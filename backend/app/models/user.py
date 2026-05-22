@@ -22,11 +22,11 @@ class User(Base):
         DateTime, server_default=func.now(), nullable=False
     )
 
-    videos: Mapped[list["Video"]] = relationship("Video", back_populates="user")
-    posts: Mapped[list["Post"]] = relationship("Post", back_populates="user")
-    reward_points: Mapped[list["RewardPoint"]] = relationship(
+    videos: Mapped[list["Video"]] = relationship("Video", back_populates="user")  # noqa: F821
+    posts: Mapped[list["Post"]] = relationship("Post", back_populates="user")  # noqa: F821
+    reward_points: Mapped[list["RewardPoint"]] = relationship(  # noqa: F821
         "RewardPoint", back_populates="user"
     )
-    claims: Mapped[list["LightningClaim"]] = relationship(
+    claims: Mapped[list["LightningClaim"]] = relationship(  # noqa: F821
         "LightningClaim", back_populates="user"
     )

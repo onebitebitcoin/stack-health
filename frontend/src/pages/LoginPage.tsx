@@ -45,9 +45,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-6">
-      <h1 className="mb-2 text-2xl font-bold text-bitcoin">운동하고 비트코인</h1>
-      <p className="mb-8 text-sm text-zinc-400">운동하면 비트코인이 쌓인다</p>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
+      <h1 className="mb-2 text-2xl font-bold text-accent">운동하고 비트코인</h1>
+      <p className="mb-8 text-sm text-theme-muted">운동하면 비트코인이 쌓인다</p>
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-3">
         <input
@@ -56,7 +56,7 @@ export default function LoginPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full rounded-lg bg-zinc-900 px-4 py-3 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-bitcoin"
+          className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
         />
         {isRegister && (
           <input
@@ -65,7 +65,7 @@ export default function LoginPage() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            className="w-full rounded-lg bg-zinc-900 px-4 py-3 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-bitcoin"
+            className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
           />
         )}
         <input
@@ -74,13 +74,13 @@ export default function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="w-full rounded-lg bg-zinc-900 px-4 py-3 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-bitcoin"
+          className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
         />
         {error && <p className="text-sm text-red-400">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-bitcoin py-3 font-semibold text-black transition-opacity disabled:opacity-60"
+          className="w-full rounded-lg bg-accent py-3 font-semibold text-accent-fg transition-opacity disabled:opacity-60"
         >
           {loading ? '처리 중...' : isRegister ? '회원가입' : '로그인'}
         </button>
@@ -88,7 +88,7 @@ export default function LoginPage() {
 
       <button
         onClick={() => setIsRegister((v) => !v)}
-        className="mt-4 text-sm text-zinc-400 underline"
+        className="mt-4 text-sm text-theme-muted underline"
       >
         {isRegister ? '이미 계정이 있어요' : '계정이 없어요'}
       </button>

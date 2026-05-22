@@ -57,35 +57,34 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh]">
+    <div className="flex flex-col gap-5 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
       <div className="flex items-center gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-700 text-2xl font-bold text-white">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-theme-surface2 text-2xl font-bold text-theme-primary">
           {user?.username?.[0]?.toUpperCase() ?? '?'}
         </div>
         <div>
-          <p className="font-bold">{user?.username}</p>
-          <p className="text-sm text-zinc-400">{user?.email}</p>
+          <p className="font-bold text-theme-primary">{user?.username}</p>
+          <p className="text-sm text-theme-muted">{user?.email}</p>
         </div>
       </div>
 
       {data && (
         <div className="flex gap-4">
-          <div className="flex-1 rounded-xl bg-zinc-900 px-4 py-3 text-center">
-            <p className="text-2xl font-bold">{data.posts.length}</p>
-            <p className="text-xs text-zinc-400">업로드</p>
+          <div className="flex-1 rounded-xl bg-theme-surface px-4 py-3 text-center">
+            <p className="text-2xl font-bold text-theme-primary">{data.posts.length}</p>
+            <p className="text-xs text-theme-muted">업로드</p>
           </div>
-          <div className="flex-1 rounded-xl bg-zinc-900 px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-bitcoin">{data.total_points}</p>
-            <p className="text-xs text-zinc-400">이번 주 pt</p>
+          <div className="flex-1 rounded-xl bg-theme-surface px-4 py-3 text-center">
+            <p className="text-2xl font-bold text-accent">{data.total_points}</p>
+            <p className="text-xs text-theme-muted">이번 주 pt</p>
           </div>
         </div>
       )}
 
-      {/* video grid */}
       {data && data.posts.length > 0 && (
         <div className="grid grid-cols-3 gap-1">
           {data.posts.map((post) => (
-            <div key={post.id} className="aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900">
+            <div key={post.id} className="aspect-[9/16] overflow-hidden rounded-lg bg-theme-surface">
               <video
                 src={post.cdn_url}
                 className="h-full w-full object-cover"
@@ -98,12 +97,11 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* settings */}
-      <div className="rounded-2xl bg-zinc-900 p-4 space-y-3">
-        <p className="font-semibold text-zinc-300">설정</p>
+      <div className="rounded-2xl bg-theme-surface p-4 space-y-3">
+        <p className="font-semibold text-theme-muted">설정</p>
 
         <div className="space-y-1">
-          <p className="text-sm text-zinc-400">Lightning Address</p>
+          <p className="text-sm text-theme-muted">Lightning Address</p>
           {editingLn ? (
             <form onSubmit={saveLightningAddress} className="flex gap-2">
               <input
@@ -111,24 +109,24 @@ export default function ProfilePage() {
                 value={lnInput}
                 onChange={(e) => setLnInput(e.target.value)}
                 placeholder="you@wallet.com"
-                className="flex-1 rounded-lg bg-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-bitcoin"
+                className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent"
               />
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-bitcoin px-3 py-2 text-black"
+                className="rounded-lg bg-accent px-3 py-2 text-accent-fg"
               >
                 <Check size={16} />
               </button>
             </form>
           ) : (
             <div className="flex items-center gap-2">
-              <Zap size={14} className="text-bitcoin flex-shrink-0" />
-              <span className="flex-1 text-sm text-white truncate">
+              <Zap size={14} className="text-accent flex-shrink-0" />
+              <span className="flex-1 text-sm text-theme-primary truncate">
                 {user?.lightning_address ?? '미설정'}
               </span>
               <button onClick={() => setEditingLn(true)}>
-                <Edit2 size={14} className="text-zinc-400" />
+                <Edit2 size={14} className="text-theme-muted" />
               </button>
             </div>
           )}
@@ -136,7 +134,7 @@ export default function ProfilePage() {
 
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-2 rounded-xl bg-zinc-800 px-4 py-3 text-sm text-red-400 transition-colors hover:bg-zinc-700"
+          className="flex w-full items-center gap-2 rounded-xl bg-theme-surface2 px-4 py-3 text-sm text-red-400 transition-colors hover:opacity-80"
         >
           <LogOut size={16} />
           로그아웃

@@ -1,0 +1,75 @@
+/* =============================================
+   Design Token Themes
+   Apply via: document.documentElement.setAttribute('data-theme', 'X')
+   ============================================= */
+
+/* --- Default: Sapphire Premium (dark) --- */
+:root,
+[data-theme="sapphire"] {
+  --bg-page: #0A0A0A;
+  --bg-surface: #141414;
+  --bg-surface-2: #1E1E1E;
+  --accent: #1E6FFF;
+  --accent-fg: #FFFFFF;
+  --text-primary: #F5F5F5;
+  --text-muted: #9CA3AF;
+  --text-subtle: #6B7280;
+  --border: #2A2A2A;
+  --overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* --- Volt Dark (dark, lime) --- */
+[data-theme="volt"] {
+  --bg-page: #0D0D0D;
+  --bg-surface: #161616;
+  --bg-surface-2: #1F1F1F;
+  --accent: #B5FF2E;
+  --accent-fg: #0D0D0D;
+  --text-primary: #F5F5F5;
+  --text-muted: #A1A1AA;
+  --text-subtle: #71717A;
+  --border: #2D2D2D;
+  --overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* --- Royal Indigo (dark, purple) --- */
+[data-theme="indigo"] {
+  --bg-page: #0F0F0F;
+  --bg-surface: #181820;
+  --bg-surface-2: #1E1E2A;
+  --accent: #7C3AED;
+  --accent-fg: #FFFFFF;
+  --text-primary: #F5F5F5;
+  --text-muted: #A1A1AA;
+  --text-subtle: #6B7280;
+  --border: #2D2D3A;
+  --overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* --- Arctic Light (light, blue) --- */
+[data-theme="arctic"] {
+  --bg-page: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-surface-2: #F1F5F9;
+  --accent: #2563EB;
+  --accent-fg: #FFFFFF;
+  --text-primary: #0F172A;
+  --text-muted: #475569;
+  --text-subtle: #94A3B8;
+  --border: #E2E8F0;
+  --overlay: rgba(0, 0, 0, 0.5);
+}
+
+/* --- Forest Light (light, green) --- */
+[data-theme="forest"] {
+  --bg-page: #FAFAF9;
+  --bg-surface: #FFFFFF;
+  --bg-surface-2: #F0FDF4;
+  --accent: #059669;
+  --accent-fg: #FFFFFF;
+  --text-primary: #0F172A;
+  --text-muted: #4B5563;
+  --text-subtle: #9CA3AF;
+  --border: #D1FAE5;
+  --overlay: rgba(0, 0, 0, 0.5);
+}

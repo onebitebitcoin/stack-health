@@ -26,4 +26,4 @@ class LightningClaim(Base):
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="claims")
+    user: Mapped["User"] = relationship("User", back_populates="claims")  # noqa: F821

@@ -22,5 +22,5 @@ class Video(Base):
         DateTime, server_default=func.now(), nullable=False
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="videos")
-    post: Mapped["Post | None"] = relationship("Post", back_populates="video", uselist=False)
+    user: Mapped["User"] = relationship("User", back_populates="videos")  # noqa: F821
+    post: Mapped["Post | None"] = relationship("Post", back_populates="video", uselist=False)  # noqa: F821

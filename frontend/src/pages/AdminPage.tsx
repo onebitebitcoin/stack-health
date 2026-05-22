@@ -1,13 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle } from 'lucide-react'
 import axios from 'axios'
 import type { AdminClaim } from '../api/types'
+import { THEMES, THEME_LABELS, useThemeStore, type Theme } from '../store/theme'
 
 export default function AdminPage() {
   const qc = useQueryClient()
   const [adminKey, setAdminKey] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const { theme, setTheme } = useThemeStore()
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const t = params.get('theme')
+    if (t && THEMES.includes(t as Theme)) {
+      setTheme(t as Theme)
+    }
+  }, [setTheme])
+
+  function handleThemeChange(t: Theme) {
+    setTheme(t)
+    const url = new URL(window.location.href)
+    url.searchParams.set('theme', t)
+    window.history.replaceState({}, '', url.toString())
+  }
 
   const { data: claims = [], isError } = useQuery<AdminClaim[]>({
     queryKey: ['admin-claims', adminKey],
@@ -41,12 +58,32 @@ export default function AdminPage() {
     pending: 'text-yellow-400',
     paid: 'text-green-400',
     failed: 'text-red-400',
-    cancelled: 'text-zinc-500',
+    cancelled: 'text-theme-subtle',
   }
 
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh]">
-      <h1 className="text-xl font-bold">Admin</h1>
+    <div className="flex flex-col gap-5 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
+      <h1 className="text-xl font-bold text-theme-primary">Admin</h1>
+
+      {/* Theme Preview */}
+      <div className="rounded-xl bg-theme-surface p-4 space-y-2">
+        <p className="text-xs font-semibold text-theme-muted uppercase tracking-wide">테마 미리보기</p>
+        <div className="flex flex-wrap gap-2">
+          {THEMES.map((t) => (
+            <button
+              key={t}
+              onClick={() => handleThemeChange(t)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                theme === t
+                  ? 'bg-accent text-accent-fg'
+                  : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              {THEME_LABELS[t]}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <form
         onSubmit={(e) => {
@@ -60,11 +97,11 @@ export default function AdminPage() {
           value={adminKey}
           onChange={(e) => setAdminKey(e.target.value)}
           placeholder="Admin Key"
-          className="flex-1 rounded-lg bg-zinc-900 px-4 py-3 outline-none focus:ring-2 focus:ring-bitcoin"
+          className="flex-1 rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
         />
         <button
           type="submit"
-          className="rounded-lg bg-bitcoin px-4 py-3 font-semibold text-black"
+          className="rounded-lg bg-accent px-4 py-3 font-semibold text-accent-fg"
         >
           조회
         </button>
@@ -75,22 +112,22 @@ export default function AdminPage() {
       )}
 
       {submitted && claims.length === 0 && !isError && (
-        <p className="text-center text-zinc-500 py-10">대기 중인 Claim이 없습니다</p>
+        <p className="text-center text-theme-subtle py-10">대기 중인 Claim이 없습니다</p>
       )}
 
       <div className="space-y-3">
         {claims.map((c) => (
-          <div key={c.id} className="rounded-xl bg-zinc-900 p-4">
+          <div key={c.id} className="rounded-xl bg-theme-surface p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="font-semibold">@{c.username}</p>
-                <p className="text-xs text-zinc-400">{c.email}</p>
-                <p className="mt-1 text-sm">
+                <p className="font-semibold text-theme-primary">@{c.username}</p>
+                <p className="text-xs text-theme-muted">{c.email}</p>
+                <p className="mt-1 text-sm text-theme-primary">
                   {c.week_label} · {c.points_used}pt · {c.satoshi_amount.toLocaleString()} sats
                 </p>
-                <p className="text-xs text-zinc-500 mt-0.5 break-all">{c.ln_address}</p>
+                <p className="text-xs text-theme-subtle mt-0.5 break-all">{c.ln_address}</p>
               </div>
-              <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-zinc-400'}`}>
+              <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-theme-muted'}`}>
                 {statusLabel[c.status] ?? c.status}
               </span>
             </div>

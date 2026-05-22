@@ -7,9 +7,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        bitcoin: {
-          DEFAULT: '#F7931A',
-          dark: '#E07B0E',
+        accent: {
+          DEFAULT: 'var(--accent)',
+          fg: 'var(--accent-fg)',
+        },
+        theme: {
+          page: 'var(--bg-page)',
+          surface: 'var(--bg-surface)',
+          surface2: 'var(--bg-surface-2)',
+          border: 'var(--border)',
+          primary: 'var(--text-primary)',
+          muted: 'var(--text-muted)',
+          subtle: 'var(--text-subtle)',
         },
       },
     },

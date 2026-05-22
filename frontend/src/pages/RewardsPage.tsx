@@ -51,18 +51,18 @@ export default function RewardsPage() {
     pending: 'text-yellow-400',
     paid: 'text-green-400',
     failed: 'text-red-400',
-    cancelled: 'text-zinc-500',
+    cancelled: 'text-theme-subtle',
   }
 
   if (claimSuccess) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-16">
-        <CheckCircle size={72} className="text-bitcoin" />
-        <p className="text-2xl font-bold">Claim 완료!</p>
-        <p className="text-zinc-400">24시간 내 지급됩니다</p>
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-16 bg-theme-page">
+        <CheckCircle size={72} className="text-accent" />
+        <p className="text-2xl font-bold text-theme-primary">Claim 완료!</p>
+        <p className="text-theme-muted">24시간 내 지급됩니다</p>
         <button
           onClick={() => setClaimSuccess(false)}
-          className="mt-4 rounded-xl bg-zinc-800 px-6 py-3 text-sm"
+          className="mt-4 rounded-xl bg-theme-surface2 px-6 py-3 text-sm text-theme-primary"
         >
           돌아가기
         </button>
@@ -71,21 +71,21 @@ export default function RewardsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh]">
-      <h1 className="text-xl font-bold">리워드</h1>
+    <div className="flex flex-col gap-6 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
+      <h1 className="text-xl font-bold text-theme-primary">리워드</h1>
 
       {summary && (
-        <div className="rounded-2xl bg-zinc-900 p-5">
-          <div className="mb-1 text-sm text-zinc-400">{summary.week_label} 이번 주 포인트</div>
+        <div className="rounded-2xl bg-theme-surface p-5">
+          <div className="mb-1 text-sm text-theme-muted">{summary.week_label} 이번 주 포인트</div>
           <div className="flex items-end gap-2">
-            <span className="text-5xl font-black text-white">{summary.current_week_points}</span>
-            <span className="mb-1 text-zinc-400">pt</span>
+            <span className="text-5xl font-black text-theme-primary">{summary.current_week_points}</span>
+            <span className="mb-1 text-theme-muted">pt</span>
           </div>
-          <div className="mt-1 flex items-center gap-1 text-bitcoin">
+          <div className="mt-1 flex items-center gap-1 text-accent">
             <Zap size={16} fill="currentColor" />
             <span className="font-semibold">{summary.satoshi_amount.toLocaleString()} sats</span>
           </div>
-          <div className="mt-2 text-sm text-zinc-500">
+          <div className="mt-2 text-sm text-theme-subtle">
             마감 {dDayLabel(summary.deadline)} · {new Date(summary.deadline).toLocaleDateString('ko-KR')}
           </div>
 
@@ -94,8 +94,8 @@ export default function RewardsPage() {
             disabled={!summary.claimable}
             className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-opacity ${
               summary.claimable
-                ? 'bg-bitcoin text-black'
-                : 'cursor-not-allowed bg-zinc-800 text-zinc-500'
+                ? 'bg-accent text-accent-fg'
+                : 'cursor-not-allowed bg-theme-surface2 text-theme-subtle'
             }`}
           >
             {!summary.claimable && <Lock size={16} />}
@@ -110,17 +110,17 @@ export default function RewardsPage() {
 
       {claims.length > 0 && (
         <div>
-          <h2 className="mb-3 font-semibold text-zinc-300">지급 이력</h2>
+          <h2 className="mb-3 font-semibold text-theme-muted">지급 이력</h2>
           <div className="space-y-2">
             {claims.map((c) => (
-              <div key={c.id} className="flex items-center justify-between rounded-xl bg-zinc-900 px-4 py-3">
+              <div key={c.id} className="flex items-center justify-between rounded-xl bg-theme-surface px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium">{c.week_label}</p>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-sm font-medium text-theme-primary">{c.week_label}</p>
+                  <p className="text-xs text-theme-subtle">
                     {c.points_used}pt · {c.satoshi_amount.toLocaleString()} sats
                   </p>
                 </div>
-                <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-zinc-400'}`}>
+                <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-theme-muted'}`}>
                   {statusLabel[c.status] ?? c.status}
                 </span>
               </div>

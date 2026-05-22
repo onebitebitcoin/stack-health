@@ -1,3 +1,5 @@
+@import './tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,7 +12,8 @@
   }
 
   body {
-    @apply bg-black text-white;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
   }

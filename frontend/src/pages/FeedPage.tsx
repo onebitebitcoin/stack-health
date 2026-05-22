@@ -69,7 +69,7 @@ export default function FeedPage() {
   if (posts.length === 0) {
     return (
       <div className="flex h-[100dvh] items-center justify-center">
-        <p className="text-zinc-400">아직 업로드된 영상이 없어요</p>
+        <p className="text-theme-muted">아직 업로드된 영상이 없어요</p>
       </div>
     )
   }

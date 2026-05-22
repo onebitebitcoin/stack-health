@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -75,7 +74,6 @@ def test_patch_me_lightning_address(client: TestClient) -> None:
 
 
 def test_password_not_stored_plaintext(client: TestClient) -> None:
-    from app.database import get_db
     from app.models.user import User
 
     client.post("/api/v1/auth/register", json={

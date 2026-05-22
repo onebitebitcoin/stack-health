@@ -96,48 +96,45 @@ export default function UploadPage() {
 
   if (done) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4">
-        <CheckCircle size={64} className="text-bitcoin" />
-        <p className="text-xl font-bold">업로드 완료!</p>
-        <p className="text-zinc-400">+50pt 적립됐어요</p>
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-theme-page">
+        <CheckCircle size={64} className="text-accent" />
+        <p className="text-xl font-bold text-theme-primary">업로드 완료!</p>
+        <p className="text-theme-muted">+50pt 적립됐어요</p>
       </div>
     )
   }
 
   return (
-    <div className="relative flex h-[100dvh] flex-col bg-black pb-16">
-      {/* upload progress overlay */}
+    <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-16">
       {uploading && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-black/90">
-          <Upload size={48} className="animate-bounce text-bitcoin" />
-          <p className="text-lg font-semibold">업로드 중...</p>
-          <div className="h-2 w-64 rounded-full bg-zinc-800">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-theme-page">
+          <Upload size={48} className="animate-bounce text-accent" />
+          <p className="text-lg font-semibold text-theme-primary">업로드 중...</p>
+          <div className="h-2 w-64 rounded-full bg-theme-surface2">
             <div
-              className="h-2 rounded-full bg-bitcoin transition-all"
+              className="h-2 rounded-full bg-accent transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-sm text-zinc-400">{progress}%</p>
+          <p className="text-sm text-theme-muted">{progress}%</p>
         </div>
       )}
 
-      {/* step indicator */}
       <div className="flex items-center gap-1 p-4">
         {STEPS.map((label, i) => (
           <div key={label} className="flex flex-1 flex-col items-center gap-1">
             <div
               className={`h-1 w-full rounded-full transition-colors ${
-                i <= step ? 'bg-bitcoin' : 'bg-zinc-700'
+                i <= step ? 'bg-accent' : 'bg-theme-surface2'
               }`}
             />
-            <span className={`text-xs ${i === step ? 'text-bitcoin' : 'text-zinc-500'}`}>
+            <span className={`text-xs ${i === step ? 'text-accent' : 'text-theme-subtle'}`}>
               {label}
             </span>
           </div>
         ))}
       </div>
 
-      {/* step 0: file select */}
       {step === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
           <input
@@ -149,7 +146,7 @@ export default function UploadPage() {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-zinc-600 p-12 text-zinc-400 transition-colors hover:border-bitcoin hover:text-bitcoin"
+            className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-theme-border p-12 text-theme-muted transition-colors hover:border-accent hover:text-accent"
           >
             <Upload size={48} strokeWidth={1.5} />
             <span>영상을 선택하세요</span>
@@ -158,7 +155,6 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* step 1: tags */}
       {step === 1 && (
         <div className="flex flex-1 flex-col px-6 pt-4">
           {previewUrl && (
@@ -171,7 +167,7 @@ export default function UploadPage() {
               playsInline
             />
           )}
-          <p className="mb-3 font-semibold">운동 종류를 선택하세요</p>
+          <p className="mb-3 font-semibold text-theme-primary">운동 종류를 선택하세요</p>
           <div className="flex flex-wrap gap-2">
             {ALLOWED_TAGS.map((tag) => (
               <button
@@ -179,8 +175,8 @@ export default function UploadPage() {
                 onClick={() => toggleTag(tag)}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                   selectedTags.includes(tag)
-                    ? 'bg-bitcoin text-black'
-                    : 'bg-zinc-800 text-zinc-300'
+                    ? 'bg-accent text-accent-fg'
+                    : 'bg-theme-surface2 text-theme-muted'
                 }`}
               >
                 {tag}
@@ -189,17 +185,16 @@ export default function UploadPage() {
           </div>
           <button
             onClick={() => setStep(2)}
-            className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl bg-bitcoin py-3 font-semibold text-black"
+            className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
             다음 <ChevronRight size={18} />
           </button>
         </div>
       )}
 
-      {/* step 2: thumbnail preview */}
       {step === 2 && (
         <div className="flex flex-1 flex-col px-6 pt-4">
-          <p className="mb-3 font-semibold">썸네일 확인</p>
+          <p className="mb-3 font-semibold text-theme-primary">썸네일 확인</p>
           {previewUrl && (
             <video
               src={previewUrl}
@@ -208,34 +203,33 @@ export default function UploadPage() {
               playsInline
             />
           )}
-          <p className="text-sm text-zinc-400">영상의 첫 프레임이 썸네일로 사용됩니다.</p>
+          <p className="text-sm text-theme-muted">영상의 첫 프레임이 썸네일로 사용됩니다.</p>
           <button
             onClick={() => setStep(3)}
-            className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl bg-bitcoin py-3 font-semibold text-black"
+            className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
             이 썸네일로 결정 <ChevronRight size={18} />
           </button>
         </div>
       )}
 
-      {/* step 3: caption */}
       {step === 3 && (
         <div className="flex flex-1 flex-col px-6 pt-4">
-          <p className="mb-3 font-semibold">설명을 추가하세요 (선택)</p>
+          <p className="mb-3 font-semibold text-theme-primary">설명을 추가하세요 (선택)</p>
           <textarea
             value={caption}
             onChange={(e) => setCaption(e.target.value.slice(0, 140))}
             maxLength={140}
             placeholder="오늘의 운동을 소개해보세요..."
             rows={4}
-            className="resize-none rounded-xl bg-zinc-900 p-4 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-bitcoin"
+            className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
           />
-          <p className="mt-1 text-right text-xs text-zinc-500">{caption.length}/140</p>
+          <p className="mt-1 text-right text-xs text-theme-subtle">{caption.length}/140</p>
           {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
           <button
             onClick={handleUpload}
             disabled={uploading}
-            className="mt-auto w-full rounded-xl bg-bitcoin py-3 font-semibold text-black disabled:opacity-60"
+            className="mt-auto w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
           >
             업로드 시작
           </button>

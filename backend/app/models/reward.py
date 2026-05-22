@@ -21,4 +21,4 @@ class RewardPoint(Base):
         DateTime, server_default=func.now(), nullable=False
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="reward_points")
+    user: Mapped["User"] = relationship("User", back_populates="reward_points")  # noqa: F821
