@@ -83,23 +83,6 @@ export interface Comment {
   created_at: string
 }
 
-export interface LeaderboardItem {
-  rank: number
-  user_id: number
-  username: string
-  weekly_points: number
-  satoshi_amount: number
-}
-
-export interface LeaderboardResponse {
-  week_label: string
-  items: LeaderboardItem[]
-  page: number
-  has_next: boolean
-  total_users: number
-  my_rank: LeaderboardItem | null
-}
-
 export interface HistoryWorkoutPost {
   id: number
   cdn_url: string

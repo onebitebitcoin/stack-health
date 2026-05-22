@@ -5,7 +5,6 @@ import client from '../api/client'
 import type { Comment } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
-
 interface CommentSheetProps {
   postId: number
   open: boolean
