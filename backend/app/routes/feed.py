@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.comment import Comment
 from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.video import Video
@@ -52,12 +53,13 @@ def get_required_user(
     return user
 
 
-def _post_to_schema(post: Post) -> PostSchema:
+def _post_to_schema(post: Post, db: Session) -> PostSchema:
     tags_raw = post.tags or "[]"
     try:
         tags = json.loads(tags_raw)
     except (json.JSONDecodeError, TypeError):
         tags = []
+    comment_count = db.query(Comment).filter(Comment.post_id == post.id).count()
     return PostSchema(
         id=post.id,
         video_id=post.video_id,
@@ -66,6 +68,7 @@ def _post_to_schema(post: Post) -> PostSchema:
         tags=tags,
         like_count=post.like_count,
         view_count=post.view_count,
+        comment_count=comment_count,
         created_at=post.created_at,
         cdn_url=post.video.cdn_url,
         username=post.user.username,
@@ -96,7 +99,7 @@ def get_feed(
     next_cursor = posts[-1].id if has_more and posts else None
     return {
         "data": {
-            "posts": [_post_to_schema(p) for p in posts],
+            "posts": [_post_to_schema(p, db) for p in posts],
             "next_cursor": next_cursor,
         }
     }

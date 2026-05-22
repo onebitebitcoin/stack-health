@@ -43,6 +43,7 @@ class PostSchema(BaseModel):
     tags: list[str]
     like_count: int
     view_count: int
+    comment_count: int
     created_at: datetime
     cdn_url: str
     username: str
