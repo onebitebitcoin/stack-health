@@ -74,6 +74,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
 
       {/* Sheet */}
       <div
+        data-testid="comment-sheet"
         className={`fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-zinc-900/95 backdrop-blur transition-transform duration-300 ${
           open ? 'translate-y-0' : 'translate-y-full'
         }`}

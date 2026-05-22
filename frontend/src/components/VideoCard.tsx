@@ -3,25 +3,24 @@ import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play } from 'lucide-reac
 import type { Post } from '../api/types'
 import TagChip from './TagChip'
 import PointBadge from './PointBadge'
-import CommentSheet from './CommentSheet'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 
 interface VideoCardProps {
   post: Post
   onLoginRequired: () => void
+  onCommentClick: () => void
   isMuted: boolean
   onToggleMute: () => void
 }
 
-export default function VideoCard({ post, onLoginRequired, isMuted, onToggleMute }: VideoCardProps) {
+export default function VideoCard({ post, onLoginRequired, onCommentClick, isMuted, onToggleMute }: VideoCardProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const token = useAuthStore((s) => s.token)
   const [liked, setLiked] = useState(post.is_liked ?? false)
   const [likeCount, setLikeCount] = useState(post.like_count)
   const [viewSent, setViewSent] = useState(false)
-  const [showComments, setShowComments] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [flashIcon, setFlashIcon] = useState<'play' | 'pause' | null>(null)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -147,7 +146,7 @@ export default function VideoCard({ post, onLoginRequired, isMuted, onToggleMute
       {/* right actions - 세로 버튼 스택 */}
       <div
         className="absolute bottom-24 right-3 flex flex-col items-center gap-4"
-        style={{ zIndex: 3 }}
+        style={{ zIndex: 4 }}
       >
         {/* 좋아요 */}
         <button
@@ -164,7 +163,8 @@ export default function VideoCard({ post, onLoginRequired, isMuted, onToggleMute
 
         {/* 댓글 */}
         <button
-          onClick={(e) => { e.stopPropagation(); setShowComments(true) }}
+          data-testid="comment-btn"
+          onClick={(e) => { e.stopPropagation(); onCommentClick() }}
           className="flex flex-col items-center gap-1"
         >
           <MessageCircle size={32} strokeWidth={1.5} className="text-white" />
@@ -198,13 +198,6 @@ export default function VideoCard({ post, onLoginRequired, isMuted, onToggleMute
         )}
       </div>
 
-      {/* CommentSheet */}
-      <CommentSheet
-        postId={post.id}
-        open={showComments}
-        onClose={() => setShowComments(false)}
-        onLoginRequired={onLoginRequired}
-      />
     </div>
   )
 }

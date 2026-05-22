@@ -4,6 +4,7 @@ import client from '../api/client'
 import type { FeedResponse } from '../api/types'
 import VideoCard from '../components/VideoCard'
 import LoginPromptSheet from '../components/LoginPromptSheet'
+import CommentSheet from '../components/CommentSheet'
 import LoadingScreen from '../components/LoadingScreen'
 import LogoMark from '../components/LogoMark'
 
@@ -17,6 +18,7 @@ export default function FeedPage() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [showLogin, setShowLogin] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
+  const [commentPostId, setCommentPostId] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const touchStartY = useRef(0)
 
@@ -97,12 +99,19 @@ export default function FeedPage() {
             key={post.id}
             post={post}
             onLoginRequired={() => setShowLogin(true)}
+            onCommentClick={() => setCommentPostId(post.id)}
             isMuted={isMuted}
             onToggleMute={() => setIsMuted((m) => !m)}
           />
         ))}
       </div>
       {showLogin && <LoginPromptSheet onClose={() => setShowLogin(false)} />}
+      <CommentSheet
+        postId={commentPostId ?? 0}
+        open={commentPostId !== null}
+        onClose={() => setCommentPostId(null)}
+        onLoginRequired={() => setShowLogin(true)}
+      />
     </>
   )
 }
