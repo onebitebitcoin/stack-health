@@ -51,9 +51,9 @@ def get_weekly_points(db: Session, user_id: int, week_label: str) -> int:
 
 
 def _utc_today_start() -> datetime:
-    """Naive UTC midnight — matches how SQLite stores server_default=func.now()."""
-    now = datetime.now(timezone.utc)
-    return datetime(now.year, now.month, now.day)
+    """KST midnight expressed as naive UTC — daily limits reset at KST 00:00."""
+    kst_midnight = datetime.now(KST).replace(hour=0, minute=0, second=0, microsecond=0)
+    return kst_midnight.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def get_daily_upload_count(db: Session, user_id: int) -> int:

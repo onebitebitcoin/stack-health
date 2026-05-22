@@ -81,3 +81,19 @@ export interface Comment {
   content: string
   created_at: string
 }
+
+export interface AdminWeeklySummaryItem {
+  rank: number
+  user_id: number
+  username: string
+  weekly_points: number
+  satoshi_amount: number
+}
+
+export interface AdminWeeklySummaryResponse {
+  week_label: string
+  items: AdminWeeklySummaryItem[]
+  page: number
+  has_next: boolean
+  total_users: number
+}

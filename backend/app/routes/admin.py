@@ -1,16 +1,19 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
 from app.models.admin_log import AdminLog
 from app.models.claim import LightningClaim
+from app.models.reward import RewardPoint
 from app.models.video import Video
 from app.models.user import User
 from app.schemas.reward import ClaimSchema, ClaimWithUserSchema
 from app.schemas.video import VideoSchema
+from app.services.reward import get_week_label, points_to_sats
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -168,3 +171,60 @@ def toggle_ban(
     db.commit()
     db.refresh(user)
     return {"data": {"user_id": user_id, "is_banned": user.is_banned}}
+
+
+@router.get("/weekly-summary")
+def weekly_summary(
+    week_label: Optional[str] = None,
+    page: int = 1,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> dict:
+    wlabel = week_label or get_week_label()
+
+    # 해당 주 포인트가 있는 비밴 유저의 총합 집계
+    base_query = (
+        db.query(
+            RewardPoint.user_id,
+            func.sum(RewardPoint.points).label("weekly_points"),
+        )
+        .join(User, User.id == RewardPoint.user_id)
+        .filter(RewardPoint.week_label == wlabel, User.is_banned.is_(False))
+        .group_by(RewardPoint.user_id)
+    )
+
+    total_users: int = base_query.count()
+
+    offset = (page - 1) * limit
+    rows = (
+        base_query
+        .order_by(func.sum(RewardPoint.points).desc(), RewardPoint.user_id.asc())
+        .offset(offset)
+        .limit(limit + 1)
+        .all()
+    )
+
+    has_next = len(rows) > limit
+    rows = rows[:limit]
+
+    items = []
+    for idx, row in enumerate(rows):
+        user = db.query(User).filter(User.id == row.user_id).first()
+        items.append({
+            "rank": offset + idx + 1,
+            "user_id": row.user_id,
+            "username": user.username if user else "",
+            "weekly_points": row.weekly_points,
+            "satoshi_amount": points_to_sats(row.weekly_points),
+        })
+
+    return {
+        "data": {
+            "week_label": wlabel,
+            "items": items,
+            "page": page,
+            "has_next": has_next,
+            "total_users": total_users,
+        }
+    }

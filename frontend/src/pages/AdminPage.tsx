@@ -2,10 +2,23 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, Ban, Trash2, User, Video, Award } from 'lucide-react'
 import axios from 'axios'
-import type { AdminClaim, AdminUser, AdminVideo } from '../api/types'
+import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse } from '../api/types'
 import { THEMES, THEME_LABELS, useThemeStore, type Theme } from '../store/theme'
 
 type TabId = 'users' | 'videos' | 'rewards'
+
+function getWeekLabel(offsetWeeks: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + offsetWeeks * 7)
+  const year = d.getFullYear()
+  // ISO week number
+  const jan4 = new Date(year, 0, 4)
+  const startOfWeek1 = new Date(jan4)
+  startOfWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7))
+  const diff = d.getTime() - startOfWeek1.getTime()
+  const week = Math.floor(diff / (7 * 24 * 3600 * 1000)) + 1
+  return `${year}-W${String(week).padStart(2, '0')}`
+}
 
 export default function AdminPage() {
   const qc = useQueryClient()
@@ -13,6 +26,11 @@ export default function AdminPage() {
   const [submitted, setSubmitted] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('users')
   const { theme, setTheme } = useThemeStore()
+
+  // 리더보드 state
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [leaderboardPage, setLeaderboardPage] = useState(1)
+  const [leaderboardItems, setLeaderboardItems] = useState<AdminWeeklySummaryItem[]>([])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -28,6 +46,30 @@ export default function AdminPage() {
   }
 
   const headers = { 'X-Admin-Key': adminKey }
+
+  // 리더보드 useQuery
+  const { data: leaderboardData } = useQuery<AdminWeeklySummaryResponse>({
+    queryKey: ['admin-weekly-summary', adminKey, weekOffset, leaderboardPage],
+    queryFn: async () => {
+      const weekLabel = getWeekLabel(weekOffset)
+      const res = await axios.get<{ data: AdminWeeklySummaryResponse }>('/admin/weekly-summary', {
+        headers,
+        params: { week_label: weekLabel, page: leaderboardPage, limit: 20 },
+      })
+      return res.data.data
+    },
+    enabled: submitted && !!adminKey && activeTab === 'rewards',
+  })
+
+  // 리더보드 데이터 누적
+  useEffect(() => {
+    if (!leaderboardData) return
+    if (leaderboardPage === 1) {
+      setLeaderboardItems(leaderboardData.items)
+    } else {
+      setLeaderboardItems((prev) => [...prev, ...leaderboardData.items])
+    }
+  }, [leaderboardData, leaderboardPage])
 
   // 리워드 탭
   const { data: claims = [], isError: claimsError } = useQuery<AdminClaim[]>({
@@ -265,37 +307,117 @@ export default function AdminPage() {
 
       {/* 리워드 탭 */}
       {submitted && activeTab === 'rewards' && (
-        <div className="space-y-3">
-          {claims.length === 0 && (
-            <p className="text-center text-theme-subtle py-10">클레임이 없습니다</p>
-          )}
-          {claims.map((c) => (
-            <div key={c.id} className="rounded-xl bg-theme-surface p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold text-theme-primary">@{c.username}</p>
-                  <p className="text-xs text-theme-muted">{c.email}</p>
-                  <p className="mt-1 text-sm text-theme-primary">
-                    {c.week_label} · {c.points_used}pt · {c.satoshi_amount.toLocaleString()} sats
-                  </p>
-                  <p className="text-xs text-theme-subtle mt-0.5 break-all">{c.ln_address}</p>
-                </div>
-                <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-theme-muted'}`}>
-                  {statusLabel[c.status] ?? c.status}
-                </span>
-              </div>
-              {c.status === 'pending' && (
+        <div className="space-y-4">
+          {/* 이번 주 리더보드 */}
+          <div className="rounded-xl bg-theme-surface p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-theme-primary">이번 주 리더보드</p>
+              <div className="flex gap-1">
                 <button
-                  onClick={() => markPaid.mutate(c.id)}
-                  disabled={markPaid.isPending}
-                  className="mt-3 flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  onClick={() => {
+                    setWeekOffset(0)
+                    setLeaderboardPage(1)
+                    setLeaderboardItems([])
+                  }}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    weekOffset === 0
+                      ? 'bg-accent text-accent-fg'
+                      : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
+                  }`}
                 >
-                  <CheckCircle size={14} />
-                  지급 완료 처리
+                  이번 주
                 </button>
-              )}
+                <button
+                  onClick={() => {
+                    setWeekOffset(-1)
+                    setLeaderboardPage(1)
+                    setLeaderboardItems([])
+                  }}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    weekOffset === -1
+                      ? 'bg-accent text-accent-fg'
+                      : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
+                  }`}
+                >
+                  지난 주
+                </button>
+              </div>
             </div>
-          ))}
+            {leaderboardData && (
+              <p className="text-xs text-theme-muted">{leaderboardData.week_label} · 총 {leaderboardData.total_users}명</p>
+            )}
+            {leaderboardItems.length === 0 && (
+              <p className="text-center text-theme-subtle py-6">데이터가 없습니다</p>
+            )}
+            {leaderboardItems.map((item) => (
+              <div
+                key={item.user_id}
+                className={`flex items-center justify-between rounded-lg px-3 py-2 ${
+                  item.rank === 1
+                    ? 'bg-yellow-500/20'
+                    : item.rank === 2
+                      ? 'bg-zinc-400/10'
+                      : item.rank === 3
+                        ? 'bg-orange-600/10'
+                        : ''
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold text-theme-muted w-6 text-right">#{item.rank}</span>
+                  <span className="text-sm font-semibold text-theme-primary">@{item.username}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs text-theme-muted">{item.weekly_points} pt</span>
+                  <span className="ml-2 text-xs font-semibold text-theme-primary">
+                    {item.satoshi_amount.toLocaleString()} sats
+                  </span>
+                </div>
+              </div>
+            ))}
+            {leaderboardData?.has_next && (
+              <button
+                onClick={() => setLeaderboardPage((p) => p + 1)}
+                className="w-full rounded-lg bg-theme-surface2 py-2 text-sm font-semibold text-theme-muted hover:text-theme-primary transition-colors"
+              >
+                더 보기
+              </button>
+            )}
+          </div>
+
+          {/* 클레임 목록 */}
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-theme-primary px-1">클레임 목록</p>
+            {claims.length === 0 && (
+              <p className="text-center text-theme-subtle py-10">클레임이 없습니다</p>
+            )}
+            {claims.map((c) => (
+              <div key={c.id} className="rounded-xl bg-theme-surface p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-theme-primary">@{c.username}</p>
+                    <p className="text-xs text-theme-muted">{c.email}</p>
+                    <p className="mt-1 text-sm text-theme-primary">
+                      {c.week_label} · {c.points_used}pt · {c.satoshi_amount.toLocaleString()} sats
+                    </p>
+                    <p className="text-xs text-theme-subtle mt-0.5 break-all">{c.ln_address}</p>
+                  </div>
+                  <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-theme-muted'}`}>
+                    {statusLabel[c.status] ?? c.status}
+                  </span>
+                </div>
+                {c.status === 'pending' && (
+                  <button
+                    onClick={() => markPaid.mutate(c.id)}
+                    disabled={markPaid.isPending}
+                    className="mt-3 flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    <CheckCircle size={14} />
+                    지급 완료 처리
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
