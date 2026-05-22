@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { LogOut, Zap, Edit2, Check, Lock, CheckCircle, Trash2 } from 'lucide-react'
+import { LogOut, Zap, Check, Lock, CheckCircle, Trash2, ChevronRight } from 'lucide-react'
 import { useNavigate, Link } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
@@ -40,8 +40,7 @@ export default function ProfilePage() {
   const [claimSuccess, setClaimSuccess] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
-  // 내 영상 (전용 엔드포인트)
-  const { data: posts = [], isLoading: postsLoading } = useQuery<Post[]>({
+  const { data: posts = [], isLoading } = useQuery<Post[]>({
     queryKey: ['my-posts'],
     queryFn: async () => {
       const res = await client.get<{ data: { posts: Post[] } }>('/videos/my-posts')
@@ -50,7 +49,6 @@ export default function ProfilePage() {
     enabled: !!user,
   })
 
-  // 리워드 요약 (단일 쿼리)
   const { data: summary } = useQuery<RewardSummary>({
     queryKey: ['rewards-summary'],
     queryFn: async () => {
@@ -60,7 +58,6 @@ export default function ProfilePage() {
     enabled: !!user,
   })
 
-  // 지급 이력
   const { data: claims = [] } = useQuery<Claim[]>({
     queryKey: ['rewards-claims'],
     queryFn: async () => {
@@ -93,11 +90,6 @@ export default function ProfilePage() {
     }
   }
 
-  function handleLogout() {
-    logout()
-    navigate('/login')
-  }
-
   function handleClaimSuccess() {
     setShowSheet(false)
     setClaimSuccess(true)
@@ -105,17 +97,17 @@ export default function ProfilePage() {
     qc.invalidateQueries({ queryKey: ['rewards-claims'] }).catch(() => undefined)
   }
 
-  if (postsLoading) return <LoadingScreen />
+  if (isLoading) return <LoadingScreen />
 
   if (claimSuccess) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-16 bg-theme-page">
-        <CheckCircle size={72} className="text-accent" />
-        <p className="text-2xl font-bold text-theme-primary">Claim 완료!</p>
-        <p className="text-theme-muted">24시간 내 지급됩니다</p>
+        <CheckCircle size={64} className="text-accent" />
+        <p className="text-xl font-bold text-theme-primary">Claim 완료!</p>
+        <p className="text-sm text-theme-muted">24시간 내 지급됩니다</p>
         <button
           onClick={() => setClaimSuccess(false)}
-          className="mt-4 rounded-xl bg-theme-surface2 px-6 py-3 text-sm text-theme-primary"
+          className="mt-2 rounded-xl bg-theme-surface px-6 py-2.5 text-sm text-theme-primary"
         >
           돌아가기
         </button>
@@ -124,47 +116,102 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="flex flex-col overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page space-y-5">
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-20">
 
-      {/* 헤더: 아바타 + 이름 + 로그아웃 */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-xl font-bold text-theme-primary">
+      {/* ── 헤더 ── */}
+      <div className="flex items-center gap-3 px-4 pt-5 pb-3">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-sm font-bold text-theme-primary">
           {user?.username?.[0]?.toUpperCase() ?? '?'}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-theme-primary truncate">{user?.username}</p>
+          <p className="text-sm font-semibold text-theme-primary leading-tight truncate">
+            {user?.username}
+          </p>
           <p className="text-xs text-theme-muted truncate">{user?.email}</p>
         </div>
         <button
-          onClick={handleLogout}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-theme-muted hover:text-red-400 transition-colors"
+          onClick={() => { logout(); navigate('/login') }}
+          className="text-theme-muted hover:text-red-400 transition-colors p-1"
           aria-label="로그아웃"
         >
-          <LogOut size={18} strokeWidth={1.5} />
+          <LogOut size={16} strokeWidth={1.5} />
         </button>
       </div>
 
-      {/* 통계: 업로드 수 + 이번 주 sats */}
-      <div className="flex gap-3">
-        <div className="flex-1 rounded-xl bg-theme-surface px-4 py-3 text-center">
-          <p className="text-2xl font-bold text-theme-primary">{posts.length}</p>
-          <p className="text-xs text-theme-muted">업로드</p>
+      {/* ── 정보 바 (업로드 · sats · lightning) ── */}
+      <div className="mx-4 mb-3 flex items-center rounded-xl bg-theme-surface px-3 py-2.5 gap-0">
+        {/* 업로드 수 */}
+        <div className="flex flex-col items-center flex-1">
+          <span className="text-base font-bold font-mono text-theme-primary leading-none">
+            {posts.length}
+          </span>
+          <span className="text-[10px] text-theme-muted mt-0.5">업로드</span>
         </div>
-        <div className="flex-1 rounded-xl bg-theme-surface px-4 py-3 text-center">
-          <p className="text-2xl font-bold text-accent">
+
+        <div className="w-px h-7 bg-theme-border" />
+
+        {/* 이번 주 sats */}
+        <div className="flex flex-col items-center flex-1">
+          <span className="text-base font-bold font-mono text-accent leading-none">
             {summary ? summary.satoshi_amount.toLocaleString() : '—'}
-          </p>
-          <p className="text-xs text-theme-muted">이번 주 sats</p>
+          </span>
+          <span className="text-[10px] text-theme-muted mt-0.5">이번 주 sats</span>
+        </div>
+
+        <div className="w-px h-7 bg-theme-border" />
+
+        {/* Lightning address */}
+        <div className="flex flex-col items-center flex-1 min-w-0 px-1">
+          {editingLn ? (
+            <form
+              onSubmit={saveLightningAddress}
+              className="flex items-center gap-1 w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="text"
+                value={lnInput}
+                onChange={(e) => setLnInput(e.target.value)}
+                placeholder="you@wallet.com"
+                autoFocus
+                className="flex-1 min-w-0 bg-transparent text-[10px] text-theme-primary outline-none text-center"
+              />
+              <button type="submit" disabled={saving}>
+                <Check size={12} className="text-accent" />
+              </button>
+            </form>
+          ) : (
+            <button
+              onClick={() => setEditingLn(true)}
+              className="flex flex-col items-center w-full"
+            >
+              <span className="text-[11px] font-mono text-theme-primary truncate max-w-full leading-none">
+                {user?.lightning_address
+                  ? user.lightning_address.length > 14
+                    ? user.lightning_address.slice(0, 12) + '…'
+                    : user.lightning_address
+                  : '미설정'}
+              </span>
+              <span className="text-[10px] text-theme-muted mt-0.5 flex items-center gap-0.5">
+                <Zap size={9} className="text-accent" />
+                lightning
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 내 영상 그리드 */}
-      {posts.length > 0 && (
-        <div className="grid grid-cols-3 gap-1">
+      {/* ── 영상 그리드 ── */}
+      {posts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-12 text-center px-6">
+          <p className="text-sm text-theme-muted">아직 업로드한 영상이 없어요</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-px mx-px">
           {posts.map((post) => (
             <div
               key={post.id}
-              className="group relative aspect-[9/16] overflow-hidden rounded-lg bg-theme-surface"
+              className="group relative aspect-[9/16] overflow-hidden bg-theme-surface"
             >
               <video
                 src={post.cdn_url}
@@ -174,19 +221,19 @@ export default function ProfilePage() {
                 preload="metadata"
               />
               {confirmDeleteId === post.id ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70">
-                  <p className="text-xs font-semibold text-white">삭제할까요?</p>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/75">
+                  <p className="text-xs font-semibold text-white">삭제?</p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => deleteMutation.mutate(post.id)}
                       disabled={deleteMutation.isPending}
-                      className="rounded-lg bg-red-500 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                      className="rounded-md bg-red-500 px-3 py-1 text-xs font-bold text-white disabled:opacity-60"
                     >
                       삭제
                     </button>
                     <button
                       onClick={() => setConfirmDeleteId(null)}
-                      className="rounded-lg bg-white/20 px-3 py-1 text-xs text-white"
+                      className="rounded-md bg-white/20 px-3 py-1 text-xs text-white"
                     >
                       취소
                     </button>
@@ -195,10 +242,9 @@ export default function ProfilePage() {
               ) : (
                 <button
                   onClick={() => setConfirmDeleteId(post.id)}
-                  className="absolute right-1.5 top-1.5 rounded-full bg-black/50 p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
-                  aria-label="삭제"
+                  className="absolute right-1 top-1 rounded-full bg-black/50 p-1 opacity-0 transition-opacity group-hover:opacity-100"
                 >
-                  <Trash2 size={14} className="text-white" />
+                  <Trash2 size={12} className="text-white" />
                 </button>
               )}
             </div>
@@ -206,66 +252,52 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* 리워드 카드 (compact) */}
-      {summary && (
-        <div className="rounded-2xl bg-theme-surface p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1.5">
-              <Zap size={14} className="text-accent" />
-              <span className="text-sm font-semibold text-theme-primary">이번 주 리워드</span>
-            </div>
-            <span className="text-xs text-theme-muted">
-              {dDayLabel(summary.deadline)} 마감
+      {/* ── 리워드 Claim 배너 (claimable일 때만) ── */}
+      {summary && summary.claimable && (
+        <button
+          onClick={() => setShowSheet(true)}
+          className="mx-4 mt-4 flex items-center justify-between rounded-xl bg-accent px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <Zap size={15} fill="var(--accent-fg)" color="var(--accent-fg)" />
+            <span className="text-sm font-semibold text-accent-fg">
+              {summary.satoshi_amount.toLocaleString()} sats 수령하기
             </span>
           </div>
+          <ChevronRight size={16} color="var(--accent-fg)" />
+        </button>
+      )}
 
-          <div className="flex items-baseline gap-2 mb-3">
-            <span className="text-3xl font-black text-theme-primary">
-              {summary.current_week_points}
-            </span>
-            <span className="text-sm text-theme-muted">pt</span>
-            <span className="mx-1 text-theme-border">→</span>
-            <span className="text-lg font-bold text-accent">
-              {summary.satoshi_amount.toLocaleString()}
-            </span>
-            <span className="text-sm text-theme-muted">sats</span>
-          </div>
-
-          <button
-            onClick={() => setShowSheet(true)}
-            disabled={!summary.claimable}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-opacity ${
-              summary.claimable
-                ? 'bg-accent text-accent-fg'
-                : 'cursor-not-allowed bg-theme-surface2 text-theme-subtle'
-            }`}
-          >
-            {!summary.claimable && <Lock size={14} />}
+      {/* Claim 불가 상태 작은 안내 */}
+      {summary && !summary.claimable && (
+        <div className="mx-4 mt-4 flex items-center gap-2 rounded-xl bg-theme-surface px-4 py-2.5">
+          <Lock size={13} className="text-theme-muted flex-shrink-0" />
+          <span className="text-xs text-theme-muted">
             {summary.already_claimed
-              ? '이미 Claim됨'
-              : summary.satoshi_amount < 1000
-                ? `${1000 - summary.satoshi_amount} sats 더 필요`
-                : 'Claim하기'}
-          </button>
+              ? `${summary.week_label} Claim 완료`
+              : `${(1000 - summary.satoshi_amount).toLocaleString()} sats 더 필요 · ${dDayLabel(summary.deadline)} 마감`}
+          </span>
         </div>
       )}
 
-      {/* 지급 이력 */}
+      {/* ── 지급 이력 (있을 때만) ── */}
       {claims.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-theme-muted px-1">지급 이력</p>
+        <div className="mx-4 mt-4 space-y-1">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-theme-muted px-1 mb-1.5">
+            지급 이력
+          </p>
           {claims.map((c) => (
             <div
               key={c.id}
-              className="flex items-center justify-between rounded-xl bg-theme-surface px-4 py-3"
+              className="flex items-center justify-between rounded-lg bg-theme-surface px-3 py-2"
             >
-              <div>
-                <p className="text-sm font-medium text-theme-primary">{c.week_label}</p>
-                <p className="text-xs text-theme-subtle">
-                  {c.points_used}pt · {c.satoshi_amount.toLocaleString()} sats
-                </p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-mono text-theme-primary">{c.week_label}</span>
+                <span className="text-[10px] text-theme-subtle">
+                  {c.satoshi_amount.toLocaleString()} sats
+                </span>
               </div>
-              <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-theme-muted'}`}>
+              <span className={`text-xs font-medium ${statusColor[c.status] ?? 'text-theme-muted'}`}>
                 {statusLabel[c.status] ?? c.status}
               </span>
             </div>
@@ -273,43 +305,14 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* 설정 (flat) */}
-      <div className="rounded-2xl bg-theme-surface p-4 space-y-3">
-        <p className="text-xs font-medium text-theme-muted">Lightning Address</p>
-        {editingLn ? (
-          <form onSubmit={saveLightningAddress} className="flex gap-2">
-            <input
-              type="text"
-              value={lnInput}
-              onChange={(e) => setLnInput(e.target.value)}
-              placeholder="you@wallet.com"
-              className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent"
-            />
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-accent px-3 py-2 text-accent-fg"
-            >
-              <Check size={16} />
-            </button>
-          </form>
-        ) : (
-          <div className="flex items-center gap-2">
-            <Zap size={14} className="text-accent flex-shrink-0" />
-            <span className="flex-1 text-sm text-theme-primary truncate">
-              {user?.lightning_address ?? '미설정'}
-            </span>
-            <button onClick={() => setEditingLn(true)}>
-              <Edit2 size={14} className="text-theme-muted" />
-            </button>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between pt-1">
-          <Link to="/terms" className="text-xs text-theme-subtle hover:text-theme-muted">
-            이용약관
-          </Link>
-        </div>
+      {/* ── 하단 링크 ── */}
+      <div className="mx-4 mt-4 mb-2">
+        <Link
+          to="/terms"
+          className="text-[10px] text-theme-subtle hover:text-theme-muted transition-colors"
+        >
+          이용약관
+        </Link>
       </div>
 
       {showSheet && summary && (
