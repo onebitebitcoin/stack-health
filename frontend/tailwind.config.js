@@ -6,6 +6,16 @@ export default {
   ],
   theme: {
     extend: {
+      keyframes: {
+        'ping-once': {
+          '0%':   { transform: 'scale(0.8)', opacity: '1' },
+          '60%':  { transform: 'scale(1.2)', opacity: '0.8' },
+          '100%': { transform: 'scale(1.0)', opacity: '0' },
+        },
+      },
+      animation: {
+        'ping-once': 'ping-once 0.5s ease-out forwards',
+      },
       colors: {
         accent: {
           DEFAULT: 'var(--accent)',
