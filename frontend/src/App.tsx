@@ -46,7 +46,14 @@ export default function App() {
               </RequireAuth>
             }
           />
-          <Route path="/history" element={<HistoryPage />} />
+          <Route
+            path="/history"
+            element={
+              <RequireAuth>
+                <HistoryPage />
+              </RequireAuth>
+            }
+          />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/terms" element={<TermsPage />} />
         </Routes>

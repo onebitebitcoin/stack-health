@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.routes import auth, videos, feed, rewards, admin, comments
+from app.routes import auth, videos, feed, rewards, admin, comments, history
 
 app = FastAPI(title="운동하고 비트코인 받자", version="0.1.0")
 app.router.redirect_slashes = False
@@ -24,6 +24,7 @@ app.include_router(feed.router)
 app.include_router(rewards.router)
 app.include_router(admin.router)
 app.include_router(comments.router)
+app.include_router(history.router)
 
 
 @app.get("/health")

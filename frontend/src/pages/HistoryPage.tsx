@@ -1,24 +1,264 @@
-import { CalendarDays } from 'lucide-react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft, ChevronRight, Flame, X, Heart, Eye } from 'lucide-react'
+import client from '../api/client'
+import type { HistoryResponse, HistoryWorkoutPost } from '../api/types'
+
+const DAYS_KO = ['월', '화', '수', '목', '금', '토', '일']
+
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate()
+}
+
+// Returns weekday index 0=Mon...6=Sun for the 1st of the month
+function getFirstDayIndex(year: number, month: number): number {
+  const day = new Date(year, month - 1, 1).getDay() // 0=Sun...6=Sat
+  return day === 0 ? 6 : day - 1
+}
+
+function pad2(n: number): string {
+  return n.toString().padStart(2, '0')
+}
 
 export default function HistoryPage() {
+  const now = new Date()
+  const [year, setYear] = useState(now.getFullYear())
+  const [month, setMonth] = useState(now.getMonth() + 1)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [selectedPosts, setSelectedPosts] = useState<HistoryWorkoutPost[]>([])
+  const [videoIdx, setVideoIdx] = useState(0)
+
+  const { data, isLoading } = useQuery<HistoryResponse>({
+    queryKey: ['history', year, month],
+    queryFn: async () => {
+      const res = await client.get('/history', { params: { year, month } })
+      return res.data.data
+    },
+    staleTime: 60_000,
+  })
+
+  function prevMonth() {
+    if (month === 1) {
+      setYear((y) => y - 1)
+      setMonth(12)
+    } else {
+      setMonth((m) => m - 1)
+    }
+    setSelectedDate(null)
+  }
+
+  function nextMonth() {
+    const todayYear = now.getFullYear()
+    const todayMonth = now.getMonth() + 1
+    if (year > todayYear || (year === todayYear && month >= todayMonth)) return
+    if (month === 12) {
+      setYear((y) => y + 1)
+      setMonth(1)
+    } else {
+      setMonth((m) => m + 1)
+    }
+    setSelectedDate(null)
+  }
+
+  function openDay(dateStr: string, posts: HistoryWorkoutPost[]) {
+    setSelectedDate(dateStr)
+    setSelectedPosts(posts)
+    setVideoIdx(0)
+  }
+
+  function closeModal() {
+    setSelectedDate(null)
+    setSelectedPosts([])
+    setVideoIdx(0)
+  }
+
+  const totalDays = getDaysInMonth(year, month)
+  const firstIdx = getFirstDayIndex(year, month)
+  const workoutDays = data?.workout_days ?? {}
+  const streak = data?.streak ?? 0
+  const totalWorkoutDays = data?.total_days ?? 0
+
+  const isCurrentMonth =
+    year === now.getFullYear() && month === now.getMonth() + 1
+  const todayNum = isCurrentMonth ? now.getDate() : -1
+
+  const cells: Array<{ day: number | null; dateStr: string | null }> = []
+  for (let i = 0; i < firstIdx; i++) cells.push({ day: null, dateStr: null })
+  for (let d = 1; d <= totalDays; d++) {
+    cells.push({ day: d, dateStr: `${year}-${pad2(month)}-${pad2(d)}` })
+  }
+  // Fill trailing cells to complete last row
+  while (cells.length % 7 !== 0) cells.push({ day: null, dateStr: null })
+
   return (
     <div className="flex flex-col h-[100dvh] bg-theme-page overflow-y-auto pb-20">
-      <div className="px-4 pt-6 pb-4">
+      {/* Header */}
+      <div className="px-4 pt-6 pb-3">
         <h1 className="text-xl font-bold text-theme-primary">운동 기록</h1>
-        <p className="text-sm text-theme-muted mt-1">날짜별 운동 히스토리</p>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 pb-16 text-center px-6">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
-          <CalendarDays size={36} strokeWidth={1.5} />
+      {/* Streak + stats bar */}
+      <div className="mx-4 mb-4 flex items-center gap-3 rounded-xl bg-theme-surface px-4 py-3">
+        <div className="flex items-center gap-1.5 text-orange-400">
+          <Flame size={20} strokeWidth={2} />
+          <span className="text-lg font-bold">{streak}</span>
+          <span className="text-sm font-medium">일 연속</span>
         </div>
-        <div>
-          <p className="font-semibold text-theme-primary">운동 캘린더 준비 중</p>
-          <p className="mt-1 text-sm text-theme-muted">
-            날짜별 운동 영상과 스트릭을 확인할 수 있어요
-          </p>
+        <div className="h-4 w-px bg-theme-border" />
+        <div className="text-sm text-theme-muted">
+          이번 달 <span className="font-semibold text-theme-primary">{totalWorkoutDays}</span>일 운동
         </div>
       </div>
+
+      {/* Month navigation */}
+      <div className="flex items-center justify-between px-4 mb-3">
+        <button
+          onClick={prevMonth}
+          className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-theme-surface transition-colors"
+        >
+          <ChevronLeft size={20} strokeWidth={2} className="text-theme-primary" />
+        </button>
+        <span className="text-base font-semibold text-theme-primary">
+          {year}년 {month}월
+        </span>
+        <button
+          onClick={nextMonth}
+          disabled={isCurrentMonth}
+          className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-theme-surface transition-colors disabled:opacity-30"
+        >
+          <ChevronRight size={20} strokeWidth={2} className="text-theme-primary" />
+        </button>
+      </div>
+
+      {/* Calendar grid */}
+      <div className="px-4">
+        {/* Day headers */}
+        <div className="grid grid-cols-7 mb-1">
+          {DAYS_KO.map((d) => (
+            <div
+              key={d}
+              className="text-center text-xs font-medium text-theme-muted py-1"
+            >
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <div className="flex h-48 items-center justify-center text-theme-muted text-sm">
+            불러오는 중...
+          </div>
+        ) : (
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((cell, idx) => {
+              if (cell.day === null) {
+                return <div key={`empty-${idx}`} className="aspect-square" />
+              }
+              const hasWorkout = cell.dateStr !== null && workoutDays[cell.dateStr]?.length > 0
+              const isToday = cell.day === todayNum
+              const posts = cell.dateStr ? (workoutDays[cell.dateStr] ?? []) : []
+
+              return (
+                <button
+                  key={cell.dateStr}
+                  onClick={() => hasWorkout && openDay(cell.dateStr!, posts)}
+                  className={`
+                    aspect-square flex flex-col items-center justify-center rounded-xl
+                    text-sm font-medium transition-colors relative
+                    ${hasWorkout
+                      ? 'bg-accent text-accent-fg cursor-pointer active:scale-95'
+                      : 'text-theme-muted cursor-default'
+                    }
+                    ${isToday && !hasWorkout ? 'ring-1 ring-accent' : ''}
+                    ${isToday && hasWorkout ? 'ring-2 ring-offset-1 ring-accent' : ''}
+                  `}
+                >
+                  <span>{cell.day}</span>
+                  {hasWorkout && posts.length > 1 && (
+                    <span className="absolute bottom-0.5 text-[9px] opacity-80">
+                      {posts.length}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Video modal */}
+      {selectedDate && selectedPosts.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70"
+          onClick={closeModal}
+        >
+          <div
+            className="w-full max-w-md bg-theme-surface rounded-t-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-theme-border">
+              <span className="text-sm font-semibold text-theme-primary">
+                {selectedDate.replace(/-/g, '.')}
+              </span>
+              {selectedPosts.length > 1 && (
+                <span className="text-xs text-theme-muted">
+                  {videoIdx + 1} / {selectedPosts.length}
+                </span>
+              )}
+              <button onClick={closeModal}>
+                <X size={18} strokeWidth={2} className="text-theme-muted" />
+              </button>
+            </div>
+
+            {/* Video */}
+            <div className="relative bg-black" style={{ aspectRatio: '9/16', maxHeight: '65vh' }}>
+              <video
+                key={selectedPosts[videoIdx].cdn_url}
+                src={selectedPosts[videoIdx].cdn_url}
+                className="w-full h-full object-contain"
+                controls
+                autoPlay
+                playsInline
+              />
+            </div>
+
+            {/* Stats + caption */}
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-4 text-sm text-theme-muted mb-2">
+                <div className="flex items-center gap-1">
+                  <Heart size={14} strokeWidth={1.5} />
+                  <span>{selectedPosts[videoIdx].like_count}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Eye size={14} strokeWidth={1.5} />
+                  <span>{selectedPosts[videoIdx].view_count}</span>
+                </div>
+              </div>
+              {selectedPosts[videoIdx].caption && (
+                <p className="text-sm text-theme-primary line-clamp-2">
+                  {selectedPosts[videoIdx].caption}
+                </p>
+              )}
+            </div>
+
+            {/* Multi-video nav */}
+            {selectedPosts.length > 1 && (
+              <div className="flex gap-2 px-4 pb-4">
+                {selectedPosts.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setVideoIdx(i)}
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${
+                      i === videoIdx ? 'bg-accent' : 'bg-theme-border'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

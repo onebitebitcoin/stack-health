@@ -82,6 +82,22 @@ export interface Comment {
   created_at: string
 }
 
+export interface HistoryWorkoutPost {
+  id: number
+  cdn_url: string
+  like_count: number
+  view_count: number
+  caption: string | null
+}
+
+export interface HistoryResponse {
+  year: number
+  month: number
+  streak: number
+  total_days: number
+  workout_days: Record<string, HistoryWorkoutPost[]>
+}
+
 export interface AdminWeeklySummaryItem {
   rank: number
   user_id: number
