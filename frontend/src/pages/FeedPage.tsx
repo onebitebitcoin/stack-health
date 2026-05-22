@@ -4,6 +4,7 @@ import client from '../api/client'
 import type { FeedResponse } from '../api/types'
 import VideoCard from '../components/VideoCard'
 import LoginPromptSheet from '../components/LoginPromptSheet'
+import LoadingScreen from '../components/LoadingScreen'
 
 async function fetchFeed(cursor?: number): Promise<FeedResponse> {
   const params = cursor ? { cursor } : {}
@@ -17,7 +18,7 @@ export default function FeedPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const touchStartY = useRef(0)
 
-  const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
+  const { data, fetchNextPage, hasNextPage, isLoading } = useInfiniteQuery({
     queryKey: ['feed'],
     queryFn: ({ pageParam }) => fetchFeed(pageParam as number | undefined),
     initialPageParam: undefined as number | undefined,
@@ -65,6 +66,8 @@ export default function FeedPage() {
     el?.addEventListener('wheel', handleWheel, { passive: false })
     return () => el?.removeEventListener('wheel', handleWheel)
   }, [activeIndex, goTo])
+
+  if (isLoading) return <LoadingScreen />
 
   if (posts.length === 0) {
     return (

@@ -6,6 +6,7 @@ import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import type { Post, RewardSummary, Claim } from '../api/types'
 import ClaimBottomSheet from '../components/ClaimBottomSheet'
+import LoadingScreen from '../components/LoadingScreen'
 
 interface ProfileData {
   posts: Post[]
@@ -44,7 +45,7 @@ export default function ProfilePage() {
   const [showSheet, setShowSheet] = useState(false)
   const [claimSuccess, setClaimSuccess] = useState(false)
 
-  const { data } = useQuery<ProfileData>({
+  const { data, isLoading: profileLoading } = useQuery<ProfileData>({
     queryKey: ['profile'],
     queryFn: async () => {
       const [postsRes, summaryRes] = await Promise.all([
@@ -104,6 +105,8 @@ export default function ProfilePage() {
     logout()
     navigate('/login')
   }
+
+  if (profileLoading) return <LoadingScreen />
 
   if (claimSuccess) {
     return (
