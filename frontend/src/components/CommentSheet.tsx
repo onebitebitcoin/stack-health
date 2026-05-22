@@ -95,6 +95,9 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
           )}
           {comments.map((c) => (
             <div key={c.id} className="flex items-start gap-2">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg text-xs font-bold">
+                {c.username.charAt(0).toUpperCase()}
+              </div>
               <div className="flex-1">
                 <span className="text-xs font-semibold text-zinc-300">@{c.username}</span>
                 <p className="text-sm text-white mt-0.5 break-words">{c.content}</p>
