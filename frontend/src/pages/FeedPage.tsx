@@ -16,6 +16,7 @@ async function fetchFeed(cursor?: number): Promise<FeedResponse> {
 export default function FeedPage() {
   const [activeIndex, setActiveIndex] = useState(0)
   const [showLogin, setShowLogin] = useState(false)
+  const [isMuted, setIsMuted] = useState(true)
   const containerRef = useRef<HTMLDivElement>(null)
   const touchStartY = useRef(0)
 
@@ -99,6 +100,8 @@ export default function FeedPage() {
             key={post.id}
             post={post}
             onLoginRequired={() => setShowLogin(true)}
+            isMuted={isMuted}
+            onToggleMute={() => setIsMuted((m) => !m)}
           />
         ))}
       </div>

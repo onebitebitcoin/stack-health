@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { Heart, MessageCircle } from 'lucide-react'
+import { Heart, MessageCircle, Volume2, VolumeX } from 'lucide-react'
 import type { Post } from '../api/types'
 import TagChip from './TagChip'
 import PointBadge from './PointBadge'
@@ -10,9 +10,11 @@ import { useAuthStore } from '../store/auth'
 interface VideoCardProps {
   post: Post
   onLoginRequired: () => void
+  isMuted: boolean
+  onToggleMute: () => void
 }
 
-export default function VideoCard({ post, onLoginRequired }: VideoCardProps) {
+export default function VideoCard({ post, onLoginRequired, isMuted, onToggleMute }: VideoCardProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const token = useAuthStore((s) => s.token)
@@ -46,6 +48,11 @@ export default function VideoCard({ post, onLoginRequired }: VideoCardProps) {
     return () => observer.disconnect()
   }, [post.id, token, viewSent])
 
+  // isMuted prop이 바뀌면 video 엘리먼트에 즉시 반영
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = isMuted
+  }, [isMuted])
+
   const handleLike = useCallback(async () => {
     if (!token) {
       onLoginRequired()
@@ -69,10 +76,19 @@ export default function VideoCard({ post, onLoginRequired }: VideoCardProps) {
         src={post.cdn_url}
         className="h-full w-full object-cover"
         loop
-        muted
+        muted={isMuted}
         playsInline
         preload="metadata"
       />
+
+      {/* 음소거 토글 — 우상단 */}
+      <button
+        onClick={onToggleMute}
+        className="absolute top-4 right-4 rounded-full bg-black/40 p-2 text-white backdrop-blur-sm"
+        aria-label={isMuted ? '소리 켜기' : '소리 끄기'}
+      >
+        {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+      </button>
 
       {/* right actions - 세로 버튼 스택 */}
       <div className="absolute bottom-24 right-3 flex flex-col items-center gap-4">
