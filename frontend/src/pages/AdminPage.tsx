@@ -11,7 +11,7 @@ export default function AdminPage() {
   const qc = useQueryClient()
   const [adminKey, setAdminKey] = useState('')
   const [submitted, setSubmitted] = useState(false)
-  const [activeTab, setActiveTab] = useState<TabId>('rewards')
+  const [activeTab, setActiveTab] = useState<TabId>('users')
   const { theme, setTheme } = useThemeStore()
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function AdminPage() {
   })
 
   // 유저 탭
-  const { data: users = [], isError: usersError } = useQuery<AdminUser[]>({
+  const { data: users = [], isError: usersError, isLoading: usersLoading } = useQuery<AdminUser[]>({
     queryKey: ['admin-users', adminKey],
     queryFn: async () => {
       const res = await axios.get<{ data: { users: AdminUser[] } }>('/admin/users', { headers })
@@ -64,7 +64,7 @@ export default function AdminPage() {
   })
 
   // 영상 탭
-  const { data: videos = [], isError: videosError } = useQuery<AdminVideo[]>({
+  const { data: videos = [], isError: videosError, isLoading: videosLoading } = useQuery<AdminVideo[]>({
     queryKey: ['admin-videos', adminKey],
     queryFn: async () => {
       const res = await axios.get<{ data: { videos: AdminVideo[] } }>('/admin/videos', { headers })
@@ -170,7 +170,13 @@ export default function AdminPage() {
       {/* 유저 탭 */}
       {submitted && activeTab === 'users' && (
         <div className="space-y-3">
-          {users.length === 0 && (
+          {usersLoading && (
+            <p className="text-center text-theme-muted py-10">불러오는 중...</p>
+          )}
+          {!usersLoading && usersError && (
+            <p className="text-center text-red-400 py-10">조회 실패 — 어드민 키를 확인하세요</p>
+          )}
+          {!usersLoading && !usersError && users.length === 0 && (
             <p className="text-center text-theme-subtle py-10">유저가 없습니다</p>
           )}
           {users.map((u) => (
@@ -209,7 +215,13 @@ export default function AdminPage() {
       {/* 영상 탭 */}
       {submitted && activeTab === 'videos' && (
         <div className="space-y-3">
-          {videos.length === 0 && (
+          {videosLoading && (
+            <p className="text-center text-theme-muted py-10">불러오는 중...</p>
+          )}
+          {!videosLoading && videosError && (
+            <p className="text-center text-red-400 py-10">조회 실패 — 어드민 키를 확인하세요</p>
+          )}
+          {!videosLoading && !videosError && videos.length === 0 && (
             <p className="text-center text-theme-subtle py-10">영상이 없습니다</p>
           )}
           {videos.map((v) => (
