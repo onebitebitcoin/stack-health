@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export const THEMES = ['sapphire', 'volt', 'indigo', 'arctic', 'forest'] as const
+export const THEMES = ['sapphire', 'volt', 'volt-light', 'indigo', 'arctic', 'forest'] as const
 export type Theme = (typeof THEMES)[number]
 
 export const THEME_LABELS: Record<Theme, string> = {
   sapphire: 'Sapphire',
   volt: 'Volt Dark',
+  'volt-light': 'Volt Light',
   indigo: 'Royal Indigo',
   arctic: 'Arctic Light',
   forest: 'Forest Light',
@@ -20,7 +21,7 @@ interface ThemeState {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
-      theme: 'sapphire',
+      theme: 'volt',
       setTheme: (theme) => {
         document.documentElement.setAttribute('data-theme', theme)
         set({ theme })

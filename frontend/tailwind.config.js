@@ -10,6 +10,7 @@ export default {
         accent: {
           DEFAULT: 'var(--accent)',
           fg: 'var(--accent-fg)',
+          text: 'var(--accent-text, var(--accent))',
         },
         theme: {
           page: 'var(--bg-page)',

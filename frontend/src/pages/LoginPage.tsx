@@ -46,7 +46,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
-      <h1 className="mb-2 text-2xl font-bold text-accent">운동하고 비트코인</h1>
+      <h1 className="mb-2 text-2xl font-bold text-accent">Stack Health</h1>
       <p className="mb-8 text-sm text-theme-muted">운동하면 비트코인이 쌓인다</p>
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-3">
