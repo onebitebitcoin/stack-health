@@ -7,12 +7,13 @@ MODE="${1:-all}"
 BACKEND_LINT_RESULT="SKIP"
 BACKEND_TEST_RESULT="SKIP"
 FRONTEND_LINT_RESULT="SKIP"
+FRONTEND_TEST_RESULT="SKIP"
 
 run_backend_lint() {
   echo "[Backend Lint] ruff check..."
   cd "$PROJECT_ROOT/backend"
   source .venv/bin/activate
-  if python -m ruff check app/ tests/ 2>/dev/null; then
+  if python3 -m ruff check app/ tests/ 2>/dev/null; then
     BACKEND_LINT_RESULT="PASS"
   else
     BACKEND_LINT_RESULT="FAIL"
@@ -20,10 +21,10 @@ run_backend_lint() {
 }
 
 run_backend_test() {
-  echo "[Backend Test] pytest..."
+  echo "[Backend Test] pytest + coverage (85%+)..."
   cd "$PROJECT_ROOT/backend"
   source .venv/bin/activate
-  if DATABASE_URL="sqlite:///./test.db" pytest tests/ -v 2>&1; then
+  if DATABASE_URL="sqlite:///./test.db" python3 -m pytest tests/ -q 2>&1; then
     BACKEND_TEST_RESULT="PASS"
   else
     BACKEND_TEST_RESULT="FAIL"
@@ -41,6 +42,16 @@ run_frontend_lint() {
   fi
 }
 
+run_frontend_test() {
+  echo "[Frontend Test] vitest + coverage (85%+)..."
+  cd "$PROJECT_ROOT/frontend"
+  if npm run test:coverage 2>&1; then
+    FRONTEND_TEST_RESULT="PASS"
+  else
+    FRONTEND_TEST_RESULT="FAIL"
+  fi
+}
+
 case "$MODE" in
   lint)
     run_backend_lint
@@ -52,17 +63,24 @@ case "$MODE" in
     ;;
   frontend)
     run_frontend_lint
+    run_frontend_test
+    ;;
+  test)
+    run_backend_test
+    run_frontend_test
     ;;
   *)
     run_backend_lint
     run_backend_test
     run_frontend_lint
+    run_frontend_test
     ;;
 esac
 
 echo ""
-echo "| 구분            | 결과 |"
-echo "|-----------------|------|"
-echo "| Backend Lint    | $BACKEND_LINT_RESULT |"
-echo "| Backend Test    | $BACKEND_TEST_RESULT |"
-echo "| Frontend Lint   | $FRONTEND_LINT_RESULT |"
+echo "| 구분              | 결과 |"
+echo "|-------------------|------|"
+echo "| Backend Lint      | $BACKEND_LINT_RESULT |"
+echo "| Backend Test+Cov  | $BACKEND_TEST_RESULT |"
+echo "| Frontend Lint     | $FRONTEND_LINT_RESULT |"
+echo "| Frontend Test+Cov | $FRONTEND_TEST_RESULT |"

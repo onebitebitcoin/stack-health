@@ -101,6 +101,7 @@ def confirm_upload(
         tags=tags,
         like_count=post.like_count,
         view_count=post.view_count,
+        comment_count=0,
         created_at=post.created_at,
         cdn_url=video.cdn_url,
         username=current_user.username,

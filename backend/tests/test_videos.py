@@ -113,3 +113,56 @@ def test_confirm_success_earns_points(mock_cdn, client: TestClient) -> None:
     # Early adopter (id <= 50) gets 2x bonus: 50pt * 2 = 100pt
     assert data["points_earned"] == 100
     assert data["post"]["user_id"] is not None
+
+
+def test_my_posts_empty(client: TestClient) -> None:
+    token = _register_and_token(client, "mp@x.com", "mpuser")
+    res = client.get("/api/v1/videos/my-posts", headers=_auth(token))
+    assert res.status_code == 200
+    assert res.json()["data"]["posts"] == []
+
+
+def test_my_posts_returns_own_posts(client: TestClient) -> None:
+    token = _register_and_token(client, "mp2@x.com", "mpuser2")
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
+        client.post("/api/v1/videos/confirm", json={"r2_key": "videos/v.mp4", "duration_sec": 20}, headers=_auth(token))
+    res = client.get("/api/v1/videos/my-posts", headers=_auth(token))
+    posts = res.json()["data"]["posts"]
+    assert len(posts) == 1
+    assert posts[0]["cdn_url"] == "https://cdn/v.mp4"
+
+
+def test_my_posts_excludes_others(client: TestClient) -> None:
+    token_a = _register_and_token(client, "mp3a@x.com", "mpusera")
+    token_b = _register_and_token(client, "mp3b@x.com", "mpuserb")
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/b.mp4"):
+        client.post("/api/v1/videos/confirm", json={"r2_key": "videos/b.mp4", "duration_sec": 20}, headers=_auth(token_b))
+    res = client.get("/api/v1/videos/my-posts", headers=_auth(token_a))
+    assert res.json()["data"]["posts"] == []
+
+
+def test_delete_post_owner(client: TestClient) -> None:
+    token = _register_and_token(client, "dp@x.com", "dpuser")
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
+        post_res = client.post("/api/v1/videos/confirm", json={"r2_key": "videos/del.mp4", "duration_sec": 20}, headers=_auth(token))
+    post_id = post_res.json()["data"]["post"]["id"]
+    with patch("app.routes.videos.r2_service.delete_object"):
+        del_res = client.delete(f"/api/v1/videos/posts/{post_id}", headers=_auth(token))
+    assert del_res.status_code == 200
+    assert del_res.json()["data"]["deleted"] == post_id
+
+
+def test_delete_post_not_found(client: TestClient) -> None:
+    token = _register_and_token(client, "dp2@x.com", "dpuser2")
+    res = client.delete("/api/v1/videos/posts/99999", headers=_auth(token))
+    assert res.status_code == 404
+
+
+def test_delete_post_forbidden(client: TestClient) -> None:
+    token_owner = _register_and_token(client, "dp3a@x.com", "dpuser3a")
+    token_other = _register_and_token(client, "dp3b@x.com", "dpuser3b")
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
+        post_res = client.post("/api/v1/videos/confirm", json={"r2_key": "videos/own.mp4", "duration_sec": 20}, headers=_auth(token_owner))
+    post_id = post_res.json()["data"]["post"]["id"]
+    res = client.delete(f"/api/v1/videos/posts/{post_id}", headers=_auth(token_other))
+    assert res.status_code == 403
