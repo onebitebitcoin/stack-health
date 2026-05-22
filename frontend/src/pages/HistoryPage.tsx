@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Flame, X, Heart, Eye } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Flame, Heart, Eye, ArrowLeft } from 'lucide-react'
 import client from '../api/client'
 import type { HistoryResponse, HistoryWorkoutPost } from '../api/types'
 
@@ -206,71 +206,68 @@ export default function HistoryPage() {
         )}
       </div>
 
-      {/* Video modal */}
+      {/* 풀스크린 영상 뷰어 */}
       {selectedDate && selectedPosts.length > 0 && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70"
-          onClick={closeModal}
-        >
-          <div
-            className="w-full max-w-md bg-theme-surface rounded-t-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-theme-border">
-              <span className="text-sm font-semibold text-theme-primary">
-                {selectedDate.replace(/-/g, '.')}
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+
+          {/* 상단 바 */}
+          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/60 to-transparent">
+            <button
+              onClick={closeModal}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/30"
+            >
+              <ArrowLeft size={20} strokeWidth={2} color="white" />
+            </button>
+            <span className="text-sm font-semibold text-white">
+              {selectedDate.replace(/-/g, '.')}
+            </span>
+            {selectedPosts.length > 1 ? (
+              <span className="text-xs text-white/70">
+                {videoIdx + 1} / {selectedPosts.length}
               </span>
-              {selectedPosts.length > 1 && (
-                <span className="text-xs text-theme-muted">
-                  {videoIdx + 1} / {selectedPosts.length}
-                </span>
-              )}
-              <button onClick={closeModal}>
-                <X size={18} strokeWidth={2} className="text-theme-muted" />
-              </button>
-            </div>
+            ) : (
+              <div className="w-9" />
+            )}
+          </div>
 
-            {/* Video */}
-            <div className="relative bg-black" style={{ aspectRatio: '9/16', maxHeight: '65vh' }}>
-              <video
-                key={selectedPosts[videoIdx].cdn_url}
-                src={selectedPosts[videoIdx].cdn_url}
-                className="w-full h-full object-contain"
-                controls
-                autoPlay
-                playsInline
-              />
-            </div>
+          {/* 영상 (풀스크린 9:16) */}
+          <video
+            key={selectedPosts[videoIdx].cdn_url}
+            src={selectedPosts[videoIdx].cdn_url}
+            className="h-full w-full object-contain"
+            autoPlay
+            playsInline
+            controls
+          />
 
-            {/* Stats + caption */}
-            <div className="px-4 py-3">
-              <div className="flex items-center gap-4 text-sm text-theme-muted mb-2">
-                <div className="flex items-center gap-1">
-                  <Heart size={14} strokeWidth={1.5} />
-                  <span>{selectedPosts[videoIdx].like_count}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Eye size={14} strokeWidth={1.5} />
-                  <span>{selectedPosts[videoIdx].view_count}</span>
-                </div>
+          {/* 하단 오버레이 */}
+          <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-safe pb-6 pt-16 bg-gradient-to-t from-black/70 to-transparent">
+            {/* stats */}
+            <div className="flex items-center gap-4 mb-2">
+              <div className="flex items-center gap-1.5 text-white/80">
+                <Heart size={14} strokeWidth={1.5} />
+                <span className="text-sm">{selectedPosts[videoIdx].like_count}</span>
               </div>
-              {selectedPosts[videoIdx].caption && (
-                <p className="text-sm text-theme-primary line-clamp-2">
-                  {selectedPosts[videoIdx].caption}
-                </p>
-              )}
+              <div className="flex items-center gap-1.5 text-white/80">
+                <Eye size={14} strokeWidth={1.5} />
+                <span className="text-sm">{selectedPosts[videoIdx].view_count}</span>
+              </div>
             </div>
-
-            {/* Multi-video nav */}
+            {/* caption */}
+            {selectedPosts[videoIdx].caption && (
+              <p className="text-sm text-white/90 line-clamp-2 mb-3">
+                {selectedPosts[videoIdx].caption}
+              </p>
+            )}
+            {/* 복수 영상 도트 */}
             {selectedPosts.length > 1 && (
-              <div className="flex gap-2 px-4 pb-4">
+              <div className="flex gap-1.5">
                 {selectedPosts.map((_, i) => (
                   <button
                     key={i}
                     onClick={() => setVideoIdx(i)}
-                    className={`h-1.5 flex-1 rounded-full transition-colors ${
-                      i === videoIdx ? 'bg-accent' : 'bg-theme-border'
+                    className={`h-1 flex-1 rounded-full transition-all ${
+                      i === videoIdx ? 'bg-accent' : 'bg-white/30'
                     }`}
                   />
                 ))}
