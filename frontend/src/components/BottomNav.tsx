@@ -1,11 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Plus, User } from 'lucide-react'
+import { Home, CalendarDays, Plus, Award, User } from 'lucide-react'
 import { useAuthStore } from '../store/auth'
-
-const tabs = [
-  { to: '/', icon: Home, label: '피드' },
-  { to: '/profile', icon: User, label: '프로필' },
-]
 
 export default function BottomNav() {
   const navigate = useNavigate()
@@ -19,23 +14,27 @@ export default function BottomNav() {
     }
   }
 
+  const navItem = ({ isActive }: { isActive: boolean }) =>
+    `flex flex-col items-center gap-0.5 px-3 py-1 text-xs transition-colors ${
+      isActive ? 'text-accent-text' : 'text-theme-subtle'
+    }`
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 h-16 border-t border-theme-border bg-theme-surface">
       <div className="flex h-full items-center justify-around">
-        <NavLink
-          to={tabs[0].to}
-          end
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-4 py-1 text-xs transition-colors ${
-              isActive ? 'text-accent-text' : 'text-theme-subtle'
-            }`
-          }
-        >
+        {/* 피드 */}
+        <NavLink to="/" end className={navItem}>
           <Home size={22} strokeWidth={1.5} />
           <span>피드</span>
         </NavLink>
 
-        {/* FAB — overlaps tab bar */}
+        {/* 히스토리 */}
+        <NavLink to="/history" className={navItem}>
+          <CalendarDays size={22} strokeWidth={1.5} />
+          <span>기록</span>
+        </NavLink>
+
+        {/* FAB — 업로드 */}
         <div className="relative flex flex-col items-center">
           <button
             onClick={handleUpload}
@@ -47,14 +46,14 @@ export default function BottomNav() {
           <span className="mt-1 text-xs text-transparent select-none">업로드</span>
         </div>
 
-        <NavLink
-          to={tabs[1].to}
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-4 py-1 text-xs transition-colors ${
-              isActive ? 'text-accent-text' : 'text-theme-subtle'
-            }`
-          }
-        >
+        {/* 리워드 */}
+        <NavLink to="/rewards" className={navItem}>
+          <Award size={22} strokeWidth={1.5} />
+          <span>리워드</span>
+        </NavLink>
+
+        {/* 프로필 */}
+        <NavLink to="/profile" className={navItem}>
           <User size={22} strokeWidth={1.5} />
           <span>프로필</span>
         </NavLink>

@@ -8,6 +8,7 @@ import RewardsPage from './pages/RewardsPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
 import TermsPage from './pages/TermsPage'
+import HistoryPage from './pages/HistoryPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -45,6 +46,7 @@ export default function App() {
               </RequireAuth>
             }
           />
+          <Route path="/history" element={<HistoryPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/terms" element={<TermsPage />} />
         </Routes>
