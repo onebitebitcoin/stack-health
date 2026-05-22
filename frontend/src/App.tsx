@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from './store/auth'
 import BottomNav from './components/BottomNav'
 import FeedPage from './pages/FeedPage'
@@ -15,50 +15,60 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return token ? <>{children}</> : <Navigate to="/login" replace />
 }
 
+const HIDE_NAV = ['/login', '/admin', '/terms']
+
+function Layout() {
+  const { pathname } = useLocation()
+  const hideNav = HIDE_NAV.includes(pathname)
+  return (
+    <div className="relative h-full">
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<FeedPage />} />
+        <Route
+          path="/upload"
+          element={
+            <RequireAuth>
+              <UploadPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/rewards"
+          element={
+            <RequireAuth>
+              <RewardsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <RequireAuth>
+              <ProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <RequireAuth>
+              <HistoryPage />
+            </RequireAuth>
+          }
+        />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+      </Routes>
+      {!hideNav && <BottomNav />}
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="relative h-full">
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<FeedPage />} />
-          <Route
-            path="/upload"
-            element={
-              <RequireAuth>
-                <UploadPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/rewards"
-            element={
-              <RequireAuth>
-                <RewardsPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <RequireAuth>
-                <ProfilePage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/history"
-            element={
-              <RequireAuth>
-                <HistoryPage />
-              </RequireAuth>
-            }
-          />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-        </Routes>
-        <BottomNav />
-      </div>
+      <Layout />
     </BrowserRouter>
   )
 }
