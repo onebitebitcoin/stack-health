@@ -9,3 +9,4 @@
 | 2026-05-22 13:00 | Volt Dark 기본·Volt Light 추가 / FAB 업로드 / Stack Health 브랜딩 / 댓글 기능 | [2026-05-22-1300-stack-health-discuss.md](2026-05-22-1300-stack-health-discuss.md) |
 | 2026-05-22 14:00 | 프로젝트 비전 재정의 — "운동 성장 일기" + vision.md 작성 + Phase A/B 경계 확정 | [2026-05-22-1400-vision-define.md](2026-05-22-1400-vision-define.md) |
 | 2026-05-22 15:00 | 어드민 3탭(유저·영상·리워드) P0 확정 + 숏츠 댓글 UX 설계 확정 (구현 Phase B) | [2026-05-22-1500-admin-comment-discuss.md](2026-05-22-1500-admin-comment-discuss.md) |
+| 2026-05-22 16:00 | 진행 현황 요약 — v0.4.0 구현 완료 내역 + Phase A 잔여 To-Do + 런칭 일정 | [2026-05-22-1600-progress-summary.md](2026-05-22-1600-progress-summary.md) |

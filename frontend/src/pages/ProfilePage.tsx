@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LogOut, Zap, Edit2, Check, Lock, CheckCircle, Trash2 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import type { Post, RewardSummary, Claim } from '../api/types'
@@ -310,6 +310,8 @@ export default function ProfilePage() {
           <LogOut size={16} />
           로그아웃
         </button>
+
+        <Link to="/terms" className="text-xs text-theme-subtle hover:text-theme-muted">이용약관</Link>
       </div>
 
       {showSheet && summary && (

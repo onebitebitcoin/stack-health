@@ -34,8 +34,9 @@ def test_summary_points_after_upload(client: TestClient) -> None:
     _upload(client, token)
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     data = res.json()["data"]
-    assert data["current_week_points"] == 50
-    assert data["satoshi_amount"] == 500  # 50pt = 500 sats
+    # Early adopter (id <= 50) gets 2x bonus: 50pt * 2 = 100pt = 1000 sats
+    assert data["current_week_points"] == 100
+    assert data["satoshi_amount"] == 1000  # 100pt = 1000 sats
 
 
 def test_claim_requires_minimum_sats(client: TestClient) -> None:
@@ -47,10 +48,9 @@ def test_claim_requires_minimum_sats(client: TestClient) -> None:
 
 def test_claim_success(client: TestClient) -> None:
     token, _ = _reg(client)
-    # Upload twice to get 100pt = 1000 sats (minimum)
+    # Upload once to get 100pt (2x early adopter bonus) = 1000 sats (minimum)
     _upload(client, token, "videos/v1.mp4")
-    _upload(client, token, "videos/v2.mp4")
-    # 100pt = 1000 sats
+    # 100pt (2x bonus) = 1000 sats
 
     # Set lightning address first
     client.patch("/api/v1/auth/me", json={"lightning_address": "user@walletofsatoshi.com"}, headers=_auth(token))
@@ -86,10 +86,10 @@ def test_claim_list(client: TestClient) -> None:
 
 
 def test_satoshi_calculation(client: TestClient) -> None:
-    """100pt = 1000 sats, 50pt = 500 sats (below min claim)."""
+    """Early adopter gets 2x bonus: 50pt * 2 = 100pt = 1000 sats (meets minimum)."""
     token, _ = _reg(client)
-    _upload(client, token)  # +50pt
+    _upload(client, token)  # +100pt (2x early adopter bonus)
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     data = res.json()["data"]
-    assert data["satoshi_amount"] == 500
-    assert data["claimable"] is False  # 500 < 1000 min
+    assert data["satoshi_amount"] == 1000
+    assert data["claimable"] is True  # 1000 >= 1000 min

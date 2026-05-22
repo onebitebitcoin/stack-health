@@ -129,6 +129,32 @@ export default function RewardsPage() {
         </div>
       )}
 
+      {/* Lightning 지갑 가이드 */}
+      <div className="rounded-2xl bg-theme-surface p-4 space-y-3">
+        <p className="text-sm font-semibold text-theme-primary">지갑이 없으신가요?</p>
+        <p className="text-xs text-theme-muted">Lightning 지갑을 설치하면 BTC를 수령할 수 있습니다.</p>
+        <div className="flex flex-col gap-2">
+          <a
+            href="https://www.walletofsatoshi.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between rounded-xl bg-theme-surface2 px-4 py-3 text-sm text-theme-primary hover:bg-theme-border"
+          >
+            <span>Wallet of Satoshi</span>
+            <span className="text-theme-subtle text-xs">추천 · 초보자용</span>
+          </a>
+          <a
+            href="https://phoenix.acinq.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between rounded-xl bg-theme-surface2 px-4 py-3 text-sm text-theme-primary hover:bg-theme-border"
+          >
+            <span>Phoenix Wallet</span>
+            <span className="text-theme-subtle text-xs">고급 · 비수탁</span>
+          </a>
+        </div>
+      </div>
+
       {showSheet && summary && (
         <ClaimBottomSheet
           satoshiAmount={summary.satoshi_amount}

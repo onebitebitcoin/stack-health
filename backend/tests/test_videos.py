@@ -110,5 +110,6 @@ def test_confirm_success_earns_points(mock_cdn, client: TestClient) -> None:
     }, headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
-    assert data["points_earned"] == 50
+    # Early adopter (id <= 50) gets 2x bonus: 50pt * 2 = 100pt
+    assert data["points_earned"] == 100
     assert data["post"]["user_id"] is not None

@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     r2_bucket_name: str = ""
     r2_public_url: str = ""
 
+    # Blink API
+    blink_api_key: str = ""
+
     # Admin
     admin_secret_key: str
 

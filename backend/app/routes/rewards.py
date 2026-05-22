@@ -1,11 +1,15 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models.claim import LightningClaim
 from app.models.user import User
 from app.routes.auth import get_current_user
 from app.schemas.reward import ClaimRequest, ClaimSchema, RewardSummarySchema
+from app.services.blink import pay_lightning_address
 from app.services.reward import (
     MIN_CLAIM_SATS,
     get_week_label,
@@ -14,6 +18,8 @@ from app.services.reward import (
     has_claimed_this_week,
     points_to_sats,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/rewards", tags=["rewards"])
 
@@ -77,6 +83,15 @@ def create_claim(
     db.add(claim)
     db.commit()
     db.refresh(claim)
+
+    if settings.blink_api_key:
+        result = pay_lightning_address(ln_address, sats)
+        if result["success"]:
+            claim.status = "paid"
+        else:
+            claim.status = "failed"
+            logger.error("Blink payment failed for claim %s: %s", claim.id, result["error"])
+        db.commit()
 
     return {"data": {"claim": ClaimSchema.model_validate(claim)}}
 

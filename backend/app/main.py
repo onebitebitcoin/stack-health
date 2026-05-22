@@ -28,7 +28,8 @@ app.include_router(comments.router)
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "version": "0.1.0"}
+    version = Path(__file__).parent.parent.parent.joinpath("VERSION").read_text().strip()
+    return {"status": "ok", "version": version}
 
 
 # Serve React SPA (production: static/ dir built by Docker)

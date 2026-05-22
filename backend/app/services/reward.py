@@ -88,14 +88,16 @@ def add_points(
     points: int,
     reason: str,
     reference_id: int | None = None,
+    early_adopter_bonus: bool = False,
 ) -> RewardPoint | None:
     """Add points respecting daily cap. Returns None if daily cap reached."""
     current_daily = get_daily_total_points(db, user_id)
     if current_daily >= DAILY_MAX_POINTS:
         return None
 
+    base_points = points * 2 if early_adopter_bonus else points
     # Cap at daily max
-    actual_points = min(points, DAILY_MAX_POINTS - current_daily)
+    actual_points = min(base_points, DAILY_MAX_POINTS - current_daily)
     week_label = get_week_label()
 
     rp = RewardPoint(

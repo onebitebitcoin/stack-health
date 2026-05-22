@@ -97,5 +97,5 @@ def test_view_dedup_same_user_same_day(client: TestClient) -> None:
     # Poster should only get +2pt once from views (not twice)
     summary = client.get("/api/v1/rewards/summary", headers=_auth(token_poster))
     pts = summary.json()["data"]["current_week_points"]
-    # 50 upload + 2 view (only once) = 52
-    assert pts == 52
+    # 100 upload (2x early adopter bonus) + 2 view (only once) = 102
+    assert pts == 102

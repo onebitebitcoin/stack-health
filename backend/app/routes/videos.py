@@ -86,7 +86,7 @@ def confirm_upload(
     db.add(post)
     db.flush()
 
-    rp = add_points(db, current_user.id, POINTS_PER_UPLOAD, "upload", reference_id=video.id)
+    rp = add_points(db, current_user.id, POINTS_PER_UPLOAD, "upload", reference_id=video.id, early_adopter_bonus=(current_user.id <= 50))
     points_earned = rp.points if rp else 0
 
     db.commit()

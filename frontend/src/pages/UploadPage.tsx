@@ -28,6 +28,7 @@ export default function UploadPage() {
   const [progress, setProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [done, setDone] = useState(false)
+  const [pointsEarned, setPointsEarned] = useState(0)
   const [error, setError] = useState('')
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
@@ -74,16 +75,15 @@ export default function UploadPage() {
         videoEl.onloadedmetadata = () => resolve(Math.round(videoEl.duration))
       })
 
-      await client.post('/videos/confirm', {
+      const confirmRes = await client.post<{ data: { points_earned: number } }>('/videos/confirm', {
         r2_key,
         file_hash: hash,
         duration_sec: Math.min(60, Math.max(10, duration)),
         caption: caption || null,
         tags: selectedTags,
       })
-
+      setPointsEarned(confirmRes.data.data.points_earned)
       setDone(true)
-      setTimeout(() => navigate('/'), 1500)
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
@@ -99,7 +99,27 @@ export default function UploadPage() {
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-theme-page">
         <CheckCircle size={64} className="text-accent" />
         <p className="text-xl font-bold text-theme-primary">업로드 완료!</p>
-        <p className="text-theme-muted">+50pt 적립됐어요</p>
+        <p className="text-theme-muted">+{pointsEarned}pt 적립됐어요</p>
+        {typeof navigator !== 'undefined' && 'share' in navigator && (
+          <button
+            onClick={() => {
+              navigator.share({
+                title: '운동하고 비트코인 받자',
+                text: '운동 영상을 올렸어요! 같이 운동해요 💪',
+                url: window.location.origin,
+              }).catch(() => undefined)
+            }}
+            className="rounded-xl bg-accent px-6 py-3 font-semibold text-accent-fg"
+          >
+            공유하기
+          </button>
+        )}
+        <button
+          onClick={() => navigate('/')}
+          className="rounded-xl bg-theme-surface2 px-6 py-3 text-sm text-theme-primary"
+        >
+          피드 보기
+        </button>
       </div>
     )
   }

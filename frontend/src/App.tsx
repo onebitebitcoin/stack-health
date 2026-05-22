@@ -7,6 +7,7 @@ import UploadPage from './pages/UploadPage'
 import RewardsPage from './pages/RewardsPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
+import TermsPage from './pages/TermsPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -45,6 +46,7 @@ export default function App() {
             }
           />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/terms" element={<TermsPage />} />
         </Routes>
         <BottomNav />
       </div>
