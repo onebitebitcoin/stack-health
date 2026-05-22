@@ -158,28 +158,48 @@ export default function HistoryPage() {
               const isToday = cell.day === todayNum
               const posts = cell.dateStr ? (workoutDays[cell.dateStr] ?? []) : []
 
+              if (hasWorkout) {
+                return (
+                  <button
+                    key={cell.dateStr}
+                    onClick={() => openDay(cell.dateStr!, posts)}
+                    className={`
+                      aspect-square relative overflow-hidden rounded-xl
+                      active:scale-95 transition-transform
+                      ${isToday ? 'ring-2 ring-accent ring-offset-1 ring-offset-[--bg-page]' : ''}
+                    `}
+                  >
+                    <video
+                      src={posts[0].cdn_url}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                    {/* 날짜 오버레이 */}
+                    <div className="absolute inset-0 bg-black/30" />
+                    <span className="absolute bottom-1 left-0 right-0 text-center text-[11px] font-bold text-white leading-none">
+                      {cell.day}
+                    </span>
+                    {/* 복수 영상 인디케이터 */}
+                    {posts.length > 1 && (
+                      <div className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-accent" />
+                    )}
+                  </button>
+                )
+              }
+
               return (
-                <button
+                <div
                   key={cell.dateStr}
-                  onClick={() => hasWorkout && openDay(cell.dateStr!, posts)}
                   className={`
-                    aspect-square flex flex-col items-center justify-center rounded-xl
-                    text-sm font-medium transition-colors relative
-                    ${hasWorkout
-                      ? 'bg-accent text-accent-fg cursor-pointer active:scale-95'
-                      : 'text-theme-muted cursor-default'
-                    }
-                    ${isToday && !hasWorkout ? 'ring-1 ring-accent' : ''}
-                    ${isToday && hasWorkout ? 'ring-2 ring-offset-1 ring-accent' : ''}
+                    aspect-square flex items-center justify-center rounded-xl
+                    text-sm font-medium
+                    ${isToday ? 'ring-1 ring-accent text-accent' : 'text-theme-muted'}
                   `}
                 >
-                  <span>{cell.day}</span>
-                  {hasWorkout && posts.length > 1 && (
-                    <span className="absolute bottom-0.5 text-[9px] opacity-80">
-                      {posts.length}
-                    </span>
-                  )}
-                </button>
+                  {cell.day}
+                </div>
               )
             })}
           </div>
