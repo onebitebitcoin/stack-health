@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Database
+dev.db
+*.db
+*.sqlite
+
+# Node
+node_modules/
+dist/
+.cache/
+
+# Build
+build/
+*.egg
+*.whl
+backend/static/
+
+# Logs
+*.log
+debug.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic (keep migrations, ignore pycache)
+backend/alembic/__pycache__/
+
+# OMC state
+.omc/
+**/.omc/
+.claude/
+**/.claude/
+.pytest_cache/
+**/.pytest_cache/

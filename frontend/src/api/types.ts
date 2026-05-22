@@ -1,0 +1,63 @@
+export interface User {
+  id: number
+  email: string
+  username: string
+  lightning_address: string | null
+  avatar_url: string | null
+  is_admin: boolean
+}
+
+export interface Post {
+  id: number
+  video_id: number
+  user_id: number
+  caption: string | null
+  tags: string[]
+  like_count: number
+  view_count: number
+  created_at: string
+  cdn_url: string
+  username: string
+}
+
+export interface FeedResponse {
+  posts: Post[]
+  next_cursor: number | null
+}
+
+export interface RewardSummary {
+  week_label: string
+  current_week_points: number
+  satoshi_amount: number
+  claimable: boolean
+  deadline: string
+  already_claimed: boolean
+}
+
+export interface Claim {
+  id: number
+  week_label: string
+  points_used: number
+  satoshi_amount: number
+  ln_address: string
+  status: 'pending' | 'paid' | 'failed' | 'cancelled'
+  payment_memo: string | null
+  created_at: string
+}
+
+export interface AdminClaim extends Claim {
+  user_id: number
+  username: string
+  email: string
+}
+
+export interface AdminVideo {
+  id: number
+  user_id: number
+  username: string
+  r2_key: string
+  cdn_url: string
+  duration_sec: number | null
+  status: string
+  created_at: string
+}

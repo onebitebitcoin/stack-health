@@ -1,0 +1,41 @@
+import os
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from app.routes import auth, videos, feed, rewards, admin
+
+app = FastAPI(title="운동하고 비트코인 받자", version="0.1.0")
+app.router.redirect_slashes = False
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth.router)
+app.include_router(videos.router)
+app.include_router(feed.router)
+app.include_router(rewards.router)
+app.include_router(admin.router)
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok", "version": "0.1.0"}
+
+
+# Serve React SPA (production: static/ dir built by Docker)
+_static_dir = Path(__file__).parent.parent / "static"
+if _static_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    def spa_fallback(full_path: str) -> FileResponse:
+        return FileResponse(str(_static_dir / "index.html"))

@@ -1,0 +1,28 @@
+# Node
+frontend/node_modules
+frontend/.vite
+
+# Python
+backend/.venv
+backend/__pycache__
+backend/**/__pycache__
+backend/**/*.pyc
+backend/.pytest_cache
+
+# Dev artifacts
+backend/static
+backend/dev.db
+backend/debug.log
+frontend/debug.log
+
+# Secrets / env
+.env
+.env.*
+*.env
+
+# Git
+.git
+.gitignore
+
+# Misc
+*.DS_Store
