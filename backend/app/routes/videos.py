@@ -44,7 +44,7 @@ def get_presigned_url(
 
     # Daily upload limit
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
-        raise HTTPException(status_code=429, detail="Daily upload limit reached (5/day)")
+        raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
 
     upload_url, r2_key = r2_service.generate_presigned_url(req.content_type, req.filename)
     return {"data": PresignedUrlResponse(upload_url=upload_url, r2_key=r2_key)}
@@ -106,3 +106,31 @@ def confirm_upload(
         username=current_user.username,
     )
     return {"data": {"post": post_schema, "points_earned": points_earned}}
+
+
+@router.delete("/posts/{post_id}")
+def delete_post(
+    post_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    video = db.query(Video).filter(Video.id == post.video_id).first()
+
+    db.delete(post)
+    if video:
+        db.delete(video)
+    db.commit()
+
+    if video:
+        try:
+            r2_service.delete_object(video.r2_key)
+        except Exception:
+            pass  # R2 deletion failure is non-fatal
+
+    return {"data": {"deleted": post_id}}

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LogOut, Zap, Edit2, Check, Lock, CheckCircle } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { LogOut, Zap, Edit2, Check, Lock, CheckCircle, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
@@ -44,6 +44,16 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [showSheet, setShowSheet] = useState(false)
   const [claimSuccess, setClaimSuccess] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+
+  const deleteMutation = useMutation({
+    mutationFn: (postId: number) => client.delete(`/videos/posts/${postId}`),
+    onSuccess: () => {
+      setConfirmDeleteId(null)
+      qc.invalidateQueries({ queryKey: ['profile'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['feed'] }).catch(() => undefined)
+    },
+  })
 
   const { data, isLoading: profileLoading } = useQuery<ProfileData>({
     queryKey: ['profile'],
@@ -155,7 +165,7 @@ export default function ProfilePage() {
       {data && data.posts.length > 0 && (
         <div className="grid grid-cols-3 gap-1">
           {data.posts.map((post) => (
-            <div key={post.id} className="aspect-[9/16] overflow-hidden rounded-lg bg-theme-surface">
+            <div key={post.id} className="group relative aspect-[9/16] overflow-hidden rounded-lg bg-theme-surface">
               <video
                 src={post.cdn_url}
                 className="h-full w-full object-cover"
@@ -163,6 +173,35 @@ export default function ProfilePage() {
                 playsInline
                 preload="metadata"
               />
+
+              {confirmDeleteId === post.id ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70">
+                  <p className="text-xs font-semibold text-white">삭제할까요?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => deleteMutation.mutate(post.id)}
+                      disabled={deleteMutation.isPending}
+                      className="rounded-lg bg-red-500 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                    >
+                      삭제
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="rounded-lg bg-white/20 px-3 py-1 text-xs text-white"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDeleteId(post.id)}
+                  className="absolute right-1.5 top-1.5 rounded-full bg-black/50 p-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+                  aria-label="삭제"
+                >
+                  <Trash2 size={14} className="text-white" />
+                </button>
+              )}
             </div>
           ))}
         </div>

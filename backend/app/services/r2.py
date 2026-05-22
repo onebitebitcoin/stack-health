@@ -44,3 +44,8 @@ def generate_presigned_url(content_type: str, filename: str) -> tuple[str, str]:
 
 def get_cdn_url(r2_key: str) -> str:
     return f"{settings.r2_public_url.rstrip('/')}/{r2_key}"
+
+
+def delete_object(r2_key: str) -> None:
+    client = get_r2_client()
+    client.delete_object(Bucket=settings.r2_bucket_name, Key=r2_key)
