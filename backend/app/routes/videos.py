@@ -36,13 +36,11 @@ def get_presigned_url(
     if req.content_type not in r2_service.ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported content type")
     if req.file_size > r2_service.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File too large (max 200MB)")
+        raise HTTPException(status_code=400, detail="File too large (max 50MB)")
 
-    # Duplicate hash check
     if db.query(Video).filter(Video.file_hash == req.file_hash).first():
         raise HTTPException(status_code=409, detail="Duplicate video")
 
-    # Daily upload limit
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
         raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
 
@@ -56,8 +54,8 @@ def confirm_upload(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    if req.duration_sec < 10 or req.duration_sec > 60:
-        raise HTTPException(status_code=400, detail="Duration must be 10-60 seconds")
+    if req.duration_sec < 5 or req.duration_sec > 30:
+        raise HTTPException(status_code=400, detail="Duration must be 5-30 seconds")
 
     # Validate tags
     tags = req.tags or []

@@ -75,7 +75,7 @@ def test_presigned_url_file_too_large(client: TestClient) -> None:
     token = _register_and_token(client)
     res = client.post("/api/v1/videos/presigned-url", json={
         "filename": "big.mp4", "content_type": "video/mp4",
-        "file_size": 201 * 1024 * 1024,
+        "file_size": 51 * 1024 * 1024,
         "file_hash": "bighash",
     }, headers=_auth(token))
     assert res.status_code == 400
@@ -85,7 +85,7 @@ def test_presigned_url_file_too_large(client: TestClient) -> None:
 def test_confirm_duration_too_short(mock_cdn, client: TestClient) -> None:
     token = _register_and_token(client)
     res = client.post("/api/v1/videos/confirm", json={
-        "r2_key": "videos/x.mp4", "duration_sec": 5,
+        "r2_key": "videos/x.mp4", "duration_sec": 4,
     }, headers=_auth(token))
     assert res.status_code == 400
 
@@ -94,7 +94,7 @@ def test_confirm_duration_too_short(mock_cdn, client: TestClient) -> None:
 def test_confirm_duration_too_long(mock_cdn, client: TestClient) -> None:
     token = _register_and_token(client)
     res = client.post("/api/v1/videos/confirm", json={
-        "r2_key": "videos/x.mp4", "duration_sec": 61,
+        "r2_key": "videos/x.mp4", "duration_sec": 31,
     }, headers=_auth(token))
     assert res.status_code == 400
 

@@ -78,7 +78,7 @@ export default function UploadPage() {
       const confirmRes = await client.post<{ data: { points_earned: number } }>('/videos/confirm', {
         r2_key,
         file_hash: hash,
-        duration_sec: Math.min(60, Math.max(10, duration)),
+        duration_sec: Math.min(30, Math.max(5, duration)),
         caption: caption || null,
         tags: selectedTags,
       })
@@ -170,7 +170,7 @@ export default function UploadPage() {
           >
             <Upload size={48} strokeWidth={1.5} />
             <span>영상을 선택하세요</span>
-            <span className="text-xs">10~60초, 최대 200MB</span>
+            <span className="text-xs">5~30초, 최대 50MB</span>
           </button>
         </div>
       )}

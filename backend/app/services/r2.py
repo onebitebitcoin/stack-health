@@ -6,7 +6,7 @@ from botocore.config import Config
 from app.config import settings
 
 PRESIGNED_URL_EXPIRES = 900  # 15 minutes
-MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 ALLOWED_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
 
 
