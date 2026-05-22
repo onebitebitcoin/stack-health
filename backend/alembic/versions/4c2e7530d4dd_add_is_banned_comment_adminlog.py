@@ -48,7 +48,7 @@ def upgrade() -> None:
 
     users_columns = [c['name'] for c in inspector.get_columns('users')]
     if 'is_banned' not in users_columns:
-        op.add_column('users', sa.Column('is_banned', sa.Boolean(), server_default=sa.text('0'), nullable=False))
+        op.add_column('users', sa.Column('is_banned', sa.Boolean(), server_default=sa.text('false'), nullable=False))
 
 
 def downgrade() -> None:
