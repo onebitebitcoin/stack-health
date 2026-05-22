@@ -180,7 +180,12 @@ export default function VideoCard({ post, onLoginRequired, isMuted, onToggleMute
         style={{ zIndex: 3 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="font-semibold text-white drop-shadow">@{post.username}</p>
+        <div className="flex items-center gap-2 mb-1">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg text-xs font-bold shrink-0">
+            {post.username.charAt(0).toUpperCase()}
+          </div>
+          <p className="font-semibold text-white drop-shadow">@{post.username}</p>
+        </div>
         {post.caption && (
           <p className="mt-1 text-sm text-zinc-200 line-clamp-2">{post.caption}</p>
         )}

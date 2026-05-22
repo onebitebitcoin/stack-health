@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Send, Trash2 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import axios from 'axios'
+import client from '../api/client'
 import type { Comment } from '../api/types'
 import { useAuthStore } from '../store/auth'
+
 
 interface CommentSheetProps {
   postId: number
@@ -22,7 +23,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
   const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: ['comments', postId],
     queryFn: async () => {
-      const res = await axios.get<{ data: { comments: Comment[] } }>(`/api/v1/feed/${postId}/comments`)
+      const res = await client.get<{ data: { comments: Comment[] } }>(`/feed/${postId}/comments`)
       return res.data.data.comments
     },
     enabled: open,
@@ -30,11 +31,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
 
   const addComment = useMutation({
     mutationFn: async (text: string) => {
-      await axios.post(
-        `/api/v1/feed/${postId}/comments`,
-        { content: text },
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
+      await client.post(`/feed/${postId}/comments`, { content: text })
     },
     onSuccess: () => {
       setContent('')
@@ -44,9 +41,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
 
   const deleteComment = useMutation({
     mutationFn: async (commentId: number) => {
-      await axios.delete(`/api/v1/feed/${postId}/comments/${commentId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      await client.delete(`/feed/${postId}/comments/${commentId}`)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['comments', postId] }).catch(() => undefined)
@@ -73,14 +68,14 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-40"
+          className="fixed inset-0 z-[55]"
           onClick={onClose}
         />
       )}
 
       {/* Sheet */}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-2xl bg-zinc-900/95 backdrop-blur transition-transform duration-300 ${
+        className={`fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-zinc-900/95 backdrop-blur transition-transform duration-300 ${
           open ? 'translate-y-0' : 'translate-y-full'
         }`}
         style={{ maxHeight: '70dvh' }}
