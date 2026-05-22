@@ -108,6 +108,43 @@ def confirm_upload(
     return {"data": {"post": post_schema, "points_earned": points_earned}}
 
 
+@router.get("/my-posts")
+def my_posts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    posts = (
+        db.query(Post)
+        .join(Post.video)
+        .filter(Post.user_id == current_user.id, Video.status == "active")
+        .order_by(Post.created_at.desc())
+        .all()
+    )
+    result = []
+    for post in posts:
+        tags_raw = post.tags or "[]"
+        try:
+            tags = json.loads(tags_raw)
+        except (json.JSONDecodeError, TypeError):
+            tags = []
+        result.append(
+            PostSchema(
+                id=post.id,
+                video_id=post.video_id,
+                user_id=post.user_id,
+                caption=post.caption,
+                tags=tags,
+                like_count=post.like_count,
+                view_count=post.view_count,
+                comment_count=0,
+                created_at=post.created_at,
+                cdn_url=post.video.cdn_url,
+                username=current_user.username,
+            )
+        )
+    return {"data": {"posts": result}}
+
+
 @router.delete("/posts/{post_id}")
 def delete_post(
     post_id: int,

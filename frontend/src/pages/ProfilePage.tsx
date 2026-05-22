@@ -8,17 +8,6 @@ import type { Post, RewardSummary, Claim } from '../api/types'
 import ClaimBottomSheet from '../components/ClaimBottomSheet'
 import LoadingScreen from '../components/LoadingScreen'
 
-interface ProfileData {
-  posts: Post[]
-  total_points: number
-}
-
-function dDayLabel(deadline: string) {
-  const diff = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000)
-  if (diff <= 0) return 'D-day'
-  return `D-${diff}`
-}
-
 const statusLabel: Record<string, string> = {
   pending: '검토 중',
   paid: '지급 완료',
@@ -30,6 +19,11 @@ const statusColor: Record<string, string> = {
   paid: 'text-green-400',
   failed: 'text-red-400',
   cancelled: 'text-theme-subtle',
+}
+
+function dDayLabel(deadline: string) {
+  const diff = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000)
+  return diff <= 0 ? 'D-day' : `D-${diff}`
 }
 
 export default function ProfilePage() {
@@ -46,32 +40,17 @@ export default function ProfilePage() {
   const [claimSuccess, setClaimSuccess] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
-  const deleteMutation = useMutation({
-    mutationFn: (postId: number) => client.delete(`/videos/posts/${postId}`),
-    onSuccess: () => {
-      setConfirmDeleteId(null)
-      qc.invalidateQueries({ queryKey: ['profile'] }).catch(() => undefined)
-      qc.invalidateQueries({ queryKey: ['feed'] }).catch(() => undefined)
-    },
-  })
-
-  const { data, isLoading: profileLoading } = useQuery<ProfileData>({
-    queryKey: ['profile'],
+  // 내 영상 (전용 엔드포인트)
+  const { data: posts = [], isLoading: postsLoading } = useQuery<Post[]>({
+    queryKey: ['my-posts'],
     queryFn: async () => {
-      const [postsRes, summaryRes] = await Promise.all([
-        client.get<{ data: { posts: Post[]; next_cursor: number | null } }>('/feed', {
-          params: { limit: 20 },
-        }),
-        client.get<{ data: { current_week_points: number } }>('/rewards/summary'),
-      ])
-      return {
-        posts: postsRes.data.data.posts.filter((p) => p.user_id === user?.id),
-        total_points: summaryRes.data.data.current_week_points,
-      }
+      const res = await client.get<{ data: { posts: Post[] } }>('/videos/my-posts')
+      return res.data.data.posts
     },
     enabled: !!user,
   })
 
+  // 리워드 요약 (단일 쿼리)
   const { data: summary } = useQuery<RewardSummary>({
     queryKey: ['rewards-summary'],
     queryFn: async () => {
@@ -81,21 +60,24 @@ export default function ProfilePage() {
     enabled: !!user,
   })
 
+  // 지급 이력
   const { data: claims = [] } = useQuery<Claim[]>({
     queryKey: ['rewards-claims'],
     queryFn: async () => {
-      const res = await client.get<{ data: Claim[] }>('/rewards/claims')
-      return res.data.data
+      const res = await client.get<{ data: { claims: Claim[] } }>('/rewards/claims')
+      return res.data.data.claims
     },
     enabled: !!user,
   })
 
-  function handleClaimSuccess() {
-    setShowSheet(false)
-    setClaimSuccess(true)
-    qc.invalidateQueries({ queryKey: ['rewards-summary'] }).catch(() => undefined)
-    qc.invalidateQueries({ queryKey: ['rewards-claims'] }).catch(() => undefined)
-  }
+  const deleteMutation = useMutation({
+    mutationFn: (postId: number) => client.delete(`/videos/posts/${postId}`),
+    onSuccess: () => {
+      setConfirmDeleteId(null)
+      qc.invalidateQueries({ queryKey: ['my-posts'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['feed'] }).catch(() => undefined)
+    },
+  })
 
   async function saveLightningAddress(e: FormEvent) {
     e.preventDefault()
@@ -116,7 +98,14 @@ export default function ProfilePage() {
     navigate('/login')
   }
 
-  if (profileLoading) return <LoadingScreen />
+  function handleClaimSuccess() {
+    setShowSheet(false)
+    setClaimSuccess(true)
+    qc.invalidateQueries({ queryKey: ['rewards-summary'] }).catch(() => undefined)
+    qc.invalidateQueries({ queryKey: ['rewards-claims'] }).catch(() => undefined)
+  }
+
+  if (postsLoading) return <LoadingScreen />
 
   if (claimSuccess) {
     return (
@@ -135,37 +124,48 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="flex flex-col gap-5 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
-      {/* 프로필 헤더 */}
-      <div className="flex items-center gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-theme-surface2 text-2xl font-bold text-theme-primary">
+    <div className="flex flex-col overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page space-y-5">
+
+      {/* 헤더: 아바타 + 이름 + 로그아웃 */}
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-xl font-bold text-theme-primary">
           {user?.username?.[0]?.toUpperCase() ?? '?'}
         </div>
-        <div>
-          <p className="font-bold text-theme-primary">{user?.username}</p>
-          <p className="text-sm text-theme-muted">{user?.email}</p>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-theme-primary truncate">{user?.username}</p>
+          <p className="text-xs text-theme-muted truncate">{user?.email}</p>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-theme-muted hover:text-red-400 transition-colors"
+          aria-label="로그아웃"
+        >
+          <LogOut size={18} strokeWidth={1.5} />
+        </button>
+      </div>
+
+      {/* 통계: 업로드 수 + 이번 주 sats */}
+      <div className="flex gap-3">
+        <div className="flex-1 rounded-xl bg-theme-surface px-4 py-3 text-center">
+          <p className="text-2xl font-bold text-theme-primary">{posts.length}</p>
+          <p className="text-xs text-theme-muted">업로드</p>
+        </div>
+        <div className="flex-1 rounded-xl bg-theme-surface px-4 py-3 text-center">
+          <p className="text-2xl font-bold text-accent">
+            {summary ? summary.satoshi_amount.toLocaleString() : '—'}
+          </p>
+          <p className="text-xs text-theme-muted">이번 주 sats</p>
         </div>
       </div>
 
-      {/* 통계 */}
-      {data && (
-        <div className="flex gap-4">
-          <div className="flex-1 rounded-xl bg-theme-surface px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-theme-primary">{data.posts.length}</p>
-            <p className="text-xs text-theme-muted">업로드</p>
-          </div>
-          <div className="flex-1 rounded-xl bg-theme-surface px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-accent">{data.total_points}</p>
-            <p className="text-xs text-theme-muted">이번 주 pt</p>
-          </div>
-        </div>
-      )}
-
       {/* 내 영상 그리드 */}
-      {data && data.posts.length > 0 && (
+      {posts.length > 0 && (
         <div className="grid grid-cols-3 gap-1">
-          {data.posts.map((post) => (
-            <div key={post.id} className="group relative aspect-[9/16] overflow-hidden rounded-lg bg-theme-surface">
+          {posts.map((post) => (
+            <div
+              key={post.id}
+              className="group relative aspect-[9/16] overflow-hidden rounded-lg bg-theme-surface"
+            >
               <video
                 src={post.cdn_url}
                 className="h-full w-full object-cover"
@@ -173,7 +173,6 @@ export default function ProfilePage() {
                 playsInline
                 preload="metadata"
               />
-
               {confirmDeleteId === post.id ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70">
                   <p className="text-xs font-semibold text-white">삭제할까요?</p>
@@ -207,35 +206,41 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* 리워드 섹션 */}
+      {/* 리워드 카드 (compact) */}
       {summary && (
-        <div className="rounded-2xl bg-theme-surface p-5">
-          <h2 className="mb-3 font-semibold text-theme-primary flex items-center gap-2">
-            <Zap size={16} className="text-accent" />
-            리워드
-          </h2>
-          <div className="mb-1 text-sm text-theme-muted">{summary.week_label} 이번 주 포인트</div>
-          <div className="flex items-end gap-2">
-            <span className="text-4xl font-black text-theme-primary">{summary.current_week_points}</span>
-            <span className="mb-1 text-theme-muted">pt</span>
+        <div className="rounded-2xl bg-theme-surface p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1.5">
+              <Zap size={14} className="text-accent" />
+              <span className="text-sm font-semibold text-theme-primary">이번 주 리워드</span>
+            </div>
+            <span className="text-xs text-theme-muted">
+              {dDayLabel(summary.deadline)} 마감
+            </span>
           </div>
-          <div className="mt-1 flex items-center gap-1 text-accent">
-            <Zap size={14} fill="currentColor" />
-            <span className="text-sm font-semibold">{summary.satoshi_amount.toLocaleString()} sats</span>
+
+          <div className="flex items-baseline gap-2 mb-3">
+            <span className="text-3xl font-black text-theme-primary">
+              {summary.current_week_points}
+            </span>
+            <span className="text-sm text-theme-muted">pt</span>
+            <span className="mx-1 text-theme-border">→</span>
+            <span className="text-lg font-bold text-accent">
+              {summary.satoshi_amount.toLocaleString()}
+            </span>
+            <span className="text-sm text-theme-muted">sats</span>
           </div>
-          <div className="mt-1 text-xs text-theme-subtle">
-            마감 {dDayLabel(summary.deadline)} · {new Date(summary.deadline).toLocaleDateString('ko-KR')}
-          </div>
+
           <button
             onClick={() => setShowSheet(true)}
             disabled={!summary.claimable}
-            className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-opacity ${
+            className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-opacity ${
               summary.claimable
                 ? 'bg-accent text-accent-fg'
                 : 'cursor-not-allowed bg-theme-surface2 text-theme-subtle'
             }`}
           >
-            {!summary.claimable && <Lock size={16} />}
+            {!summary.claimable && <Lock size={14} />}
             {summary.already_claimed
               ? '이미 Claim됨'
               : summary.satoshi_amount < 1000
@@ -247,71 +252,64 @@ export default function ProfilePage() {
 
       {/* 지급 이력 */}
       {claims.length > 0 && (
-        <div>
-          <h2 className="mb-3 font-semibold text-theme-muted">지급 이력</h2>
-          <div className="space-y-2">
-            {claims.map((c) => (
-              <div key={c.id} className="flex items-center justify-between rounded-xl bg-theme-surface px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-theme-primary">{c.week_label}</p>
-                  <p className="text-xs text-theme-subtle">
-                    {c.points_used}pt · {c.satoshi_amount.toLocaleString()} sats
-                  </p>
-                </div>
-                <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-theme-muted'}`}>
-                  {statusLabel[c.status] ?? c.status}
-                </span>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-theme-muted px-1">지급 이력</p>
+          {claims.map((c) => (
+            <div
+              key={c.id}
+              className="flex items-center justify-between rounded-xl bg-theme-surface px-4 py-3"
+            >
+              <div>
+                <p className="text-sm font-medium text-theme-primary">{c.week_label}</p>
+                <p className="text-xs text-theme-subtle">
+                  {c.points_used}pt · {c.satoshi_amount.toLocaleString()} sats
+                </p>
               </div>
-            ))}
-          </div>
+              <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-theme-muted'}`}>
+                {statusLabel[c.status] ?? c.status}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* 설정 */}
+      {/* 설정 (flat) */}
       <div className="rounded-2xl bg-theme-surface p-4 space-y-3">
-        <p className="font-semibold text-theme-muted">설정</p>
+        <p className="text-xs font-medium text-theme-muted">Lightning Address</p>
+        {editingLn ? (
+          <form onSubmit={saveLightningAddress} className="flex gap-2">
+            <input
+              type="text"
+              value={lnInput}
+              onChange={(e) => setLnInput(e.target.value)}
+              placeholder="you@wallet.com"
+              className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent"
+            />
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-accent px-3 py-2 text-accent-fg"
+            >
+              <Check size={16} />
+            </button>
+          </form>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Zap size={14} className="text-accent flex-shrink-0" />
+            <span className="flex-1 text-sm text-theme-primary truncate">
+              {user?.lightning_address ?? '미설정'}
+            </span>
+            <button onClick={() => setEditingLn(true)}>
+              <Edit2 size={14} className="text-theme-muted" />
+            </button>
+          </div>
+        )}
 
-        <div className="space-y-1">
-          <p className="text-sm text-theme-muted">Lightning Address</p>
-          {editingLn ? (
-            <form onSubmit={saveLightningAddress} className="flex gap-2">
-              <input
-                type="text"
-                value={lnInput}
-                onChange={(e) => setLnInput(e.target.value)}
-                placeholder="you@wallet.com"
-                className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent"
-              />
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-lg bg-accent px-3 py-2 text-accent-fg"
-              >
-                <Check size={16} />
-              </button>
-            </form>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Zap size={14} className="text-accent flex-shrink-0" />
-              <span className="flex-1 text-sm text-theme-primary truncate">
-                {user?.lightning_address ?? '미설정'}
-              </span>
-              <button onClick={() => setEditingLn(true)}>
-                <Edit2 size={14} className="text-theme-muted" />
-              </button>
-            </div>
-          )}
+        <div className="flex items-center justify-between pt-1">
+          <Link to="/terms" className="text-xs text-theme-subtle hover:text-theme-muted">
+            이용약관
+          </Link>
         </div>
-
-        <button
-          onClick={handleLogout}
-          className="flex w-full items-center gap-2 rounded-xl bg-theme-surface2 px-4 py-3 text-sm text-red-400 transition-colors hover:opacity-80"
-        >
-          <LogOut size={16} />
-          로그아웃
-        </button>
-
-        <Link to="/terms" className="text-xs text-theme-subtle hover:text-theme-muted">이용약관</Link>
       </div>
 
       {showSheet && summary && (
