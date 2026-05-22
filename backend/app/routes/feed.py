@@ -53,13 +53,23 @@ def get_required_user(
     return user
 
 
-def _post_to_schema(post: Post, db: Session) -> PostSchema:
+def _post_to_schema(post: Post, db: Session, viewer_id: Optional[int] = None) -> PostSchema:
     tags_raw = post.tags or "[]"
     try:
         tags = json.loads(tags_raw)
     except (json.JSONDecodeError, TypeError):
         tags = []
     comment_count = db.query(Comment).filter(Comment.post_id == post.id).count()
+    is_liked = (
+        db.query(RewardPoint)
+        .filter(
+            RewardPoint.user_id == viewer_id,
+            RewardPoint.reason == "like_given",
+            RewardPoint.reference_id == post.id,
+        )
+        .first()
+        is not None
+    ) if viewer_id else False
     return PostSchema(
         id=post.id,
         video_id=post.video_id,
@@ -69,6 +79,7 @@ def _post_to_schema(post: Post, db: Session) -> PostSchema:
         like_count=post.like_count,
         view_count=post.view_count,
         comment_count=comment_count,
+        is_liked=is_liked,
         created_at=post.created_at,
         cdn_url=post.video.cdn_url,
         username=post.user.username,
@@ -97,9 +108,10 @@ def get_feed(
     posts = posts[:limit]
 
     next_cursor = posts[-1].id if has_more and posts else None
+    viewer_id = current_user.id if current_user else None
     return {
         "data": {
-            "posts": [_post_to_schema(p, db) for p in posts],
+            "posts": [_post_to_schema(p, db, viewer_id) for p in posts],
             "next_cursor": next_cursor,
         }
     }

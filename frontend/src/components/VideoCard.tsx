@@ -18,7 +18,7 @@ export default function VideoCard({ post, onLoginRequired, isMuted, onToggleMute
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const token = useAuthStore((s) => s.token)
-  const [liked, setLiked] = useState(false)
+  const [liked, setLiked] = useState(post.is_liked ?? false)
   const [likeCount, setLikeCount] = useState(post.like_count)
   const [viewSent, setViewSent] = useState(false)
   const [showComments, setShowComments] = useState(false)

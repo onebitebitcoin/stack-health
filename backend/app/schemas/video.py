@@ -44,6 +44,7 @@ class PostSchema(BaseModel):
     like_count: int
     view_count: int
     comment_count: int
+    is_liked: bool = False
     created_at: datetime
     cdn_url: str
     username: str

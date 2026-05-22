@@ -16,6 +16,7 @@ export interface Post {
   like_count: number
   view_count: number
   comment_count?: number
+  is_liked?: boolean
   created_at: string
   cdn_url: string
   username: string
