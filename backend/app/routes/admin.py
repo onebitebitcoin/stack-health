@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.models.admin_log import AdminLog
 from app.models.claim import LightningClaim
 from app.models.video import Video
 from app.models.user import User
@@ -69,7 +70,20 @@ def list_videos(
     _: None = Depends(require_admin),
 ) -> dict:
     videos = db.query(Video).order_by(Video.created_at.desc()).all()
-    return {"data": {"videos": [VideoSchema.model_validate(v) for v in videos]}}
+    result = []
+    for v in videos:
+        user = db.query(User).filter(User.id == v.user_id).first()
+        result.append({
+            "id": v.id,
+            "user_id": v.user_id,
+            "username": user.username if user else "",
+            "r2_key": v.r2_key,
+            "cdn_url": v.cdn_url,
+            "duration_sec": v.duration_sec,
+            "status": v.status,
+            "created_at": v.created_at.isoformat(),
+        })
+    return {"data": {"videos": result}}
 
 
 @router.patch("/videos/{video_id}/reject")
@@ -86,3 +100,71 @@ def reject_video(
     db.commit()
     db.refresh(video)
     return {"data": {"video": VideoSchema.model_validate(video)}}
+
+
+@router.delete("/videos/{video_id}")
+def delete_video(
+    video_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> dict:
+    video = db.query(Video).filter(Video.id == video_id).first()
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    video.status = "deleted"
+    log = AdminLog(
+        action="video_delete",
+        target_type="video",
+        target_id=video_id,
+        detail=video.r2_key,
+    )
+    db.add(log)
+    db.commit()
+    return {"data": {"video_id": video_id, "status": "deleted"}}
+
+
+@router.get("/users")
+def list_users(
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> dict:
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    result = []
+    for u in users:
+        video_count = (
+            db.query(Video)
+            .filter(Video.user_id == u.id, Video.status == "active")
+            .count()
+        )
+        result.append({
+            "id": u.id,
+            "email": u.email,
+            "username": u.username,
+            "is_banned": u.is_banned,
+            "is_admin": u.is_admin,
+            "video_count": video_count,
+            "created_at": u.created_at.isoformat(),
+        })
+    return {"data": {"users": result}}
+
+
+@router.patch("/users/{user_id}/ban")
+def toggle_ban(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+) -> dict:
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_banned = not user.is_banned
+    log = AdminLog(
+        action="ban_toggle",
+        target_type="user",
+        target_id=user_id,
+        detail=f"is_banned={user.is_banned}",
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(user)
+    return {"data": {"user_id": user_id, "is_banned": user.is_banned}}

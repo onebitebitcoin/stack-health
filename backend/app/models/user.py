@@ -18,6 +18,7 @@ class User(Base):
     lightning_address: Mapped[str | None] = mapped_column(String, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
@@ -30,3 +31,4 @@ class User(Base):
     claims: Mapped[list["LightningClaim"]] = relationship(  # noqa: F821
         "LightningClaim", back_populates="user"
     )
+    comments: Mapped[list["Comment"]] = relationship("Comment", back_populates="user")  # noqa: F821

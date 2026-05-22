@@ -3,5 +3,7 @@ from app.models.video import Video
 from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.claim import LightningClaim
+from app.models.comment import Comment
+from app.models.admin_log import AdminLog
 
-__all__ = ["User", "Video", "Post", "RewardPoint", "LightningClaim"]
+__all__ = ["User", "Video", "Post", "RewardPoint", "LightningClaim", "Comment", "AdminLog"]

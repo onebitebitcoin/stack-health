@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
-import { Heart } from 'lucide-react'
+import { Heart, MessageCircle } from 'lucide-react'
 import type { Post } from '../api/types'
 import TagChip from './TagChip'
 import PointBadge from './PointBadge'
+import CommentSheet from './CommentSheet'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 
@@ -18,6 +19,8 @@ export default function VideoCard({ post, onLoginRequired }: VideoCardProps) {
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(post.like_count)
   const [viewSent, setViewSent] = useState(false)
+  const [showComments, setShowComments] = useState(false)
+  const commentCount = post.comment_count ?? 0
 
   useEffect(() => {
     const el = containerRef.current
@@ -71,8 +74,9 @@ export default function VideoCard({ post, onLoginRequired }: VideoCardProps) {
         preload="metadata"
       />
 
-      {/* right actions */}
+      {/* right actions - 세로 버튼 스택 */}
       <div className="absolute bottom-24 right-3 flex flex-col items-center gap-4">
+        {/* 좋아요 */}
         <button onClick={handleLike} className="flex flex-col items-center gap-1">
           <Heart
             size={32}
@@ -81,6 +85,13 @@ export default function VideoCard({ post, onLoginRequired }: VideoCardProps) {
           />
           <span className="text-xs font-semibold text-white drop-shadow">{likeCount}</span>
         </button>
+
+        {/* 댓글 */}
+        <button onClick={() => setShowComments(true)} className="flex flex-col items-center gap-1">
+          <MessageCircle size={32} strokeWidth={1.5} className="text-white" />
+          <span className="text-xs font-semibold text-white drop-shadow">{commentCount}</span>
+        </button>
+
         <PointBadge points={2} />
       </div>
 
@@ -98,6 +109,14 @@ export default function VideoCard({ post, onLoginRequired }: VideoCardProps) {
           </div>
         )}
       </div>
+
+      {/* CommentSheet */}
+      <CommentSheet
+        postId={post.id}
+        open={showComments}
+        onClose={() => setShowComments(false)}
+        onLoginRequired={onLoginRequired}
+      />
     </div>
   )
 }

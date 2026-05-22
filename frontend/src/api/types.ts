@@ -15,6 +15,7 @@ export interface Post {
   tags: string[]
   like_count: number
   view_count: number
+  comment_count?: number
   created_at: string
   cdn_url: string
   username: string
@@ -59,5 +60,24 @@ export interface AdminVideo {
   cdn_url: string
   duration_sec: number | null
   status: string
+  created_at: string
+}
+
+export interface AdminUser {
+  id: number
+  email: string
+  username: string
+  is_banned: boolean
+  is_admin: boolean
+  video_count: number
+  created_at: string
+}
+
+export interface Comment {
+  id: number
+  post_id: number
+  user_id: number
+  username: string
+  content: string
   created_at: string
 }
