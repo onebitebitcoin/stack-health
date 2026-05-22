@@ -28,7 +28,10 @@ app.include_router(comments.router)
 
 @app.get("/health")
 def health() -> dict:
-    version = Path(__file__).parent.parent.parent.joinpath("VERSION").read_text().strip()
+    try:
+        version = Path(__file__).parent.parent.joinpath("VERSION").read_text().strip()
+    except FileNotFoundError:
+        version = "unknown"
     return {"status": "ok", "version": version}
 
 
