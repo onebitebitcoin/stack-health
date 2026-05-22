@@ -1,9 +1,10 @@
-interface LogoMarkProps {
+import type { SVGProps } from 'react'
+
+interface LogoMarkProps extends SVGProps<SVGSVGElement> {
   size?: number
-  className?: string
 }
 
-export default function LogoMark({ size = 48, className = '' }: LogoMarkProps) {
+export default function LogoMark({ size = 48, className = '', ...props }: LogoMarkProps) {
   return (
     <svg
       width={size}
@@ -12,6 +13,7 @@ export default function LogoMark({ size = 48, className = '' }: LogoMarkProps) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      {...props}
     >
       {/* Left weight plate */}
       <rect x="2" y="16" width="6" height="16" rx="2" fill="currentColor" />

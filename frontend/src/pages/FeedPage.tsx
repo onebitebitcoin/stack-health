@@ -5,6 +5,7 @@ import type { FeedResponse } from '../api/types'
 import VideoCard from '../components/VideoCard'
 import LoginPromptSheet from '../components/LoginPromptSheet'
 import LoadingScreen from '../components/LoadingScreen'
+import LogoMark from '../components/LogoMark'
 
 async function fetchFeed(cursor?: number): Promise<FeedResponse> {
   const params = cursor ? { cursor } : {}
@@ -71,8 +72,16 @@ export default function FeedPage() {
 
   if (posts.length === 0) {
     return (
-      <div className="flex h-[100dvh] items-center justify-center">
-        <p className="text-theme-muted">아직 업로드된 영상이 없어요</p>
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-theme-page px-6 pb-16 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
+          <LogoMark aria-hidden="true" size={42} />
+        </div>
+        <div>
+          <p className="font-semibold text-theme-primary">아직 업로드된 영상이 없어요</p>
+          <p className="mt-1 text-sm text-theme-muted">
+            15초 운동을 공유하고 커뮤니티 스코어를 쌓아보세요.
+          </p>
+        </div>
       </div>
     )
   }
