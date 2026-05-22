@@ -47,19 +47,13 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
-      <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-theme-surface text-accent shadow-lg shadow-black/20">
-        <LogoMark aria-label="Stack Health 로고" role="img" size={52} />
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
+        <LogoMark aria-label="Stack Health 로고" role="img" size={40} />
       </div>
-      <p className="mb-2 text-xs font-bold tracking-[0.28em] text-accent uppercase">
+      <p className="mb-1 text-xs font-bold tracking-[0.28em] text-accent uppercase">
         Stack Health
       </p>
-      <h1 className="text-center text-2xl font-black text-theme-primary">
-        운동 기록이 쌓이면 스코어가 됩니다
-      </h1>
-      <p className="mb-8 mt-3 max-w-sm text-center text-sm leading-6 text-theme-muted">
-        15초 운동 기록을 공유하고, 커뮤니티 반응으로 꾸준함을 이어가세요.
-        운동하고 비트코인 리워드 경험도 함께 확인할 수 있어요.
-      </p>
+      <p className="mb-8 text-sm text-theme-muted">운동하고 비트코인 받자</p>
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-3">
         <input
