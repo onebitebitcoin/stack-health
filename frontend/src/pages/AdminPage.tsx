@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, Ban, Trash2, User, Video, Award } from 'lucide-react'
 import axios from 'axios'
 import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse } from '../api/types'
-import { THEMES, THEME_LABELS, useThemeStore, type Theme } from '../store/theme'
 
 type TabId = 'users' | 'videos' | 'rewards'
 
@@ -25,25 +24,10 @@ export default function AdminPage() {
   const [adminKey, setAdminKey] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [activeTab, setActiveTab] = useState<TabId>('users')
-  const { theme, setTheme } = useThemeStore()
-
   // 리더보드 state
   const [weekOffset, setWeekOffset] = useState(0)
   const [leaderboardPage, setLeaderboardPage] = useState(1)
   const [leaderboardItems, setLeaderboardItems] = useState<AdminWeeklySummaryItem[]>([])
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const t = params.get('theme')
-    if (t && THEMES.includes(t as Theme)) setTheme(t as Theme)
-  }, [setTheme])
-
-  function handleThemeChange(t: Theme) {
-    setTheme(t)
-    const url = new URL(window.location.href)
-    url.searchParams.set('theme', t)
-    window.history.replaceState({}, '', url.toString())
-  }
 
   const headers = { 'X-Admin-Key': adminKey }
 
@@ -144,26 +128,6 @@ export default function AdminPage() {
   return (
     <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
       <h1 className="text-xl font-bold text-theme-primary">Admin</h1>
-
-      {/* 테마 미리보기 */}
-      <div className="rounded-xl bg-theme-surface p-4 space-y-2">
-        <p className="text-xs font-semibold text-theme-muted uppercase tracking-wide">테마 미리보기</p>
-        <div className="flex flex-wrap gap-2">
-          {THEMES.map((t) => (
-            <button
-              key={t}
-              onClick={() => handleThemeChange(t)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
-                theme === t
-                  ? 'bg-accent text-accent-fg'
-                  : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
-              }`}
-            >
-              {THEME_LABELS[t]}
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Admin Key 입력 */}
       <form

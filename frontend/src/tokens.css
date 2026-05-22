@@ -3,23 +3,8 @@
    Apply via: document.documentElement.setAttribute('data-theme', 'X')
    ============================================= */
 
-/* --- Default: Sapphire Premium (dark) --- */
+/* --- Default: Volt Dark (dark, lime) --- */
 :root,
-[data-theme="sapphire"] {
-  --bg-page: #0A0A0A;
-  --bg-surface: #141414;
-  --bg-surface-2: #1E1E1E;
-  --accent: #1E6FFF;
-  --accent-fg: #FFFFFF;
-  --accent-text: #1E6FFF;
-  --text-primary: #F5F5F5;
-  --text-muted: #9CA3AF;
-  --text-subtle: #6B7280;
-  --border: #2A2A2A;
-  --overlay: rgba(0, 0, 0, 0.7);
-}
-
-/* --- Volt Dark (dark, lime) --- */
 [data-theme="volt"] {
   --bg-page: #0D0D0D;
   --bg-surface: #161616;
@@ -31,6 +16,21 @@
   --text-muted: #A1A1AA;
   --text-subtle: #71717A;
   --border: #2D2D2D;
+  --overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* --- Sapphire Premium (dark, blue) --- */
+[data-theme="sapphire"] {
+  --bg-page: #0A0A0A;
+  --bg-surface: #141414;
+  --bg-surface-2: #1E1E1E;
+  --accent: #1E6FFF;
+  --accent-fg: #FFFFFF;
+  --accent-text: #1E6FFF;
+  --text-primary: #F5F5F5;
+  --text-muted: #9CA3AF;
+  --text-subtle: #6B7280;
+  --border: #2A2A2A;
   --overlay: rgba(0, 0, 0, 0.7);
 }
 
