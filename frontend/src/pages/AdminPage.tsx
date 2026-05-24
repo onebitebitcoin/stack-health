@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, Ban, Trash2, User, Video, Award, Users } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse } from '../api/types'
 
@@ -24,7 +24,8 @@ export default function AdminPage() {
   const qc = useQueryClient()
   const [adminKey, setAdminKey] = useState('')
   const [submitted, setSubmitted] = useState(false)
-  const [activeTab, setActiveTab] = useState<TabId>('users')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab: TabId = (searchParams.get('tab') as TabId) ?? 'users'
   // 리더보드 state
   const [weekOffset, setWeekOffset] = useState(0)
   const [leaderboardPage, setLeaderboardPage] = useState(1)
@@ -169,7 +170,7 @@ export default function AdminPage() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setSearchParams({ tab: tab.id })}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors ${
                 activeTab === tab.id
                   ? 'bg-accent text-accent-fg'
