@@ -21,6 +21,7 @@ class UserSchema(BaseModel):
     lightning_address: str | None
     avatar_url: str | None
     is_admin: bool
+    app_settings: dict
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -40,6 +41,7 @@ class LoginRequest(BaseModel):
 class UpdateProfileRequest(BaseModel):
     username: str | None = None
     lightning_address: str | None = None
+    app_settings: dict | None = None
 
 
 class TokenResponse(BaseModel):

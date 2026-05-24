@@ -27,6 +27,7 @@ const mockUser = {
   lightning_address: null,
   avatar_url: null,
   is_admin: false,
+  app_settings: {},
 }
 
 beforeEach(() => {
@@ -48,7 +49,7 @@ describe('auth store + client integration', () => {
 
   it('setUser로 lightning_address 업데이트', () => {
     useAuthStore.getState().login('tok', mockUser)
-    useAuthStore.getState().setUser({ ...mockUser, lightning_address: 'user@ln.com' })
+    useAuthStore.getState().setUser({ ...mockUser, lightning_address: 'user@ln.com', app_settings: {} })
     expect(useAuthStore.getState().user?.lightning_address).toBe('user@ln.com')
   })
 })

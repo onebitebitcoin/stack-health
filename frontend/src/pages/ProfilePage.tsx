@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { LogOut, Zap, Check, Lock, CheckCircle, Trash2, ChevronRight } from 'lucide-react'
+import { LogOut, Zap, Check, Lock, CheckCircle, Trash2, ChevronRight, Moon, Sun } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
+import { useThemeStore, type Theme } from '../store/theme'
 import type { Post, RewardSummary, Claim } from '../api/types'
 import ClaimBottomSheet from '../components/ClaimBottomSheet'
 import LoadingScreen from '../components/LoadingScreen'
@@ -32,12 +33,30 @@ export default function ProfilePage() {
   const logout = useAuthStore((s) => s.logout)
   const setUser = useAuthStore((s) => s.setUser)
 
+  const { theme, setTheme } = useThemeStore()
+
   const [editingLn, setEditingLn] = useState(false)
   const [lnInput, setLnInput] = useState(user?.lightning_address ?? '')
   const [saving, setSaving] = useState(false)
   const [showSheet, setShowSheet] = useState(false)
   const [claimSuccess, setClaimSuccess] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+
+  const DARK_THEMES: Theme[] = ['volt', 'sapphire', 'indigo']
+  const isDark = DARK_THEMES.includes(theme)
+
+  async function handleThemeChange(dark: boolean) {
+    const next: Theme = dark ? 'volt' : 'volt-light'
+    setTheme(next)
+    try {
+      const res = await client.patch<{ data: typeof user }>('/auth/me', {
+        app_settings: { ...((user?.app_settings ?? {}) as object), theme: next },
+      })
+      if (res.data.data) setUser(res.data.data)
+    } catch {
+      // silently ignore — theme is already applied locally
+    }
+  }
 
   const { data: posts = [], isLoading } = useQuery<Post[]>({
     queryKey: ['my-posts'],
@@ -303,6 +322,40 @@ export default function ProfilePage() {
           ))}
         </div>
       )}
+
+      {/* ── 앱 설정 ── */}
+      <div className="mx-4 mt-4">
+        <p className="text-[10px] font-medium uppercase tracking-widest text-theme-muted px-1 mb-2">
+          앱 설정
+        </p>
+        <div className="flex items-center justify-between rounded-xl bg-theme-surface px-4 py-3">
+          <span className="text-xs text-theme-primary">화면 모드</span>
+          <div className="flex items-center gap-1 rounded-lg bg-theme-surface2 p-0.5">
+            <button
+              onClick={() => handleThemeChange(true)}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                isDark
+                  ? 'bg-theme-page text-theme-primary shadow-sm'
+                  : 'text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              <Moon size={11} strokeWidth={1.5} />
+              다크
+            </button>
+            <button
+              onClick={() => handleThemeChange(false)}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                !isDark
+                  ? 'bg-theme-page text-theme-primary shadow-sm'
+                  : 'text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              <Sun size={11} strokeWidth={1.5} />
+              라이트
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* ── 하단 링크 ── */}
       <div className="mx-4 mt-4 mb-2">

@@ -35,4 +35,7 @@ export function initTheme(override?: string | null) {
   const stored = useThemeStore.getState().theme
   const t = (override && THEMES.includes(override as Theme) ? override : stored) as Theme
   document.documentElement.setAttribute('data-theme', t)
+  if (t !== useThemeStore.getState().theme) {
+    useThemeStore.getState().setTheme(t)
+  }
 }

@@ -87,6 +87,8 @@ def update_me(
         current_user.username = req.username
     if req.lightning_address is not None:
         current_user.lightning_address = req.lightning_address
+    if req.app_settings is not None:
+        current_user.app_settings = req.app_settings
 
     db.commit()
     db.refresh(current_user)

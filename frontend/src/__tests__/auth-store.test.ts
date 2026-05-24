@@ -8,6 +8,7 @@ const mockUser = {
   lightning_address: null,
   avatar_url: null,
   is_admin: false,
+  app_settings: {},
 }
 
 beforeEach(() => {

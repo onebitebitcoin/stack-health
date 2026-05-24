@@ -8,6 +8,7 @@ interface User {
   lightning_address: string | null
   avatar_url: string | null
   is_admin: boolean
+  app_settings: Record<string, unknown>
 }
 
 interface AuthState {
