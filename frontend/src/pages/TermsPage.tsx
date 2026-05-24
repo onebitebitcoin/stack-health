@@ -26,7 +26,12 @@ export default function TermsPage() {
           <p>업로드 영상은 본인이 직접 촬영한 운동 영상이어야 합니다. 타인의 영상 무단 업로드, 음란물, 폭력적 콘텐츠는 즉시 삭제 및 계정 정지 처리됩니다.</p>
         </section>
         <section>
-          <h2 className="font-semibold text-theme-primary mb-2">제4조 (면책 사항)</h2>
+          <h2 className="font-semibold text-theme-primary mb-2">제4조 (가상자산 보상 안내)</h2>
+          <p className="mb-2">서비스에서 지급되는 비트코인(사토시)은 운동 활동에 대한 보상입니다. 이는 투자 권유, 재산 증식 목적의 금융 서비스가 아닙니다.</p>
+          <p>비트코인 보상 수령으로 인해 발생하는 세금 신고 및 납부 의무는 이용자 본인에게 있습니다. 서비스는 세무 조언을 제공하지 않으며 이와 관련한 책임을 지지 않습니다.</p>
+        </section>
+        <section>
+          <h2 className="font-semibold text-theme-primary mb-2">제5조 (면책 사항)</h2>
           <p>서비스는 Lightning Network 전송 실패, 지연, 네트워크 장애에 대해 책임지지 않습니다. 리워드 지급은 서비스 운영 상황에 따라 변경될 수 있습니다.</p>
         </section>
         <section>
