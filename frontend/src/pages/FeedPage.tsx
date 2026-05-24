@@ -88,22 +88,24 @@ export default function FeedPage() {
 
   return (
     <>
-      <div
-        ref={containerRef}
-        className="h-[100dvh] overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        {posts.map((post) => (
-          <VideoCard
-            key={post.id}
-            post={post}
-            onLoginRequired={() => setShowLogin(true)}
-            onCommentClick={() => setCommentPostId(post.id)}
-            isMuted={isMuted}
-            onToggleMute={() => setIsMuted((m) => !m)}
-          />
-        ))}
+      <div className="h-[100dvh] bg-black flex justify-center">
+        <div
+          ref={containerRef}
+          className="h-[100dvh] overflow-hidden w-full max-w-[430px]"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {posts.map((post) => (
+            <VideoCard
+              key={post.id}
+              post={post}
+              onLoginRequired={() => setShowLogin(true)}
+              onCommentClick={() => setCommentPostId(post.id)}
+              isMuted={isMuted}
+              onToggleMute={() => setIsMuted((m) => !m)}
+            />
+          ))}
+        </div>
       </div>
       {showLogin && <LoginPromptSheet onClose={() => setShowLogin(false)} />}
       <CommentSheet
