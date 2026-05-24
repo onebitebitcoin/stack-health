@@ -136,3 +136,32 @@ export interface EarnedTitle {
   challenge_title: string
   completed_at: string
 }
+
+export interface PublicPost {
+  id: number
+  cdn_url: string
+  like_count: number
+  view_count: number
+  caption: string | null
+  created_at: string
+}
+
+export interface ActiveChallenge {
+  challenge_id: number
+  title: string
+  upload_count: number
+  condition_value: number
+}
+
+export interface UserProfile {
+  user: {
+    id: number
+    username: string
+    avatar_url: string | null
+    created_at: string
+  }
+  post_count: number
+  posts: PublicPost[]
+  titles: EarnedTitle[]
+  active_challenges: ActiveChallenge[]
+}

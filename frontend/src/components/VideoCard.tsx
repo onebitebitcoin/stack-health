@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play } from 'lucide-react'
 import type { Post } from '../api/types'
 import TagChip from './TagChip'
@@ -15,6 +16,7 @@ interface VideoCardProps {
 }
 
 export default function VideoCard({ post, onLoginRequired, onCommentClick, isMuted, onToggleMute }: VideoCardProps) {
+  const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const token = useAuthStore((s) => s.token)
@@ -180,12 +182,15 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         style={{ zIndex: 3 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 mb-1">
+        <button
+          onClick={(e) => { e.stopPropagation(); navigate(`/users/${post.user_id}`) }}
+          className="flex items-center gap-2 mb-1 active:opacity-70"
+        >
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg text-xs font-bold shrink-0">
             {post.username.charAt(0).toUpperCase()}
           </div>
           <p className="font-semibold text-white drop-shadow">@{post.username}</p>
-        </div>
+        </button>
         {post.caption && (
           <p className="mt-1 text-sm text-zinc-200 line-clamp-2">{post.caption}</p>
         )}
