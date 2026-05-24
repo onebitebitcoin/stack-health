@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { LogOut, Zap, Check, Lock, CheckCircle, Trash2, ChevronRight, Moon, Sun } from 'lucide-react'
+import { LogOut, Zap, Check, Lock, CheckCircle, Trash2, ChevronRight, Moon, Sun, Trophy } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { useThemeStore, type Theme } from '../store/theme'
-import type { Post, RewardSummary, Claim } from '../api/types'
+import type { Post, RewardSummary, Claim, EarnedTitle } from '../api/types'
 import ClaimBottomSheet from '../components/ClaimBottomSheet'
 import LoadingScreen from '../components/LoadingScreen'
 
@@ -81,6 +81,15 @@ export default function ProfilePage() {
     queryFn: async () => {
       const res = await client.get<{ data: { claims: Claim[] } }>('/rewards/claims')
       return res.data.data.claims
+    },
+    enabled: !!user,
+  })
+
+  const { data: titles = [] } = useQuery<EarnedTitle[]>({
+    queryKey: ['my-titles'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { titles: EarnedTitle[] } }>('/challenges/titles')
+      return res.data.data.titles
     },
     enabled: !!user,
   })
@@ -267,6 +276,27 @@ export default function ProfilePage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── 획득한 타이틀 ── */}
+      {titles.length > 0 && (
+        <div className="mx-4 mt-4">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-theme-muted px-1 mb-2">
+            획득한 타이틀
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {titles.map((t, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5"
+                title={t.challenge_title}
+              >
+                <Trophy size={11} className="text-accent" />
+                <span className="text-xs font-medium text-accent">{t.title}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

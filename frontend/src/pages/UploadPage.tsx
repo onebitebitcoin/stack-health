@@ -1,13 +1,15 @@
 import { useState, useRef, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, ChevronRight, CheckCircle } from 'lucide-react'
+import { Upload, ChevronRight, CheckCircle, Trophy } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import client from '../api/client'
+import type { Challenge } from '../api/types'
 
 const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as const
 type Tag = (typeof ALLOWED_TAGS)[number]
 
-const STEPS = ['영상 선택', '태그', '썸네일', '설명'] as const
+const STEPS = ['영상 선택', '태그', '챌린지', '설명'] as const
 
 async function sha256(file: File): Promise<string> {
   const buffer = await file.arrayBuffer()
@@ -25,6 +27,7 @@ export default function UploadPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectedTags, setSelectedTags] = useState<Tag[]>([])
   const [caption, setCaption] = useState('')
+  const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [progress, setProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [done, setDone] = useState(false)
@@ -44,6 +47,14 @@ export default function UploadPage() {
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     )
   }
+
+  const { data: myChallenges = [] } = useQuery<Challenge[]>({
+    queryKey: ['my-challenges-upload'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges/my')
+      return res.data.data.challenges.filter((c) => c.is_active && !c.completed)
+    },
+  })
 
   async function handleUpload() {
     if (!file) return
@@ -81,6 +92,7 @@ export default function UploadPage() {
         duration_sec: Math.min(30, Math.max(5, duration)),
         caption: caption || null,
         tags: selectedTags,
+        challenge_id: selectedChallengeId,
       })
       setPointsEarned(confirmRes.data.data.points_earned)
       setDone(true)
@@ -214,21 +226,45 @@ export default function UploadPage() {
 
       {step === 2 && (
         <div className="flex flex-1 flex-col px-6 pt-4">
-          <p className="mb-3 font-semibold text-theme-primary">썸네일 확인</p>
-          {previewUrl && (
-            <video
-              src={previewUrl}
-              className="mb-4 h-64 w-full rounded-xl object-cover"
-              muted
-              playsInline
-            />
-          )}
-          <p className="text-sm text-theme-muted">영상의 첫 프레임이 썸네일로 사용됩니다.</p>
+          <p className="mb-1 font-semibold text-theme-primary">챌린지 선택 (선택)</p>
+          <p className="mb-4 text-xs text-theme-muted">참여 중인 챌린지에 인증하세요</p>
+          <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
+            <button
+              onClick={() => setSelectedChallengeId(null)}
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                selectedChallengeId === null
+                  ? 'bg-accent text-accent-fg'
+                  : 'bg-theme-surface text-theme-primary'
+              }`}
+            >
+              <Trophy size={16} strokeWidth={1.5} />
+              <span className="text-sm font-medium">챌린지 없음</span>
+            </button>
+            {myChallenges.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedChallengeId(c.id)}
+                className={`flex items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                  selectedChallengeId === c.id
+                    ? 'bg-accent text-accent-fg'
+                    : 'bg-theme-surface text-theme-primary'
+                }`}
+              >
+                <Trophy size={16} strokeWidth={1.5} className="mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">{c.title}</p>
+                  <p className={`text-xs mt-0.5 ${selectedChallengeId === c.id ? 'text-accent-fg/70' : 'text-theme-muted'}`}>
+                    {c.my_upload_count}/{c.condition_value}회 · {c.reward_title}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setStep(3)}
-            className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
-            이 썸네일로 결정 <ChevronRight size={18} />
+            다음 <ChevronRight size={18} />
           </button>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, CalendarDays, Plus, Award, User } from 'lucide-react'
+import { Home, CalendarDays, Plus, Trophy, User } from 'lucide-react'
 import { useAuthStore } from '../store/auth'
 
 export default function BottomNav() {
@@ -46,10 +46,10 @@ export default function BottomNav() {
           <span className="mt-1 text-xs text-transparent select-none">업로드</span>
         </div>
 
-        {/* 리워드 */}
-        <NavLink to="/rewards" className={navItem}>
-          <Award size={22} strokeWidth={1.5} />
-          <span>리워드</span>
+        {/* 챌린지 */}
+        <NavLink to="/challenges" className={navItem}>
+          <Trophy size={22} strokeWidth={1.5} />
+          <span>챌린지</span>
         </NavLink>
 
         {/* 프로필 */}

@@ -115,3 +115,24 @@ export interface AdminWeeklySummaryResponse {
   has_next: boolean
   total_users: number
 }
+
+export interface Challenge {
+  id: number
+  title: string
+  description: string
+  reward_title: string
+  condition_value: number
+  start_date: string
+  end_date: string
+  is_active: boolean
+  participant_count: number
+  my_upload_count: number
+  joined: boolean
+  completed: boolean
+}
+
+export interface EarnedTitle {
+  title: string
+  challenge_title: string
+  completed_at: string
+}

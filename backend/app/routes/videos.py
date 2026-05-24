@@ -21,6 +21,7 @@ from app.services.reward import (
     add_points,
     get_daily_upload_count,
 )
+from app.routes.challenges import increment_challenge_upload
 
 ALLOWED_TAGS = {"홈트", "러닝", "요가", "웨이트", "기타"}
 
@@ -83,6 +84,9 @@ def confirm_upload(
     )
     db.add(post)
     db.flush()
+
+    if req.challenge_id:
+        increment_challenge_upload(db, current_user.id, req.challenge_id)
 
     rp = add_points(db, current_user.id, POINTS_PER_UPLOAD, "upload", reference_id=video.id, early_adopter_bonus=(current_user.id <= 50))
     points_earned = rp.points if rp else 0

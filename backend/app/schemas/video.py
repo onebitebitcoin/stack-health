@@ -33,6 +33,7 @@ class ConfirmUploadRequest(BaseModel):
     duration_sec: int
     caption: str | None = None
     tags: list[str] | None = None
+    challenge_id: int | None = None
 
 
 class PostSchema(BaseModel):
