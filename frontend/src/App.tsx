@@ -9,13 +9,14 @@ import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
 import TermsPage from './pages/TermsPage'
 import HistoryPage from './pages/HistoryPage'
+import TeamPage from './pages/TeamPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
   return token ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-const HIDE_NAV = ['/login', '/admin', '/terms']
+const HIDE_NAV = ['/login', '/admin', '/terms', '/team']
 
 function Layout() {
   const { pathname } = useLocation()
@@ -59,6 +60,7 @@ function Layout() {
         />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/terms" element={<TermsPage />} />
+        <Route path="/team" element={<TeamPage />} />
       </Routes>
       {!hideNav && <BottomNav />}
     </div>

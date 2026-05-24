@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, Ban, Trash2, User, Video, Award } from 'lucide-react'
+import { CheckCircle, Ban, Trash2, User, Video, Award, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
 import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse } from '../api/types'
 
@@ -127,7 +128,16 @@ export default function AdminPage() {
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
-      <h1 className="text-xl font-bold text-theme-primary">Admin</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-theme-primary">Admin</h1>
+        <Link
+          to="/team"
+          className="flex items-center gap-1.5 rounded-lg bg-theme-surface px-3 py-1.5 text-xs text-theme-muted hover:text-theme-primary transition-colors"
+        >
+          <Users size={13} strokeWidth={1.5} />
+          팀 구성
+        </Link>
+      </div>
 
       {/* Admin Key 입력 */}
       <form
