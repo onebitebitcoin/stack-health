@@ -53,7 +53,7 @@ export default function LoginPage() {
       <p className="mb-1 text-xs font-bold tracking-[0.28em] text-accent uppercase">
         Stack Health
       </p>
-      <p className="mb-8 text-sm text-theme-muted">운동하고 비트코인 받자</p>
+      <p className="mb-8 text-sm text-theme-muted">건강과 비트코인, 두 마리 토끼를 한 번에</p>
 
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-3">
         <input
