@@ -43,4 +43,11 @@ if _static_dir.exists():
 
     @app.get("/{full_path:path}")
     def spa_fallback(full_path: str) -> FileResponse:
-        return FileResponse(str(_static_dir / "index.html"))
+        return FileResponse(
+            str(_static_dir / "index.html"),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { LogOut, Zap, Check, Lock, CheckCircle, Trash2, ChevronRight } from 'lucide-react'
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import type { Post, RewardSummary, Claim } from '../api/types'
@@ -27,7 +27,6 @@ function dDayLabel(deadline: string) {
 }
 
 export default function ProfilePage() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
@@ -130,7 +129,7 @@ export default function ProfilePage() {
           <p className="text-xs text-theme-muted truncate">{user?.email}</p>
         </div>
         <button
-          onClick={() => { logout(); navigate('/login') }}
+          onClick={() => { logout(); window.location.href = '/login' }}
           className="text-theme-muted hover:text-red-400 transition-colors p-1"
           aria-label="로그아웃"
         >
