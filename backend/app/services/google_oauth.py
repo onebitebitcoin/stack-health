@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import httpx
+from urllib.parse import urlencode
 
 from app.config import settings
 
@@ -18,8 +19,7 @@ def get_google_auth_url(state: str = "") -> str:
         "access_type": "offline",
         "state": state,
     }
-    query = "&".join(f"{k}={v}" for k, v in params.items())
-    return f"{GOOGLE_AUTH_URL}?{query}"
+    return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
 
 async def exchange_code(code: str) -> dict:
