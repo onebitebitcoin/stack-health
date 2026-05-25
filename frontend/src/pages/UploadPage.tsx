@@ -22,22 +22,35 @@ async function sha256(file: File | Blob): Promise<string> {
     .join('')
 }
 
-async function mergeWithFFmpeg(videoFile: File, audio: Blob, audioDurationSec: number): Promise<File | null> {
+async function mergeWithFFmpeg(
+  videoFile: File,
+  audio: Blob,
+  audioDurationSec: number,
+  onLog: (msg: string) => void,
+): Promise<File | null> {
   try {
-    if (!audioDurationSec || audioDurationSec <= 0) return null
+    if (!audioDurationSec || audioDurationSec <= 0) {
+      onLog(`[FFmpeg] SKIP: audioDurationSec=${audioDurationSec}`)
+      return null
+    }
+
+    onLog(`[FFmpeg] 시작: 녹음 ${audioDurationSec}초, 영상 ${(videoFile.size / 1024).toFixed(0)}KB`)
 
     const ffmpeg = new FFmpeg()
     ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message))
 
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
+    onLog('[FFmpeg] 코어 로딩 중...')
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
     })
+    onLog('[FFmpeg] 코어 로드 완료')
 
     await ffmpeg.writeFile('video.mp4', await fetchFile(videoFile))
     await ffmpeg.writeFile('audio.webm', await fetchFile(audio))
 
+    onLog(`[FFmpeg] exec: -stream_loop -1 -t ${audioDurationSec} -c:v libx264`)
     const ret = await ffmpeg.exec([
       '-stream_loop', '-1',
       '-i', 'video.mp4',
@@ -53,16 +66,21 @@ async function mergeWithFFmpeg(videoFile: File, audio: Blob, audioDurationSec: n
     ])
 
     if (ret !== 0) {
-      console.error('[FFmpeg] exec failed with code', ret)
+      onLog(`[FFmpeg] FAIL: exit code ${ret}`)
       return null
     }
 
     const data = await ffmpeg.readFile('output.mp4')
-    if (typeof data === 'string') return null
+    if (typeof data === 'string') {
+      onLog('[FFmpeg] FAIL: readFile returned string')
+      return null
+    }
     const plain: ArrayBuffer = new Uint8Array(data).buffer as ArrayBuffer
-    return new File([plain], 'merged.mp4', { type: 'video/mp4' })
+    const outFile = new File([plain], 'merged.mp4', { type: 'video/mp4' })
+    onLog(`[FFmpeg] 성공: ${(outFile.size / 1024).toFixed(0)}KB, ${audioDurationSec}초`)
+    return outFile
   } catch (err) {
-    console.error('[FFmpeg] merge error:', err)
+    onLog(`[FFmpeg] ERROR: ${err instanceof Error ? err.message : String(err)}`)
     return null
   }
 }
@@ -88,6 +106,12 @@ export default function UploadPage() {
   const [ffmpegMerging, setFfmpegMerging] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordedSeconds, setRecordedSeconds] = useState(0)
+  const [debugLogs, setDebugLogs] = useState<string[]>([])
+
+  const addLog = (msg: string) => {
+    const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false })
+    setDebugLogs((prev) => [...prev, `${ts} ${msg}`])
+  }
 
   // 녹음 관련 ref (stale closure 방지)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -142,9 +166,10 @@ export default function UploadPage() {
 
         if (file) {
           setFfmpegMerging(true)
-          const result = await mergeWithFFmpeg(file, blob, recordedSecondsRef.current)
+          const result = await mergeWithFFmpeg(file, blob, recordedSecondsRef.current, addLog)
           setMergedFile(result)
           setFfmpegMerging(false)
+          if (!result) addLog('[FFmpeg] merge 실패 — 원본 영상으로 업로드됩니다')
         }
         setStep(4)
       }
@@ -206,7 +231,9 @@ export default function UploadPage() {
     setUploading(true)
     try {
       const uploadTarget = mergedFile ?? file
+      addLog(`[Upload] 파일: ${uploadTarget.name}, ${(uploadTarget.size / 1024).toFixed(0)}KB`)
       const hash = await sha256(uploadTarget)
+      addLog(`[Upload] SHA-256: ${hash.slice(0, 12)}...`)
 
       const presignRes = await client.post<{
         data: { upload_url: string; r2_key: string }
@@ -217,6 +244,7 @@ export default function UploadPage() {
         file_hash: hash,
       })
       const { upload_url, r2_key } = presignRes.data.data
+      addLog(`[R2] presigned URL 발급: ${r2_key}`)
 
       await axios.put(upload_url, uploadTarget, {
         headers: { 'Content-Type': uploadTarget.type },
@@ -224,12 +252,14 @@ export default function UploadPage() {
           if (e.total) setProgress(Math.round((e.loaded / e.total) * 100))
         },
       })
+      addLog(`[R2] 업로드 완료`)
 
       const videoEl = document.createElement('video')
       videoEl.src = previewUrl!
       const duration = await new Promise<number>((resolve) => {
         videoEl.onloadedmetadata = () => resolve(Math.round(videoEl.duration))
       })
+      addLog(`[Upload] 영상 길이: ${duration}초`)
 
       const confirmRes = await client.post<{ data: { points_earned: number } }>('/videos/confirm', {
         r2_key,
@@ -239,12 +269,14 @@ export default function UploadPage() {
         tags: selectedTags,
         challenge_id: selectedChallengeId,
       })
+      addLog(`[R2] DB 등록 완료, +${confirmRes.data.data.points_earned}pt`)
       setPointsEarned(confirmRes.data.data.points_earned)
       setDone(true)
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
         '업로드 실패'
+      addLog(`[Upload] ERROR: ${msg}`)
       setError(msg)
     } finally {
       setUploading(false)
@@ -304,7 +336,7 @@ export default function UploadPage() {
   return (
     <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-16">
       {uploading && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-theme-page">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-theme-page px-6">
           <Upload size={48} className="animate-bounce text-accent" />
           <p className="text-lg font-semibold text-theme-primary">업로드 중...</p>
           <div className="h-2 w-64 rounded-full bg-theme-surface2">
@@ -314,13 +346,27 @@ export default function UploadPage() {
             />
           </div>
           <p className="text-sm text-theme-muted">{progress}%</p>
+          {debugLogs.length > 0 && (
+            <div className="w-full max-w-sm rounded-xl bg-zinc-900 border border-zinc-700 p-3 max-h-40 overflow-y-auto">
+              {debugLogs.map((log, i) => (
+                <p key={i} className="text-xs font-mono text-zinc-400 leading-5">{log}</p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {ffmpegMerging && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           <p className="text-sm text-theme-muted">음성과 영상을 합치는 중...</p>
+          {debugLogs.length > 0 && (
+            <div className="w-full max-w-sm rounded-xl bg-zinc-900 border border-zinc-700 p-3 max-h-40 overflow-y-auto">
+              {debugLogs.map((log, i) => (
+                <p key={i} className="text-xs font-mono text-zinc-400 leading-5">{log}</p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -519,6 +565,14 @@ export default function UploadPage() {
             className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
           />
           <p className="mt-1 text-right text-xs text-theme-subtle">{caption.length}/140</p>
+          {debugLogs.length > 0 && (
+            <div className="mt-3 rounded-xl bg-zinc-900 border border-zinc-700 p-3 max-h-36 overflow-y-auto">
+              <p className="text-xs text-zinc-500 mb-1 font-mono">— debug log —</p>
+              {debugLogs.map((log, i) => (
+                <p key={i} className="text-xs font-mono text-zinc-400 leading-5">{log}</p>
+              ))}
+            </div>
+          )}
           {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
           <button
             onClick={handleUpload}
