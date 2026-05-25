@@ -171,20 +171,31 @@ def test_delete_post_forbidden(client: TestClient) -> None:
 @patch("app.routes.videos.r2_service.get_r2_client")
 @patch("subprocess.run")
 def test_merge_audio_success(mock_subprocess, mock_get_client, client: TestClient) -> None:
+    import os
+    import tempfile
     from unittest.mock import MagicMock
 
     token = _register_and_token(client, "ma@x.com", "mauser")
 
-    # Mock R2 download
+    # Mock R2 client
     mock_s3 = MagicMock()
     mock_s3.get_object.return_value = {"Body": MagicMock(read=lambda: b"fake_video_data")}
     mock_s3.put_object.return_value = {}
     mock_get_client.return_value = mock_s3
 
-    # Mock ffmpeg success
-    mock_subprocess.return_value = MagicMock(returncode=0, stderr=b"")
+    # subprocess.run: ffprobe returns 10s, ffmpeg creates output file
+    def fake_subprocess(cmd, **kwargs):
+        if "ffprobe" in cmd[0]:
+            return MagicMock(returncode=0, stdout="10.0\n", stderr="")
+        # ffmpeg: create the output file so open() succeeds
+        output_path = cmd[-1]
+        with open(output_path, "wb") as f:
+            f.write(b"fake_merged_video")
+        return MagicMock(returncode=0, stderr=b"")
 
-    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn.example.com/merged/test.mp4"):
+    mock_subprocess.side_effect = fake_subprocess
+
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn.example.com/videos/merged.mp4"):
         res = client.post(
             "/api/v1/videos/merge-audio",
             data={"video_r2_key": "videos/test.mp4"},
@@ -194,8 +205,9 @@ def test_merge_audio_success(mock_subprocess, mock_get_client, client: TestClien
 
     assert res.status_code == 200
     data = res.json()["data"]
-    assert data["r2_key"] == "merged/test.mp4"
+    assert data["r2_key"].startswith("videos/merged-")
     assert "cdn_url" in data
+    assert data["duration_sec"] == 10
 
 
 @patch("app.routes.videos.r2_service.get_r2_client")
@@ -209,8 +221,12 @@ def test_merge_audio_ffmpeg_failure(mock_subprocess, mock_get_client, client: Te
     mock_s3.get_object.return_value = {"Body": MagicMock(read=lambda: b"fake_video_data")}
     mock_get_client.return_value = mock_s3
 
-    # Mock ffmpeg failure
-    mock_subprocess.return_value = MagicMock(returncode=1, stderr=b"some ffmpeg error")
+    def fake_subprocess(cmd, **kwargs):
+        if "ffprobe" in cmd[0]:
+            return MagicMock(returncode=0, stdout="10.0\n", stderr="")
+        return MagicMock(returncode=1, stderr=b"some ffmpeg error")
+
+    mock_subprocess.side_effect = fake_subprocess
 
     res = client.post(
         "/api/v1/videos/merge-audio",
