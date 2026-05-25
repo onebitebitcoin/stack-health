@@ -82,6 +82,24 @@ def ensure_r2_cors() -> None:
         logger.warning("R2 CORS setup skipped: %s", exc)
 
 
+def upload_fileobj(fileobj: object, content_type: str, filename: str) -> tuple[str, str]:
+    """Upload a file-like object directly to R2 (server-side upload, no CORS).
+
+    Returns (r2_key, cdn_url).
+    """
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else "mp4"
+    r2_key = f"videos/{uuid.uuid4()}.{ext}"
+
+    client = get_r2_client()
+    client.upload_fileobj(
+        fileobj,
+        settings.r2_bucket_name,
+        r2_key,
+        ExtraArgs={"ContentType": content_type},
+    )
+    return r2_key, get_cdn_url(r2_key)
+
+
 def get_cdn_url(r2_key: str) -> str:
     return f"{settings.r2_public_url.rstrip('/')}/{r2_key}"
 

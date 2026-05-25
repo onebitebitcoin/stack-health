@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload, ChevronRight, Trophy, Flame, Share2, Mic, MicOff, SkipForward } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import axios from 'axios'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
 
@@ -200,51 +199,26 @@ export default function UploadPage() {
     setError('')
     setUploading(true)
     try {
-      // 1. 영상 R2 presigned URL 발급
+      // 1. 영상 서버 경유 R2 업로드 (CORS 우회)
       const contentType = resolveContentType(file)
       addLog(`[Upload] 영상: ${file.name}, ${(file.size / 1024).toFixed(0)}KB, type=${contentType}`)
       const hash = await sha256(file)
       addLog(`[Upload] SHA-256: ${hash.slice(0, 12)}...`)
 
-      const presignRes = await client.post<{
-        data: { upload_url: string; r2_key: string }
-      }>('/videos/presigned-url', {
-        filename: file.name,
-        content_type: contentType,
-        file_size: file.size,
-        file_hash: hash,
-      })
-      let { r2_key } = presignRes.data.data
-      const { upload_url } = presignRes.data.data
-      addLog(`[R2] presigned URL 발급: ${r2_key}`)
+      const uploadForm = new FormData()
+      uploadForm.append('file', file, file.name)
+      uploadForm.append('file_hash', hash)
 
-      // 2. 영상 R2 업로드
-      try {
-        await axios.put(upload_url, file, {
-          headers: { 'Content-Type': contentType },
-          timeout: 180_000,
-          onUploadProgress: (e) => {
-            if (e.total) setProgress(Math.round((e.loaded / e.total) * 40))
-          },
-        })
-        addLog('[R2] 영상 업로드 완료')
-      } catch (r2Err: unknown) {
-        const e = r2Err as {
-          response?: { status?: number; data?: unknown }
-          message?: string
-          code?: string
-        }
-        const status = e.response?.status
-        const body = e.response?.data
-        const bodyStr = typeof body === 'string'
-          ? body.slice(0, 300)
-          : body instanceof Object
-          ? JSON.stringify(body).slice(0, 300)
-          : '(empty)'
-        addLog(`[R2] PUT 실패 — status=${status ?? 'N/A'} code=${e.code ?? 'N/A'} msg="${e.message ?? ''}"`)
-        addLog(`[R2] 응답 body: ${bodyStr}`)
-        throw new Error(`R2 업로드 실패 (HTTP ${status ?? 'network error'}): ${e.message ?? ''}`)
-      }
+      const uploadRes = await client.post<{
+        data: { r2_key: string; cdn_url: string }
+      }>('/videos/upload', uploadForm, {
+        timeout: 180_000,
+        onUploadProgress: (e) => {
+          if (e.total) setProgress(Math.round((e.loaded / e.total) * 40))
+        },
+      })
+      let { r2_key } = uploadRes.data.data
+      addLog(`[R2] 영상 업로드 완료: ${r2_key}`)
 
       // 3. 오디오가 녹음됐으면 서버에서 merge
       let finalDurationSec: number | null = null

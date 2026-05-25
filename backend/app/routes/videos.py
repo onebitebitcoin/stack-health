@@ -58,6 +58,32 @@ def get_presigned_url(
     return {"data": PresignedUrlResponse(upload_url=upload_url, r2_key=r2_key)}
 
 
+@router.post("/upload")
+async def upload_video(
+    file: UploadFile = File(...),
+    file_hash: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Server-side upload: receives file from browser, streams to R2.
+
+    Avoids CORS preflight issues on Android/mobile.
+    """
+    content_type = file.content_type or "video/mp4"
+    if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식입니다: {content_type}")
+
+    if db.query(Video).filter(Video.file_hash == file_hash).first():
+        raise HTTPException(status_code=409, detail="Duplicate video")
+
+    if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
+        raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
+
+    logger.info("upload_video: user_id=%s filename=%s content_type=%s", current_user.id, file.filename, content_type)
+    r2_key, cdn_url = r2_service.upload_fileobj(file.file, content_type, file.filename or "video.mp4")
+    return {"data": {"r2_key": r2_key, "cdn_url": cdn_url}}
+
+
 @router.post("/confirm")
 def confirm_upload(
     req: ConfirmUploadRequest,
