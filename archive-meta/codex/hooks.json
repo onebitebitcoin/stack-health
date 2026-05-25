@@ -1,0 +1,100 @@
+{
+  "state": {
+    "/Users/nsw/Desktop/meeting_room/bitcoin_workout/.codex/hooks.json:session_start:0:0": {
+      "trusted_hash": "sha256:1ca2d2b6d427e32b9f489d2c265fde85e8750ed233321ccd785e37b345e7c3a9"
+    },
+    "/Users/nsw/Desktop/meeting_room/bitcoin_workout/.codex/hooks.json:pre_tool_use:0:0": {
+      "trusted_hash": "sha256:6811f88df3f77808d59199c1091e4c64856579b54f9b4b8b05a1778c6549a30e"
+    },
+    "/Users/nsw/Desktop/meeting_room/bitcoin_workout/.codex/hooks.json:post_tool_use:0:0": {
+      "trusted_hash": "sha256:91dcb36a5fe74c29b9fefedee5e2e7b810de3f04da1a1af7903bbdba1a6e8c96"
+    },
+    "/Users/nsw/Desktop/meeting_room/bitcoin_workout/.codex/hooks.json:user_prompt_submit:0:0": {
+      "trusted_hash": "sha256:f7a9686186013bef6dcf7bf5b03d36427fa98d085c4137acacb725f3cf90041f"
+    },
+    "/Users/nsw/Desktop/meeting_room/bitcoin_workout/.codex/hooks.json:pre_compact:0:0": {
+      "trusted_hash": "sha256:453b0553dec83a33fb1c07dd8725c04a66b6a0862181d6ec68d03014d1f43c45"
+    },
+    "/Users/nsw/Desktop/meeting_room/bitcoin_workout/.codex/hooks.json:post_compact:0:0": {
+      "trusted_hash": "sha256:d64f4d9d1b8d83bbbffca95886335b121fd705e9d27f72a3aa323b36ecb7f2b6"
+    },
+    "/Users/nsw/Desktop/meeting_room/bitcoin_workout/.codex/hooks.json:stop:0:0": {
+      "trusted_hash": "sha256:e9ab0fefcd69f15f79ed7b98b59ba8749d8f0f9c643a69b294563462a012f7a0"
+    }
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/opt/homebrew/Cellar/node/24.4.1/bin/node\" \"/opt/homebrew/lib/node_modules/oh-my-codex/dist/scripts/codex-native-hook.js\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/opt/homebrew/Cellar/node/24.4.1/bin/node\" \"/opt/homebrew/lib/node_modules/oh-my-codex/dist/scripts/codex-native-hook.js\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/opt/homebrew/Cellar/node/24.4.1/bin/node\" \"/opt/homebrew/lib/node_modules/oh-my-codex/dist/scripts/codex-native-hook.js\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/opt/homebrew/Cellar/node/24.4.1/bin/node\" \"/opt/homebrew/lib/node_modules/oh-my-codex/dist/scripts/codex-native-hook.js\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/opt/homebrew/Cellar/node/24.4.1/bin/node\" \"/opt/homebrew/lib/node_modules/oh-my-codex/dist/scripts/codex-native-hook.js\""
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/opt/homebrew/Cellar/node/24.4.1/bin/node\" \"/opt/homebrew/lib/node_modules/oh-my-codex/dist/scripts/codex-native-hook.js\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/opt/homebrew/Cellar/node/24.4.1/bin/node\" \"/opt/homebrew/lib/node_modules/oh-my-codex/dist/scripts/codex-native-hook.js\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

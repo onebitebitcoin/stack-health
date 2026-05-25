@@ -1,0 +1,57 @@
+{
+  "title": "테스트 시나리오 + Pre-push Hook 구현",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "기존 백엔드 테스트 수정 (17 failures 해결)",
+      "passes": false,
+      "acceptanceCriteria": [
+        "videos.py confirm_upload의 PostSchema 생성에 comment_count=0 추가",
+        "pytest tests/ 실행 시 0 failures"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "누락된 백엔드 테스트 추가 (history, comments)",
+      "passes": false,
+      "acceptanceCriteria": [
+        "backend/tests/test_history.py 존재하며 GET /api/v1/history 엔드포인트 테스트 포함",
+        "backend/tests/test_comments.py 존재하며 댓글 CRUD 테스트 포함",
+        "pytest tests/ 실행 시 새 테스트 포함 전체 통과"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "프론트엔드 Vitest 설치 및 유닛 테스트 작성",
+      "passes": false,
+      "acceptanceCriteria": [
+        "vitest, @testing-library/react, @testing-library/user-event, jsdom 설치됨",
+        "frontend/vite.config.ts 또는 vitest.config.ts에 test 설정 추가",
+        "frontend/src/__tests__/ 디렉토리에 auth store, 유틸 함수 단위 테스트 존재",
+        "npm run test -- --run 실행 시 테스트 통과"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "커버리지 85%+ 강제 설정",
+      "passes": false,
+      "acceptanceCriteria": [
+        "backend: pytest-cov 설치, pytest.ini 또는 pyproject.toml에 --cov=app --cov-fail-under=85 설정",
+        "frontend: vitest coverage 설정에 thresholds.lines=85 설정",
+        "커버리지 미달 시 테스트 명령이 non-zero exit code 반환"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "scripts/test.sh 업데이트 + git pre-push hook 생성",
+      "passes": false,
+      "acceptanceCriteria": [
+        "scripts/test.sh에 frontend unit test(vitest) 항목 추가",
+        ".git/hooks/pre-push 실행 파일 존재",
+        "pre-push hook이 backend pytest(커버리지 포함) + frontend vitest(커버리지 포함) 실행",
+        "테스트 실패 시 push 차단 (exit 1)",
+        "pre-push hook에 실행 권한(chmod +x) 부여"
+      ]
+    }
+  ]
+}

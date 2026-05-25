@@ -1,0 +1,191 @@
+{
+  "sessionId": "ralph-session-001",
+  "project": "운동하고 비트코인 받자 (bitcoin_workout)",
+  "goal": "SPEC.md 기반 MVP 전체 구현 — 7일 내 런칭 목표 (2026-05-28)",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "프로젝트 기반 구조 셋업",
+      "priority": 1,
+      "passes": true,
+      "acceptanceCriteria": [
+        "backend/, frontend/, scripts/ 디렉토리 구조가 SPEC.md 3항과 일치한다",
+        "scripts/install.sh 실행 시 Python 가상환경 생성 + pip install 완료",
+        "scripts/dev.sh backend 실행 시 uvicorn이 http://localhost:8000 에서 응답",
+        ".gitignore에 __pycache__, .venv, node_modules, .env, dev.db, dist 포함",
+        "VERSION 파일에 '0.1.0' 기록"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Backend 기반: FastAPI + DB 모델 + Alembic",
+      "priority": 2,
+      "passes": true,
+      "acceptanceCriteria": [
+        "GET /health 응답: { status: 'ok', version: '0.1.0' }",
+        "alembic upgrade head 실행 시 users, videos, posts, reward_points, lightning_claims 5개 테이블 생성",
+        "SQLAlchemy 모델이 SPEC.md 4항 스키마와 일치 (컬럼명, 타입, 제약)",
+        "app/config.py에서 모든 env 변수를 pydantic-settings로 로드",
+        "CORS 설정: allow_origins=['*'], allow_credentials=False"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "인증 API: 회원가입 + 로그인 + /auth/me",
+      "priority": 3,
+      "passes": true,
+      "acceptanceCriteria": [
+        "POST /api/v1/auth/register: 이메일+비밀번호로 가입 → { data: { access_token, user } } 반환",
+        "POST /api/v1/auth/login: 잘못된 비밀번호 → 401, 올바른 비밀번호 → access_token 반환",
+        "GET /api/v1/auth/me: 유효한 Bearer token → 현재 사용자 반환, 토큰 없음 → 401",
+        "PATCH /api/v1/auth/me: lightning_address 업데이트 → DB에 저장됨 확인",
+        "비밀번호는 bcrypt 해시로 저장 (평문 저장 금지)",
+        "tests/test_auth.py에서 위 4개 케이스 모두 pytest 통과"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "영상 업로드 API: presigned URL + confirm + 어뷰징 방지",
+      "priority": 4,
+      "passes": true,
+      "acceptanceCriteria": [
+        "POST /api/v1/videos/presigned-url: R2_ACCESS_KEY 설정 시 유효한 presigned PUT URL 반환",
+        "POST /api/v1/videos/presigned-url: file_hash 중복 시 409 반환",
+        "POST /api/v1/videos/presigned-url: 하루 5회 초과 시 429 반환",
+        "POST /api/v1/videos/presigned-url: file_size > 200MB → 400 반환",
+        "POST /api/v1/videos/confirm: duration_sec < 10 또는 > 60 → 400 반환",
+        "POST /api/v1/videos/confirm: 성공 시 posts 테이블에 행 삽입 + reward_points에 +50pt 삽입",
+        "tests/test_videos.py에서 중복 해시, 일일 상한, 길이 검증 케이스 pytest 통과"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "피드 API: cursor-based 페이지네이션 + 좋아요 + 조회",
+      "priority": 5,
+      "passes": true,
+      "acceptanceCriteria": [
+        "GET /api/v1/feed: 최신순 10개 반환, next_cursor 포함 (비로그인 접근 가능)",
+        "GET /api/v1/feed?cursor=N: cursor 이후 게시물만 반환",
+        "POST /api/v1/feed/{id}/like: 토글 방식 (첫 호출 liked=true, 재호출 liked=false)",
+        "POST /api/v1/feed/{id}/like: 좋아요 시 게시자 reward_points에 +5pt 삽입",
+        "POST /api/v1/feed/{id}/view: 같은 사용자 같은 포스트 당일 중복 호출 → 포인트 미적립",
+        "tests/test_feed.py에서 페이지네이션, 좋아요 토글, 중복 view 케이스 pytest 통과"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "리워드 API: 포인트 집계 + claim",
+      "priority": 6,
+      "passes": true,
+      "acceptanceCriteria": [
+        "GET /api/v1/rewards/summary: week_label, current_week_points, satoshi_amount, claimable 반환",
+        "satoshi_amount = floor(current_week_points / 100) * 1000",
+        "claimable: 이번 주 미claim 상태이고 satoshi_amount >= 1000 이면 true",
+        "POST /api/v1/rewards/claim: 성공 시 lightning_claims 행 삽입 (status=pending)",
+        "POST /api/v1/rewards/claim: 이번 주 이미 claim → 409",
+        "POST /api/v1/rewards/claim: satoshi_amount < 1000 → 400",
+        "GET /api/v1/rewards/claims: 로그인 사용자의 전체 claim 이력 반환",
+        "tests/test_rewards.py에서 집계, claim 생성, 중복 claim 케이스 pytest 통과"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Admin API: claim 처리 + 영상 모더레이션",
+      "priority": 7,
+      "passes": true,
+      "acceptanceCriteria": [
+        "GET /admin/claims: X-Admin-Key 없으면 403, 맞으면 pending claim 목록 반환",
+        "PATCH /admin/claims/{id}/mark-paid: status를 paid로 변경, updated_at 갱신",
+        "GET /admin/videos: 모든 영상 + 업로더 정보 반환",
+        "PATCH /admin/videos/{id}/reject: video status를 rejected로 변경",
+        "tests/test_admin.py에서 인증 없는 접근 차단, paid 상태 전환 케이스 pytest 통과"
+      ]
+    },
+    {
+      "id": "US-008",
+      "title": "Frontend 기반: Vite + React + TailwindCSS + Router",
+      "priority": 8,
+      "passes": true,
+      "acceptanceCriteria": [
+        "npm run dev 실행 시 http://localhost:5173 에서 React 앱 정상 렌더링",
+        "npm run build 성공 (0 errors)",
+        "React Router로 /, /login, /upload, /rewards, /profile, /admin 6개 라우트 구성",
+        "BottomNav 컴포넌트: 피드/업로드/리워드/프로필 4탭, 현재 경로 활성 표시",
+        "Zustand auth store: token, user 상태 + login/logout 액션",
+        "TanStack Query QueryClient 설정 완료 (App.tsx에 Provider 래핑)"
+      ]
+    },
+    {
+      "id": "US-009",
+      "title": "피드 UI: 풀스크린 세로 영상 + 스와이프 + 자동재생",
+      "priority": 9,
+      "passes": true,
+      "acceptanceCriteria": [
+        "FeedPage: 100dvh 풀스크린 레이아웃, 영상 1개가 전체 화면 채움",
+        "스와이프 업/다운으로 이전/다음 영상 전환 (touch 이벤트 기반)",
+        "IntersectionObserver로 뷰포트 진입 영상 자동재생, 이탈 시 일시정지",
+        "video 태그에 muted + playsinline 속성 (iOS Safari 자동재생)",
+        "우측 액션바: 좋아요 버튼(하트 아이콘) + PointBadge",
+        "하단 그라디언트 오버레이: 닉네임, TagChip 목록, 캡션",
+        "비로그인 좋아요 클릭 → 로그인 유도 바텀시트 표시",
+        "npm run build 성공 (FeedPage 포함)"
+      ]
+    },
+    {
+      "id": "US-010",
+      "title": "업로드 UI: 4단계 업로드 + R2 직접 업로드",
+      "priority": 10,
+      "passes": true,
+      "acceptanceCriteria": [
+        "UploadPage: 4단계 진행바 (영상선택→태그→썸네일→설명) 구현",
+        "영상 선택 후 SHA256 해시를 웹에서 계산해 presigned-url API에 전달",
+        "presigned URL로 R2에 PUT 업로드 + 진행률 % 표시",
+        "업로드 완료 후 /videos/confirm API 호출 → 피드로 리다이렉트",
+        "태그 선택: 홈트/러닝/요가/웨이트/기타 칩 멀티선택",
+        "npm run build 성공 (UploadPage 포함)"
+      ]
+    },
+    {
+      "id": "US-011",
+      "title": "리워드 UI: 포인트 현황 + Claim 바텀시트",
+      "priority": 11,
+      "passes": true,
+      "acceptanceCriteria": [
+        "RewardsPage: 이번 주 포인트 대형 숫자 표시",
+        "D-day 카운트다운 (다음 claim 가능일까지)",
+        "Claim 버튼: claimable=true이면 활성, false이면 잠금 + 이유 텍스트",
+        "ClaimBottomSheet: Lightning Address 입력 필드 + 저장된 주소 자동완성",
+        "claim 성공 후 성공 애니메이션 + 공유 버튼",
+        "지급 이력 리스트: 날짜/pt/sats/상태 표시",
+        "npm run build 성공 (RewardsPage 포함)"
+      ]
+    },
+    {
+      "id": "US-012",
+      "title": "프로필 UI + Admin 대시보드 UI",
+      "priority": 12,
+      "passes": true,
+      "acceptanceCriteria": [
+        "ProfilePage: 업로드 영상 그리드, 총 포인트 요약, 설정 섹션",
+        "설정 섹션: 로그아웃 버튼 + Lightning Address 편집 (PATCH /auth/me)",
+        "AdminPage: X-Admin-Key 입력 폼 → pending claims 목록 렌더링",
+        "AdminPage: 각 claim에 'mark-paid' 버튼 → PATCH 호출 후 상태 업데이트",
+        "npm run build 성공 (ProfilePage, AdminPage 포함)"
+      ]
+    },
+    {
+      "id": "US-013",
+      "title": "배포 설정: Dockerfile + railway.toml + scripts",
+      "priority": 13,
+      "passes": true,
+      "acceptanceCriteria": [
+        "Dockerfile: 멀티스테이지 빌드 (Stage1: node:20-alpine frontend build, Stage2: python:3.11-slim)",
+        "railway.toml: builder=dockerfile, healthcheckPath=/health",
+        "docker build 성공 (로컬에서 docker available 시)",
+        "FastAPI가 static/ 디렉토리 서빙 + SPA fallback (/* → index.html)",
+        "scripts/install.sh: venv 생성 + pip install + npm install 일괄 처리",
+        "scripts/dev.sh: backend와 frontend 개발 서버 동시 실행"
+      ]
+    }
+  ]
+}

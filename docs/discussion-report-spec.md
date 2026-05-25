@@ -110,3 +110,19 @@ After the interview: update `report-<date>.md`, update `data.json` if present, u
 ## 8. Interview workflow (/interview)
 
 Scans all meeting files within the last 7 days, collects pending supervisor decisions, asks them one at a time sorted by urgency (🔴즉시 → 🟡이번 주 → 🟢장기).
+
+## 9. 컨텍스트 로딩 최적화 가이드
+
+각 역할 에이전트 파일은 `반드시 docs/discussion-report-spec.md를 먼저 읽고 따른다` 지시를 포함한다.
+9개 에이전트가 라운드마다 각자 파일을 읽으면 토론 1회당 최대 18회 파일 읽기가 발생한다.
+
+**1회 로드로 줄이는 방법**: `/discuss` 오케스트레이터가 이 파일을 시작 시 1회 읽어 전체 내용을
+각 에이전트 프롬프트의 `<spec>` 블록으로 직접 첨부한다. 이렇게 하면 개별 에이전트가
+파일을 다시 읽지 않아도 되므로 컨텍스트 비용이 줄어든다.
+
+권장 오케스트레이터 패턴:
+```
+1. 오케스트레이터가 docs/discussion-report-spec.md 1회 Read
+2. 해당 내용을 각 에이전트 프롬프트에 주입 (또는 컨텍스트로 전달)
+3. 에이전트 내부의 "먼저 읽고 따른다" 지시는 fallback용으로 유지
+```

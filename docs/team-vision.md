@@ -2,32 +2,36 @@
 
 ## 프로젝트 개요
 
-- **프로젝트명**: 운동하고 비트코인 받자
+- **프로젝트명**: 운동하고 비트코인 받자 (Stack Health)
 - **한 줄 설명**: 운동 쇼츠를 SNS 피드(릴스/쇼츠 형태)로 공유하고 매주 비트코인 리워드를 받는 플랫폼. 비트코인 접근성 향상 + 운동 공유 문화 형성
 - **핵심 목표**: 3개월 내 사용자 100명 확보
-- **현재 단계**: 아이디어 / 구상 중
+- **현재 단계**: MVP 운영 직전 (v0.26.x)
 - **대표자**: 한입 비트코인
-- **런칭 목표일**: 2026-05-28 (일주일 이내)
-- **기술 스택**: React + FastAPI (웹), Railway 배포, 영상 저장/전송은 Cloudflare CDN 검토
+- **런칭 목표일**: 2026-05-28
+- **기술 스택**: React + FastAPI (웹), Railway 배포, Cloudflare R2 CDN, Redis + ffmpeg 오디오 병합, Blink API Lightning 결제
 
-## 영상 인프라 아키텍처 고려사항
+## 영상 인프라 아키텍처
 
-### 권장 아키텍처: Cloudflare Stream + R2
+### 구현된 아키텍처: Cloudflare R2 + 외부 워커
 
-| 컴포넌트 | 역할 | 비용 특징 |
-|----------|------|-----------|
-| **Cloudflare R2** | 영상 원본 저장 | Egress 무료 (Railway 대비 획기적 절감) |
-| **Cloudflare Stream** | 영상 트랜스코딩 + CDN 전송 | $5/1000분 저장, $1/1000분 전송 |
-| **Railway** | FastAPI 백엔드 + React 프론트 | 컴퓨팅만 과금 |
+| 컴포넌트 | 역할 | 상태 |
+|----------|------|------|
+| **Cloudflare R2** | 영상 원본 저장 (presigned URL 직접 업로드) | ✅ 구현됨 |
+| **Railway FastAPI** | 백엔드 API + React SPA 서빙 | ✅ 구현됨 |
+| **Ubuntu 워커** | ffmpeg 오디오+영상 병합 | ✅ 구현됨 |
+| **Redis** | 병합 잡 큐 (워커 미사용 시 in-process fallback) | ✅ 구현됨 |
 
-### 대안: Cloudflare R2 + 직접 서빙
-- 트랜스코딩 없이 R2에 저장 후 직접 서빙 → 비용 최소화
-- 단점: 화질 최적화, 썸네일 자동 생성 없음
-
-### 업로드 흐름
+### 업로드 흐름 (presigned)
 ```
 사용자 → FastAPI (presigned URL 발급) → Cloudflare R2 직접 업로드
-       → 업로드 완료 후 FastAPI에 알림 → DB 메타데이터 저장
+       → 업로드 완료 후 FastAPI /videos/confirm → DB 메타데이터 저장
+```
+
+### 오디오 병합 흐름
+```
+사용자 → FastAPI /videos/merge-audio → Redis 큐 enqueue
+       → Ubuntu 워커 BRPOP → ffmpeg 병합 → R2 업로드 → 완료
+       (Redis 불가 시 FastAPI 프로세스에서 직접 ffmpeg 실행)
 ```
 
 ## 경쟁사 / 레퍼런스
@@ -58,4 +62,5 @@
 
 ## 현재 Phase
 
-- **Phase A**: MVP 구현 및 런칭 — 핵심 기능(영상 업로드 + 피드 + 비트코인 리워드 지급) 구현 (목표: 2026-05-28)
+- **Phase A**: MVP 런칭 — 핵심 기능(영상 업로드 + 피드 + 리워드 + 챌린지 + 댓글) 구현 완료, 런칭 대기 (2026-05-28)
+- **Phase B**: 어드바이저 시스템, 업로드 전 5가지 질문, 월 이벤트/루틴, 광고 SDK, Lightning 자동화 안정화

@@ -1,0 +1,419 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1779684857198,
+  "projectRoot": "/Users/nsw/Desktop/meeting_room/stack_health",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "cd /Users/nsw/Desktop/meeting_room/stack_health/frontend && npm run build 2>&1 | tail -20",
+    "testCommand": "cd /Users/nsw/Desktop/meeting_room/stack_health/backend && .venv/bin/python -m pytest tests/test_videos.py -v 2>&1",
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "scripts"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "backend": {
+      "path": "backend",
+      "purpose": null,
+      "fileCount": 9,
+      "lastAccessed": 1779684857172,
+      "keyFiles": [
+        "ENV_VARS.md",
+        "alembic.ini",
+        "bitcoin_workout.db",
+        "dev.db",
+        "pytest.ini"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 4,
+      "lastAccessed": 1779684857173,
+      "keyFiles": [
+        "1week-schedule.md",
+        "discussion-report-spec.md",
+        "team-vision.md",
+        "vision.md"
+      ]
+    },
+    "frontend": {
+      "path": "frontend",
+      "purpose": null,
+      "fileCount": 11,
+      "lastAccessed": 1779684857173,
+      "keyFiles": [
+        "eslint.config.js",
+        "index.html",
+        "package-lock.json",
+        "package.json",
+        "playwright.config.ts"
+      ]
+    },
+    "meetings": {
+      "path": "meetings",
+      "purpose": null,
+      "fileCount": 11,
+      "lastAccessed": 1779684857173,
+      "keyFiles": [
+        "2026-05-21-2200-mvp-1week-plan.md",
+        "2026-05-21-2230-supervisor-decisions.md",
+        "2026-05-22-1115-design-theme.md",
+        "2026-05-22-1200-design-theme-impl.md",
+        "2026-05-22-1300-stack-health-discuss.md"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 3,
+      "lastAccessed": 1779684857173,
+      "keyFiles": [
+        "dev.sh",
+        "install.sh",
+        "test.sh"
+      ]
+    },
+    "backend/app": {
+      "path": "backend/app",
+      "purpose": "Application code",
+      "fileCount": 4,
+      "lastAccessed": 1779684857174,
+      "keyFiles": [
+        "__init__.py",
+        "config.py",
+        "database.py"
+      ]
+    },
+    "frontend/node_modules": {
+      "path": "frontend/node_modules",
+      "purpose": "Dependencies",
+      "fileCount": 1,
+      "lastAccessed": 1779684857182,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "frontend/src/pages/UploadPage.tsx",
+      "accessCount": 92,
+      "lastAccessed": 1779720272711,
+      "type": "file"
+    },
+    {
+      "path": "docs/discussion-report-spec.md",
+      "accessCount": 91,
+      "lastAccessed": 1779720294136,
+      "type": "file"
+    },
+    {
+      "path": "docs/team-vision.md",
+      "accessCount": 59,
+      "lastAccessed": 1779748182886,
+      "type": "file"
+    },
+    {
+      "path": "VERSION",
+      "accessCount": 51,
+      "lastAccessed": 1779717733609,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "accessCount": 45,
+      "lastAccessed": 1779720265845,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/pages/ProfilePage.tsx",
+      "accessCount": 44,
+      "lastAccessed": 1779720286786,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/VideoCard.tsx",
+      "accessCount": 40,
+      "lastAccessed": 1779720280011,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/pages/AdminPage.tsx",
+      "accessCount": 37,
+      "lastAccessed": 1779720324645,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/routes/videos.py",
+      "accessCount": 35,
+      "lastAccessed": 1779720280745,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/pages/LoginPage.tsx",
+      "accessCount": 32,
+      "lastAccessed": 1779720287448,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/main.py",
+      "accessCount": 29,
+      "lastAccessed": 1779720273165,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/pages/FeedPage.tsx",
+      "accessCount": 28,
+      "lastAccessed": 1779720278776,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/api/types.ts",
+      "accessCount": 27,
+      "lastAccessed": 1779687305910,
+      "type": "file"
+    },
+    {
+      "path": "backend/tests/test_videos.py",
+      "accessCount": 17,
+      "lastAccessed": 1779718052964,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/routes/admin.py",
+      "accessCount": 17,
+      "lastAccessed": 1779720289208,
+      "type": "file"
+    },
+    {
+      "path": "meetings/INDEX.md",
+      "accessCount": 16,
+      "lastAccessed": 1779720305019,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/BottomNav.tsx",
+      "accessCount": 15,
+      "lastAccessed": 1779720280554,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/services/r2.py",
+      "accessCount": 15,
+      "lastAccessed": 1779720291056,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/models/user.py",
+      "accessCount": 14,
+      "lastAccessed": 1779720315848,
+      "type": "file"
+    },
+    {
+      "path": "Dockerfile",
+      "accessCount": 13,
+      "lastAccessed": 1779688674594,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/services/reward.py",
+      "accessCount": 12,
+      "lastAccessed": 1779720291280,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/tokens.css",
+      "accessCount": 11,
+      "lastAccessed": 1779720337553,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/models/video.py",
+      "accessCount": 10,
+      "lastAccessed": 1779720317290,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/models/post.py",
+      "accessCount": 10,
+      "lastAccessed": 1779720318275,
+      "type": "file"
+    },
+    {
+      "path": "backend/requirements.txt",
+      "accessCount": 9,
+      "lastAccessed": 1779720328624,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/store/theme.ts",
+      "accessCount": 8,
+      "lastAccessed": 1779604134271,
+      "type": "file"
+    },
+    {
+      "path": "frontend/tailwind.config.js",
+      "accessCount": 7,
+      "lastAccessed": 1779669658885,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/index.css",
+      "accessCount": 7,
+      "lastAccessed": 1779720338200,
+      "type": "file"
+    },
+    {
+      "path": "docs/vision.md",
+      "accessCount": 6,
+      "lastAccessed": 1779720208791,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/models/__init__.py",
+      "accessCount": 6,
+      "lastAccessed": 1779720315152,
+      "type": "file"
+    },
+    {
+      "path": "SPEC.md",
+      "accessCount": 6,
+      "lastAccessed": 1779721301745,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1779604137737,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/schemas/user.py",
+      "accessCount": 5,
+      "lastAccessed": 1779604230234,
+      "type": "file"
+    },
+    {
+      "path": "frontend/index.html",
+      "accessCount": 5,
+      "lastAccessed": 1779710702310,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/pages/RewardsPage.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1779720281371,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/routes/feed.py",
+      "accessCount": 5,
+      "lastAccessed": 1779720283741,
+      "type": "file"
+    },
+    {
+      "path": "meetings/2026-05-22-1115-design-theme.md",
+      "accessCount": 4,
+      "lastAccessed": 1779418537352,
+      "type": "file"
+    },
+    {
+      "path": "docs/1week-schedule.md",
+      "accessCount": 4,
+      "lastAccessed": 1779720293504,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/LoadingScreen.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1779720306914,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/LoginPromptSheet.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1779720306168,
+      "type": "file"
+    },
+    {
+      "path": "meetings/2026-05-22-1200-design-theme-impl.md",
+      "accessCount": 2,
+      "lastAccessed": 1779418598446,
+      "type": "file"
+    },
+    {
+      "path": "meetings/2026-05-22-1400-vision-define.md",
+      "accessCount": 2,
+      "lastAccessed": 1779426637958,
+      "type": "file"
+    },
+    {
+      "path": "meetings/2026-05-21-2230-supervisor-decisions.md",
+      "accessCount": 2,
+      "lastAccessed": 1779429548427,
+      "type": "file"
+    },
+    {
+      "path": "meetings/2026-05-22-1500-admin-comment-discuss.md",
+      "accessCount": 2,
+      "lastAccessed": 1779437013912,
+      "type": "file"
+    },
+    {
+      "path": "backend/alembic/versions/d349c0124c34_init.py",
+      "accessCount": 2,
+      "lastAccessed": 1779437247075,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/ClaimBottomSheet.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1779720296493,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/PointBadge.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1779720302951,
+      "type": "file"
+    },
+    {
+      "path": "backend/app/models/comment.py",
+      "accessCount": 2,
+      "lastAccessed": 1779720320534,
+      "type": "file"
+    },
+    {
+      "path": "meetings/2026-05-22-1300-stack-health-discuss.md",
+      "accessCount": 1,
+      "lastAccessed": 1779418885817,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/LogoMark.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1779420284551,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

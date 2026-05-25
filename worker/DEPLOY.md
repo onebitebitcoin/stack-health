@@ -14,6 +14,9 @@
     │ 1) audio를 R2에 업로드
     │ 2) Redis LPUSH queue:merge-jobs {job_id, ...}
     │    └─ Redis 불가 시 → 백엔드에서 직접 ffmpeg 처리 (fallback)
+    │       ⚠️ fallback은 in-memory (_local_jobs dict)로 상태 저장
+    │       ⚠️ Railway 재배포/멀티 인스턴스 시 fallback 잡 상태 소실됨
+    │       ⚠️ 프로덕션에서는 반드시 Redis 연결 유지 권장
     │ 3) job_id 즉시 반환
     ▼
 [브라우저 - 3초 간격 폴링]

@@ -1,8 +1,10 @@
 # SPEC.md — 운동하고 비트코인 받자
 
-> 버전: 0.1.0 (MVP)
+> 버전: 0.26.1 (운영 중)
 > 런칭 목표: 2026-05-28
-> 최종 업데이트: 2026-05-21
+> 최종 업데이트: 2026-05-25
+>
+> **이 문서는 코드 기준으로 작성됩니다. 코드가 진실 원본이며, 이 문서는 코드를 설명합니다.**
 
 ---
 
@@ -14,6 +16,7 @@
 - 운동 습관 형성 + 비트코인 접근성 향상
 - 진짜 BTC 지급 (자체 토큰 없음)
 - 비수탁 구조 (서버가 사용자 BTC 보관하지 않음)
+- **스코어 UI 원칙**: 앱 내에서 BTC/sats 잔액 표시 방식 사용하지 않음 — 규제 이슈 방지
 
 ### MVP 목표
 - 사용자: 3개월 내 100명 확보
@@ -33,11 +36,13 @@
 | 영상 저장 | Cloudflare R2 (presigned URL 직접 업로드) |
 | 영상 서빙 | Cloudflare CDN (R2 퍼블릭 도메인) |
 | 배포 | Railway (단일 서비스: FastAPI가 React 빌드 파일도 서빙) |
-| Lightning 지급 | 운영자 수동 송금 (외부 API 없음) |
-| 인증 | JWT (python-jose) |
+| Lightning 지급 | 운영자 수동 송금 (기본) / Blink API 자동결제 (옵션) |
+| 인증 | JWT (python-jose) + Google OAuth (옵션) + LNAuth (옵션) |
 | 아이콘 | lucide-react |
 | HTTP 클라이언트 | TanStack Query (React Query v5) |
 | 상태 관리 | Zustand |
+| 오디오 병합 | ffmpeg (Ubuntu 외부 워커) + Redis 큐 |
+| 워커 큐 | Redis (merge-audio 잡 분배) |
 
 ### 환경 변수 (.env)
 ```
@@ -61,6 +66,17 @@ ADMIN_SECRET_KEY=<random string>
 # App
 ENVIRONMENT=development
 PORT=8000
+APP_BASE_URL=http://localhost:8000
+
+# Google OAuth (선택 — 미설정 시 Google 로그인 비활성화)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Blink API (선택 — 미설정 시 수동 송금 모드)
+BLINK_API_KEY=
+
+# Redis (선택 — 미설정 시 백엔드 직접 ffmpeg fallback)
+REDIS_URL=redis://localhost:6379/0
 ```
 
 ---
@@ -68,72 +84,58 @@ PORT=8000
 ## 3. 프로젝트 구조
 
 ```
-bitcoin_workout/
+stack_health/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── models/
-│   │   │   ├── __init__.py
 │   │   │   ├── user.py
 │   │   │   ├── video.py
 │   │   │   ├── post.py
 │   │   │   ├── reward.py
-│   │   │   └── claim.py
+│   │   │   ├── claim.py
+│   │   │   ├── comment.py
+│   │   │   ├── challenge.py
+│   │   │   ├── lnauth_challenge.py
+│   │   │   └── admin_log.py
 │   │   ├── schemas/
-│   │   │   ├── __init__.py
-│   │   │   ├── user.py
-│   │   │   ├── video.py
-│   │   │   ├── reward.py
-│   │   │   └── claim.py
 │   │   ├── routes/
-│   │   │   ├── __init__.py
 │   │   │   ├── auth.py
 │   │   │   ├── videos.py
 │   │   │   ├── feed.py
 │   │   │   ├── rewards.py
+│   │   │   ├── comments.py
+│   │   │   ├── challenges.py
+│   │   │   ├── history.py
+│   │   │   ├── users.py
 │   │   │   └── admin.py
 │   │   ├── services/
 │   │   │   ├── auth.py
 │   │   │   ├── r2.py
-│   │   │   └── reward.py
+│   │   │   ├── reward.py
+│   │   │   ├── blink.py
+│   │   │   ├── google_oauth.py
+│   │   │   ├── lnauth.py
+│   │   │   └── job_queue.py
 │   │   └── middleware/
-│   │       └── rate_limit.py
 │   ├── alembic/
 │   ├── tests/
-│   ├── requirements.txt
-│   └── Dockerfile
+│   └── requirements.txt
 ├── frontend/
-│   ├── src/
-│   │   ├── main.tsx
-│   │   ├── App.tsx
-│   │   ├── pages/
-│   │   │   ├── FeedPage.tsx
-│   │   │   ├── UploadPage.tsx
-│   │   │   ├── RewardsPage.tsx
-│   │   │   ├── ProfilePage.tsx
-│   │   │   ├── LoginPage.tsx
-│   │   │   └── AdminPage.tsx
-│   │   ├── components/
-│   │   │   ├── VideoCard.tsx
-│   │   │   ├── BottomNav.tsx
-│   │   │   ├── TagChip.tsx
-│   │   │   ├── PointBadge.tsx
-│   │   │   └── ClaimBottomSheet.tsx
-│   │   ├── api/
-│   │   │   ├── client.ts
-│   │   │   └── types.ts
-│   │   └── store/
-│   │       └── auth.ts
-│   ├── package.json
-│   └── vite.config.ts
+│   └── src/
+│       ├── pages/
+│       ├── components/
+│       ├── api/
+│       └── store/
+├── worker/
+│   ├── worker.py
+│   ├── tasks/merge.py
+│   ├── queue_client.py
+│   └── DEPLOY.md
 ├── scripts/
-│   ├── install.sh
-│   ├── dev.sh
-│   └── test.sh
 ├── SPEC.md
-├── PROGRESS.md  (구현 중에만 존재)
 └── VERSION
 ```
 
@@ -144,10 +146,12 @@ bitcoin_workout/
 ### users
 ```sql
 id              INTEGER PRIMARY KEY
-email           TEXT UNIQUE NOT NULL
+email           TEXT UNIQUE                -- nullable (LNAuth/OAuth 사용자는 이메일 없을 수 있음)
 username        TEXT UNIQUE NOT NULL
-password_hash   TEXT NOT NULL
-lightning_address TEXT              -- 예: user@walletofsatoshi.com
+password_hash   TEXT                       -- nullable (OAuth 전용 계정은 패스워드 없음)
+oauth_provider  TEXT                       -- 'google' | null
+oauth_sub       TEXT                       -- Google sub 또는 null
+lightning_address TEXT                     -- 예: user@walletofsatoshi.com
 avatar_url      TEXT
 is_admin        BOOLEAN DEFAULT FALSE
 created_at      DATETIME DEFAULT now()
@@ -157,11 +161,11 @@ created_at      DATETIME DEFAULT now()
 ```sql
 id              INTEGER PRIMARY KEY
 user_id         INTEGER REFERENCES users(id)
-r2_key          TEXT NOT NULL          -- R2 오브젝트 키
-cdn_url         TEXT NOT NULL          -- 서빙 URL
-file_hash       TEXT NOT NULL          -- SHA256, 중복 업로드 차단
-duration_sec    INTEGER                -- 영상 길이 (초)
-status          TEXT DEFAULT 'active'  -- active | rejected
+r2_key          TEXT NOT NULL
+cdn_url         TEXT NOT NULL
+file_hash       TEXT NOT NULL              -- SHA256, 중복 업로드 차단
+duration_sec    INTEGER
+status          TEXT DEFAULT 'active'      -- active | rejected | deleted
 created_at      DATETIME DEFAULT now()
 ```
 
@@ -170,8 +174,8 @@ created_at      DATETIME DEFAULT now()
 id              INTEGER PRIMARY KEY
 video_id        INTEGER REFERENCES videos(id) UNIQUE
 user_id         INTEGER REFERENCES users(id)
-caption         TEXT                   -- 140자 이내
-tags            TEXT                   -- JSON 배열: ["홈트", "러닝"]
+caption         TEXT                       -- 140자 이내
+tags            TEXT                       -- JSON 배열: ["홈트", "러닝"]
 like_count      INTEGER DEFAULT 0
 view_count      INTEGER DEFAULT 0
 created_at      DATETIME DEFAULT now()
@@ -181,10 +185,14 @@ created_at      DATETIME DEFAULT now()
 ```sql
 id              INTEGER PRIMARY KEY
 user_id         INTEGER REFERENCES users(id)
-week_label      TEXT NOT NULL          -- 예: 2026-W21
+week_label      TEXT NOT NULL              -- 예: 2026-W21
 points          INTEGER NOT NULL
-reason          TEXT NOT NULL          -- upload | like_received | view_received
-reference_id    INTEGER                -- post_id 또는 video_id
+reason          TEXT NOT NULL              -- upload | like_received | view_received
+reference_id    INTEGER                    -- post_id 또는 video_id
+status          TEXT DEFAULT 'fixed'       -- queued | fixed | revoked
+                                           -- queued: 업로드 후 24h 대기 (어뷰징 방지)
+                                           -- fixed: 24h 경과 후 확정
+                                           -- revoked: 영상 삭제로 취소됨
 created_at      DATETIME DEFAULT now()
 ```
 
@@ -195,11 +203,64 @@ user_id         INTEGER REFERENCES users(id)
 week_label      TEXT NOT NULL
 points_used     INTEGER NOT NULL
 satoshi_amount  INTEGER NOT NULL
-ln_address      TEXT NOT NULL          -- 지급 시점의 주소 스냅샷
-status          TEXT DEFAULT 'pending' -- pending | paid | cancelled
-payment_memo    TEXT                   -- 운영자 메모 (선택)
+ln_address      TEXT NOT NULL
+status          TEXT DEFAULT 'pending'     -- pending | paid | cancelled
+payment_memo    TEXT
 created_at      DATETIME DEFAULT now()
 updated_at      DATETIME DEFAULT now()
+UNIQUE(user_id, week_label)               -- 주당 1회 클레임 강제
+```
+
+### comments
+```sql
+id              INTEGER PRIMARY KEY
+post_id         INTEGER REFERENCES posts(id)
+user_id         INTEGER REFERENCES users(id)
+content         TEXT NOT NULL              -- 최대 500자
+created_at      DATETIME DEFAULT now()
+```
+
+### challenges
+```sql
+id              INTEGER PRIMARY KEY
+title           TEXT NOT NULL              -- 최대 100자
+description     TEXT NOT NULL
+reward_title    TEXT NOT NULL              -- 달성 보상 타이틀 (최대 80자)
+condition_value INTEGER NOT NULL           -- 완료에 필요한 업로드 수
+start_date      DATETIME NOT NULL
+end_date        DATETIME NOT NULL
+categories      JSON DEFAULT []            -- 운동 카테고리 목록
+is_active       BOOLEAN DEFAULT TRUE
+creator_id      INTEGER REFERENCES users(id) -- null이면 시스템 챌린지
+created_at      DATETIME DEFAULT now()
+```
+
+### challenge_participations
+```sql
+id              INTEGER PRIMARY KEY
+user_id         INTEGER REFERENCES users(id)
+challenge_id    INTEGER REFERENCES challenges(id)
+upload_count    INTEGER DEFAULT 0
+completed_at    DATETIME                   -- null이면 미완료
+joined_at       DATETIME DEFAULT now()
+```
+
+### lnauth_challenges
+```sql
+k1              TEXT PRIMARY KEY           -- 64자 hex challenge
+pubkey          TEXT                       -- 서명한 공개키 (verify 후 저장)
+verified        BOOLEAN DEFAULT FALSE
+created_at      DATETIME DEFAULT now()
+```
+
+### admin_logs
+```sql
+id              INTEGER PRIMARY KEY
+action          TEXT NOT NULL              -- 'ban_user' | 'reject_video' | 'delete_video' 등
+target_type     TEXT NOT NULL              -- 'user' | 'video' | 'post'
+target_id       INTEGER NOT NULL
+detail          TEXT
+created_at      DATETIME DEFAULT now()
 ```
 
 ---
@@ -208,10 +269,10 @@ updated_at      DATETIME DEFAULT now()
 
 ### 공통
 - Base URL: `/api/v1`
-- 인증: `Authorization: Bearer <jwt>`
+- 인증: `Authorization: Bearer <jwt>` (🔒 표시)
+- 관리자: JWT `is_admin=true` 필요 (🛡️ 표시)
 - 응답 형식: `{ data, error }`
 - Trailing slash 없음
-- `redirect_slashes = False`
 
 ### CORS
 ```python
@@ -248,6 +309,45 @@ Request:  { "username"?: str, "lightning_address"?: str }
 Response: { "data": UserSchema }
 ```
 
+#### GET `/api/v1/auth/check-username`
+```
+Query: username: str
+Response: { "data": { "available": bool } }
+```
+
+#### GET `/api/v1/auth/google`
+Google OAuth 인증 시작. `GOOGLE_CLIENT_ID` 미설정 시 503.
+```
+Response: 302 Redirect → Google 인증 URL
+```
+
+#### GET `/api/v1/auth/google/callback`
+```
+Query: code: str
+Response: 302 Redirect → <APP_BASE_URL>/?google_token=<jwt> (성공)
+          302 Redirect → <APP_BASE_URL>/?error=google_auth_failed (실패)
+```
+
+#### GET `/api/v1/auth/lnauth/challenge`
+LNAuth 로그인용 challenge 생성.
+```json
+Response: { "data": { "lnurl": str, "k1": str } }
+```
+
+#### GET `/api/v1/auth/lnauth`
+LNAuth wallet callback (wallet이 직접 호출).
+```
+Query: k1: str, sig: str, key: str, tag: str
+Response: { "status": "OK" } or { "status": "ERROR", "reason": str }
+```
+
+#### GET `/api/v1/auth/lnauth/verify`
+프론트엔드가 폴링으로 인증 완료 여부 확인.
+```
+Query: k1: str
+Response: { "data": { "verified": bool, "access_token"?: str, "user"?: UserSchema } }
+```
+
 ---
 
 ### Videos
@@ -259,21 +359,48 @@ Request:  { "filename": str, "content_type": str, "file_size": int, "file_hash":
 Response: { "data": { "upload_url": str, "r2_key": str } }
 ```
 검증:
-- `content_type`: `video/mp4`, `video/quicktime`, `video/webm` 만 허용
-- `file_size`: 최대 200MB
-- `file_hash`: DB에서 중복 검사 → 중복이면 `409 Conflict`
-- 일일 업로드 횟수: 사용자당 5회 초과 시 `429 Too Many Requests`
+- `content_type`: `video/mp4`, `video/quicktime`, `video/webm`
+- `file_size`: 최대 50MB (`services/r2.py:MAX_FILE_SIZE`)
+- `file_hash`: SHA256 중복 검사 → 중복이면 `409 Conflict`
+- 일일 업로드 횟수: 사용자당 3회 초과 시 `429 Too Many Requests`
+
+#### POST `/api/v1/videos/upload` 🔒
+서버 사이드 업로드 (브라우저 → 서버 → R2). CORS 제약이 있는 환경에서 사용.
+```
+Request: multipart/form-data { file: UploadFile }
+Response: { "data": { "r2_key": str, "cdn_url": str } }
+```
 
 #### POST `/api/v1/videos/confirm` 🔒
-R2 업로드 완료 후 DB 저장 + 포인트 적립.
+R2 업로드 완료 후 DB 저장 + 포인트 적립 큐 등록.
 ```json
-Request:  { "r2_key": str, "duration_sec": int, "caption"?: str, "tags"?: [str] }
+Request:  { "r2_key": str, "duration_sec": int, "caption"?: str, "tags"?: [str], "challenge_id"?: int }
 Response: { "data": { "post": PostSchema, "points_earned": int } }
 ```
 검증:
-- `duration_sec`: 10초 이상, 60초 이하
+- `duration_sec`: 5초 이상, 30초 이하
 - `tags`: `["홈트", "러닝", "요가", "웨이트", "기타"]` 중 선택 (복수 가능)
-- 완료 후 포인트 적립: `+50pt` (uploads)
+- 포인트 적립: `+50pt` (queued 상태로 생성 → 24h 후 fixed 전환)
+- user.id ≤ 50이면 early adopter 2× 보너스 적용
+
+#### POST `/api/v1/videos/merge-audio` 🔒
+영상과 오디오 파일을 ffmpeg로 병합하는 잡을 큐에 등록.
+```
+Request: multipart/form-data
+  { video_r2_key: str, audio: UploadFile, audio_duration_sec: int,
+    post_id: int, caption?: str, tags?: str (JSON) }
+Response: { "data": { "job_id": str, "status": "pending" } }
+```
+- Redis 가용 시: 워커 큐에 잡 등록
+- Redis 불가 시: 백엔드에서 직접 ffmpeg 처리 (fallback)
+- **주의**: fallback은 in-memory로 상태 관리 → Railway 재배포 시 잡 상태 소실 가능
+
+#### GET `/api/v1/videos/merge-job/{job_id}` 🔒
+병합 잡 상태 조회.
+```json
+Response: { "data": { "job_id": str, "status": "pending|processing|completed|failed",
+                       "cdn_url"?: str } }
+```
 
 ---
 
@@ -285,20 +412,89 @@ Query: cursor?: int, limit?: int (default 10, max 20)
 Response: { "data": { "posts": [PostSchema], "next_cursor": int | null } }
 ```
 - 최신순 정렬
-- 비로그인도 접근 가능
+- 비로그인 접근 가능
 
 #### POST `/api/v1/feed/{post_id}/like` 🔒
 ```json
 Response: { "data": { "liked": bool, "like_count": int } }
 ```
-- 좋아요 받은 게시자: `+5pt`
-- 토글 방식 (이미 좋아요 → 취소)
+- 좋아요 받은 게시자: `+5pt` (fixed, 즉시)
+- 토글 방식
 
 #### POST `/api/v1/feed/{post_id}/view` 🔒
 ```json
 Response: { "data": { "view_count": int } }
 ```
 - 게시자 `+2pt` (하루 동일 영상 중복 view 제외)
+
+---
+
+### Comments
+
+#### GET `/api/v1/comments/{post_id}/comments`
+```json
+Response: { "data": { "comments": [CommentSchema] } }
+```
+
+#### POST `/api/v1/comments/{post_id}/comments` 🔒
+```json
+Request:  { "content": str }  -- 최대 500자
+Response: { "data": { "comment": CommentSchema } }
+```
+
+#### DELETE `/api/v1/comments/{post_id}/comments/{comment_id}` 🔒
+작성자 본인 또는 관리자만 삭제 가능.
+```json
+Response: { "data": { "deleted": true } }
+```
+
+---
+
+### Challenges
+
+#### GET `/api/v1/challenges`
+진행 중인 챌린지 목록.
+```
+Query: cursor?: int
+Response: { "data": { "challenges": [ChallengeSchema], "next_cursor"?: int } }
+```
+
+#### POST `/api/v1/challenges` 🔒
+새 챌린지 생성.
+```json
+Request:  { "title": str, "description": str, "reward_title": str,
+            "condition_value": int, "start_date": str, "end_date": str,
+            "categories"?: [str] }
+Response: { "data": { "challenge": ChallengeSchema } }
+```
+
+#### GET `/api/v1/challenges/created` 🔒
+내가 만든 챌린지 목록.
+
+#### GET `/api/v1/challenges/my` 🔒
+내가 참여 중인 챌린지 목록.
+
+#### GET `/api/v1/challenges/titles` 🔒
+내가 획득한 챌린지 타이틀 목록.
+
+#### POST `/api/v1/challenges/{challenge_id}/join` 🔒
+챌린지 참여.
+
+#### GET `/api/v1/challenges/{challenge_id}/participants`
+챌린지 참여자 목록.
+
+---
+
+### History & Users
+
+#### GET `/api/v1/history` 🔒
+운동 히스토리 캘린더 데이터.
+
+#### GET `/api/v1/history/me/stats` 🔒
+내 스탯 (streak, 총 업로드 수 등).
+
+#### GET `/api/v1/history/{user_id}/profile`
+특정 사용자 공개 프로필.
 
 ---
 
@@ -312,8 +508,8 @@ Response: {
     "week_label": "2026-W21",
     "current_week_points": 350,
     "satoshi_amount": 3500,
-    "claimable": true,            // 1000 sats(100pt) 이상이고 미claim 상태
-    "claim_deadline": "2026-05-25T23:59:59",  // 매주 월요일 자정
+    "claimable": true,
+    "claim_deadline": "2026-05-25T23:59:59",
     "next_claim_date": "2026-05-26T00:00:00"
   }
 }
@@ -321,14 +517,17 @@ Response: {
 
 #### POST `/api/v1/rewards/claim` 🔒
 ```json
-Request:  { "ln_address"?: str }  // 미입력 시 프로필의 lightning_address 사용
+Request:  { "ln_address"?: str }
 Response: { "data": { "claim": ClaimSchema } }
 ```
 검증:
-- `satoshi_amount` >= 1000 (최소 claim 단위)
+- `satoshi_amount` >= 1000
 - 이번 주 이미 claim한 경우 `409 Conflict`
-- `ln_address` 미등록 + 요청에도 없으면 `400`
-- claim 생성 후 해당 주 포인트 차감
+- `ln_address` 미등록 시 `400`
+
+**결제 모드**:
+- `BLINK_API_KEY` 설정됨 → Blink API로 자동 Lightning 송금
+- `BLINK_API_KEY` 미설정 → `status=pending`으로 저장, 운영자 수동 송금
 
 #### GET `/api/v1/rewards/claims` 🔒
 ```json
@@ -337,32 +536,32 @@ Response: { "data": { "claims": [ClaimSchema] } }
 
 ---
 
-### Admin (운영자 전용)
+### Admin (관리자 전용)
 
-헤더: `X-Admin-Key: <ADMIN_SECRET_KEY>`
+관리자 인증: JWT 토큰 + `is_admin=true` 필요 🛡️
 
-#### GET `/admin/claims`
+#### GET `/api/v1/admin/claims`
 ```
 Query: status?: pending|paid|cancelled, limit?: int
 Response: { "data": { "claims": [ClaimWithUserSchema] } }
 ```
 
-#### PATCH `/admin/claims/{claim_id}/mark-paid`
+#### PATCH `/api/v1/admin/claims/{claim_id}/mark-paid` 🛡️
 ```json
 Request:  { "payment_memo"?: str }
 Response: { "data": { "claim": ClaimSchema } }
 ```
 
-#### GET `/admin/videos`
+#### GET `/api/v1/admin/videos` 🛡️
 콘텐츠 모더레이션용 영상 목록.
-```json
-Response: { "data": { "videos": [VideoWithUserSchema] } }
-```
 
-#### PATCH `/admin/videos/{video_id}/reject`
-```json
-Response: { "data": { "video": VideoSchema } }
-```
+#### PATCH `/api/v1/admin/videos/{video_id}/reject` 🛡️
+
+#### GET `/api/v1/admin/users` 🛡️
+전체 사용자 목록.
+
+#### POST `/api/v1/admin/users/{user_id}/ban` 🛡️
+사용자 비활성화. AdminLog 기록됨.
 
 ---
 
@@ -370,7 +569,7 @@ Response: { "data": { "video": VideoSchema } }
 
 #### GET `/health`
 ```json
-Response: { "status": "ok", "version": "0.1.0" }
+Response: { "status": "ok", "version": "0.26.1" }
 ```
 
 ---
@@ -378,22 +577,30 @@ Response: { "status": "ok", "version": "0.1.0" }
 ## 6. 포인트 시스템
 
 ### 적립 규칙
-| 행동 | 포인트 | 일일 상한 |
-|------|--------|----------|
-| 영상 업로드 | +50pt | 5회 (250pt) |
-| 좋아요 받음 | +5pt | 제한 없음 |
-| 조회 받음 | +2pt | 중복 제외 |
-| **일일 총 상한** | | **300pt** |
+| 행동 | 포인트 | 비고 |
+|------|--------|------|
+| 영상 업로드 | +50pt | queued → 24h 후 fixed |
+| 좋아요 받음 | +5pt | 즉시 fixed |
+| 조회 받음 | +2pt | 하루 동일 영상 중복 제외 |
+| early adopter 보너스 | ×2 | user.id ≤ 50인 사용자만 |
+| **일일 총 상한** | 300pt | 초과분 자동 미적립 |
+| **일일 업로드 횟수 상한** | 3회 | 초과 시 429 |
 
 ### 포인트 → Sats 환산
-- **100pt = 1,000 sats** (하드코딩, 코드 상수로 관리)
+- **100pt = 1,000 sats** (코드 상수: `POINTS_TO_SATS_DIVISOR = 100`)
 - 최소 claim 단위: **1,000 sats (100pt)**
+
+### 어뷰징 방지: 업로드 포인트 24h 대기
+- 업로드 직후 포인트는 `status=queued`로 생성
+- `settle_queued_rewards()`가 24h 경과분을 `status=fixed`로 전환
+- 영상이 24h 이내에 삭제/거부되면 `status=revoked`로 취소
+- `get_weekly_points()`: fixed 포인트만 합산 (queued 제외)
 
 ### 주간 claim 사이클
 - 집계 기간: 월요일 00:00 ~ 일요일 23:59 (Asia/Seoul)
-- claim 가능 시작: 주간 종료 후 (월요일 00:00부터)
-- 미claim 포인트: 다음 주로 이월 없음, 만료 (런칭 초기엔 이월로 시작 후 검토)
-- 주당 1회만 claim 가능
+- claim 가능: 주간 종료 후 (월요일 00:00부터)
+- 미claim 포인트: 다음 주로 이월 (런칭 초기 정책)
+- 주당 1회만 claim 가능 (`UNIQUE(user_id, week_label)`)
 
 ---
 
@@ -401,13 +608,12 @@ Response: { "status": "ok", "version": "0.1.0" }
 
 | 항목 | 제한 |
 |------|------|
-| 최대 길이 | 60초 |
-| 최소 길이 | 10초 |
-| 최대 파일 크기 | 200MB |
+| 최대 길이 | **30초** |
+| 최소 길이 | **5초** |
+| 최대 파일 크기 | **50MB** |
 | 허용 포맷 | mp4, mov, webm |
-| 일일 업로드 | 5회 |
+| 일일 업로드 | **3회** |
 | 중복 차단 | 파일 SHA256 해시 기준 |
-| 보존 기간 | 30일 (이후 자동 삭제 — v2) |
 | 태그 | 홈트, 러닝, 요가, 웨이트, 기타 |
 
 ---
@@ -418,39 +624,15 @@ Response: { "status": "ok", "version": "0.1.0" }
 |------|------|------|
 | `/` | 피드 (풀스크린 세로형 영상) | 불필요 (좋아요·업로드는 요구) |
 | `/login` | 로그인 / 회원가입 | — |
-| `/upload` | 영상 업로드 (4단계) | 필요 |
+| `/upload` | 영상 업로드 (다단계 wizard) | 필요 |
 | `/rewards` | 포인트 현황 + claim | 필요 |
 | `/profile` | 내 프로필 + 설정 | 필요 |
-| `/admin` | 운영자 대시보드 (claim 목록 + 영상 관리) | Admin Key |
-
-### 피드 화면 상세
-- 풀스크린 (`100dvh`), 한 번에 1개 영상
-- 스와이프 업/다운으로 전환
-- 자동재생 + 음소거 기본 (탭으로 토글)
-- `muted` + `playsinline` 속성 (iOS Safari)
-- IntersectionObserver로 뷰포트 진입 시 재생
-- 우측 액션바: 좋아요, PointBadge
-- 하단 그라디언트 오버레이: 닉네임, 태그 칩, 설명
-
-### 업로드 화면 상세
-- 4단계 진행바
-  1. 영상 선택 (카메라/갤러리, 최대 60초)
-  2. 운동 태그 선택 (복수 선택 칩)
-  3. 썸네일 (자동 추출)
-  4. 설명 입력 (140자, 선택)
-- 업로드 중 진행률 % 표시
-- R2 직접 업로드 (PUT presigned URL)
-
-### 리워드 화면 상세
-- 이번 주 포인트 대형 숫자
-- D-day 카운트다운 (다음 claim 가능일)
-- Claim 버튼 (비활성 시 잠금 + 이유 텍스트)
-- Claim 바텀시트:
-  - Lightning Address 입력 (저장된 주소 자동 완성)
-  - 확인 → 성공 애니메이션 + **공유 버튼**
-  - "지갑 없나요?" 링크 (Wallet of Satoshi 설치 가이드)
-- 지급 이력 리스트 (날짜 / pt / sats / 상태)
-- 포인트 획득 조건 요약 카드
+| `/history` | 운동 히스토리 캘린더 | 필요 |
+| `/challenges` | 챌린지 목록 + 참여 | 필요 |
+| `/my-challenges` | 내 챌린지 현황 | 필요 |
+| `/challenges/create` | 챌린지 생성 | 필요 |
+| `/users/:userId` | 다른 사용자 프로필 | 불필요 |
+| `/admin` | 운영자 대시보드 | is_admin |
 
 ---
 
@@ -468,76 +650,66 @@ healthcheckPath = "/health"
 healthcheckTimeout = 30
 ```
 
-### Dockerfile (멀티스테이지)
-```dockerfile
-# Stage 1: Frontend build
-FROM node:20-alpine AS frontend
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
-COPY frontend/ ./
-RUN npm run build
-
-# Stage 2: Backend
-FROM python:3.11-slim
-WORKDIR /app
-COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-COPY backend/ ./
-COPY --from=frontend /app/frontend/dist ./static
-
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### FastAPI Static 파일 서빙
-```python
-# main.py
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-
-app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
-
-@app.get("/{full_path:path}")
-async def spa_fallback(full_path: str):
-    return FileResponse("static/index.html")
-```
+### Worker (별도 Ubuntu 서버)
+- 상세 내용: `worker/DEPLOY.md` 참조
+- 필수 환경변수: `REDIS_URL`, `R2_*` (백엔드와 동일)
+- 서비스: systemd `stackhealth-worker.service`
 
 ---
 
-## 10. MVP 범위 (v0.1.0)
+## 10. 현재 구현 범위
 
-### 포함
+### Phase A (런칭 포함 — v0.26.x)
 - 회원가입/로그인 (이메일+비밀번호)
-- 영상 업로드 (R2 presigned URL)
+- Google OAuth 로그인 (옵션)
+- LNAuth 로그인 (옵션)
+- 영상 업로드 (R2 presigned URL 또는 서버 사이드)
+- 오디오+영상 merge-audio (Redis 워커 또는 fallback)
 - 세로 영상 피드 (최신순)
 - 좋아요, 조회수
-- 포인트 적립 (업로드/좋아요/조회)
-- 주간 Lightning claim (운영자 수동 송금)
-- 운영자 대시보드 (claim 처리, 영상 관리)
-- 어뷰징 방지 (해시 중복, 일일 상한)
+- 댓글
+- 챌린지 시스템 (생성, 참여, 타이틀)
+- 포인트 적립 (업로드/좋아요/조회, 24h queued 어뷰징 방지)
+- early adopter 보너스 (user.id ≤ 50)
+- 운동 히스토리 캘린더 + streak
+- 주간 Lightning claim (자동 Blink / 운영자 수동 송금)
+- 운영자 대시보드 (claim 처리, 영상/사용자 관리, AdminLog)
 
-### 제외 (v2)
-- 소셜 기능 (댓글, 팔로우, DM)
+### v2 (미구현)
 - 추천 알고리즘
 - 광고 SDK
 - 푸시 알림
+- 팔로우/DM
 - AI 운동 인증 검증
 - Cloudflare Stream 트랜스코딩
-- Lightning 자동 지급 API
+- 업로드 전 5가지 질문 (Phase B 기획)
+- 어드바이저 역할 시스템 (Phase B 기획)
+- 월 이벤트/루틴 (Phase B 기획)
 
 ---
 
 ## 11. 운영 SOP
 
 ### 주간 BTC 지급 프로세스
+
+#### 모드 A: Blink 자동결제 (`BLINK_API_KEY` 설정됨)
+1. 사용자가 `/rewards/claim` 호출 시 Blink API가 자동 송금
+2. 실패 시 `status=pending`으로 남음
+3. 매주 월요일 오전 `/admin/claims?status=pending` 조회로 실패건 확인
+4. 실패건은 수동 송금 후 `/admin/claims/{id}/mark-paid` 호출
+
+#### 모드 B: 운영자 수동 송금 (`BLINK_API_KEY` 미설정)
 1. 매주 월요일 00:00 이후 `/admin/claims?status=pending` 조회
 2. 각 사용자의 `ln_address`와 `satoshi_amount` 확인
 3. 운영자 Lightning 지갑 앱에서 직접 송금
-4. 송금 완료 후 `/admin/claims/{id}/mark-paid` 호출
+4. 송금 완료 후 `/admin/claims/{id}/mark-paid` 호출 (payment_memo 선택)
 5. 실패 시 사용자에게 재claim 안내
 
 ### 콘텐츠 모더레이션
-- `/admin/videos` 에서 신고된/최신 영상 확인
-- 부적절 영상 → `/admin/videos/{id}/reject`
+- `/admin/videos` 에서 최신 영상 확인
+- 부적절 영상 → `/admin/videos/{id}/reject` (AdminLog 기록됨)
 - SLA: 신고 후 24시간 이내 검토
+
+### 사용자 관리
+- `/admin/users` 에서 사용자 목록 확인
+- 어뷰저 → `/admin/users/{id}/ban` (AdminLog 기록됨)

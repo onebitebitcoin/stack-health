@@ -1,0 +1,51 @@
+{
+  "task": "Admin 주간 리워드 현황 UI + DB UniqueConstraint + KST 버그 수정",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "lightning_claims UniqueConstraint Alembic 마이그레이션",
+      "passes": false,
+      "acceptanceCriteria": [
+        "LightningClaim 모델에 UniqueConstraint('user_id', 'week_label') 추가",
+        "Alembic 마이그레이션 파일이 생성됨",
+        "alembic upgrade head 성공 (오류 없음)"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "KST 일일 경계 버그 수정 (_utc_today_start → KST midnight)",
+      "passes": false,
+      "acceptanceCriteria": [
+        "_utc_today_start() 함수가 KST 자정을 naive UTC datetime으로 반환",
+        "get_daily_upload_count, get_daily_total_points가 _utc_today_start() 호출",
+        "ruff lint 통과"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "GET /admin/weekly-summary API 구현",
+      "passes": false,
+      "acceptanceCriteria": [
+        "GET /admin/weekly-summary?week_label=&page=1&limit=20 엔드포인트 존재",
+        "week_label 기본값 = 현재 주 (get_week_label())",
+        "is_banned=True 유저 제외",
+        "weekly_points 내림차순 정렬, 동점 시 user_id 오름차순",
+        "has_next 필드로 다음 페이지 존재 여부 반환",
+        "각 항목에 rank, user_id, username, weekly_points, satoshi_amount 포함",
+        "require_admin 의존성 적용"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Frontend types + AdminPage 주간 리더보드 UI",
+      "passes": false,
+      "acceptanceCriteria": [
+        "types.ts에 AdminWeeklySummaryItem, AdminWeeklySummaryResponse 인터페이스 추가",
+        "AdminPage rewards 탭에 주간 리더보드 섹션 추가 (이번 주 / 지난 주 week_label 토글)",
+        "첫 20명 로딩 후 '더 보기' 버튼으로 페이지네이션",
+        "각 행: 순위, @username, weekly_points pt, satoshi_amount sats 표시",
+        "TypeScript 빌드 오류 없음"
+      ]
+    }
+  ]
+}

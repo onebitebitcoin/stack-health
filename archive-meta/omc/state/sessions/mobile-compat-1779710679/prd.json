@@ -1,0 +1,64 @@
+{
+  "title": "모바일(Android/iOS) 호환성 수정",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "viewport-fit=cover + safe area CSS 유틸리티 추가",
+      "passes": true,
+      "acceptanceCriteria": [
+        "index.html viewport meta에 viewport-fit=cover 포함 ✓",
+        "index.css에 .pb-safe, .pb-nav-safe, .bottom-nav-safe 유틸리티 클래스 추가 ✓",
+        "env(safe-area-inset-bottom) 기반 CSS 정의 ✓"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "BottomNav 아이폰 홈 인디케이터 겹침 해결",
+      "passes": true,
+      "acceptanceCriteria": [
+        "BottomNav nav에 pb-safe 적용 ✓",
+        "h-16을 콘텐츠 영역에만 적용, 배경은 safe area까지 확장 ✓"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "VideoCard 하단 요소 safe area 반영",
+      "passes": true,
+      "acceptanceCriteria": [
+        "우측 액션버튼: bottom-nav-safe 클래스 적용 ✓",
+        "하단 오버레이: bottom-nav-safe 적용 ✓",
+        "진행 바: bottom-nav-safe 적용 ✓"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "CommentSheet iOS 키보드 겹침 해결",
+      "passes": true,
+      "acceptanceCriteria": [
+        "visualViewport resize/scroll 이벤트로 sheet bottom 동적 조정 ✓",
+        "키보드 내려가면 bottom 0으로 복귀 ✓",
+        "lint 경고 없음 (ref 캡처 처리) ✓"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "스크롤 페이지 하단 패딩 safe area 반영",
+      "passes": true,
+      "acceptanceCriteria": [
+        "ChallengeDashboardPage, HistoryPage, ChallengePage, UserProfilePage, MyChallengeDashboardPage, ChallengeCreatePage: pb-20 → pb-nav-safe ✓",
+        "ProfilePage, RewardsPage: pb-16/pb-24 → pb-nav-safe ✓",
+        "FeedPage, UploadPage: pb-16 → pb-nav-safe ✓"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "iOS MediaRecorder 불가 시 명확한 안내",
+      "passes": true,
+      "acceptanceCriteria": [
+        "typeof MediaRecorder === 'undefined' 체크 추가 ✓",
+        "미지원 시 명확한 에러 메시지 표시 ✓",
+        "건너뛰기로 영상만 업로드 가능 ✓"
+      ]
+    }
+  ]
+}
