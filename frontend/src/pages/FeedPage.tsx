@@ -72,7 +72,7 @@ export default function FeedPage() {
 
   if (posts.length === 0) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-theme-page px-6 pb-16 text-center">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-theme-page px-6 pb-nav-safe text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
           <LogoMark aria-hidden="true" size={42} />
         </div>

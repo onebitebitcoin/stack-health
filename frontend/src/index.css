@@ -18,3 +18,17 @@
     overscroll-behavior: none;
   }
 }
+
+@layer utilities {
+  /* iPhone safe area 유틸리티 */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pb-nav-safe {
+    /* BottomNav(4rem) + safe area */
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+  .bottom-nav-safe {
+    bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+}

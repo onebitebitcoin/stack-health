@@ -166,8 +166,8 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
 
       {/* right actions - 세로 버튼 스택 */}
       <div
-        className="absolute bottom-24 right-3 flex flex-col items-center gap-4"
-        style={{ zIndex: 4 }}
+        className="absolute right-3 flex flex-col items-center gap-4 bottom-nav-safe"
+        style={{ zIndex: 4, paddingBottom: '1.5rem' }}
       >
         {/* 좋아요 */}
         <button
@@ -197,8 +197,8 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
 
       {/* 재생 진행 바 — 네비게이션 바 바로 위 */}
       <div
-        className="absolute left-0 right-0 h-8 flex items-end cursor-pointer"
-        style={{ bottom: '4rem', zIndex: 5 }}
+        className="absolute left-0 right-0 h-8 flex items-end cursor-pointer bottom-nav-safe"
+        style={{ zIndex: 5 }}
         onClick={(e) => { e.stopPropagation(); handleSeek(e) }}
       >
         <div className="w-full h-0.5 bg-white/30">
@@ -211,7 +211,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
 
       {/* bottom overlay */}
       <div
-        className="absolute bottom-16 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16"
+        className="absolute left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-16 bottom-nav-safe"
         style={{ zIndex: 3 }}
         onClick={(e) => e.stopPropagation()}
       >

@@ -146,7 +146,7 @@ export default function ProfilePage() {
 
   if (claimSuccess) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-16 bg-theme-page">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-nav-safe bg-theme-page">
         <CheckCircle size={64} className="text-accent" />
         <p className="text-xl font-bold text-theme-primary">Claim 완료!</p>
         <p className="text-sm text-theme-muted">24시간 내 지급됩니다</p>
@@ -161,7 +161,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-20">
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
 
       {/* ── 헤더 ── */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-3">

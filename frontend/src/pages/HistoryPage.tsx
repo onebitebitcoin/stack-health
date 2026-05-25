@@ -91,7 +91,7 @@ export default function HistoryPage() {
   while (cells.length % 7 !== 0) cells.push({ day: null, dateStr: null })
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-theme-page overflow-y-auto pb-20">
+    <div className="flex flex-col h-[100dvh] bg-theme-page overflow-y-auto pb-nav-safe">
       {/* Header */}
       <div className="px-4 pt-6 pb-3">
         <h1 className="text-xl font-bold text-theme-primary">운동 기록</h1>
@@ -296,7 +296,7 @@ export default function HistoryPage() {
           />
 
           {/* 하단 오버레이 */}
-          <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-safe pb-6 pt-16 bg-gradient-to-t from-black/70 to-transparent">
+          <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 pt-16 bg-gradient-to-t from-black/70 to-transparent">
             {/* stats */}
             <div className="flex items-center gap-4 mb-2">
               <div className="flex items-center gap-1.5 text-white/80">

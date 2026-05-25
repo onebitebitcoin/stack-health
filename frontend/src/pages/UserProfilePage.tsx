@@ -30,7 +30,7 @@ export default function UserProfilePage() {
   const { user, post_count, posts, titles, active_challenges } = data
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-20">
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
       {/* 헤더 */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-3">
         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-sm font-bold text-theme-primary">

@@ -20,8 +20,8 @@ export default function BottomNav() {
     }`
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 h-16 border-t border-theme-border bg-theme-surface">
-      <div className="flex h-full items-center justify-around">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-theme-border bg-theme-surface pb-safe">
+      <div className="flex h-16 items-center justify-around">
         {/* 피드 */}
         <NavLink to="/" end className={navItem}>
           <Home size={22} strokeWidth={1.5} />

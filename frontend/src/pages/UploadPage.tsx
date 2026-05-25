@@ -105,6 +105,10 @@ export default function UploadPage() {
   }
 
   async function startRecording() {
+    if (typeof MediaRecorder === 'undefined') {
+      setError('이 브라우저에서는 음성 녹음을 지원하지 않습니다. 건너뛰기를 눌러 영상만 업로드하세요.')
+      return
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -347,7 +351,7 @@ export default function UploadPage() {
   const progressPct = (recordedSeconds / MAX_RECORD_SECONDS) * 100
 
   return (
-    <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-16">
+    <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-nav-safe">
       {uploading && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-theme-page px-6">
           <Upload size={48} className="animate-bounce text-accent" />

@@ -18,6 +18,29 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
   const user = useAuthStore((s) => s.user)
   const [content, setContent] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
+
+  // iOS 키보드가 올라올 때 시트가 가려지는 문제 처리
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv || !open) return
+    const sheet = sheetRef.current
+    const reposition = () => {
+      const offset = window.innerHeight - vv.offsetTop - vv.height
+      if (sheet) {
+        sheet.style.bottom = `${Math.max(0, offset)}px`
+      }
+    }
+    vv.addEventListener('resize', reposition)
+    vv.addEventListener('scroll', reposition)
+    return () => {
+      vv.removeEventListener('resize', reposition)
+      vv.removeEventListener('scroll', reposition)
+      if (sheet) {
+        sheet.style.bottom = '0px'
+      }
+    }
+  }, [open])
 
   const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: ['comments', postId],
@@ -74,6 +97,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
 
       {/* Sheet */}
       <div
+        ref={sheetRef}
         data-testid="comment-sheet"
         className={`fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-zinc-900/95 backdrop-blur transition-transform duration-300 ${
           open ? 'translate-y-0' : 'translate-y-full'

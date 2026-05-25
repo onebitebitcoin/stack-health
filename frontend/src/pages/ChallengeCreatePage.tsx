@@ -58,7 +58,7 @@ export default function ChallengeCreatePage() {
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-20">
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
       {/* 헤더 */}
       <div className="px-4 pt-5 pb-3 flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="text-theme-muted">

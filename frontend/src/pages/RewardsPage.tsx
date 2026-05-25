@@ -56,7 +56,7 @@ export default function RewardsPage() {
 
   if (claimSuccess) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-16 bg-theme-page">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-nav-safe bg-theme-page">
         <CheckCircle size={72} className="text-accent" />
         <p className="text-2xl font-bold text-theme-primary">Claim 완료!</p>
         <p className="text-theme-muted">24시간 내 지급됩니다</p>
@@ -71,7 +71,7 @@ export default function RewardsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
+    <div className="flex flex-col gap-6 overflow-y-auto px-4 pb-nav-safe pt-6 h-[100dvh] bg-theme-page">
       <h1 className="text-xl font-bold text-theme-primary">리워드</h1>
 
       {summary && (
