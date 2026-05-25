@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,7 @@ from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, EarnedTitleSchema
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/challenges", tags=["challenges"])
 
 
@@ -78,21 +80,27 @@ def create_challenge(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    challenge = Challenge(
-        title=body.title,
-        description=body.description,
-        reward_title=body.reward_title,
-        condition_value=body.condition_value,
-        start_date=body.start_date,
-        end_date=body.end_date,
-        categories=body.categories,
-        is_active=True,
-        creator_id=current_user.id,
-    )
-    db.add(challenge)
-    db.commit()
-    db.refresh(challenge)
-    return {"data": {"challenge": _to_schema(challenge, current_user.id, db)}}
+    try:
+        challenge = Challenge(
+            title=body.title,
+            description=body.description,
+            reward_title=body.reward_title,
+            condition_value=body.condition_value,
+            start_date=body.start_date,
+            end_date=body.end_date,
+            categories=body.categories,
+            is_active=True,
+            creator_id=current_user.id,
+        )
+        db.add(challenge)
+        db.commit()
+        db.refresh(challenge)
+        logger.info("Challenge created: id=%s title=%r by user_id=%s", challenge.id, challenge.title, current_user.id)
+        return {"data": {"challenge": _to_schema(challenge, current_user.id, db)}}
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to create challenge for user_id=%s: %s", current_user.id, e)
+        raise HTTPException(status_code=500, detail=f"챌린지 생성 실패: {e}")
 
 
 @router.get("/created")
