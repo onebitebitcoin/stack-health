@@ -11,6 +11,15 @@ type Tag = (typeof ALLOWED_TAGS)[number]
 
 const STEPS = ['영상 선택', '태그', '챌린지', '음성 녹음', '설명'] as const
 const MAX_RECORD_SECONDS = 30
+const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
+const AUDIO_BITS_PER_SECOND = 128_000
+
+function getSupportedAudioMimeType(): string {
+  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
+    return ''
+  }
+  return PREFERRED_AUDIO_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? ''
+}
 
 async function sha256(file: File | Blob): Promise<string> {
   const buffer = await file.arrayBuffer()
@@ -38,6 +47,7 @@ export default function UploadPage() {
 
   // 음성 녹음 상태
   const audioBlobRef = useRef<Blob | null>(null)
+  const audioMimeTypeRef = useRef('audio/webm')
   const [serverMerging, setServerMerging] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordedSeconds, setRecordedSeconds] = useState(0)
@@ -78,13 +88,25 @@ export default function UploadPage() {
 
   async function startRecording() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48_000,
+        },
+      })
       streamRef.current = stream
       audioChunksRef.current = []
       recordedSecondsRef.current = 0
       setRecordedSeconds(0)
 
-      const mr = new MediaRecorder(stream)
+      const mimeType = getSupportedAudioMimeType()
+      audioMimeTypeRef.current = mimeType || 'audio/webm'
+      const mr = new MediaRecorder(stream, {
+        ...(mimeType ? { mimeType } : {}),
+        audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+      })
       mediaRecorderRef.current = mr
 
       mr.ondataavailable = (e) => {
@@ -95,7 +117,7 @@ export default function UploadPage() {
         streamRef.current?.getTracks().forEach((t) => t.stop())
         streamRef.current = null
 
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const blob = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current })
         audioBlobRef.current = blob
         setRecording(false)
         setStep(4)
@@ -188,12 +210,16 @@ export default function UploadPage() {
 
       if (audioBlob && audioBlob.size > 0) {
         setServerMerging(true)
-        addLog(`[Merge] 서버 병합 시작: 음성 ${(audioBlob.size / 1024).toFixed(0)}KB`)
+        const audioMimeType = audioBlob.type || audioMimeTypeRef.current || 'audio/webm'
+        const audioExt = audioMimeType.includes('mp4') ? 'mp4' : 'webm'
+        addLog(
+          `[Merge] 서버 병합 시작: 음성 ${(audioBlob.size / 1024).toFixed(0)}KB (${audioMimeType}, ${AUDIO_BITS_PER_SECOND / 1000}kbps)`,
+        )
 
         const formData = new FormData()
         formData.append('video_r2_key', r2_key)
         formData.append('audio_duration_sec', String(recordedSecondsRef.current))
-        formData.append('audio', new File([audioBlob], 'audio.webm', { type: 'audio/webm' }))
+        formData.append('audio', new File([audioBlob], `audio.${audioExt}`, { type: audioMimeType }))
 
         try {
           const mergeRes = await client.post<{

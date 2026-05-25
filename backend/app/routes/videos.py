@@ -204,7 +204,8 @@ async def merge_audio(
     tmp_video = tmp_audio = tmp_output = None
     try:
         tmp_video = tempfile.mktemp(suffix=".mp4")
-        tmp_audio = tempfile.mktemp(suffix=".webm")
+        audio_suffix = ".mp4" if audio.content_type == "audio/mp4" else ".webm"
+        tmp_audio = tempfile.mktemp(suffix=audio_suffix)
         tmp_output = tempfile.mktemp(suffix=".mp4")
 
         if audio_duration_sec <= 0 or audio_duration_sec > 35:
@@ -222,19 +223,23 @@ async def merge_audio(
         with open(tmp_video, "wb") as f:
             f.write(response["Body"].read())
 
-        # ffmpeg: 짧은 영상을 오디오 길이만큼 루프 후 병합
+        # ffmpeg: 짧은 영상을 오디오 길이만큼 루프 후 병합.
+        # 비디오는 재인코딩하지 않고 원본 스트림을 복사해 업로드된 영상 품질을 보존한다.
+        # 녹음 오디오는 MP4 호환을 위해 AAC로만 변환하되 충분한 비트레이트를 명시한다.
         cmd = [
             "ffmpeg", "-y",
             "-stream_loop", "-1",
             "-i", tmp_video,
             "-i", tmp_audio,
             "-t", str(audio_duration),
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-crf", "28",
+            "-c:v", "copy",
             "-c:a", "aac",
+            "-b:a", "256k",
+            "-ar", "48000",
+            "-ac", "2",
             "-map", "0:v:0",
             "-map", "1:a:0",
+            "-movflags", "+faststart",
             tmp_output,
         ]
         result = subprocess.run(cmd, capture_output=True, timeout=120)

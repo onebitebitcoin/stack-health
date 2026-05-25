@@ -258,6 +258,14 @@ def test_merge_audio_success(mock_subprocess, mock_get_client, client: TestClien
     assert data["r2_key"].startswith("videos/merged-")
     assert "cdn_url" in data
     assert data["duration_sec"] == 10
+    ffmpeg_cmd = mock_subprocess.call_args.args[0]
+    assert ffmpeg_cmd[ffmpeg_cmd.index("-c:v") + 1] == "copy"
+    assert "-preset" not in ffmpeg_cmd
+    assert "-crf" not in ffmpeg_cmd
+    assert ffmpeg_cmd[ffmpeg_cmd.index("-c:a") + 1] == "aac"
+    assert ffmpeg_cmd[ffmpeg_cmd.index("-b:a") + 1] == "256k"
+    assert ffmpeg_cmd[ffmpeg_cmd.index("-ar") + 1] == "48000"
+    assert ffmpeg_cmd[ffmpeg_cmd.index("-ac") + 1] == "2"
 
 
 @patch("app.routes.videos.r2_service.get_r2_client")
