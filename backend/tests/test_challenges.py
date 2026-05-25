@@ -3,11 +3,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.challenge import Challenge, ChallengeParticipation
+from app.models.challenge import Challenge
 
 
 def _register(client: TestClient, email: str, username: str) -> str:
@@ -208,3 +207,155 @@ def test_upload_with_challenge_not_joined_fails(client: TestClient, db: Session)
             "r2_key": "v.mp4", "duration_sec": 15, "challenge_id": challenge.id,
         }, headers=_auth(token))
     assert res.status_code == 400
+
+
+# ── create_challenge (API) ────────────────────────────────────────────
+
+def test_create_challenge_authenticated(client: TestClient) -> None:
+    from datetime import date
+    token = _register(client, "creator@x.com", "creator1")
+    payload = {
+        "title": "API 생성 챌린지",
+        "description": "설명",
+        "reward_title": "마스터",
+        "condition_value": 5,
+        "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=30)),
+        "categories": ["strength"],
+    }
+    res = client.post("/api/v1/challenges", json=payload, headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]["challenge"]
+    assert data["title"] == "API 생성 챌린지"
+    assert data["categories"] == ["strength"]
+
+
+def test_create_challenge_unauthenticated(client: TestClient) -> None:
+    from datetime import date
+    payload = {
+        "title": "무인증 챌린지",
+        "description": "설명",
+        "reward_title": "타이틀",
+        "condition_value": 3,
+        "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=10)),
+        "categories": [],
+    }
+    res = client.post("/api/v1/challenges", json=payload)
+    assert res.status_code in (401, 403)
+
+
+# ── list_challenges category filter ──────────────────────────────────
+
+def test_list_challenges_category_filter(client: TestClient, db: Session) -> None:
+    from datetime import date
+    token = _register(client, "cat@x.com", "catuser")
+    # strength 카테고리 챌린지 생성
+    payload = {
+        "title": "근력 챌린지",
+        "description": "근력 운동",
+        "reward_title": "근력왕",
+        "condition_value": 5,
+        "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=30)),
+        "categories": ["strength"],
+    }
+    client.post("/api/v1/challenges", json=payload, headers=_auth(token))
+    # 카테고리 없는 챌린지도 하나 추가
+    _make_challenge(db, "일반 챌린지")
+
+    res = client.get("/api/v1/challenges?category=strength")
+    assert res.status_code == 200
+    titles = [c["title"] for c in res.json()["data"]["challenges"]]
+    assert "근력 챌린지" in titles
+    assert "일반 챌린지" not in titles
+
+
+# ── my_created_challenges ─────────────────────────────────────────────
+
+def test_my_created_challenges_empty(client: TestClient) -> None:
+    token = _register(client, "cr_empty@x.com", "creator_empty")
+    res = client.get("/api/v1/challenges/created", headers=_auth(token))
+    assert res.status_code == 200
+    assert res.json()["data"]["challenges"] == []
+
+
+def test_my_created_challenges_shows_own(client: TestClient, db: Session) -> None:
+    from datetime import date
+    token = _register(client, "cr_own@x.com", "creator_own")
+    payload = {
+        "title": "내가 만든 챌린지",
+        "description": "설명",
+        "reward_title": "타이틀",
+        "condition_value": 3,
+        "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=14)),
+        "categories": [],
+    }
+    client.post("/api/v1/challenges", json=payload, headers=_auth(token))
+    # 다른 사람이 직접 DB에 만든 챌린지 (creator_id=None)
+    _make_challenge(db, "남의 챌린지")
+
+    res = client.get("/api/v1/challenges/created", headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]["challenges"]
+    assert len(data) == 1
+    assert data[0]["title"] == "내가 만든 챌린지"
+    assert "participant_count" in data[0]
+    assert "completed_count" in data[0]
+
+
+# ── challenge_participants ────────────────────────────────────────────
+
+def test_challenge_participants_creator_can_view(client: TestClient, db: Session) -> None:
+    from datetime import date
+    creator_token = _register(client, "cp_creator@x.com", "cp_creator")
+    joiner_token = _register(client, "cp_joiner@x.com", "cp_joiner")
+
+    payload = {
+        "title": "참여자 조회 챌린지",
+        "description": "설명",
+        "reward_title": "타이틀",
+        "condition_value": 5,
+        "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=30)),
+        "categories": [],
+    }
+    create_res = client.post("/api/v1/challenges", json=payload, headers=_auth(creator_token))
+    challenge_id = create_res.json()["data"]["challenge"]["id"]
+
+    client.post(f"/api/v1/challenges/{challenge_id}/join", headers=_auth(joiner_token))
+
+    res = client.get(f"/api/v1/challenges/{challenge_id}/participants", headers=_auth(creator_token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert "challenge" in data
+    assert len(data["participants"]) == 1
+    assert data["participants"][0]["username"] == "cp_joiner"
+
+
+def test_challenge_participants_non_creator_forbidden(client: TestClient, db: Session) -> None:
+    from datetime import date
+    creator_token = _register(client, "cp_cr2@x.com", "cp_creator2")
+    other_token = _register(client, "cp_other@x.com", "cp_other")
+
+    payload = {
+        "title": "접근 불가 챌린지",
+        "description": "설명",
+        "reward_title": "타이틀",
+        "condition_value": 5,
+        "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=30)),
+        "categories": [],
+    }
+    create_res = client.post("/api/v1/challenges", json=payload, headers=_auth(creator_token))
+    challenge_id = create_res.json()["data"]["challenge"]["id"]
+
+    res = client.get(f"/api/v1/challenges/{challenge_id}/participants", headers=_auth(other_token))
+    assert res.status_code == 403
+
+
+def test_challenge_participants_not_found(client: TestClient) -> None:
+    token = _register(client, "cp_nf@x.com", "cp_notfound")
+    res = client.get("/api/v1/challenges/99999/participants", headers=_auth(token))
+    assert res.status_code == 404
