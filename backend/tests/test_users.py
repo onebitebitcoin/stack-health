@@ -6,7 +6,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.challenge import Challenge, ChallengeParticipation
+from app.models.challenge import Challenge
 
 
 def _register(client: TestClient, email: str, username: str) -> str:

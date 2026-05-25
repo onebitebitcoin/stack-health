@@ -17,6 +17,7 @@ class ChallengeSchema(BaseModel):
     my_upload_count: int = 0
     joined: bool = False
     completed: bool = False
+    creator_id: int | None = None
 
     model_config = {"from_attributes": True}
 
