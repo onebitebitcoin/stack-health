@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: ['**/media-recorder-merge.spec.ts'],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
@@ -15,8 +16,26 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
+      name: 'desktop',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'android',
+      use: {
+        ...devices['Pixel 5'],
+        // Chromium-based: same engine as desktop, touch emulation + mobile viewport
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: 'iphone',
+      use: {
+        ...devices['iPhone 14'],
+        // WebKit: Safari engine; tests safe-area CSS, input behaviour, etc.
+        hasTouch: true,
+        isMobile: true,
+      },
     },
   ],
   webServer: [

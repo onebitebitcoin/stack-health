@@ -1,9 +1,12 @@
+import logging
 import uuid
 
 import boto3
 from botocore.config import Config
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 PRESIGNED_URL_EXPIRES = 900  # 15 minutes
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
@@ -49,6 +52,34 @@ def generate_presigned_url(content_type: str, filename: str) -> tuple[str, str]:
         ExpiresIn=PRESIGNED_URL_EXPIRES,
     )
     return upload_url, r2_key
+
+
+def ensure_r2_cors() -> None:
+    """Set CORS policy on the R2 bucket to allow direct browser uploads (presigned PUT).
+
+    Called once on app startup. Browsers (especially Android Chrome) send an OPTIONS
+    preflight before the PUT; without this policy R2 returns 403 and the browser raises
+    ERR_NETWORK before any HTTP response is visible.
+    """
+    try:
+        client = get_r2_client()
+        client.put_bucket_cors(
+            Bucket=settings.r2_bucket_name,
+            CORSConfiguration={
+                "CORSRules": [
+                    {
+                        "AllowedOrigins": ["*"],
+                        "AllowedMethods": ["GET", "PUT", "DELETE", "HEAD"],
+                        "AllowedHeaders": ["*"],
+                        "ExposeHeaders": ["ETag"],
+                        "MaxAgeSeconds": 3600,
+                    }
+                ]
+            },
+        )
+        logger.info("R2 CORS policy applied to bucket '%s'", settings.r2_bucket_name)
+    except Exception as exc:
+        logger.warning("R2 CORS setup skipped: %s", exc)
 
 
 def get_cdn_url(r2_key: str) -> str:

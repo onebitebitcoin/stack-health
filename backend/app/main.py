@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.routes import auth, videos, feed, rewards, admin, comments, history, challenges, users
+from app.services.r2 import ensure_r2_cors
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,6 +32,11 @@ async def add_coop_coep_headers(request: Request, call_next) -> Response:
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Embedder-Policy"] = "credentialless"
     return response
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    ensure_r2_cors()
+
 
 app.include_router(auth.router)
 app.include_router(videos.router)

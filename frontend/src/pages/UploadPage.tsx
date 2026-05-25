@@ -222,6 +222,7 @@ export default function UploadPage() {
       try {
         await axios.put(upload_url, file, {
           headers: { 'Content-Type': contentType },
+          timeout: 180_000,
           onUploadProgress: (e) => {
             if (e.total) setProgress(Math.round((e.loaded / e.total) * 40))
           },
