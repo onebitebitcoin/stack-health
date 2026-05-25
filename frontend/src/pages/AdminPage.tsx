@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, Ban, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
@@ -7,6 +7,19 @@ import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWe
 import { useAuthStore } from '../store/auth'
 
 type TabId = 'users' | 'videos' | 'rewards'
+
+const STATUS_COLOR: Record<string, string> = {
+  pending: 'text-yellow-400',
+  paid: 'text-green-400',
+  failed: 'text-red-400',
+  cancelled: 'text-theme-subtle',
+}
+const STATUS_LABEL: Record<string, string> = {
+  pending: '대기',
+  paid: '지급완료',
+  failed: '실패',
+  cancelled: '취소',
+}
 
 interface AdminUserDetail {
   user: {
@@ -200,12 +213,19 @@ export default function AdminPage() {
       const res = await client.get<{ data: AdminWeeklySummaryResponse }>('/admin/weekly-summary', {
         params: { week_label: weekLabel, page: leaderboardPage, limit: 20 },
       })
-      if (leaderboardPage === 1) setLeaderboardItems(res.data.data.items)
-      else setLeaderboardItems((prev) => [...prev, ...res.data.data.items])
       return res.data.data
     },
     enabled: isAdmin && activeTab === 'rewards',
   })
+
+  useEffect(() => {
+    if (!leaderboardData) return
+    if (leaderboardPage === 1) {
+      setLeaderboardItems(leaderboardData.items)
+    } else {
+      setLeaderboardItems((prev) => [...prev, ...leaderboardData.items])
+    }
+  }, [leaderboardData, leaderboardPage])
 
   if (!isAdmin) {
     return (
@@ -220,19 +240,6 @@ export default function AdminPage() {
     { id: 'videos', label: '영상', icon: <Video size={14} /> },
     { id: 'rewards', label: '리워드', icon: <Award size={14} /> },
   ]
-
-  const statusColor: Record<string, string> = {
-    pending: 'text-yellow-400',
-    paid: 'text-green-400',
-    failed: 'text-red-400',
-    cancelled: 'text-theme-subtle',
-  }
-  const statusLabel: Record<string, string> = {
-    pending: '대기',
-    paid: '지급완료',
-    failed: '실패',
-    cancelled: '취소',
-  }
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
@@ -437,8 +444,8 @@ export default function AdminPage() {
                       {c.ln_address}
                     </p>
                   </div>
-                  <span className={`text-sm font-semibold ${statusColor[c.status] ?? 'text-theme-muted'}`}>
-                    {statusLabel[c.status] ?? c.status}
+                  <span className={`text-sm font-semibold ${STATUS_COLOR[c.status] ?? 'text-theme-muted'}`}>
+                    {STATUS_LABEL[c.status] ?? c.status}
                   </span>
                 </div>
                 {c.status === 'pending' && (

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Zap, X } from 'lucide-react'
 import client from '../api/client'
+import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 
 interface ClaimBottomSheetProps {
@@ -38,10 +39,7 @@ export default function ClaimBottomSheet({
       await client.post('/rewards/claim', { week_label: weekLabel, ln_address: lnAddress })
       onSuccess()
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        'Claim 실패'
-      setError(msg)
+      setError(getApiErrorMessage(err, 'Claim 실패'))
     } finally {
       setLoading(false)
     }

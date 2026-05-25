@@ -5,6 +5,7 @@ import type { Post } from '../api/types'
 import TagChip from './TagChip'
 import PointBadge from './PointBadge'
 import client from '../api/client'
+import { POINTS_PER_VIEW } from '../lib/constants'
 import { useAuthStore } from '../store/auth'
 
 interface VideoCardProps {
@@ -192,7 +193,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
           <span className="text-xs font-semibold text-white drop-shadow">{commentCount}</span>
         </button>
 
-        <PointBadge points={2} />
+        <PointBadge points={POINTS_PER_VIEW} />
       </div>
 
       {/* 재생 진행 바 — 네비게이션 바 바로 위 */}

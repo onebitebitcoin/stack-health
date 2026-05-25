@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
 
-function formatDate(dateStr: string) {
+function formatYmd(dateStr: string) {
   const d = new Date(dateStr)
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
@@ -71,7 +71,7 @@ export default function MyChallengeDashboardPage() {
               </div>
 
               <p className="text-xs text-theme-muted mb-3">
-                {formatDate(c.start_date)} ~ {formatDate(c.end_date)}
+                {formatYmd(c.start_date)} ~ {formatYmd(c.end_date)}
               </p>
 
               <div className="flex items-center gap-3 mb-3">

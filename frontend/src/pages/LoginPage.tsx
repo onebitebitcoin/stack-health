@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { Zap, Mail, AlertCircle, Copy, Check, ArrowLeft } from 'lucide-react'
 import client from '../api/client'
+import { getApiErrorMessage } from '../api/errors'
+import { LN_POLL_INTERVAL_MS, LN_LOGIN_EXPIRE_MS } from '../lib/constants'
 import { useAuthStore } from '../store/auth'
 import type { User } from '../api/types'
 import LogoMark from '../components/LogoMark'
@@ -98,11 +100,11 @@ export default function LoginPage() {
           } catch {
             // ignore poll errors
           }
-        }, 2000)
+        }, LN_POLL_INTERVAL_MS)
         timeoutRef.current = setTimeout(() => {
           if (pollRef.current) clearInterval(pollRef.current)
           setLnExpired(true)
-        }, 120000)
+        }, LN_LOGIN_EXPIRE_MS)
       })
       .catch(() => {
         setLnLoading(false)
@@ -134,8 +136,7 @@ export default function LoginPage() {
       }
       navigate('/')
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setEmailError(detail ?? '오류가 발생했습니다')
+      setEmailError(getApiErrorMessage(err, '오류가 발생했습니다'))
     } finally {
       setEmailLoading(false)
     }

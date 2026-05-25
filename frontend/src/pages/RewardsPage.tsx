@@ -29,8 +29,8 @@ export default function RewardsPage() {
   const { data: claims = [] } = useQuery<Claim[]>({
     queryKey: ['rewards-claims'],
     queryFn: async () => {
-      const res = await client.get<{ data: Claim[] }>('/rewards/claims')
-      return res.data.data
+      const res = await client.get<{ data: { claims: Claim[] } }>('/rewards/claims')
+      return res.data.data.claims
     },
   })
 

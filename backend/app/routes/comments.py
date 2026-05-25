@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -7,27 +6,13 @@ from app.database import get_db
 from app.models.comment import Comment
 from app.models.post import Post
 from app.models.user import User
-from app.services.auth import decode_token, get_user_by_id
+from app.routes.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/feed", tags=["comments"])
-bearer_required = HTTPBearer()
 
 
 class CreateCommentRequest(BaseModel):
     content: str
-
-
-def _get_required_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_required),
-    db: Session = Depends(get_db),
-) -> User:
-    user_id = decode_token(credentials.credentials)
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = get_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
 
 
 @router.get("/{post_id}/comments")
@@ -60,7 +45,7 @@ def create_comment(
     post_id: int,
     body: CreateCommentRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(_get_required_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     if current_user.is_banned:
         raise HTTPException(status_code=403, detail="Banned users cannot comment")
@@ -91,7 +76,7 @@ def delete_comment(
     post_id: int,
     comment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(_get_required_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     comment = db.query(Comment).filter(
         Comment.id == comment_id, Comment.post_id == post_id

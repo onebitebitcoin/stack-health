@@ -18,7 +18,7 @@ const CATEGORIES = [
   { value: 'beginner', label: '입문' },
 ]
 
-function formatDate(dateStr: string) {
+function formatMonthDay(dateStr: string) {
   const d = new Date(dateStr)
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
@@ -103,7 +103,7 @@ function ChallengeCard({
           <Users size={12} />
           <span>{challenge.participant_count}명 참여</span>
           <span className="mx-1">·</span>
-          <span>~{formatDate(challenge.end_date)}</span>
+          <span>~{formatMonthDay(challenge.end_date)}</span>
         </div>
 
         {challenge.completed ? (

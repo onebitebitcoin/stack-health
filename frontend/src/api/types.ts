@@ -16,8 +16,8 @@ export interface Post {
   tags: string[]
   like_count: number
   view_count: number
-  comment_count?: number
-  is_liked?: boolean
+  comment_count: number
+  is_liked: boolean
   created_at: string
   cdn_url: string
   username: string
@@ -37,6 +37,8 @@ export interface RewardSummary {
   claimable: boolean
   deadline: string
   already_claimed: boolean
+  claim_deadline: string
+  next_claim_date: string
 }
 
 export interface Claim {

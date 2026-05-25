@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -12,8 +12,8 @@ from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.video import Video
 from app.models.user import User
+from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.video import PostSchema
-from app.services.auth import decode_token, get_user_by_id
 from app.services.reward import (
     POINTS_PER_LIKE_RECEIVED,
     POINTS_PER_VIEW_RECEIVED,
@@ -24,52 +24,18 @@ from app.services.reward import (
 KST = timezone(timedelta(hours=9))
 
 router = APIRouter(prefix="/api/v1/feed", tags=["feed"])
-bearer = HTTPBearer(auto_error=False)
-bearer_required = HTTPBearer()
 
 
-def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
-    db: Session = Depends(get_db),
-) -> Optional[User]:
-    if credentials is None:
-        return None
-    user_id = decode_token(credentials.credentials)
-    if user_id is None:
-        return None
-    return get_user_by_id(db, user_id)
-
-
-def get_required_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_required),
-    db: Session = Depends(get_db),
-) -> User:
-    user_id = decode_token(credentials.credentials)
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = get_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
-
-
-def _post_to_schema(post: Post, db: Session, viewer_id: Optional[int] = None) -> PostSchema:
+def _post_to_schema(
+    post: Post,
+    comment_counts: dict,
+    liked_post_ids: set,
+) -> PostSchema:
     tags_raw = post.tags or "[]"
     try:
         tags = json.loads(tags_raw)
     except (json.JSONDecodeError, TypeError):
         tags = []
-    comment_count = db.query(Comment).filter(Comment.post_id == post.id).count()
-    is_liked = (
-        db.query(RewardPoint)
-        .filter(
-            RewardPoint.user_id == viewer_id,
-            RewardPoint.reason == "like_given",
-            RewardPoint.reference_id == post.id,
-        )
-        .first()
-        is not None
-    ) if viewer_id else False
     return PostSchema(
         id=post.id,
         video_id=post.video_id,
@@ -78,8 +44,8 @@ def _post_to_schema(post: Post, db: Session, viewer_id: Optional[int] = None) ->
         tags=tags,
         like_count=post.like_count,
         view_count=post.view_count,
-        comment_count=comment_count,
-        is_liked=is_liked,
+        comment_count=comment_counts.get(post.id, 0),
+        is_liked=post.id in liked_post_ids,
         created_at=post.created_at,
         cdn_url=post.video.cdn_url,
         username=post.user.username,
@@ -109,9 +75,33 @@ def get_feed(
 
     next_cursor = posts[-1].id if has_more and posts else None
     viewer_id = current_user.id if current_user else None
+
+    post_ids = [p.id for p in posts]
+    comment_counts: dict = {}
+    liked_post_ids: set = set()
+
+    if post_ids:
+        comment_counts = dict(
+            db.query(Comment.post_id, func.count(Comment.id))
+            .filter(Comment.post_id.in_(post_ids))
+            .group_by(Comment.post_id)
+            .all()
+        )
+        if viewer_id:
+            liked_rows = (
+                db.query(RewardPoint.reference_id)
+                .filter(
+                    RewardPoint.user_id == viewer_id,
+                    RewardPoint.reason == "like_given",
+                    RewardPoint.reference_id.in_(post_ids),
+                )
+                .all()
+            )
+            liked_post_ids = {r.reference_id for r in liked_rows}
+
     return {
         "data": {
-            "posts": [_post_to_schema(p, db, viewer_id) for p in posts],
+            "posts": [_post_to_schema(p, comment_counts, liked_post_ids) for p in posts],
             "next_cursor": next_cursor,
         }
     }
@@ -121,7 +111,7 @@ def get_feed(
 def like_post(
     post_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_required_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if post is None:
@@ -164,7 +154,7 @@ def like_post(
 def view_post(
     post_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_required_user),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if post is None:

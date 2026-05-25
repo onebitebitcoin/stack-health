@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
+import { getApiErrorMessage } from '../api/errors'
+import { MERGE_POLL_INTERVAL_MS, MERGE_POLL_MAX_ATTEMPTS } from '../lib/constants'
 import type { Challenge } from '../api/types'
 
 const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as const
@@ -228,10 +230,8 @@ export default function UploadPage() {
           }>('/videos/merge-audio', formData)
           const jobId = enqueueRes.data.data.job_id
 
-          // 잡 완료까지 폴링 (최대 120초, 3초 간격)
-          const MAX_POLLS = 40
-          for (let i = 0; i < MAX_POLLS; i++) {
-            await new Promise<void>((resolve) => setTimeout(resolve, 3000))
+          for (let i = 0; i < MERGE_POLL_MAX_ATTEMPTS; i++) {
+            await new Promise<void>((resolve) => setTimeout(resolve, MERGE_POLL_INTERVAL_MS))
             const pollRes = await client.get<{
               data: { job_id: string; status: string; r2_key: string; cdn_url: string; error: string }
             }>(`/videos/merge-job/${jobId}`)
@@ -278,14 +278,7 @@ export default function UploadPage() {
       setPointsEarned(confirmRes.data.data.points_earned)
       setDone(true)
     } catch (err: unknown) {
-      const e = err as {
-        response?: { status?: number; data?: { detail?: string } }
-        message?: string
-        code?: string
-      }
-      const detail = e.response?.data?.detail
-      const msg = detail ?? (err instanceof Error ? err.message : '업로드 실패')
-      setError(msg)
+      setError(getApiErrorMessage(err, '업로드 실패'))
       setServerMerging(false)
     } finally {
       setUploading(false)

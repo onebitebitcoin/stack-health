@@ -43,9 +43,15 @@ def list_claims(
         query = query.filter(LightningClaim.status == status)
     claims = query.order_by(LightningClaim.created_at.desc()).limit(limit).all()
 
+    user_ids = [c.user_id for c in claims]
+    users_map = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_(user_ids)).all()
+    } if user_ids else {}
+
     result = []
     for c in claims:
-        user = db.query(User).filter(User.id == c.user_id).first()
+        user = users_map.get(c.user_id)
         schema = ClaimWithUserSchema(
             **ClaimSchema.model_validate(c).model_dump(),
             username=user.username if user else "",
@@ -81,19 +87,25 @@ def list_videos(
     _: User = Depends(require_admin),
 ) -> dict:
     videos = db.query(Video).order_by(Video.created_at.desc()).all()
-    result = []
-    for v in videos:
-        user = db.query(User).filter(User.id == v.user_id).first()
-        result.append({
+    video_user_ids = [v.user_id for v in videos]
+    video_users_map = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_(video_user_ids)).all()
+    } if video_user_ids else {}
+
+    result = [
+        {
             "id": v.id,
             "user_id": v.user_id,
-            "username": user.username if user else "",
+            "username": video_users_map[v.user_id].username if v.user_id in video_users_map else "",
             "r2_key": v.r2_key,
             "cdn_url": v.cdn_url,
             "duration_sec": v.duration_sec,
             "status": v.status,
             "created_at": v.created_at.isoformat(),
-        })
+        }
+        for v in videos
+    ]
     return {"data": {"videos": result}}
 
 
@@ -146,38 +158,49 @@ def list_users(
         db.commit()
 
     users = db.query(User).order_by(User.created_at.desc()).all()
-    result = []
-    for u in users:
-        video_count = (
-            db.query(func.count(Video.id))
-            .filter(Video.user_id == u.id, Video.status == "active")
-            .scalar() or 0
+    user_ids = [u.id for u in users]
+
+    video_counts: dict = {}
+    point_totals: dict = {}
+    challenge_counts: dict = {}
+    if user_ids:
+        video_counts = dict(
+            db.query(Video.user_id, func.count(Video.id))
+            .filter(Video.user_id.in_(user_ids), Video.status == "active")
+            .group_by(Video.user_id)
+            .all()
         )
-        total_points = (
-            db.query(func.sum(RewardPoint.points))
+        point_totals = dict(
+            db.query(RewardPoint.user_id, func.sum(RewardPoint.points))
             .filter(
-                RewardPoint.user_id == u.id,
+                RewardPoint.user_id.in_(user_ids),
                 RewardPoint.status == REWARD_STATUS_FIXED,
             )
-            .scalar() or 0
+            .group_by(RewardPoint.user_id)
+            .all()
         )
-        challenge_count = (
-            db.query(func.count(ChallengeParticipation.id))
-            .filter(ChallengeParticipation.user_id == u.id)
-            .scalar() or 0
+        challenge_counts = dict(
+            db.query(ChallengeParticipation.user_id, func.count(ChallengeParticipation.id))
+            .filter(ChallengeParticipation.user_id.in_(user_ids))
+            .group_by(ChallengeParticipation.user_id)
+            .all()
         )
-        result.append({
+
+    result = [
+        {
             "id": u.id,
             "email": u.email,
             "username": u.username,
             "lightning_address": u.lightning_address,
             "is_banned": u.is_banned,
             "is_admin": u.is_admin,
-            "video_count": video_count,
-            "total_points": total_points,
-            "challenge_count": challenge_count,
+            "video_count": video_counts.get(u.id, 0),
+            "total_points": point_totals.get(u.id, 0),
+            "challenge_count": challenge_counts.get(u.id, 0),
             "created_at": u.created_at.isoformat(),
-        })
+        }
+        for u in users
+    ]
     return {"data": {"users": result}}
 
 
@@ -319,6 +342,7 @@ def weekly_summary(
     base_query = (
         db.query(
             RewardPoint.user_id,
+            User.username,
             func.sum(RewardPoint.points).label("weekly_points"),
         )
         .join(User, User.id == RewardPoint.user_id)
@@ -327,7 +351,7 @@ def weekly_summary(
             RewardPoint.status == REWARD_STATUS_FIXED,
             User.is_banned.is_(False),
         )
-        .group_by(RewardPoint.user_id)
+        .group_by(RewardPoint.user_id, User.username)
     )
 
     total_users: int = base_query.count()
@@ -344,16 +368,16 @@ def weekly_summary(
     has_next = len(rows) > limit
     rows = rows[:limit]
 
-    items = []
-    for idx, row in enumerate(rows):
-        user = db.query(User).filter(User.id == row.user_id).first()
-        items.append({
+    items = [
+        {
             "rank": offset + idx + 1,
             "user_id": row.user_id,
-            "username": user.username if user else "",
+            "username": row.username,
             "weekly_points": row.weekly_points,
             "satoshi_amount": points_to_sats(row.weekly_points),
-        })
+        }
+        for idx, row in enumerate(rows)
+    ]
 
     return {
         "data": {

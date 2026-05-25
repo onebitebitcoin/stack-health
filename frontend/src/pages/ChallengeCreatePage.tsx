@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft, Trophy } from 'lucide-react'
 import client from '../api/client'
+import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 
 const CATEGORIES = [
@@ -38,8 +39,7 @@ export default function ChallengeCreatePage() {
       }),
     onSuccess: () => navigate('/challenges'),
     onError: (e: unknown) => {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(msg ?? '생성에 실패했습니다')
+      setError(getApiErrorMessage(e, '생성에 실패했습니다'))
     },
   })
 

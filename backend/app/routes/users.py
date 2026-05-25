@@ -11,7 +11,7 @@ from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.user import User
 from app.models.video import Video
-from app.routes.feed import get_required_user
+from app.routes.auth import get_current_user as get_required_user
 from app.services.reward import REWARD_STATUS_FIXED, settle_queued_rewards
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])

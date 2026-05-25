@@ -9,7 +9,7 @@ from app.database import get_db
 from app.models.post import Post
 from app.models.video import Video
 from app.models.user import User
-from app.routes.feed import get_required_user
+from app.routes.auth import get_current_user as get_required_user
 
 KST = timezone(timedelta(hours=9))
 

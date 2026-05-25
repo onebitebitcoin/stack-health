@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle, XCircle } from 'lucide-react'
 import client from '../api/client'
+import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 import type { User } from '../api/types'
 import LogoMark from '../components/LogoMark'
@@ -65,8 +66,7 @@ export default function SetupUsernamePage() {
       login(token, me.data.data)
       navigate('/', { replace: true })
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail ?? '닉네임 설정에 실패했습니다')
+      setError(getApiErrorMessage(err, '닉네임 설정에 실패했습니다'))
     } finally {
       setSubmitting(false)
     }
