@@ -150,7 +150,7 @@ export default function HistoryPage() {
           </p>
           <button
             onClick={() => {
-              const text = `나는 이번 달 ${totalWorkoutDays}일 운동했다! 연속 ${streak}일 달성 #StackHealth #ProofOfWorkout`
+              const text = `이번 달 ${totalWorkoutDays}일 운동, 연속 ${streak}일 달성`
               if (typeof navigator !== 'undefined' && 'share' in navigator) {
                 navigator.share({ title: 'Stack Health 운동 리포트', text, url: window.location.origin }).catch(() => undefined)
               } else {

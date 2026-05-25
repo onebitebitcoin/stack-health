@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { LogOut, Zap, Check, Moon, Sun, Droplets } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import client from '../api/client'
@@ -10,7 +10,6 @@ import LoadingScreen from '../components/LoadingScreen'
 
 
 export default function ProfilePage() {
-  const qc = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const setUser = useAuthStore((s) => s.setUser)

@@ -79,7 +79,7 @@ export default function FeedPage() {
         <div>
           <p className="font-semibold text-theme-primary">아직 업로드된 영상이 없어요</p>
           <p className="mt-1 text-sm text-theme-muted">
-            15초 운동을 공유하고 커뮤니티 스코어를 쌓아보세요.
+            첫 번째로 운동 영상을 올려보세요.
           </p>
         </div>
       </div>

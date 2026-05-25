@@ -337,33 +337,29 @@ export default function UploadPage() {
   }
 
   if (done) {
-    const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
-    const shareText = `오늘도 운동 증명 완료! +${pointsEarned}pt 적립${caption ? `\n"${caption}"` : ''}\n#StackHealth #ProofOfWorkout\n${window.location.origin}`
+    const shareText = `오늘 운동 완료${caption ? ` — "${caption}"` : ''}`
 
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
-        <div className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-700 p-6 shadow-2xl">
+        <div className="w-full max-w-sm rounded-2xl bg-theme-surface p-6">
           <div className="flex items-center gap-2 mb-4">
             <Flame size={20} className="text-orange-400" />
-            <span className="text-xs font-bold tracking-widest text-orange-400 uppercase">Proof of Workout</span>
+            <span className="text-sm font-semibold text-theme-primary">오늘 운동 완료</span>
           </div>
-          <p className="text-2xl font-bold text-white mb-1">운동 증명 완료</p>
-          <p className="text-sm text-zinc-400 mb-5">{today}</p>
           {caption && (
-            <p className="text-sm text-zinc-300 mb-5 italic">"{caption}"</p>
+            <p className="text-sm text-theme-muted mb-4">"{caption}"</p>
           )}
-          <div className="flex items-center justify-between rounded-xl bg-zinc-800 px-4 py-3">
-            <span className="text-xs text-zinc-400">적립 포인트</span>
-            <span className="text-lg font-bold text-accent">+{pointsEarned}pt</span>
+          <div className="flex items-center justify-between rounded-xl bg-theme-surface2 px-4 py-3">
+            <span className="text-xs text-theme-muted">흘린 땀</span>
+            <span className="text-lg font-bold text-accent">+{pointsEarned} ml</span>
           </div>
-          <p className="mt-3 text-center text-xs text-zinc-600">Stack Health</p>
         </div>
 
         <div className="flex w-full max-w-sm flex-col gap-3">
           <button
             onClick={() => {
               if (typeof navigator !== 'undefined' && 'share' in navigator) {
-                navigator.share({ title: '운동 증명 완료!', text: shareText }).catch(() => undefined)
+                navigator.share({ title: '오늘 운동 완료', text: shareText }).catch(() => undefined)
               } else {
                 window.navigator.clipboard?.writeText(shareText).then(() => alert('클립보드에 복사됐어요!')).catch(() => undefined)
               }
@@ -371,11 +367,11 @@ export default function UploadPage() {
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
             <Share2 size={18} />
-            운동 증명 공유하기
+            공유하기
           </button>
           <button
             onClick={() => navigate('/')}
-            className="w-full rounded-xl bg-zinc-800 py-3 text-sm text-zinc-300"
+            className="w-full rounded-xl bg-theme-surface py-3 text-sm text-theme-muted"
           >
             피드 보기
           </button>
@@ -399,27 +395,13 @@ export default function UploadPage() {
             />
           </div>
           <p className="text-sm text-theme-muted">{progress}%</p>
-          {debugLogs.length > 0 && (
-            <div className="w-full max-w-sm rounded-xl bg-zinc-900 border border-zinc-700 p-3 max-h-40 overflow-y-auto">
-              {debugLogs.map((log, i) => (
-                <p key={i} className="text-xs font-mono text-zinc-400 leading-5">{log}</p>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
       {serverMerging && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          <p className="text-sm text-theme-muted">서버에서 음성과 영상을 합치는 중...</p>
-          {debugLogs.length > 0 && (
-            <div className="w-full max-w-sm rounded-xl bg-zinc-900 border border-zinc-700 p-3 max-h-40 overflow-y-auto">
-              {debugLogs.map((log, i) => (
-                <p key={i} className="text-xs font-mono text-zinc-400 leading-5">{log}</p>
-              ))}
-            </div>
-          )}
+          <p className="text-sm text-theme-muted">음성과 영상을 합치는 중...</p>
         </div>
       )}
 
@@ -631,14 +613,6 @@ export default function UploadPage() {
             className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
           />
           <p className="mt-1 text-right text-xs text-theme-subtle">{caption.length}/140</p>
-          {debugLogs.length > 0 && (
-            <div className="mt-3 rounded-xl bg-zinc-900 border border-zinc-700 p-3 max-h-36 overflow-y-auto">
-              <p className="text-xs text-zinc-500 mb-1 font-mono">— debug log —</p>
-              {debugLogs.map((log, i) => (
-                <p key={i} className="text-xs font-mono text-zinc-400 leading-5">{log}</p>
-              ))}
-            </div>
-          )}
           {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
           <button
             onClick={handleUpload}
