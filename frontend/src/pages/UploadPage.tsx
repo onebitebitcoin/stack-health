@@ -22,35 +22,59 @@ async function sha256(file: File | Blob): Promise<string> {
     .join('')
 }
 
+async function getMediaDuration(blob: Blob): Promise<number> {
+  return new Promise((resolve) => {
+    const el = document.createElement('video')
+    const url = URL.createObjectURL(blob)
+    el.addEventListener('loadedmetadata', () => { URL.revokeObjectURL(url); resolve(el.duration) })
+    el.addEventListener('error', () => { URL.revokeObjectURL(url); resolve(0) })
+    el.src = url
+    el.load()
+  })
+}
+
 async function mergeWithFFmpeg(videoFile: File, audio: Blob): Promise<File | null> {
   try {
+    const audioDuration = await getMediaDuration(audio)
+    if (!audioDuration || audioDuration <= 0) return null
+
     const ffmpeg = new FFmpeg()
+    ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message))
+
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
     })
+
     await ffmpeg.writeFile('video.mp4', await fetchFile(videoFile))
     await ffmpeg.writeFile('audio.webm', await fetchFile(audio))
-    await ffmpeg.exec([
+
+    const ret = await ffmpeg.exec([
+      '-stream_loop', '-1',
       '-i', 'video.mp4',
       '-i', 'audio.webm',
-      '-filter_complex', '[0:v]loop=loop=-1:size=32767:start=0[v]',
-      '-map', '[v]',
-      '-map', '1:a:0',
+      '-t', String(audioDuration),
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
       '-crf', '28',
       '-c:a', 'aac',
-      '-shortest',
+      '-map', '0:v:0',
+      '-map', '1:a:0',
       'output.mp4',
     ])
+
+    if (ret !== 0) {
+      console.error('[FFmpeg] exec failed with code', ret)
+      return null
+    }
+
     const data = await ffmpeg.readFile('output.mp4')
     if (typeof data === 'string') return null
-    // SharedArrayBuffer → 일반 ArrayBuffer 복사 (BlobPart 호환)
     const plain: ArrayBuffer = new Uint8Array(data).buffer as ArrayBuffer
     return new File([plain], 'merged.mp4', { type: 'video/mp4' })
-  } catch {
+  } catch (err) {
+    console.error('[FFmpeg] merge error:', err)
     return null
   }
 }
