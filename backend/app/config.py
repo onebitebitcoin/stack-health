@@ -24,7 +24,13 @@ class Settings(BaseSettings):
     # Admin
     admin_secret_key: str
 
+    # Google OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     # App
+    app_base_url: str = "http://localhost:8000"
+    frontend_url: str = "http://localhost:5173"
     environment: str = "development"
     port: int = 8000
 

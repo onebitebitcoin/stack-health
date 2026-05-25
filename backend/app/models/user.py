@@ -12,9 +12,11 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    email: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     username: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    oauth_provider: Mapped[str | None] = mapped_column(String, nullable=True)
+    oauth_sub: Mapped[str | None] = mapped_column(String, nullable=True)
     lightning_address: Mapped[str | None] = mapped_column(String, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)

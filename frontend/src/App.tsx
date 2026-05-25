@@ -1,5 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useAuthStore } from './store/auth'
+import client from './api/client'
+import type { User } from './api/types'
 import BottomNav from './components/BottomNav'
 import FeedPage from './pages/FeedPage'
 import LoginPage from './pages/LoginPage'
@@ -23,6 +26,29 @@ const HIDE_NAV = ['/login', '/admin', '/terms', '/team']
 function Layout() {
   const { pathname } = useLocation()
   const hideNav = HIDE_NAV.includes(pathname)
+  const navigate = useNavigate()
+  const login = useAuthStore((s) => s.login)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const googleToken = params.get('google_token')
+    if (!googleToken) return
+    client
+      .get<{ data: User }>('/auth/me', {
+        headers: { Authorization: `Bearer ${googleToken}` },
+      })
+      .then((res) => {
+        login(googleToken, res.data.data)
+        window.history.replaceState({}, '', '/')
+        navigate('/', { replace: true })
+      })
+      .catch(() => {
+        window.history.replaceState({}, '', '/login?error=google_auth_failed')
+        navigate('/login?error=google_auth_failed', { replace: true })
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <div className="relative h-full">
       <Routes>

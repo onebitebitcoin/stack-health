@@ -73,6 +73,84 @@ def test_patch_me_lightning_address(client: TestClient) -> None:
     assert res.json()["data"]["lightning_address"] == "lnuser@walletofsatoshi.com"
 
 
+# ── Google OAuth ──────────────────────────────────────────────────────
+
+def test_google_login_not_configured(client: TestClient) -> None:
+    res = client.get("/api/v1/auth/google", follow_redirects=False)
+    assert res.status_code == 503
+
+
+def test_google_login_redirects_when_configured(client: TestClient, monkeypatch) -> None:
+    import app.routes.auth as auth_module
+    monkeypatch.setattr(auth_module.settings, "google_client_id", "fake-client-id")
+    res = client.get("/api/v1/auth/google", follow_redirects=False)
+    assert res.status_code in (302, 307)
+    assert "accounts.google.com" in res.headers["location"]
+
+
+def test_google_callback_failure(client: TestClient, monkeypatch) -> None:
+    import app.routes.auth as auth_module
+    monkeypatch.setattr(auth_module.settings, "frontend_url", "http://localhost:5173")
+    # No mock for exchange_code — it will fail with network error
+    res = client.get("/api/v1/auth/google/callback?code=badcode", follow_redirects=False)
+    assert res.status_code in (302, 307)
+    assert "google_auth_failed" in res.headers["location"]
+
+
+# ── LNAuth ────────────────────────────────────────────────────────────
+
+def test_lnauth_challenge_returns_k1_and_lnurl(client: TestClient) -> None:
+    res = client.get("/api/v1/auth/lnauth/challenge")
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert "k1" in data
+    assert "lnurl" in data
+    assert len(data["k1"]) == 64
+    assert data["lnurl"].startswith("LNURL")
+
+
+def test_lnauth_callback_invalid_k1(client: TestClient) -> None:
+    res = client.get("/api/v1/auth/lnauth?tag=login&k1=deadbeef00000000000000000000000000000000000000000000000000000000")
+    assert res.status_code == 400
+
+
+def test_lnauth_callback_metadata_response(client: TestClient) -> None:
+    challenge_res = client.get("/api/v1/auth/lnauth/challenge")
+    k1 = challenge_res.json()["data"]["k1"]
+    res = client.get(f"/api/v1/auth/lnauth?tag=login&k1={k1}")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["tag"] == "login"
+    assert body["k1"] == k1
+
+
+def test_lnauth_callback_invalid_signature(client: TestClient) -> None:
+    challenge_res = client.get("/api/v1/auth/lnauth/challenge")
+    k1 = challenge_res.json()["data"]["k1"]
+    # Use a valid compressed pubkey format but garbage sig
+    fake_key = "02" + "ab" * 32
+    fake_sig = "30" + "44" + "02" * 68
+    res = client.get(f"/api/v1/auth/lnauth?tag=login&k1={k1}&sig={fake_sig}&key={fake_key}")
+    assert res.status_code == 200
+    assert res.json()["status"] == "ERROR"
+
+
+def test_lnauth_verify_not_verified(client: TestClient) -> None:
+    challenge_res = client.get("/api/v1/auth/lnauth/challenge")
+    k1 = challenge_res.json()["data"]["k1"]
+    res = client.get(f"/api/v1/auth/lnauth/verify?k1={k1}")
+    assert res.status_code == 200
+    assert res.json()["data"]["verified"] is False
+
+
+def test_lnauth_verify_unknown_k1(client: TestClient) -> None:
+    res = client.get("/api/v1/auth/lnauth/verify?k1=" + "00" * 32)
+    assert res.status_code == 200
+    assert res.json()["data"]["verified"] is False
+
+
+# ── Existing tests ────────────────────────────────────────────────────
+
 def test_password_not_stored_plaintext(client: TestClient) -> None:
     from app.models.user import User
 
