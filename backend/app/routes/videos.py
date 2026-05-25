@@ -182,6 +182,7 @@ def delete_post(
 @router.post("/merge-audio")
 async def merge_audio(
     video_r2_key: str = Form(...),
+    audio_duration_sec: int = Form(...),
     audio: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ) -> dict:
@@ -201,24 +202,14 @@ async def merge_audio(
         tmp_audio = tempfile.mktemp(suffix=".webm")
         tmp_output = tempfile.mktemp(suffix=".mp4")
 
+        if audio_duration_sec <= 0 or audio_duration_sec > 35:
+            raise HTTPException(status_code=400, detail="오디오 길이가 올바르지 않습니다")
+        audio_duration = float(audio_duration_sec)
+
         # 오디오 저장
         audio_bytes = await audio.read()
         with open(tmp_audio, "wb") as f:
             f.write(audio_bytes)
-
-        # 오디오 길이 측정
-        probe = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", tmp_audio],
-            capture_output=True, text=True, timeout=10,
-        )
-        try:
-            audio_duration = float(probe.stdout.strip())
-        except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="오디오 길이를 읽을 수 없습니다")
-
-        if audio_duration <= 0 or audio_duration > 35:
-            raise HTTPException(status_code=400, detail="오디오 길이가 올바르지 않습니다")
 
         # R2에서 비디오 다운로드
         client = r2_service.get_r2_client()

@@ -192,6 +192,7 @@ export default function UploadPage() {
 
         const formData = new FormData()
         formData.append('video_r2_key', r2_key)
+        formData.append('audio_duration_sec', String(recordedSecondsRef.current))
         formData.append('audio', new File([audioBlob], 'audio.webm', { type: 'audio/webm' }))
 
         try {
