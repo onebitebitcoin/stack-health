@@ -85,6 +85,11 @@ export default function RewardsPage() {
             <Zap size={16} fill="currentColor" />
             <span className="font-semibold">{summary.satoshi_amount.toLocaleString()} sats</span>
           </div>
+          {summary.queued_week_points > 0 && (
+            <div className="mt-2 rounded-xl bg-theme-surface2 px-3 py-2 text-xs text-theme-muted">
+              대기 중 {summary.queued_week_points.toLocaleString()}pt · 업로드 후 24시간이 지나면 확정됩니다
+            </div>
+          )}
           <div className="mt-2 text-sm text-theme-subtle">
             마감 {dDayLabel(summary.deadline)} · {new Date(summary.deadline).toLocaleDateString('ko-KR')}
           </div>

@@ -14,9 +14,11 @@ from app.services.reward import (
     MIN_CLAIM_SATS,
     get_week_label,
     get_week_claim_deadline,
+    get_weekly_queued_points,
     get_weekly_points,
     has_claimed_this_week,
     points_to_sats,
+    settle_queued_rewards,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,8 +32,13 @@ def get_summary(
     db: Session = Depends(get_db),
 ) -> dict:
     week_label = get_week_label()
-    pts = get_weekly_points(db, current_user.id, week_label)
-    sats = points_to_sats(pts)
+    settled_count = settle_queued_rewards(db, current_user.id)
+    if settled_count:
+        db.commit()
+
+    fixed_pts = get_weekly_points(db, current_user.id, week_label)
+    queued_pts = get_weekly_queued_points(db, current_user.id, week_label)
+    sats = points_to_sats(fixed_pts)
     claimed = has_claimed_this_week(db, current_user.id, week_label)
     claimable = sats >= MIN_CLAIM_SATS and not claimed
     deadline = get_week_claim_deadline(week_label)
@@ -39,9 +46,13 @@ def get_summary(
     return {
         "data": RewardSummarySchema(
             week_label=week_label,
-            current_week_points=pts,
+            current_week_points=fixed_pts,
+            fixed_week_points=fixed_pts,
+            queued_week_points=queued_pts,
             satoshi_amount=sats,
             claimable=claimable,
+            already_claimed=claimed,
+            deadline=deadline,
             claim_deadline=deadline,
             next_claim_date=deadline,
         )
@@ -55,6 +66,9 @@ def create_claim(
     db: Session = Depends(get_db),
 ) -> dict:
     week_label = get_week_label()
+    settled_count = settle_queued_rewards(db, current_user.id)
+    if settled_count:
+        db.commit()
 
     if has_claimed_this_week(db, current_user.id, week_label):
         raise HTTPException(status_code=409, detail="Already claimed this week")

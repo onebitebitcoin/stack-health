@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -33,6 +34,18 @@ def _make_admin_by_email(email: str) -> None:
         session.close()
 
 
+def _age_queued_rewards() -> None:
+    from app.models.reward import RewardPoint
+    session = _Session()
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=1, seconds=1)
+        for reward in session.query(RewardPoint).filter(RewardPoint.status == "queued").all():
+            reward.created_at = cutoff
+        session.commit()
+    finally:
+        session.close()
+
+
 def _reg_admin(client: TestClient, email: str = "admin@x.com", username: str = "admin") -> str:
     token = _reg(client, email=email, username=username)
     _make_admin_by_email(email)
@@ -43,6 +56,7 @@ def _upload_and_claim(client: TestClient, user_token: str) -> int:
     for i in range(2):
         with patch("app.routes.videos.r2_service.get_cdn_url", return_value=f"https://cdn/v{i}.mp4"):
             client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/v{i}.mp4", "duration_sec": 20}, headers=_auth(user_token))
+    _age_queued_rewards()
     client.patch("/api/v1/auth/me", json={"lightning_address": "u@w.com"}, headers=_auth(user_token))
     res = client.post("/api/v1/rewards/claim", json={}, headers=_auth(user_token))
     return res.json()["data"]["claim"]["id"]

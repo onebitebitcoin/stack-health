@@ -12,6 +12,7 @@ from app.models.reward import RewardPoint
 from app.models.user import User
 from app.models.video import Video
 from app.routes.feed import get_required_user
+from app.services.reward import REWARD_STATUS_FIXED, settle_queued_rewards
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -51,6 +52,10 @@ def get_my_stats(
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    settled_count = settle_queued_rewards(db, current_user.id)
+    if settled_count:
+        db.commit()
+
     total_posts = (
         db.query(Post)
         .join(Post.video)
@@ -66,6 +71,7 @@ def get_my_stats(
         .filter(
             RewardPoint.user_id == current_user.id,
             RewardPoint.points > 0,
+            RewardPoint.status == REWARD_STATUS_FIXED,
         )
         .scalar()
         or 0

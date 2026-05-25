@@ -31,6 +31,8 @@ export interface FeedResponse {
 export interface RewardSummary {
   week_label: string
   current_week_points: number
+  fixed_week_points: number
+  queued_week_points: number
   satoshi_amount: number
   claimable: boolean
   deadline: string

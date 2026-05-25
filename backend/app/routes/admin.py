@@ -14,7 +14,13 @@ from app.models.user import User
 from app.routes.auth import get_current_user
 from app.schemas.reward import ClaimSchema, ClaimWithUserSchema
 from app.schemas.video import VideoSchema
-from app.services.reward import get_week_label, points_to_sats
+from app.services.reward import (
+    REWARD_STATUS_FIXED,
+    get_week_label,
+    points_to_sats,
+    revoke_queued_upload_reward,
+    settle_queued_rewards,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -101,6 +107,7 @@ def reject_video(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
+    revoke_queued_upload_reward(db, video.id)
     video.status = "rejected"
     db.commit()
     db.refresh(video)
@@ -116,6 +123,7 @@ def delete_video(
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    revoke_queued_upload_reward(db, video.id)
     video.status = "deleted"
     log = AdminLog(
         action="video_delete",
@@ -133,6 +141,10 @@ def list_users(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> dict:
+    settled_count = settle_queued_rewards(db)
+    if settled_count:
+        db.commit()
+
     users = db.query(User).order_by(User.created_at.desc()).all()
     result = []
     for u in users:
@@ -143,7 +155,10 @@ def list_users(
         )
         total_points = (
             db.query(func.sum(RewardPoint.points))
-            .filter(RewardPoint.user_id == u.id)
+            .filter(
+                RewardPoint.user_id == u.id,
+                RewardPoint.status == REWARD_STATUS_FIXED,
+            )
             .scalar() or 0
         )
         challenge_count = (
@@ -194,6 +209,10 @@ def get_user_detail(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> dict:
+    settled_count = settle_queued_rewards(db, user_id)
+    if settled_count:
+        db.commit()
+
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -215,7 +234,10 @@ def get_user_detail(
 
     points_by_week = (
         db.query(RewardPoint.week_label, func.sum(RewardPoint.points).label("pts"))
-        .filter(RewardPoint.user_id == user_id)
+        .filter(
+            RewardPoint.user_id == user_id,
+            RewardPoint.status == REWARD_STATUS_FIXED,
+        )
         .group_by(RewardPoint.week_label)
         .order_by(RewardPoint.week_label.desc())
         .limit(10)
@@ -290,6 +312,9 @@ def weekly_summary(
     _: User = Depends(require_admin),
 ) -> dict:
     wlabel = week_label or get_week_label()
+    settled_count = settle_queued_rewards(db)
+    if settled_count:
+        db.commit()
 
     base_query = (
         db.query(
@@ -297,7 +322,11 @@ def weekly_summary(
             func.sum(RewardPoint.points).label("weekly_points"),
         )
         .join(User, User.id == RewardPoint.user_id)
-        .filter(RewardPoint.week_label == wlabel, User.is_banned.is_(False))
+        .filter(
+            RewardPoint.week_label == wlabel,
+            RewardPoint.status == REWARD_STATUS_FIXED,
+            User.is_banned.is_(False),
+        )
         .group_by(RewardPoint.user_id)
     )
 

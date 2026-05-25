@@ -360,6 +360,8 @@ export default function ProfilePage() {
           <span className="text-xs text-theme-muted">
             {summary.already_claimed
               ? `${summary.week_label} Claim 완료`
+              : summary.queued_week_points > 0
+                ? `${summary.queued_week_points.toLocaleString()}pt 확정 대기 중 · 업로드 후 24시간`
               : `${(1000 - summary.satoshi_amount).toLocaleString()} sats 더 필요 · ${dDayLabel(summary.deadline)} 마감`}
           </span>
         </div>

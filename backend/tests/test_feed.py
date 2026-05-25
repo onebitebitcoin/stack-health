@@ -80,9 +80,10 @@ def test_like_gives_points_to_poster(client: TestClient) -> None:
     client.post(f"/api/v1/feed/{post['id']}/like", headers=_auth(token_liker))
 
     summary = client.get("/api/v1/rewards/summary", headers=_auth(token_poster))
-    # poster already earned 50 from upload + 5 from like = 55
+    # Upload reward is queued for 24h; like reward is fixed immediately.
     pts = summary.json()["data"]["current_week_points"]
-    assert pts >= 55
+    assert pts >= 5
+    assert summary.json()["data"]["queued_week_points"] >= 100
 
 
 def test_view_dedup_same_user_same_day(client: TestClient) -> None:
@@ -97,5 +98,6 @@ def test_view_dedup_same_user_same_day(client: TestClient) -> None:
     # Poster should only get +2pt once from views (not twice)
     summary = client.get("/api/v1/rewards/summary", headers=_auth(token_poster))
     pts = summary.json()["data"]["current_week_points"]
-    # 100 upload (2x early adopter bonus) + 2 view (only once) = 102
-    assert pts == 102
+    # Upload reward is queued for 24h; the single deduped view reward is fixed.
+    assert pts == 2
+    assert summary.json()["data"]["queued_week_points"] == 100

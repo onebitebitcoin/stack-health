@@ -53,8 +53,8 @@ def test_presigned_url_duplicate_hash(mock_r2, client: TestClient) -> None:
 def test_presigned_url_daily_limit(mock_r2, client: TestClient) -> None:
     token = _register_and_token(client)
     headers = _auth(token)
-    # Exhaust 5 uploads by confirming each
-    for i in range(5):
+    # Exhaust the active upload-content limit by confirming each upload.
+    for i in range(3):
         client.post("/api/v1/videos/presigned-url", json={
             "filename": f"w{i}.mp4", "content_type": "video/mp4",
             "file_size": 100, "file_hash": f"hash{i}",
@@ -63,10 +63,65 @@ def test_presigned_url_daily_limit(mock_r2, client: TestClient) -> None:
             client.post("/api/v1/videos/confirm", json={
                 "r2_key": f"videos/v{i}.mp4", "duration_sec": 20,
             }, headers=headers)
-    # 6th → 429
+    # Next upload is blocked while 3 active uploads remain.
     res = client.post("/api/v1/videos/presigned-url", json={
-        "filename": "w6.mp4", "content_type": "video/mp4",
-        "file_size": 100, "file_hash": "hash6",
+        "filename": "w3.mp4", "content_type": "video/mp4",
+        "file_size": 100, "file_hash": "hash3",
+    }, headers=headers)
+    assert res.status_code == 429
+
+
+@patch("app.routes.videos.r2_service.generate_presigned_url", return_value=("https://r2.example.com/upload", "videos/x.mp4"))
+def test_presigned_url_limit_eased_after_delete(mock_r2, client: TestClient) -> None:
+    token = _register_and_token(client, "limit-delete@x.com", "limitdelete")
+    headers = _auth(token)
+    post_ids: list[int] = []
+
+    for i in range(3):
+        client.post("/api/v1/videos/presigned-url", json={
+            "filename": f"w{i}.mp4", "content_type": "video/mp4",
+            "file_size": 100, "file_hash": f"delete-hash-{i}",
+        }, headers=headers)
+        with patch("app.routes.videos.r2_service.get_cdn_url", return_value=f"https://cdn/delete-v{i}.mp4"):
+            confirm_res = client.post("/api/v1/videos/confirm", json={
+                "r2_key": f"videos/delete-v{i}.mp4", "duration_sec": 20,
+            }, headers=headers)
+        post_ids.append(confirm_res.json()["data"]["post"]["id"])
+
+    blocked_res = client.post("/api/v1/videos/presigned-url", json={
+        "filename": "blocked.mp4", "content_type": "video/mp4",
+        "file_size": 100, "file_hash": "delete-hash-blocked",
+    }, headers=headers)
+    assert blocked_res.status_code == 429
+
+    with patch("app.routes.videos.r2_service.delete_object"):
+        delete_res = client.delete(f"/api/v1/videos/posts/{post_ids[0]}", headers=headers)
+    assert delete_res.status_code == 200
+
+    eased_res = client.post("/api/v1/videos/presigned-url", json={
+        "filename": "eased.mp4", "content_type": "video/mp4",
+        "file_size": 100, "file_hash": "delete-hash-eased",
+    }, headers=headers)
+    assert eased_res.status_code == 200
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/limit.mp4")
+def test_confirm_upload_uses_active_content_limit(mock_cdn, client: TestClient) -> None:
+    token = _register_and_token(client, "confirm-limit@x.com", "confirmlimit")
+    headers = _auth(token)
+
+    for i in range(3):
+        res = client.post("/api/v1/videos/confirm", json={
+            "r2_key": f"videos/confirm-limit-{i}.mp4",
+            "file_hash": f"confirm-limit-hash-{i}",
+            "duration_sec": 20,
+        }, headers=headers)
+        assert res.status_code == 200
+
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": "videos/confirm-limit-blocked.mp4",
+        "file_hash": "confirm-limit-hash-blocked",
+        "duration_sec": 20,
     }, headers=headers)
     assert res.status_code == 429
 

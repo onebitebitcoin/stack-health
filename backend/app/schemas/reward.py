@@ -6,8 +6,12 @@ from pydantic import BaseModel
 class RewardSummarySchema(BaseModel):
     week_label: str
     current_week_points: int
+    fixed_week_points: int = 0
+    queued_week_points: int = 0
     satoshi_amount: int
     claimable: bool
+    deadline: datetime
+    already_claimed: bool = False
     claim_deadline: datetime
     next_claim_date: datetime
 

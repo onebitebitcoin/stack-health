@@ -22,6 +22,7 @@ from app.services.reward import (
     POINTS_PER_UPLOAD,
     add_points,
     get_daily_upload_count,
+    revoke_queued_upload_reward,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,9 @@ def confirm_upload(
     invalid = [t for t in tags if t not in ALLOWED_TAGS]
     if invalid:
         raise HTTPException(status_code=400, detail=f"Invalid tags: {invalid}")
+
+    if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
+        raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
 
     cdn_url = r2_service.get_cdn_url(req.r2_key)
 
@@ -167,6 +171,7 @@ def delete_post(
 
     db.delete(post)
     if video:
+        revoke_queued_upload_reward(db, video.id)
         db.delete(video)
     db.commit()
 

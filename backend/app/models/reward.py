@@ -17,6 +17,7 @@ class RewardPoint(Base):
     points: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(String, nullable=False)  # upload | like_received | view_received
     reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="fixed", nullable=False)  # queued | fixed | revoked
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.claim import LightningClaim
 from app.models.reward import RewardPoint
+from app.models.video import Video
 
 POINTS_PER_UPLOAD = 50
 POINTS_PER_LIKE_RECEIVED = 5
@@ -14,6 +15,10 @@ DAILY_MAX_UPLOADS = 3
 POINTS_TO_SATS_DIVISOR = 100  # 100pt = 1000 sats
 SATS_PER_HUNDRED_POINTS = 1000
 MIN_CLAIM_SATS = 1000
+REWARD_STATUS_QUEUED = "queued"
+REWARD_STATUS_FIXED = "fixed"
+REWARD_STATUS_REVOKED = "revoked"
+REWARD_SETTLEMENT_DELAY = timedelta(days=1)
 
 KST = timezone(timedelta(hours=9))
 
@@ -44,6 +49,20 @@ def get_weekly_points(db: Session, user_id: int, week_label: str) -> int:
         .filter(
             RewardPoint.user_id == user_id,
             RewardPoint.week_label == week_label,
+            RewardPoint.status == REWARD_STATUS_FIXED,
+        )
+        .scalar()
+    )
+    return result or 0
+
+
+def get_weekly_queued_points(db: Session, user_id: int, week_label: str) -> int:
+    result = (
+        db.query(func.sum(RewardPoint.points))
+        .filter(
+            RewardPoint.user_id == user_id,
+            RewardPoint.week_label == week_label,
+            RewardPoint.status == REWARD_STATUS_QUEUED,
         )
         .scalar()
     )
@@ -59,11 +78,11 @@ def _utc_today_start() -> datetime:
 def get_daily_upload_count(db: Session, user_id: int) -> int:
     today_start = _utc_today_start()
     return (
-        db.query(RewardPoint)
+        db.query(Video)
         .filter(
-            RewardPoint.user_id == user_id,
-            RewardPoint.reason == "upload",
-            RewardPoint.created_at >= today_start,
+            Video.user_id == user_id,
+            Video.status == "active",
+            Video.created_at >= today_start,
         )
         .count()
     )
@@ -76,10 +95,55 @@ def get_daily_total_points(db: Session, user_id: int) -> int:
         .filter(
             RewardPoint.user_id == user_id,
             RewardPoint.created_at >= today_start,
+            RewardPoint.status != REWARD_STATUS_REVOKED,
         )
         .scalar()
     )
     return result or 0
+
+
+def settle_queued_rewards(db: Session, user_id: int | None = None, now: datetime | None = None) -> int:
+    """Move upload rewards from queued to fixed once content survived 24 hours."""
+    settled_at = now or datetime.now(timezone.utc)
+    if settled_at.tzinfo is None:
+        settled_at_utc = settled_at.replace(tzinfo=timezone.utc)
+    else:
+        settled_at_utc = settled_at.astimezone(timezone.utc)
+    cutoff = settled_at_utc.replace(tzinfo=None) - REWARD_SETTLEMENT_DELAY
+    settlement_week_label = get_week_label(settled_at_utc.astimezone(KST))
+
+    query = db.query(RewardPoint).filter(
+        RewardPoint.status == REWARD_STATUS_QUEUED,
+        RewardPoint.created_at <= cutoff,
+    )
+    if user_id is not None:
+        query = query.filter(RewardPoint.user_id == user_id)
+
+    rewards = query.all()
+    for reward in rewards:
+        reward.status = REWARD_STATUS_FIXED
+        reward.week_label = settlement_week_label
+    if rewards:
+        db.flush()
+    return len(rewards)
+
+
+def revoke_queued_upload_reward(db: Session, video_id: int) -> int:
+    """Retrieve queued upload points when the associated content is removed before settlement."""
+    rewards = (
+        db.query(RewardPoint)
+        .filter(
+            RewardPoint.reason == "upload",
+            RewardPoint.reference_id == video_id,
+            RewardPoint.status == REWARD_STATUS_QUEUED,
+        )
+        .all()
+    )
+    for reward in rewards:
+        reward.status = REWARD_STATUS_REVOKED
+    if rewards:
+        db.flush()
+    return len(rewards)
 
 
 def add_points(
@@ -106,6 +170,7 @@ def add_points(
         points=actual_points,
         reason=reason,
         reference_id=reference_id,
+        status=REWARD_STATUS_QUEUED if reason == "upload" else REWARD_STATUS_FIXED,
     )
     db.add(rp)
     db.flush()
