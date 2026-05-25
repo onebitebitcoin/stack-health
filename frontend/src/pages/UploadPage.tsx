@@ -12,7 +12,7 @@ const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as co
 type Tag = (typeof ALLOWED_TAGS)[number]
 
 const STEPS = ['영상 선택', '태그', '챌린지', '음성 녹음', '설명'] as const
-const MAX_RECORD_SECONDS = 15
+const MAX_RECORD_SECONDS = 30
 
 async function sha256(file: File | Blob): Promise<string> {
   const buffer = await file.arrayBuffer()
