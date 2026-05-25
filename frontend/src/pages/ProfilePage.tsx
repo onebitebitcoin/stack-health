@@ -1,18 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LogOut, Zap, Check, Lock, CheckCircle, ChevronRight, Moon, Sun, Droplets } from 'lucide-react'
+import { LogOut, Zap, Check, Moon, Sun, Droplets } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { useThemeStore, type Theme } from '../store/theme'
-import type { RewardSummary, MyStats } from '../api/types'
-import ClaimBottomSheet from '../components/ClaimBottomSheet'
+import type { MyStats } from '../api/types'
 import LoadingScreen from '../components/LoadingScreen'
 
-function dDayLabel(deadline: string) {
-  const diff = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000)
-  return diff <= 0 ? 'D-day' : `D-${diff}`
-}
 
 export default function ProfilePage() {
   const qc = useQueryClient()
@@ -25,8 +20,6 @@ export default function ProfilePage() {
   const [editingLn, setEditingLn] = useState(false)
   const [lnInput, setLnInput] = useState(user?.lightning_address ?? '')
   const [saving, setSaving] = useState(false)
-  const [showSheet, setShowSheet] = useState(false)
-  const [claimSuccess, setClaimSuccess] = useState(false)
 
   const DARK_THEMES: Theme[] = ['volt', 'sapphire', 'indigo']
   const isDark = DARK_THEMES.includes(theme)
@@ -44,16 +37,7 @@ export default function ProfilePage() {
     }
   }
 
-  const { data: summary, isLoading } = useQuery<RewardSummary>({
-    queryKey: ['rewards-summary'],
-    queryFn: async () => {
-      const res = await client.get<{ data: RewardSummary }>('/rewards/summary')
-      return res.data.data
-    },
-    enabled: !!user,
-  })
-
-  const { data: myStats } = useQuery<MyStats>({
+  const { data: myStats, isLoading } = useQuery<MyStats>({
     queryKey: ['my-stats'],
     queryFn: async () => {
       const res = await client.get<{ data: MyStats }>('/me/stats')
@@ -76,30 +60,7 @@ export default function ProfilePage() {
     }
   }
 
-  function handleClaimSuccess() {
-    setShowSheet(false)
-    setClaimSuccess(true)
-    qc.invalidateQueries({ queryKey: ['rewards-summary'] }).catch(() => undefined)
-    qc.invalidateQueries({ queryKey: ['rewards-claims'] }).catch(() => undefined)
-  }
-
   if (isLoading) return <LoadingScreen />
-
-  if (claimSuccess) {
-    return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-nav-safe bg-theme-page">
-        <CheckCircle size={64} className="text-accent" />
-        <p className="text-xl font-bold text-theme-primary">Claim 완료!</p>
-        <p className="text-sm text-theme-muted">24시간 내 지급됩니다</p>
-        <button
-          onClick={() => setClaimSuccess(false)}
-          className="mt-2 rounded-xl bg-theme-surface px-6 py-2.5 text-sm text-theme-primary"
-        >
-          돌아가기
-        </button>
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
@@ -133,36 +94,6 @@ export default function ProfilePage() {
         </span>
         <span className="text-xs text-theme-muted mt-0.5">내가 흘린 땀</span>
       </div>
-
-      {/* ── 리워드 Claim 배너 (claimable일 때만) ── */}
-      {summary && summary.claimable && (
-        <button
-          onClick={() => setShowSheet(true)}
-          className="mx-4 mb-3 flex items-center justify-between rounded-xl bg-accent px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <Zap size={15} fill="var(--accent-fg)" color="var(--accent-fg)" />
-            <span className="text-sm font-semibold text-accent-fg">
-              {summary.satoshi_amount.toLocaleString()} sats 수령하기
-            </span>
-          </div>
-          <ChevronRight size={16} color="var(--accent-fg)" />
-        </button>
-      )}
-
-      {/* Claim 불가 상태 작은 안내 */}
-      {summary && !summary.claimable && (
-        <div className="mx-4 mb-3 flex items-center gap-2 rounded-xl bg-theme-surface px-4 py-2.5">
-          <Lock size={13} className="text-theme-muted flex-shrink-0" />
-          <span className="text-xs text-theme-muted">
-            {summary.already_claimed
-              ? `${summary.week_label} Claim 완료`
-              : summary.queued_week_points > 0
-                ? `${summary.queued_week_points.toLocaleString()}pt 확정 대기 중 · 업로드 후 24시간`
-              : `${(1000 - summary.satoshi_amount).toLocaleString()} sats 더 필요 · ${dDayLabel(summary.deadline)} 마감`}
-          </span>
-        </div>
-      )}
 
       {/* ── Lightning 주소 ── */}
       <div className="mx-4 mb-4 rounded-xl bg-theme-surface px-4 py-3">
@@ -240,15 +171,6 @@ export default function ProfilePage() {
         </Link>
       </div>
 
-      {showSheet && summary && (
-        <ClaimBottomSheet
-          satoshiAmount={summary.satoshi_amount}
-          weekLabel={summary.week_label}
-          savedAddress={user?.lightning_address ?? null}
-          onClose={() => setShowSheet(false)}
-          onSuccess={handleClaimSuccess}
-        />
-      )}
     </div>
   )
 }

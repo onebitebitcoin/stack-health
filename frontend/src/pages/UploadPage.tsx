@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, ChevronRight, Trophy, Flame, Share2, Mic, MicOff, SkipForward } from 'lucide-react'
+import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
@@ -186,6 +186,21 @@ export default function UploadPage() {
     setStep(4)
   }
 
+  function handleBack() {
+    if (step === 0) return
+    if (recording) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+      setRecording(false)
+      audioBlobRef.current = null
+    }
+    setStep((prev) => prev - 1)
+  }
+
   const { data: myChallenges = [] } = useQuery<Challenge[]>({
     queryKey: ['my-challenges-upload'],
     queryFn: async () => {
@@ -238,12 +253,35 @@ export default function UploadPage() {
         formData.append('audio', new File([audioBlob], `audio.${audioExt}`, { type: audioMimeType }))
 
         try {
-          const mergeRes = await client.post<{
-            data: { r2_key: string; cdn_url: string; duration_sec: number }
+          const enqueueRes = await client.post<{
+            data: { job_id: string; status: string }
           }>('/videos/merge-audio', formData)
-          r2_key = mergeRes.data.data.r2_key
-          finalDurationSec = mergeRes.data.data.duration_sec
-          addLog(`[Merge] 완료: ${r2_key}, ${finalDurationSec}초`)
+          const jobId = enqueueRes.data.data.job_id
+          addLog(`[Merge] 잡 등록 완료: ${jobId}, 워커 처리 대기 중...`)
+
+          // 잡 완료까지 폴링 (최대 120초, 3초 간격)
+          const MAX_POLLS = 40
+          for (let i = 0; i < MAX_POLLS; i++) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 3000))
+            const pollRes = await client.get<{
+              data: { job_id: string; status: string; r2_key: string; cdn_url: string; error: string }
+            }>(`/videos/merge-job/${jobId}`)
+            const { status, r2_key: mergedKey, error: jobError } = pollRes.data.data
+            addLog(`[Merge] 폴링 ${i + 1}/${MAX_POLLS}: ${status}`)
+
+            if (status === 'completed') {
+              r2_key = mergedKey
+              finalDurationSec = recordedSecondsRef.current
+              addLog(`[Merge] 완료: ${r2_key}, ${finalDurationSec}초`)
+              break
+            } else if (status === 'failed') {
+              addLog(`[Merge] ERROR: 워커 처리 실패 — ${jobError ?? '알 수 없는 오류'}, 원본 영상으로 업로드합니다`)
+              break
+            }
+            if (i === MAX_POLLS - 1) {
+              addLog(`[Merge] ERROR: 타임아웃 — 원본 영상으로 업로드합니다`)
+            }
+          }
         } catch (mergeErr: unknown) {
           const mergeMsg =
             (mergeErr as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
@@ -385,19 +423,32 @@ export default function UploadPage() {
         </div>
       )}
 
-      <div data-testid="step-bar" className="flex items-center gap-1 p-4">
-        {STEPS.map((label, i) => (
-          <div key={label} className="flex flex-1 flex-col items-center gap-1">
-            <div
-              className={`h-1 w-full rounded-full transition-colors ${
-                i <= step ? 'bg-accent' : 'bg-theme-surface2'
-              }`}
-            />
-            <span className={`text-xs ${i === step ? 'text-accent' : 'text-theme-subtle'}`}>
-              {label}
-            </span>
-          </div>
-        ))}
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+        {step > 0 ? (
+          <button
+            onClick={handleBack}
+            className="flex-shrink-0 p-1 text-theme-muted hover:text-theme-primary transition-colors"
+            aria-label="이전 단계"
+          >
+            <ChevronLeft size={20} strokeWidth={1.5} />
+          </button>
+        ) : (
+          <div className="w-7 flex-shrink-0" />
+        )}
+        <div data-testid="step-bar" className="flex flex-1 items-center gap-1">
+          {STEPS.map((label, i) => (
+            <div key={label} className="flex flex-1 flex-col items-center gap-1">
+              <div
+                className={`h-1 w-full rounded-full transition-colors ${
+                  i <= step ? 'bg-accent' : 'bg-theme-surface2'
+                }`}
+              />
+              <span className={`text-xs ${i === step ? 'text-accent' : 'text-theme-subtle'}`}>
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {step === 0 && (
@@ -450,7 +501,7 @@ export default function UploadPage() {
           </div>
           <button
             onClick={() => setStep(2)}
-            className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
+            className="mt-auto mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
             다음 <ChevronRight size={18} />
           </button>
@@ -495,7 +546,7 @@ export default function UploadPage() {
           </div>
           <button
             onClick={() => setStep(3)}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
+            className="mt-4 mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
             다음 <ChevronRight size={18} />
           </button>
@@ -556,7 +607,7 @@ export default function UploadPage() {
 
           {error && <p className="text-sm text-red-400">{error}</p>}
 
-          <div className="mt-auto flex gap-3">
+          <div className="mt-auto mb-4 flex gap-3">
             <button
               onClick={skipRecording}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
@@ -592,7 +643,7 @@ export default function UploadPage() {
           <button
             onClick={handleUpload}
             disabled={uploading}
-            className="mt-auto w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
+            className="mt-auto mb-4 w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
           >
             업로드 시작
           </button>
