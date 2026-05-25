@@ -38,8 +38,8 @@ export default function UploadPage() {
 
   // 음성 녹음 상태
   const audioBlobRef = useRef<Blob | null>(null)
-  const [mergedR2Key, setMergedR2Key] = useState<string | null>(null)
-  const [mergedDurationSec, setMergedDurationSec] = useState<number | null>(null)
+  const mergedR2KeyRef = useRef<string | null>(null)
+  const mergedDurationSecRef = useRef<number | null>(null)
   const [serverMerging, setServerMerging] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordedSeconds, setRecordedSeconds] = useState(0)
@@ -142,7 +142,6 @@ export default function UploadPage() {
       setRecording(false)
     }
     audioBlobRef.current = null
-    setMergedFile(null)
     setStep(4)
   }
 
@@ -209,8 +208,8 @@ export default function UploadPage() {
         r2_key = mergeRes.data.data.r2_key
         finalDurationSec = mergeRes.data.data.duration_sec
         addLog(`[Merge] 완료: ${r2_key}, ${finalDurationSec}초`)
-        setMergedR2Key(r2_key)
-        setMergedDurationSec(finalDurationSec)
+        mergedR2KeyRef.current = r2_key
+        mergedDurationSecRef.current = finalDurationSec
         setServerMerging(false)
         setUploading(true)
       }
