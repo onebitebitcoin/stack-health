@@ -16,13 +16,14 @@ import TermsPage from './pages/TermsPage'
 import HistoryPage from './pages/HistoryPage'
 import TeamPage from './pages/TeamPage'
 import UserProfilePage from './pages/UserProfilePage'
+import SetupUsernamePage from './pages/SetupUsernamePage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
   return token ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-const HIDE_NAV = ['/login', '/admin', '/terms', '/team']
+const HIDE_NAV = ['/login', '/admin', '/terms', '/team', '/setup-username']
 
 function Layout() {
   const { pathname } = useLocation()
@@ -34,6 +35,12 @@ function Layout() {
     const params = new URLSearchParams(window.location.search)
     const googleToken = params.get('google_token')
     if (!googleToken) return
+    const isNew = params.get('new_user') === '1'
+    if (isNew) {
+      window.history.replaceState({}, '', '/')
+      navigate(`/setup-username?token=${encodeURIComponent(googleToken)}`, { replace: true })
+      return
+    }
     client
       .get<{ data: User }>('/auth/me', {
         headers: { Authorization: `Bearer ${googleToken}` },
@@ -89,6 +96,7 @@ function Layout() {
             </RequireAuth>
           }
         />
+        <Route path="/setup-username" element={<SetupUsernamePage />} />
         <Route path="/users/:userId" element={<UserProfilePage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/terms" element={<TermsPage />} />

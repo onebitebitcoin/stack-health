@@ -10,7 +10,7 @@ export default function LoadingScreen() {
         <p className="text-sm font-semibold tracking-widest text-theme-primary uppercase">
           Stack Health
         </p>
-        <p className="mt-1 text-xs text-theme-muted">운동 기록이 스코어가 되는 중</p>
+        <p className="mt-1 text-xs text-theme-muted">건강이 쌓여가는 중</p>
       </div>
     </div>
   )

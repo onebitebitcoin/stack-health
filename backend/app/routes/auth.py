@@ -90,6 +90,14 @@ def get_me(current_user: User = Depends(get_current_user)) -> dict:
     return {"data": UserSchema.model_validate(current_user)}
 
 
+@router.get("/check-username")
+def check_username(username: str, db: Session = Depends(get_db)) -> dict:
+    if len(username) < 2 or len(username) > 30:
+        return {"data": {"available": False}}
+    existing = db.query(User).filter(User.username == username).first()
+    return {"data": {"available": existing is None}}
+
+
 @router.patch("/me")
 def update_me(
     req: UpdateProfileRequest,
@@ -103,6 +111,9 @@ def update_me(
         if existing:
             raise HTTPException(status_code=400, detail="Username already taken")
         current_user.username = req.username
+        settings = dict(current_user.app_settings or {})
+        settings.pop("needs_username", None)
+        current_user.app_settings = settings
     if req.lightning_address is not None:
         current_user.lightning_address = req.lightning_address
     if req.app_settings is not None:
@@ -140,6 +151,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)) -> RedirectR
     if user is None and email:
         user = db.query(User).filter(User.email == email).first()
 
+    is_new = user is None
     if user is None:
         base_username = name.lower().replace(" ", "_")[:20]
         username = base_username
@@ -154,6 +166,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)) -> RedirectR
             oauth_provider="google",
             oauth_sub=google_sub,
             avatar_url=avatar,
+            app_settings={"needs_username": True},
         )
         db.add(user)
         db.commit()
@@ -167,7 +180,10 @@ async def google_callback(code: str, db: Session = Depends(get_db)) -> RedirectR
         db.commit()
 
     token = create_access_token(user.id)
-    return RedirectResponse(url=f"{settings.app_base_url}/?google_token={token}")
+    redirect_url = f"{settings.app_base_url}/?google_token={token}"
+    if is_new:
+        redirect_url += "&new_user=1"
+    return RedirectResponse(url=redirect_url)
 
 
 # ── LNAuth ────────────────────────────────────────────────────────────
@@ -219,6 +235,7 @@ def lnauth_callback(
             password_hash=None,
             oauth_provider="lnauth",
             oauth_sub=key,
+            app_settings={"needs_username": True},
         )
         db.add(user)
 
@@ -242,5 +259,6 @@ def lnauth_verify(k1: str, db: Session = Depends(get_db)) -> dict:
     if not user:
         return {"data": {"verified": False}}
 
+    is_new_user = bool((user.app_settings or {}).get("needs_username", False))
     token = create_access_token(user.id)
-    return {"data": {"verified": True, "token": token}}
+    return {"data": {"verified": True, "token": token, "is_new_user": is_new_user}}
