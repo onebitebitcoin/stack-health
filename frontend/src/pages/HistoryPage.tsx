@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Flame, Heart, Eye, ArrowLeft } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Flame, Heart, Eye, ArrowLeft, Award, Share2 } from 'lucide-react'
 import client from '../api/client'
 import type { HistoryResponse, HistoryWorkoutPost } from '../api/types'
 
@@ -97,16 +97,71 @@ export default function HistoryPage() {
         <h1 className="text-xl font-bold text-theme-primary">운동 기록</h1>
       </div>
 
-      {/* Streak + stats bar */}
-      <div className="mx-4 mb-4 flex items-center gap-3 rounded-xl bg-theme-surface px-4 py-3">
-        <div className="flex items-center gap-1.5 text-orange-400">
-          <Flame size={20} strokeWidth={2} />
-          <span className="text-lg font-bold">{streak}</span>
-          <span className="text-sm font-medium">일 연속</span>
+      {/* 스트릭 배지 섹션 */}
+      <div className="mx-4 mb-4 rounded-xl bg-theme-surface px-4 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-orange-400">
+              <Flame size={24} strokeWidth={2} />
+              <span className="text-3xl font-bold leading-none">{streak}</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-theme-primary">일 연속</p>
+              {streak === 0 && (
+                <p className="text-xs text-theme-muted">오늘 첫 운동을 시작해보세요!</p>
+              )}
+            </div>
+          </div>
+          {/* 마일스톤 배지 */}
+          <div className="text-right">
+            {streak >= 100 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-400">
+                <Award size={12} /> 100일 레전드
+              </span>
+            )}
+            {streak >= 30 && streak < 100 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-400">
+                <Award size={12} /> 한달 달성
+              </span>
+            )}
+            {streak >= 14 && streak < 30 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-2.5 py-1 text-xs font-bold text-orange-400">
+                <Award size={12} /> 2주 달성
+              </span>
+            )}
+            {streak >= 7 && streak < 14 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-2.5 py-1 text-xs font-bold text-orange-400">
+                <Award size={12} /> 7일 달성
+              </span>
+            )}
+            {streak >= 3 && streak < 7 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-2.5 py-1 text-xs font-bold text-yellow-400">
+                <Award size={12} /> 3일 달성
+              </span>
+            )}
+          </div>
         </div>
-        <div className="h-4 w-px bg-theme-border" />
-        <div className="text-sm text-theme-muted">
-          이번 달 <span className="font-semibold text-theme-primary">{totalWorkoutDays}</span>일 운동
+        <div className="mt-3 h-px bg-theme-border" />
+        {/* 월별 리포트 */}
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-sm text-theme-muted">
+            이번 달{' '}
+            <span className="font-semibold text-theme-primary">{totalWorkoutDays}일</span> 운동
+          </p>
+          <button
+            onClick={() => {
+              const text = `나는 이번 달 ${totalWorkoutDays}일 운동했다! 연속 ${streak}일 달성 #StackHealth #ProofOfWorkout`
+              if (typeof navigator !== 'undefined' && 'share' in navigator) {
+                navigator.share({ title: 'Stack Health 운동 리포트', text, url: window.location.origin }).catch(() => undefined)
+              } else {
+                window.navigator.clipboard?.writeText(text).then(() => alert('클립보드에 복사됐어요!')).catch(() => undefined)
+              }
+            }}
+            className="flex items-center gap-1 rounded-lg bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"
+          >
+            <Share2 size={12} />
+            공유
+          </button>
         </div>
       </div>
 

@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { LogOut, Zap, Check, Lock, CheckCircle, Trash2, ChevronRight, Moon, Sun, Trophy } from 'lucide-react'
+import { LogOut, Zap, Check, Lock, CheckCircle, Trash2, ChevronRight, Moon, Sun, Trophy, Video, Flame } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { useThemeStore, type Theme } from '../store/theme'
-import type { Post, RewardSummary, Claim, EarnedTitle } from '../api/types'
+import type { Post, RewardSummary, Claim, EarnedTitle, MyStats, HistoryResponse } from '../api/types'
 import ClaimBottomSheet from '../components/ClaimBottomSheet'
 import LoadingScreen from '../components/LoadingScreen'
 
@@ -90,6 +90,24 @@ export default function ProfilePage() {
     queryFn: async () => {
       const res = await client.get<{ data: { titles: EarnedTitle[] } }>('/challenges/titles')
       return res.data.data.titles
+    },
+    enabled: !!user,
+  })
+
+  const { data: myStats } = useQuery<MyStats>({
+    queryKey: ['my-stats'],
+    queryFn: async () => {
+      const res = await client.get<{ data: MyStats }>('/me/stats')
+      return res.data.data
+    },
+    enabled: !!user,
+  })
+
+  const { data: historyData } = useQuery<HistoryResponse>({
+    queryKey: ['history-profile'],
+    queryFn: async () => {
+      const res = await client.get<{ data: HistoryResponse }>('/history')
+      return res.data.data
     },
     enabled: !!user,
   })
@@ -225,6 +243,25 @@ export default function ProfilePage() {
               </span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* ── 통계 카드 ── */}
+      <div className="mx-4 mb-4 grid grid-cols-3 gap-2">
+        <div className="flex flex-col items-center rounded-xl bg-theme-surface px-3 py-4">
+          <Video size={18} className="mb-1.5 text-theme-muted" strokeWidth={1.5} />
+          <span className="text-xl font-bold text-theme-primary">{myStats?.total_posts ?? 0}</span>
+          <span className="text-xs text-theme-muted mt-0.5">총 업로드</span>
+        </div>
+        <div className="flex flex-col items-center rounded-xl bg-theme-surface px-3 py-4">
+          <Flame size={18} className="mb-1.5 text-orange-400" strokeWidth={1.5} />
+          <span className="text-xl font-bold text-theme-primary">{historyData?.streak ?? 0}</span>
+          <span className="text-xs text-theme-muted mt-0.5">연속 일수</span>
+        </div>
+        <div className="flex flex-col items-center rounded-xl bg-theme-surface px-3 py-4">
+          <Zap size={18} className="mb-1.5 text-accent" strokeWidth={1.5} />
+          <span className="text-xl font-bold text-theme-primary">{myStats?.total_points ?? 0}</span>
+          <span className="text-xs text-theme-muted mt-0.5">총 포인트</span>
         </div>
       </div>
 

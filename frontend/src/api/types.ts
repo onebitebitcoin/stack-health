@@ -169,3 +169,8 @@ export interface UserProfile {
   titles: EarnedTitle[]
   active_challenges: ActiveChallenge[]
 }
+
+export interface MyStats {
+  total_posts: number
+  total_points: number
+}

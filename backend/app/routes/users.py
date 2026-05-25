@@ -2,13 +2,16 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.challenge import ChallengeParticipation
 from app.models.post import Post
+from app.models.reward import RewardPoint
 from app.models.user import User
 from app.models.video import Video
+from app.routes.feed import get_required_user
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -41,6 +44,34 @@ class ActiveChallengeSchema(BaseModel):
     title: str
     upload_count: int
     condition_value: int
+
+
+@router.get("/me/stats")
+def get_my_stats(
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    total_posts = (
+        db.query(Post)
+        .join(Post.video)
+        .filter(
+            Post.user_id == current_user.id,
+            Video.status == "active",
+        )
+        .count()
+    )
+
+    total_points = (
+        db.query(sqlfunc.sum(RewardPoint.points))
+        .filter(
+            RewardPoint.user_id == current_user.id,
+            RewardPoint.points > 0,
+        )
+        .scalar()
+        or 0
+    )
+
+    return {"data": {"total_posts": total_posts, "total_points": int(total_points)}}
 
 
 @router.get("/{user_id}/profile")

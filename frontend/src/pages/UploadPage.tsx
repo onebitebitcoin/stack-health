@@ -1,6 +1,6 @@
 import { useState, useRef, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, ChevronRight, CheckCircle, Trophy } from 'lucide-react'
+import { Upload, ChevronRight, Trophy, Flame, Share2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import client from '../api/client'
@@ -107,31 +107,51 @@ export default function UploadPage() {
   }
 
   if (done) {
+    const today = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+    const shareText = `오늘도 운동 증명 완료! +${pointsEarned}pt 적립${caption ? `\n"${caption}"` : ''}\n#StackHealth #ProofOfWorkout\n${window.location.origin}`
+
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-theme-page">
-        <CheckCircle size={64} className="text-accent" />
-        <p className="text-xl font-bold text-theme-primary">업로드 완료!</p>
-        <p className="text-theme-muted">+{pointsEarned}pt 적립됐어요</p>
-        {typeof navigator !== 'undefined' && 'share' in navigator && (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
+        {/* 증명 카드 */}
+        <div className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-700 p-6 shadow-2xl">
+          <div className="flex items-center gap-2 mb-4">
+            <Flame size={20} className="text-orange-400" />
+            <span className="text-xs font-bold tracking-widest text-orange-400 uppercase">Proof of Workout</span>
+          </div>
+          <p className="text-2xl font-bold text-white mb-1">운동 증명 완료</p>
+          <p className="text-sm text-zinc-400 mb-5">{today}</p>
+          {caption && (
+            <p className="text-sm text-zinc-300 mb-5 italic">"{caption}"</p>
+          )}
+          <div className="flex items-center justify-between rounded-xl bg-zinc-800 px-4 py-3">
+            <span className="text-xs text-zinc-400">적립 포인트</span>
+            <span className="text-lg font-bold text-accent">+{pointsEarned}pt</span>
+          </div>
+          <p className="mt-3 text-center text-xs text-zinc-600">Stack Health</p>
+        </div>
+
+        {/* 액션 버튼 */}
+        <div className="flex w-full max-w-sm flex-col gap-3">
           <button
             onClick={() => {
-              navigator.share({
-                title: '운동하고 비트코인 받자',
-                text: '운동 영상을 올렸어요! 같이 운동해요 💪',
-                url: window.location.origin,
-              }).catch(() => undefined)
+              if (typeof navigator !== 'undefined' && 'share' in navigator) {
+                navigator.share({ title: '운동 증명 완료!', text: shareText }).catch(() => undefined)
+              } else {
+                window.navigator.clipboard?.writeText(shareText).then(() => alert('클립보드에 복사됐어요!')).catch(() => undefined)
+              }
             }}
-            className="rounded-xl bg-accent px-6 py-3 font-semibold text-accent-fg"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
-            공유하기
+            <Share2 size={18} />
+            운동 증명 공유하기
           </button>
-        )}
-        <button
-          onClick={() => navigate('/')}
-          className="rounded-xl bg-theme-surface2 px-6 py-3 text-sm text-theme-primary"
-        >
-          피드 보기
-        </button>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full rounded-xl bg-zinc-800 py-3 text-sm text-zinc-300"
+          >
+            피드 보기
+          </button>
+        </div>
       </div>
     )
   }
