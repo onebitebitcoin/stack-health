@@ -35,12 +35,6 @@ export default function FeedPage() {
     (idx: number) => {
       if (idx < 0 || idx >= posts.length) return
       setActiveIndex(idx)
-      if (containerRef.current) {
-        containerRef.current.scrollTo({
-          top: idx * containerRef.current.clientHeight,
-          behavior: 'smooth',
-        })
-      }
       if (idx >= posts.length - 2 && hasNextPage) {
         fetchNextPage().catch(() => undefined)
       }
@@ -63,14 +57,24 @@ export default function FeedPage() {
   )
 
   useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    // pull-to-refresh 및 네이티브 스크롤 차단
+    const preventScroll = (e: TouchEvent) => e.preventDefault()
+    el.addEventListener('touchmove', preventScroll, { passive: false })
+
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
       if (e.deltaY > 30) goTo(activeIndex + 1)
       else if (e.deltaY < -30) goTo(activeIndex - 1)
     }
-    const el = containerRef.current
-    el?.addEventListener('wheel', handleWheel, { passive: false })
-    return () => el?.removeEventListener('wheel', handleWheel)
+    el.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      el.removeEventListener('touchmove', preventScroll)
+      el.removeEventListener('wheel', handleWheel)
+    }
   }, [activeIndex, goTo])
 
   if (isLoading) return <LoadingScreen />
@@ -100,16 +104,24 @@ export default function FeedPage() {
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          {posts.map((post) => (
-            <VideoCard
-              key={post.id}
-              post={post}
-              onLoginRequired={() => setShowLogin(true)}
-              onCommentClick={() => setCommentPostId(post.id)}
-              isMuted={isMuted}
-              onToggleMute={() => setIsMuted((m) => !m)}
-            />
-          ))}
+          <div
+            style={{
+              transform: `translateY(calc(-${activeIndex} * 100dvh))`,
+              transition: 'transform 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
+              willChange: 'transform',
+            }}
+          >
+            {posts.map((post) => (
+              <VideoCard
+                key={post.id}
+                post={post}
+                onLoginRequired={() => setShowLogin(true)}
+                onCommentClick={() => setCommentPostId(post.id)}
+                isMuted={isMuted}
+                onToggleMute={() => setIsMuted((m) => !m)}
+              />
+            ))}
+          </div>
         </div>
       </div>
       {showLogin && <LoginPromptSheet onClose={() => setShowLogin(false)} />}
