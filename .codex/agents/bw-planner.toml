@@ -1,3 +1,5 @@
+name = "bw-planner"
+description = "Project planning reviewer for roadmap, scope, and regulatory risk"
 model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"

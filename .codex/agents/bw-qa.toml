@@ -1,3 +1,5 @@
+name = "bw-qa"
+description = "Project QA reviewer for validation criteria, failure scenarios, and operational risk"
 model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"

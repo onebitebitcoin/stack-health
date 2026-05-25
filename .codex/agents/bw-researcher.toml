@@ -1,3 +1,5 @@
+name = "bw-researcher"
+description = "Project researcher for market, regulatory, Lightning, and video infrastructure evidence"
 model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"

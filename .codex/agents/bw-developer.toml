@@ -1,3 +1,5 @@
+name = "bw-developer"
+description = "Project developer reviewer for technical feasibility and implementation impact"
 model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"

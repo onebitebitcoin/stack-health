@@ -50,6 +50,16 @@ backend/alembic/__pycache__/
 **/.claude/
 .pytest_cache/
 **/.pytest_cache/
+.coverage
+coverage/
+**/coverage/
+playwright-report/
+**/playwright-report/
+test-results/
+**/test-results/
+e2e/screenshots/
+**/e2e/screenshots/
+.playwright-mcp/
 .codex/*
 !.codex/agents/
 !.codex/agents/**
