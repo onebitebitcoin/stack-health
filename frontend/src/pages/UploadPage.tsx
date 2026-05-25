@@ -4,7 +4,7 @@ import { Upload, ChevronRight, Trophy, Flame, Share2, Mic, MicOff, SkipForward }
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
 import { FFmpeg } from '@ffmpeg/ffmpeg'
-import { fetchFile, toBlobURL } from '@ffmpeg/util'
+import { fetchFile } from '@ffmpeg/util'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
 
@@ -39,11 +39,10 @@ async function mergeWithFFmpeg(
     const ffmpeg = new FFmpeg()
     ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message))
 
-    const baseURL = '/ffmpeg'
     onLog('[FFmpeg] 코어 로딩 중...')
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      coreURL: `${window.location.origin}/ffmpeg/ffmpeg-core.js`,
+      wasmURL: `${window.location.origin}/ffmpeg/ffmpeg-core.wasm`,
     })
     onLog('[FFmpeg] 코어 로드 완료')
 
