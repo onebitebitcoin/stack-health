@@ -10,11 +10,12 @@ test.describe('업로드 플로우', () => {
     await page.goto('/upload')
     await page.screenshot({ path: 'e2e/screenshots/07-upload-step0.png', fullPage: true })
 
-    await expect(page.locator('text=영상 선택')).toBeVisible()
-    await expect(page.locator('text=태그')).toBeVisible()
-    await expect(page.locator('text=챌린지')).toBeVisible()
-    await expect(page.locator('text=음성 녹음')).toBeVisible()
-    await expect(page.locator('text=설명')).toBeVisible()
+    const stepBar = page.locator('[data-testid="step-bar"]')
+    await expect(stepBar.locator('text=영상 선택')).toBeVisible()
+    await expect(stepBar.locator('text=태그')).toBeVisible()
+    await expect(stepBar.locator('text=챌린지')).toBeVisible()
+    await expect(stepBar.locator('text=음성 녹음')).toBeVisible()
+    await expect(stepBar.locator('text=설명')).toBeVisible()
   })
 
   test('업로드 Step 0: 파일 선택 UI', async ({ page }) => {

@@ -411,7 +411,7 @@ export default function UploadPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-1 p-4">
+      <div data-testid="step-bar" className="flex items-center gap-1 p-4">
         {STEPS.map((label, i) => (
           <div key={label} className="flex flex-1 flex-col items-center gap-1">
             <div
