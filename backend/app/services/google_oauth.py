@@ -10,10 +10,10 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
-def get_google_auth_url(state: str = "") -> str:
+def get_google_auth_url(base_url: str, state: str = "") -> str:
     params = {
         "client_id": settings.google_client_id,
-        "redirect_uri": f"{settings.app_base_url}/api/v1/auth/google/callback",
+        "redirect_uri": f"{base_url}/api/v1/auth/google/callback",
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline",
@@ -22,13 +22,13 @@ def get_google_auth_url(state: str = "") -> str:
     return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
 
-async def exchange_code(code: str) -> dict:
+async def exchange_code(code: str, base_url: str) -> dict:
     async with httpx.AsyncClient() as client:
         resp = await client.post(GOOGLE_TOKEN_URL, data={
             "code": code,
             "client_id": settings.google_client_id,
             "client_secret": settings.google_client_secret,
-            "redirect_uri": f"{settings.app_base_url}/api/v1/auth/google/callback",
+            "redirect_uri": f"{base_url}/api/v1/auth/google/callback",
             "grant_type": "authorization_code",
         })
         resp.raise_for_status()
