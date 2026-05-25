@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class AdminUserSchema(BaseModel):
     id: int
-    email: str
+    email: str | None
     username: str
     is_banned: bool
     is_admin: bool
@@ -16,7 +16,7 @@ class AdminUserSchema(BaseModel):
 
 class UserSchema(BaseModel):
     id: int
-    email: str
+    email: str | None
     username: str
     lightning_address: str | None
     avatar_url: str | None
