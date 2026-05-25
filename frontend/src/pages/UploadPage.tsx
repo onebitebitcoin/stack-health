@@ -33,13 +33,15 @@ async function mergeWithFFmpeg(videoFile: File, audio: Blob): Promise<File | nul
     await ffmpeg.writeFile('video.mp4', await fetchFile(videoFile))
     await ffmpeg.writeFile('audio.webm', await fetchFile(audio))
     await ffmpeg.exec([
-      '-stream_loop', '-1',
       '-i', 'video.mp4',
       '-i', 'audio.webm',
-      '-c:v', 'copy',
-      '-c:a', 'aac',
-      '-map', '0:v:0',
+      '-filter_complex', '[0:v]loop=loop=-1:size=32767:start=0[v]',
+      '-map', '[v]',
       '-map', '1:a:0',
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '28',
+      '-c:a', 'aac',
       '-shortest',
       'output.mp4',
     ])
