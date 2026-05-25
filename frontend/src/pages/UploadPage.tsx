@@ -189,29 +189,28 @@ export default function UploadPage() {
       const audioBlob = audioBlobRef.current
 
       if (audioBlob && audioBlob.size > 0) {
-        setUploading(false)
         setServerMerging(true)
         addLog(`[Merge] 서버 병합 시작: 음성 ${(audioBlob.size / 1024).toFixed(0)}KB`)
 
         const formData = new FormData()
         formData.append('video_r2_key', r2_key)
-        formData.append('audio', audioBlob, 'audio.webm')
+        formData.append('audio', new File([audioBlob], 'audio.webm', { type: 'audio/webm' }))
 
-        const mergeRes = await client.post<{
-          data: { r2_key: string; cdn_url: string; duration_sec: number }
-        }>('/videos/merge-audio', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          onUploadProgress: (e) => {
-            if (e.total) setProgress(40 + Math.round((e.loaded / e.total) * 30))
-          },
-        })
-        r2_key = mergeRes.data.data.r2_key
-        finalDurationSec = mergeRes.data.data.duration_sec
-        addLog(`[Merge] 완료: ${r2_key}, ${finalDurationSec}초`)
-        mergedR2KeyRef.current = r2_key
-        mergedDurationSecRef.current = finalDurationSec
-        setServerMerging(false)
-        setUploading(true)
+        try {
+          const mergeRes = await client.post<{
+            data: { r2_key: string; cdn_url: string; duration_sec: number }
+          }>('/videos/merge-audio', formData)
+          r2_key = mergeRes.data.data.r2_key
+          finalDurationSec = mergeRes.data.data.duration_sec
+          addLog(`[Merge] 완료: ${r2_key}, ${finalDurationSec}초`)
+        } catch (mergeErr: unknown) {
+          const mergeMsg =
+            (mergeErr as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+            '병합 실패 — 원본 영상으로 업로드합니다'
+          addLog(`[Merge] ERROR: ${mergeMsg}`)
+        } finally {
+          setServerMerging(false)
+        }
       }
 
       setProgress(75)
