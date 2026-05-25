@@ -1,11 +1,22 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Trophy, Users, CheckCircle, Lock } from 'lucide-react'
+import { Search, Trophy, Users, CheckCircle, Lock, Plus } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
 import { useAuthStore } from '../store/auth'
 import LoginPromptSheet from '../components/LoginPromptSheet'
 import LoadingScreen from '../components/LoadingScreen'
+
+const CATEGORIES = [
+  { value: 'strength', label: '근력' },
+  { value: 'cardio', label: '유산소' },
+  { value: 'flexibility', label: '유연성' },
+  { value: 'diet', label: '식단' },
+  { value: 'challenge', label: '도전' },
+  { value: 'social', label: '소셜' },
+  { value: 'beginner', label: '입문' },
+]
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr)
@@ -52,10 +63,24 @@ function ChallengeCard({
       </div>
 
       {/* 리워드 배지 */}
-      <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5">
+      <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5">
         <Trophy size={11} className="text-accent" />
         <span className="text-xs font-medium text-accent">{challenge.reward_title}</span>
       </div>
+
+      {/* 카테고리 뱃지 */}
+      {challenge.categories?.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1">
+          {challenge.categories.map((cat) => {
+            const label = CATEGORIES.find((c) => c.value === cat)?.label ?? cat
+            return (
+              <span key={cat} className="rounded-full bg-theme-surface2 px-2 py-0.5 text-[10px] text-theme-muted">
+                {label}
+              </span>
+            )
+          })}
+        </div>
+      )}
 
       {/* 진행 바 (참여 중일 때) */}
       {challenge.joined && (
@@ -101,15 +126,21 @@ function ChallengeCard({
 
 export default function ChallengePage() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
   const [q, setQ] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('')
   const [joiningId, setJoiningId] = useState<number | null>(null)
   const [showLogin, setShowLogin] = useState(false)
 
   const { data: challenges = [], isLoading } = useQuery<Challenge[]>({
-    queryKey: ['challenges', q],
+    queryKey: ['challenges', q, selectedCategory],
     queryFn: async () => {
       const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', {
-        params: q ? { q } : {},
+        params: {
+          ...(q ? { q } : {}),
+          ...(selectedCategory ? { category: selectedCategory } : {}),
+        },
       })
       return res.data.data.challenges
     },
@@ -129,9 +160,45 @@ export default function ChallengePage() {
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-20">
       {/* 헤더 */}
-      <div className="px-4 pt-5 pb-3">
-        <h1 className="text-lg font-bold text-theme-primary">챌린지</h1>
-        <p className="text-xs text-theme-muted mt-0.5">운동하고 타이틀을 획득하세요</p>
+      <div className="px-4 pt-5 pb-3 flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-theme-primary">챌린지</h1>
+          <p className="text-xs text-theme-muted mt-0.5">운동하고 타이틀을 획득하세요</p>
+        </div>
+        {user?.is_admin && (
+          <button onClick={() => navigate('/challenges/create')} className="rounded-full bg-accent p-1.5">
+            <Plus size={16} className="text-accent-fg" />
+          </button>
+        )}
+      </div>
+
+      {/* 카테고리 필터 */}
+      <div className="px-4 mb-3">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            onClick={() => setSelectedCategory('')}
+            className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              selectedCategory === ''
+                ? 'bg-accent text-accent-fg'
+                : 'bg-theme-surface text-theme-muted'
+            }`}
+          >
+            전체
+          </button>
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat.value}
+              onClick={() => setSelectedCategory(cat.value)}
+              className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                selectedCategory === cat.value
+                  ? 'bg-accent text-accent-fg'
+                  : 'bg-theme-surface text-theme-muted'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 검색 */}
@@ -153,7 +220,7 @@ export default function ChallengePage() {
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center px-6">
           <Trophy size={40} className="text-theme-surface2" strokeWidth={1} />
           <p className="text-sm text-theme-muted">
-            {q ? '검색 결과가 없어요' : '현재 진행 중인 챌린지가 없어요'}
+            {q || selectedCategory ? '검색 결과가 없어요' : '현재 진행 중인 챌린지가 없어요'}
           </p>
         </div>
       ) : (

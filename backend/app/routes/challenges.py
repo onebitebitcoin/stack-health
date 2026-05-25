@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.challenge import Challenge, ChallengeParticipation
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
-from app.schemas.challenge import ChallengeSchema, EarnedTitleSchema
+from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, EarnedTitleSchema
 
 router = APIRouter(prefix="/api/v1/challenges", tags=["challenges"])
 
@@ -46,6 +46,7 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
         start_date=challenge.start_date,
         end_date=challenge.end_date,
         is_active=challenge.is_active,
+        categories=challenge.categories or [],
         participant_count=participant_count,
         my_upload_count=my_upload_count,
         joined=joined,
@@ -56,6 +57,7 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
 @router.get("")
 def list_challenges(
     q: str | None = Query(None),
+    category: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ) -> dict:
@@ -63,8 +65,34 @@ def list_challenges(
     if q:
         query = query.filter(Challenge.title.ilike(f"%{q}%"))
     challenges = query.order_by(Challenge.start_date.desc()).all()
+    if category:
+        challenges = [c for c in challenges if category in (c.categories or [])]
     uid = current_user.id if current_user else None
     return {"data": {"challenges": [_to_schema(c, uid, db) for c in challenges]}}
+
+
+@router.post("")
+def create_challenge(
+    body: ChallengeCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="관리자만 챌린지를 생성할 수 있습니다")
+    challenge = Challenge(
+        title=body.title,
+        description=body.description,
+        reward_title=body.reward_title,
+        condition_value=body.condition_value,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        categories=body.categories,
+        is_active=True,
+    )
+    db.add(challenge)
+    db.commit()
+    db.refresh(challenge)
+    return {"data": {"challenge": _to_schema(challenge, current_user.id, db)}}
 
 
 @router.post("/{challenge_id}/join")

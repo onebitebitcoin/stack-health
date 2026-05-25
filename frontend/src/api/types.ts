@@ -129,6 +129,7 @@ export interface Challenge {
   my_upload_count: number
   joined: boolean
   completed: boolean
+  categories: string[]
 }
 
 export interface EarnedTitle {

@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage'
 import UploadPage from './pages/UploadPage'
 import RewardsPage from './pages/RewardsPage'
 import ChallengePage from './pages/ChallengePage'
+import ChallengeCreatePage from './pages/ChallengeCreatePage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
 import TermsPage from './pages/TermsPage'
@@ -71,6 +72,7 @@ function Layout() {
           }
         />
         <Route path="/challenges" element={<ChallengePage />} />
+        <Route path="/challenges/create" element={<ChallengeCreatePage />} />
         <Route
           path="/profile"
           element={

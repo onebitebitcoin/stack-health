@@ -12,12 +12,23 @@ class ChallengeSchema(BaseModel):
     start_date: datetime
     end_date: datetime
     is_active: bool
+    categories: list[str] = []
     participant_count: int = 0
     my_upload_count: int = 0
     joined: bool = False
     completed: bool = False
 
     model_config = {"from_attributes": True}
+
+
+class ChallengeCreateRequest(BaseModel):
+    title: str
+    description: str
+    reward_title: str
+    condition_value: int
+    start_date: datetime
+    end_date: datetime
+    categories: list[str] = []
 
 
 class ChallengeParticipationSchema(BaseModel):
