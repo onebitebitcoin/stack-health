@@ -35,7 +35,12 @@ export default function FeedPage() {
     (idx: number) => {
       if (idx < 0 || idx >= posts.length) return
       setActiveIndex(idx)
-      containerRef.current?.children[idx]?.scrollIntoView({ behavior: 'smooth' })
+      if (containerRef.current) {
+        containerRef.current.scrollTo({
+          top: idx * containerRef.current.clientHeight,
+          behavior: 'smooth',
+        })
+      }
       if (idx >= posts.length - 2 && hasNextPage) {
         fetchNextPage().catch(() => undefined)
       }
