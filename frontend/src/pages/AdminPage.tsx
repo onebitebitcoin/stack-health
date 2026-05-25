@@ -149,7 +149,8 @@ export default function AdminPage() {
   const [leaderboardItems, setLeaderboardItems] = useState<AdminWeeklySummaryItem[]>([])
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
 
-  if (!user?.is_admin) {
+  const isDev = import.meta.env.DEV
+  if (!isDev && !user?.is_admin) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page">
         <p className="text-theme-muted text-sm">관리자만 접근할 수 있습니다</p>

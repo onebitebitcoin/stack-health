@@ -165,7 +165,7 @@ export default function ChallengePage() {
           <h1 className="text-lg font-bold text-theme-primary">챌린지</h1>
           <p className="text-xs text-theme-muted mt-0.5">운동하고 타이틀을 획득하세요</p>
         </div>
-        {user?.is_admin && (
+        {user && (
           <button onClick={() => navigate('/challenges/create')} className="rounded-full bg-accent p-1.5">
             <Plus size={16} className="text-accent-fg" />
           </button>

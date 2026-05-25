@@ -18,6 +18,14 @@ const CATEGORIES = [
 export default function ChallengeCreatePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+
+  if (!user) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page">
+        <p className="text-theme-muted text-sm">로그인이 필요합니다</p>
+      </div>
+    )
+  }
   const [form, setForm] = useState({
     title: '',
     description: '',
