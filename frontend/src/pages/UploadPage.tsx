@@ -22,21 +22,9 @@ async function sha256(file: File | Blob): Promise<string> {
     .join('')
 }
 
-async function getMediaDuration(blob: Blob): Promise<number> {
-  return new Promise((resolve) => {
-    const el = document.createElement('video')
-    const url = URL.createObjectURL(blob)
-    el.addEventListener('loadedmetadata', () => { URL.revokeObjectURL(url); resolve(el.duration) })
-    el.addEventListener('error', () => { URL.revokeObjectURL(url); resolve(0) })
-    el.src = url
-    el.load()
-  })
-}
-
-async function mergeWithFFmpeg(videoFile: File, audio: Blob): Promise<File | null> {
+async function mergeWithFFmpeg(videoFile: File, audio: Blob, audioDurationSec: number): Promise<File | null> {
   try {
-    const audioDuration = await getMediaDuration(audio)
-    if (!audioDuration || audioDuration <= 0) return null
+    if (!audioDurationSec || audioDurationSec <= 0) return null
 
     const ffmpeg = new FFmpeg()
     ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message))
@@ -54,7 +42,7 @@ async function mergeWithFFmpeg(videoFile: File, audio: Blob): Promise<File | nul
       '-stream_loop', '-1',
       '-i', 'video.mp4',
       '-i', 'audio.webm',
-      '-t', String(audioDuration),
+      '-t', String(audioDurationSec),
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
       '-crf', '28',
@@ -152,7 +140,7 @@ export default function UploadPage() {
 
         if (file) {
           setFfmpegMerging(true)
-          const result = await mergeWithFFmpeg(file, blob)
+          const result = await mergeWithFFmpeg(file, blob, recordedSeconds)
           setMergedFile(result)
           setFfmpegMerging(false)
         }
