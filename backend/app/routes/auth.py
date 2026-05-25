@@ -22,6 +22,7 @@ from app.services.auth import (
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 bearer = HTTPBearer()
+bearer_optional = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
@@ -35,6 +36,18 @@ def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_optional),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if not credentials:
+        return None
+    user_id = decode_token(credentials.credentials)
+    if user_id is None:
+        return None
+    return get_user_by_id(db, user_id)
 
 
 @router.post("/register")

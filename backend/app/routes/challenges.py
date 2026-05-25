@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.challenge import Challenge, ChallengeParticipation
 from app.models.user import User
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.challenge import ChallengeSchema, EarnedTitleSchema
 
 router = APIRouter(prefix="/api/v1/challenges", tags=["challenges"])
@@ -57,7 +57,7 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
 def list_challenges(
     q: str | None = Query(None),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_user),
 ) -> dict:
     query = db.query(Challenge).filter(Challenge.is_active == True)  # noqa: E712
     if q:
