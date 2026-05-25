@@ -7,6 +7,9 @@ export async function registerAndLogin(page: Page) {
   const username = `user${ts}`
   const password = 'password123'
 
+  // 이메일 로그인 모드로 전환 (기본 화면은 OAuth 목록)
+  await page.click('text=이메일로 로그인')
+
   // 회원가입 모드로 전환
   await page.locator('text=계정이 없어요').click()
 

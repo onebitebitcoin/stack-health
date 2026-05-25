@@ -6,15 +6,16 @@ test.describe('인증 플로우', () => {
     await page.goto('/login')
     await page.screenshot({ path: 'e2e/screenshots/03-login.png', fullPage: true })
 
-    await expect(page.locator('input[type="email"]')).toBeVisible()
-    await expect(page.locator('input[type="password"]')).toBeVisible()
-    await expect(page.locator('text=운동하고 비트코인')).toBeVisible()
+    await expect(page.locator('input[type="email"]')).not.toBeVisible()  // email form hidden by default
+    await expect(page.locator('text=Stack Health')).toBeVisible()
+    await expect(page.locator('text=이메일로 로그인')).toBeVisible()
   })
 
   test('회원가입 폼 토글', async ({ page }) => {
     await page.goto('/login')
 
-    // 회원가입 모드 전환
+    // 이메일 모드 전환 후 회원가입 모드
+    await page.click('text=이메일로 로그인')
     await page.locator('text=계정이 없어요').click()
     await page.screenshot({ path: 'e2e/screenshots/04-register-form.png', fullPage: true })
 
@@ -29,9 +30,9 @@ test.describe('인증 플로우', () => {
     expect(page.url()).toMatch(/\/$/)
   })
 
-  test('업로드 탭 → 비로그인이면 로그인 페이지로 이동', async ({ page }) => {
+  test('업로드 버튼 → 비로그인이면 로그인 페이지로 이동', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('link', { name: '업로드' }).click()
+    await page.getByRole('button', { name: '운동 영상 올리기' }).click()
     await page.screenshot({ path: 'e2e/screenshots/06-upload-auth-gate.png', fullPage: true })
 
     expect(page.url()).toMatch(/upload|login/)
