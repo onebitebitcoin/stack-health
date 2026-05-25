@@ -5,16 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.config import settings
 from app.routes import auth, videos, feed, rewards, admin, comments, history, challenges, users
 
 app = FastAPI(title="운동하고 비트코인 받자", version="0.1.0")
 app.router.redirect_slashes = False
-
-# Railway 리버스 프록시의 X-Forwarded-Proto 헤더를 신뢰해 https:// 감지
-if settings.environment == "production":
-    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 app.add_middleware(
     CORSMiddleware,

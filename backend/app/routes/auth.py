@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -116,22 +116,20 @@ def update_me(
 # ── Google OAuth ──────────────────────────────────────────────────────
 
 @router.get("/google")
-def google_login(request: Request) -> RedirectResponse:
+def google_login() -> RedirectResponse:
     if not settings.google_client_id:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
-    base_url = str(request.base_url).rstrip("/")
-    url = get_google_auth_url(base_url=base_url)
+    url = get_google_auth_url()
     return RedirectResponse(url=url)
 
 
 @router.get("/google/callback")
-async def google_callback(request: Request, code: str, db: Session = Depends(get_db)) -> RedirectResponse:
-    base_url = str(request.base_url).rstrip("/")
+async def google_callback(code: str, db: Session = Depends(get_db)) -> RedirectResponse:
     try:
-        tokens = await exchange_code(code, base_url=base_url)
+        tokens = await exchange_code(code)
         user_info = await get_google_user_info(tokens["access_token"])
     except Exception:
-        return RedirectResponse(url=f"{base_url}/?error=google_auth_failed")
+        return RedirectResponse(url=f"{settings.app_base_url}/?error=google_auth_failed")
 
     google_sub = user_info.get("sub")
     email = user_info.get("email")
@@ -169,7 +167,7 @@ async def google_callback(request: Request, code: str, db: Session = Depends(get
         db.commit()
 
     token = create_access_token(user.id)
-    return RedirectResponse(url=f"{base_url}/?google_token={token}")
+    return RedirectResponse(url=f"{settings.app_base_url}/?google_token={token}")
 
 
 # ── LNAuth ────────────────────────────────────────────────────────────
