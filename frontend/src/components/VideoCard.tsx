@@ -25,6 +25,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   const [viewSent, setViewSent] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const [flashIcon, setFlashIcon] = useState<'play' | 'pause' | null>(null)
+  const [progress, setProgress] = useState(0)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const commentCount = post.comment_count ?? 0
 
@@ -56,6 +57,24 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = isMuted
   }, [isMuted])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    const onTimeUpdate = () => {
+      if (video.duration) setProgress((video.currentTime / video.duration) * 100)
+    }
+    video.addEventListener('timeupdate', onTimeUpdate)
+    return () => video.removeEventListener('timeupdate', onTimeUpdate)
+  }, [])
+
+  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const video = videoRef.current
+    if (!video || !video.duration) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const ratio = (e.clientX - rect.left) / rect.width
+    video.currentTime = ratio * video.duration
+  }, [])
 
   const handleTap = useCallback(() => {
     const video = videoRef.current
@@ -174,6 +193,20 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         </button>
 
         <PointBadge points={2} />
+      </div>
+
+      {/* 재생 진행 바 — 네비게이션 바 바로 위 */}
+      <div
+        className="absolute left-0 right-0 h-8 flex items-end cursor-pointer"
+        style={{ bottom: '4rem', zIndex: 5 }}
+        onClick={(e) => { e.stopPropagation(); handleSeek(e) }}
+      >
+        <div className="w-full h-0.5 bg-white/30">
+          <div
+            className="h-full bg-white transition-none"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
 
       {/* bottom overlay */}
