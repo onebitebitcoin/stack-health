@@ -39,7 +39,7 @@ async function mergeWithFFmpeg(
     const ffmpeg = new FFmpeg()
     ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message))
 
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
+    const baseURL = '/ffmpeg'
     onLog('[FFmpeg] 코어 로딩 중...')
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
