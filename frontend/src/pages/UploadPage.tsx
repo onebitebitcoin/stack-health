@@ -219,13 +219,31 @@ export default function UploadPage() {
       addLog(`[R2] presigned URL 발급: ${r2_key}`)
 
       // 2. 영상 R2 업로드
-      await axios.put(upload_url, file, {
-        headers: { 'Content-Type': contentType },
-        onUploadProgress: (e) => {
-          if (e.total) setProgress(Math.round((e.loaded / e.total) * 40))
-        },
-      })
-      addLog('[R2] 영상 업로드 완료')
+      try {
+        await axios.put(upload_url, file, {
+          headers: { 'Content-Type': contentType },
+          onUploadProgress: (e) => {
+            if (e.total) setProgress(Math.round((e.loaded / e.total) * 40))
+          },
+        })
+        addLog('[R2] 영상 업로드 완료')
+      } catch (r2Err: unknown) {
+        const e = r2Err as {
+          response?: { status?: number; data?: unknown }
+          message?: string
+          code?: string
+        }
+        const status = e.response?.status
+        const body = e.response?.data
+        const bodyStr = typeof body === 'string'
+          ? body.slice(0, 300)
+          : body instanceof Object
+          ? JSON.stringify(body).slice(0, 300)
+          : '(empty)'
+        addLog(`[R2] PUT 실패 — status=${status ?? 'N/A'} code=${e.code ?? 'N/A'} msg="${e.message ?? ''}"`)
+        addLog(`[R2] 응답 body: ${bodyStr}`)
+        throw new Error(`R2 업로드 실패 (HTTP ${status ?? 'network error'}): ${e.message ?? ''}`)
+      }
 
       // 3. 오디오가 녹음됐으면 서버에서 merge
       let finalDurationSec: number | null = null
@@ -289,10 +307,15 @@ export default function UploadPage() {
       setPointsEarned(confirmRes.data.data.points_earned)
       setDone(true)
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        '업로드 실패'
-      addLog(`[Upload] ERROR: ${msg}`)
+      const e = err as {
+        response?: { status?: number; data?: { detail?: string } }
+        message?: string
+        code?: string
+      }
+      const status = e.response?.status
+      const detail = e.response?.data?.detail
+      const msg = detail ?? (err instanceof Error ? err.message : '업로드 실패')
+      addLog(`[Upload] ERROR: ${msg} (status=${status ?? 'N/A'}, code=${e.code ?? 'N/A'})`)
       setError(msg)
       setServerMerging(false)
     } finally {
