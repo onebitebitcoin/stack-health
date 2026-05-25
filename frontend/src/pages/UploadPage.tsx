@@ -21,6 +21,24 @@ function getSupportedAudioMimeType(): string {
   return PREFERRED_AUDIO_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? ''
 }
 
+const EXT_TO_MIME: Record<string, string> = {
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  m4v: 'video/x-m4v',
+  '3gp': 'video/3gpp',
+  '3gpp': 'video/3gpp',
+  mkv: 'video/x-matroska',
+  mpeg: 'video/mpeg',
+  mpg: 'video/mpeg',
+}
+
+function resolveContentType(file: File): string {
+  if (file.type) return file.type
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+  return EXT_TO_MIME[ext] ?? 'video/mp4'
+}
+
 async function sha256(file: File | Blob): Promise<string> {
   const buffer = await file.arrayBuffer()
   const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
@@ -179,7 +197,8 @@ export default function UploadPage() {
     setUploading(true)
     try {
       // 1. 영상 R2 presigned URL 발급
-      addLog(`[Upload] 영상: ${file.name}, ${(file.size / 1024).toFixed(0)}KB`)
+      const contentType = resolveContentType(file)
+      addLog(`[Upload] 영상: ${file.name}, ${(file.size / 1024).toFixed(0)}KB, type=${contentType}`)
       const hash = await sha256(file)
       addLog(`[Upload] SHA-256: ${hash.slice(0, 12)}...`)
 
@@ -187,7 +206,7 @@ export default function UploadPage() {
         data: { upload_url: string; r2_key: string }
       }>('/videos/presigned-url', {
         filename: file.name,
-        content_type: file.type,
+        content_type: contentType,
         file_size: file.size,
         file_hash: hash,
       })
@@ -197,7 +216,7 @@ export default function UploadPage() {
 
       // 2. 영상 R2 업로드
       await axios.put(upload_url, file, {
-        headers: { 'Content-Type': file.type },
+        headers: { 'Content-Type': contentType },
         onUploadProgress: (e) => {
           if (e.total) setProgress(Math.round((e.loaded / e.total) * 40))
         },

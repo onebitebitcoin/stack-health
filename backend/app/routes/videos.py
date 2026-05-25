@@ -39,9 +39,14 @@ def get_presigned_url(
     db: Session = Depends(get_db),
 ) -> dict:
     if req.content_type not in r2_service.ALLOWED_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail="Unsupported content type")
+        logger.warning(
+            "Unsupported content type: %s from user_id=%s",
+            req.content_type,
+            current_user.id,
+        )
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식입니다: {req.content_type}")
     if req.file_size > r2_service.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File too large (max 50MB)")
+        raise HTTPException(status_code=400, detail="파일이 너무 큽니다 (최대 50MB)")
 
     if db.query(Video).filter(Video.file_hash == req.file_hash).first():
         raise HTTPException(status_code=409, detail="Duplicate video")

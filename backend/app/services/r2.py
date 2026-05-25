@@ -7,7 +7,16 @@ from app.config import settings
 
 PRESIGNED_URL_EXPIRES = 900  # 15 minutes
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-ALLOWED_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
+ALLOWED_CONTENT_TYPES = {
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
+    "video/x-m4v",
+    "video/3gpp",
+    "video/3gpp2",
+    "video/mpeg",
+    "video/x-matroska",
+}
 
 
 def get_r2_client():
