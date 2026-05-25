@@ -1,9 +1,11 @@
 import json
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.config import settings as app_settings
 from app.database import get_db
 from app.models.post import Post
 from app.models.user import User
@@ -17,6 +19,7 @@ from app.schemas.video import (
     PresignedUrlResponse,
 )
 from app.services import r2 as r2_service
+from app.services.job_queue import enqueue_merge_job, enqueue_merge_job_local, get_job_status
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
     POINTS_PER_UPLOAD,
@@ -222,77 +225,68 @@ async def merge_audio(
     audio: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """R2에 업로드된 비디오와 오디오를 서버에서 ffmpeg으로 병합한다."""
-    import os
-    import subprocess
-    import tempfile
-    import uuid
+    """오디오+비디오 병합 잡을 외부 워커 큐에 등록한다."""
+    if audio_duration_sec <= 0 or audio_duration_sec > 35:
+        raise HTTPException(status_code=400, detail="오디오 길이가 올바르지 않습니다")
 
-    from app.config import settings as app_settings
+    logger.info("merge_audio enqueue: user_id=%s video_r2_key=%s", current_user.id, video_r2_key)
 
-    logger.info("merge_audio: user_id=%s video_r2_key=%s", current_user.id, video_r2_key)
+    content_type = audio.content_type or "audio/webm"
+    ext = "mp4" if content_type == "audio/mp4" else "webm"
+    audio_r2_key = f"audio/{uuid.uuid4()}.{ext}"
 
-    tmp_video = tmp_audio = tmp_output = None
     try:
-        tmp_video = tempfile.mktemp(suffix=".mp4")
-        audio_suffix = ".mp4" if audio.content_type == "audio/mp4" else ".webm"
-        tmp_audio = tempfile.mktemp(suffix=audio_suffix)
-        tmp_output = tempfile.mktemp(suffix=".mp4")
-
-        if audio_duration_sec <= 0 or audio_duration_sec > 35:
-            raise HTTPException(status_code=400, detail="오디오 길이가 올바르지 않습니다")
-        audio_duration = float(audio_duration_sec)
-
-        # 오디오 저장
         audio_bytes = await audio.read()
-        with open(tmp_audio, "wb") as f:
-            f.write(audio_bytes)
-
-        # R2에서 비디오 다운로드
         client = r2_service.get_r2_client()
-        response = client.get_object(Bucket=app_settings.r2_bucket_name, Key=video_r2_key)
-        with open(tmp_video, "wb") as f:
-            f.write(response["Body"].read())
+        client.put_object(
+            Bucket=app_settings.r2_bucket_name,
+            Key=audio_r2_key,
+            Body=audio_bytes,
+            ContentType=content_type,
+        )
+    except Exception as e:
+        logger.error("오디오 R2 업로드 실패: %s", e)
+        raise HTTPException(status_code=500, detail="오디오 업로드에 실패했습니다")
 
-        # ffmpeg: 짧은 영상을 오디오 길이만큼 루프 후 병합.
-        # 비디오는 재인코딩하지 않고 원본 스트림을 복사해 업로드된 영상 품질을 보존한다.
-        # 녹음 오디오는 MP4 호환을 위해 AAC로만 변환하되 충분한 비트레이트를 명시한다.
-        cmd = [
-            "ffmpeg", "-y",
-            "-stream_loop", "-1",
-            "-i", tmp_video,
-            "-i", tmp_audio,
-            "-t", str(audio_duration),
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-b:a", "256k",
-            "-ar", "48000",
-            "-ac", "2",
-            "-map", "0:v:0",
-            "-map", "1:a:0",
-            "-movflags", "+faststart",
-            tmp_output,
-        ]
-        result = subprocess.run(cmd, capture_output=True, timeout=120)
-        if result.returncode != 0:
-            logger.error("ffmpeg failed: %s", result.stderr.decode())
-            raise HTTPException(status_code=500, detail="오디오 병합 실패")
+    job_payload = {
+        "user_id": current_user.id,
+        "video_r2_key": video_r2_key,
+        "audio_r2_key": audio_r2_key,
+        "audio_duration_sec": audio_duration_sec,
+        "audio_content_type": content_type,
+    }
 
-        # 병합된 파일을 R2에 업로드
-        merged_key = f"videos/merged-{uuid.uuid4()}.mp4"
-        with open(tmp_output, "rb") as f:
-            client.put_object(
-                Bucket=app_settings.r2_bucket_name,
-                Key=merged_key,
-                Body=f,
-                ContentType="video/mp4",
-            )
+    try:
+        job_id = enqueue_merge_job(job_payload)
+    except Exception as e:
+        # Redis 불가 → Railway 서버에서 직접 ffmpeg 처리 (fallback)
+        logger.warning("Redis 큐 실패 (%s) — 로컬 fallback 처리", type(e).__name__)
+        try:
+            job_id = enqueue_merge_job_local(job_payload)
+        except Exception as fb_err:
+            logger.error("로컬 fallback 실패: %s", fb_err)
+            raise HTTPException(status_code=500, detail="영상 처리에 실패했습니다")
 
-        cdn_url = r2_service.get_cdn_url(merged_key)
-        logger.info("merge_audio: done key=%s duration=%.1fs", merged_key, audio_duration)
-        return {"data": {"r2_key": merged_key, "cdn_url": cdn_url, "duration_sec": int(audio_duration)}}
+    return {"data": {"job_id": job_id, "status": "processing"}}
 
-    finally:
-        for tmp in [tmp_video, tmp_audio, tmp_output]:
-            if tmp and os.path.exists(tmp):
-                os.unlink(tmp)
+
+@router.get("/merge-job/{job_id}")
+def get_merge_job_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """merge-audio 잡 상태를 폴링한다."""
+    job = get_job_status(job_id)  # 로컬 스토어 → Redis 순 확인, 예외 없음
+
+    if job is None:
+        raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+
+    return {
+        "data": {
+            "job_id": job_id,
+            "status": job.get("status", "unknown"),
+            "r2_key": job.get("output_r2_key", ""),
+            "cdn_url": job.get("cdn_url", ""),
+            "error": job.get("error", ""),
+        }
+    }

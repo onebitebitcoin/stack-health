@@ -223,66 +223,19 @@ def test_delete_post_forbidden(client: TestClient) -> None:
     assert res.status_code == 403
 
 
+@patch("app.services.job_queue.get_redis_client")
 @patch("app.routes.videos.r2_service.get_r2_client")
-@patch("subprocess.run")
-def test_merge_audio_success(mock_subprocess, mock_get_client, client: TestClient) -> None:
+def test_merge_audio_enqueues_job(mock_get_r2, mock_get_redis, client: TestClient) -> None:
     from unittest.mock import MagicMock
 
     token = _register_and_token(client, "ma@x.com", "mauser")
 
-    # Mock R2 client
     mock_s3 = MagicMock()
-    mock_s3.get_object.return_value = {"Body": MagicMock(read=lambda: b"fake_video_data")}
     mock_s3.put_object.return_value = {}
-    mock_get_client.return_value = mock_s3
+    mock_get_r2.return_value = mock_s3
 
-    # subprocess.run: ffmpeg creates output file
-    def fake_subprocess(cmd, **kwargs):
-        output_path = cmd[-1]
-        with open(output_path, "wb") as f:
-            f.write(b"fake_merged_video")
-        return MagicMock(returncode=0, stderr=b"")
-
-    mock_subprocess.side_effect = fake_subprocess
-
-    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn.example.com/videos/merged.mp4"):
-        res = client.post(
-            "/api/v1/videos/merge-audio",
-            data={"video_r2_key": "videos/test.mp4", "audio_duration_sec": "10"},
-            files={"audio": ("audio.webm", b"fake_audio_data", "audio/webm")},
-            headers=_auth(token),
-        )
-
-    assert res.status_code == 200
-    data = res.json()["data"]
-    assert data["r2_key"].startswith("videos/merged-")
-    assert "cdn_url" in data
-    assert data["duration_sec"] == 10
-    ffmpeg_cmd = mock_subprocess.call_args.args[0]
-    assert ffmpeg_cmd[ffmpeg_cmd.index("-c:v") + 1] == "copy"
-    assert "-preset" not in ffmpeg_cmd
-    assert "-crf" not in ffmpeg_cmd
-    assert ffmpeg_cmd[ffmpeg_cmd.index("-c:a") + 1] == "aac"
-    assert ffmpeg_cmd[ffmpeg_cmd.index("-b:a") + 1] == "256k"
-    assert ffmpeg_cmd[ffmpeg_cmd.index("-ar") + 1] == "48000"
-    assert ffmpeg_cmd[ffmpeg_cmd.index("-ac") + 1] == "2"
-
-
-@patch("app.routes.videos.r2_service.get_r2_client")
-@patch("subprocess.run")
-def test_merge_audio_ffmpeg_failure(mock_subprocess, mock_get_client, client: TestClient) -> None:
-    from unittest.mock import MagicMock
-
-    token = _register_and_token(client, "maf@x.com", "mafuser")
-
-    mock_s3 = MagicMock()
-    mock_s3.get_object.return_value = {"Body": MagicMock(read=lambda: b"fake_video_data")}
-    mock_get_client.return_value = mock_s3
-
-    def fake_subprocess(cmd, **kwargs):
-        return MagicMock(returncode=1, stderr=b"some ffmpeg error")
-
-    mock_subprocess.side_effect = fake_subprocess
+    mock_r = MagicMock()
+    mock_get_redis.return_value = mock_r
 
     res = client.post(
         "/api/v1/videos/merge-audio",
@@ -291,8 +244,81 @@ def test_merge_audio_ffmpeg_failure(mock_subprocess, mock_get_client, client: Te
         headers=_auth(token),
     )
 
-    assert res.status_code == 500
-    assert "병합 실패" in res.json()["detail"]
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert "job_id" in data
+    assert data["status"] == "processing"
+    mock_r.lpush.assert_called_once()
+
+
+def test_merge_audio_no_redis_url(client: TestClient) -> None:
+    """REDIS_URL 미설정 시 로컬 fallback 처리 → 200 반환."""
+    from unittest.mock import MagicMock
+    import app.services.job_queue as jq
+
+    token = _register_and_token(client, "ma2@x.com", "mauser2")
+
+    with patch("app.routes.videos.r2_service.get_r2_client") as mock_r2, \
+         patch("app.routes.videos.enqueue_merge_job_local", return_value="fallback-job-id") as mock_local:
+        mock_s3 = MagicMock()
+        mock_s3.put_object.return_value = {}
+        mock_r2.return_value = mock_s3
+
+        original_url = jq.settings.redis_url
+        jq.settings.redis_url = ""
+        try:
+            res = client.post(
+                "/api/v1/videos/merge-audio",
+                data={"video_r2_key": "videos/test.mp4", "audio_duration_sec": "10"},
+                files={"audio": ("audio.webm", b"fake_audio_data", "audio/webm")},
+                headers=_auth(token),
+            )
+        finally:
+            jq.settings.redis_url = original_url
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["job_id"] == "fallback-job-id"
+    assert data["status"] == "processing"
+    mock_local.assert_called_once()
+
+
+@patch("app.services.job_queue.get_redis_client")
+def test_get_merge_job_status_not_found(mock_get_redis, client: TestClient) -> None:
+    from unittest.mock import MagicMock
+
+    token = _register_and_token(client, "mj@x.com", "mjuser")
+
+    mock_r = MagicMock()
+    mock_r.hgetall.return_value = {}
+    mock_get_redis.return_value = mock_r
+
+    res = client.get("/api/v1/videos/merge-job/nonexistent-id", headers=_auth(token))
+    assert res.status_code == 404
+
+
+@patch("app.services.job_queue.get_redis_client")
+def test_get_merge_job_status_pending(mock_get_redis, client: TestClient) -> None:
+    from unittest.mock import MagicMock
+
+    token = _register_and_token(client, "mj2@x.com", "mjuser2")
+
+    mock_r = MagicMock()
+    mock_r.hgetall.return_value = {
+        "status": "pending",
+        "user_id": "1",
+        "video_r2_key": "videos/test.mp4",
+        "audio_r2_key": "audio/test.webm",
+        "created_at": "2026-01-01T00:00:00+00:00",
+    }
+    mock_get_redis.return_value = mock_r
+
+    job_id = "test-job-id-123"
+    res = client.get(f"/api/v1/videos/merge-job/{job_id}", headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["job_id"] == job_id
+    assert data["status"] == "pending"
 
 
 def test_merge_audio_unauthenticated(client: TestClient) -> None:
