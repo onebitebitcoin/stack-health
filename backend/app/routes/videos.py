@@ -1,13 +1,15 @@
 import json
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.post import Post
+from app.models.user import User
 from app.models.video import Video
 from app.routes.auth import get_current_user
-from app.models.user import User
+from app.routes.challenges import increment_challenge_upload
 from app.schemas.video import (
     ConfirmUploadRequest,
     PostSchema,
@@ -21,7 +23,8 @@ from app.services.reward import (
     add_points,
     get_daily_upload_count,
 )
-from app.routes.challenges import increment_challenge_upload
+
+logger = logging.getLogger(__name__)
 
 ALLOWED_TAGS = {"홈트", "러닝", "요가", "웨이트", "기타"}
 
@@ -174,3 +177,79 @@ def delete_post(
             pass  # R2 deletion failure is non-fatal
 
     return {"data": {"deleted": post_id}}
+
+
+@router.post("/merge-audio")
+async def merge_audio(
+    video_r2_key: str = Form(...),
+    audio: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """이미 R2에 업로드된 비디오에 오디오를 병합한다. (테스트용 - CPU 집약적 작업)"""
+    import os
+    import subprocess
+    import tempfile
+
+    logger.info("merge_audio: user_id=%s video_r2_key=%s", current_user.id, video_r2_key)
+
+    tmp_video = None
+    tmp_audio = None
+    tmp_output = None
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+            tmp_video = f.name
+        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+            tmp_audio = f.name
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+            tmp_output = f.name
+
+        from app.config import settings as app_settings
+
+        # R2에서 비디오 다운로드
+        client = r2_service.get_r2_client()
+        response = client.get_object(Bucket=app_settings.r2_bucket_name, Key=video_r2_key)
+        with open(tmp_video, "wb") as f:
+            f.write(response["Body"].read())
+
+        # 업로드된 오디오 저장
+        audio_bytes = await audio.read()
+        with open(tmp_audio, "wb") as f:
+            f.write(audio_bytes)
+
+        # ffmpeg으로 병합
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", tmp_video,
+            "-i", tmp_audio,
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-shortest",
+            tmp_output,
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
+        if result.returncode != 0:
+            logger.error("ffmpeg failed: %s", result.stderr.decode())
+            raise HTTPException(status_code=500, detail="오디오 병합 실패")
+
+        # 병합된 파일을 R2에 업로드
+        merged_key = f"merged/{video_r2_key.split('/')[-1]}"
+        with open(tmp_output, "rb") as f:
+            client.put_object(
+                Bucket=app_settings.r2_bucket_name,
+                Key=merged_key,
+                Body=f,
+                ContentType="video/mp4",
+            )
+
+        cdn_url = r2_service.get_cdn_url(merged_key)
+        logger.info("merge_audio: merged uploaded as %s", merged_key)
+        return {"data": {"r2_key": merged_key, "cdn_url": cdn_url}}
+
+    finally:
+        for tmp in [tmp_video, tmp_audio, tmp_output]:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)

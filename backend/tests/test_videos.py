@@ -166,3 +166,67 @@ def test_delete_post_forbidden(client: TestClient) -> None:
     post_id = post_res.json()["data"]["post"]["id"]
     res = client.delete(f"/api/v1/videos/posts/{post_id}", headers=_auth(token_other))
     assert res.status_code == 403
+
+
+@patch("app.routes.videos.r2_service.get_r2_client")
+@patch("subprocess.run")
+def test_merge_audio_success(mock_subprocess, mock_get_client, client: TestClient) -> None:
+    from unittest.mock import MagicMock
+
+    token = _register_and_token(client, "ma@x.com", "mauser")
+
+    # Mock R2 download
+    mock_s3 = MagicMock()
+    mock_s3.get_object.return_value = {"Body": MagicMock(read=lambda: b"fake_video_data")}
+    mock_s3.put_object.return_value = {}
+    mock_get_client.return_value = mock_s3
+
+    # Mock ffmpeg success
+    mock_subprocess.return_value = MagicMock(returncode=0, stderr=b"")
+
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn.example.com/merged/test.mp4"):
+        res = client.post(
+            "/api/v1/videos/merge-audio",
+            data={"video_r2_key": "videos/test.mp4"},
+            files={"audio": ("audio.webm", b"fake_audio_data", "audio/webm")},
+            headers=_auth(token),
+        )
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["r2_key"] == "merged/test.mp4"
+    assert "cdn_url" in data
+
+
+@patch("app.routes.videos.r2_service.get_r2_client")
+@patch("subprocess.run")
+def test_merge_audio_ffmpeg_failure(mock_subprocess, mock_get_client, client: TestClient) -> None:
+    from unittest.mock import MagicMock
+
+    token = _register_and_token(client, "maf@x.com", "mafuser")
+
+    mock_s3 = MagicMock()
+    mock_s3.get_object.return_value = {"Body": MagicMock(read=lambda: b"fake_video_data")}
+    mock_get_client.return_value = mock_s3
+
+    # Mock ffmpeg failure
+    mock_subprocess.return_value = MagicMock(returncode=1, stderr=b"some ffmpeg error")
+
+    res = client.post(
+        "/api/v1/videos/merge-audio",
+        data={"video_r2_key": "videos/test.mp4"},
+        files={"audio": ("audio.webm", b"fake_audio_data", "audio/webm")},
+        headers=_auth(token),
+    )
+
+    assert res.status_code == 500
+    assert "병합 실패" in res.json()["detail"]
+
+
+def test_merge_audio_unauthenticated(client: TestClient) -> None:
+    res = client.post(
+        "/api/v1/videos/merge-audio",
+        data={"video_r2_key": "videos/test.mp4"},
+        files={"audio": ("audio.webm", b"data", "audio/webm")},
+    )
+    assert res.status_code in (401, 403)

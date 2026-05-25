@@ -1,22 +1,55 @@
-import { useState, useRef, type ChangeEvent } from 'react'
+import { useState, useRef, useEffect, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, ChevronRight, Trophy, Flame, Share2 } from 'lucide-react'
+import { Upload, ChevronRight, Trophy, Flame, Share2, Mic, MicOff, SkipForward } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
+import { FFmpeg } from '@ffmpeg/ffmpeg'
+import { fetchFile, toBlobURL } from '@ffmpeg/util'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
 
 const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as const
 type Tag = (typeof ALLOWED_TAGS)[number]
 
-const STEPS = ['영상 선택', '태그', '챌린지', '설명'] as const
+const STEPS = ['영상 선택', '태그', '챌린지', '음성 녹음', '설명'] as const
+const MAX_RECORD_SECONDS = 15
 
-async function sha256(file: File): Promise<string> {
+async function sha256(file: File | Blob): Promise<string> {
   const buffer = await file.arrayBuffer()
   const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
+}
+
+async function mergeWithFFmpeg(videoFile: File, audio: Blob): Promise<File | null> {
+  try {
+    const ffmpeg = new FFmpeg()
+    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+    })
+    await ffmpeg.writeFile('video.mp4', await fetchFile(videoFile))
+    await ffmpeg.writeFile('audio.webm', await fetchFile(audio))
+    await ffmpeg.exec([
+      '-i', 'video.mp4',
+      '-i', 'audio.webm',
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-map', '0:v:0',
+      '-map', '1:a:0',
+      '-shortest',
+      'output.mp4',
+    ])
+    const data = await ffmpeg.readFile('output.mp4')
+    if (typeof data === 'string') return null
+    // SharedArrayBuffer → 일반 ArrayBuffer 복사 (BlobPart 호환)
+    const plain: ArrayBuffer = new Uint8Array(data).buffer as ArrayBuffer
+    return new File([plain], 'merged.mp4', { type: 'video/mp4' })
+  } catch {
+    return null
+  }
 }
 
 export default function UploadPage() {
@@ -34,6 +67,26 @@ export default function UploadPage() {
   const [pointsEarned, setPointsEarned] = useState(0)
   const [error, setError] = useState('')
 
+  // 음성 녹음 상태
+  const audioBlobRef = useRef<Blob | null>(null)
+  const [mergedFile, setMergedFile] = useState<File | null>(null)
+  const [ffmpegMerging, setFfmpegMerging] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const [recordedSeconds, setRecordedSeconds] = useState(0)
+
+  // 녹음 관련 ref (stale closure 방지)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+    }
+  }, [])
+
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
@@ -46,6 +99,79 @@ export default function UploadPage() {
     setSelectedTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     )
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      audioChunksRef.current = []
+      setRecordedSeconds(0)
+
+      const mr = new MediaRecorder(stream)
+      mediaRecorderRef.current = mr
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      mr.onstop = async () => {
+        streamRef.current?.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        audioBlobRef.current = blob
+        setRecording(false)
+
+        if (file) {
+          setFfmpegMerging(true)
+          const result = await mergeWithFFmpeg(file, blob)
+          setMergedFile(result)
+          setFfmpegMerging(false)
+        }
+        setStep(4)
+      }
+
+      mr.start()
+      setRecording(true)
+
+      intervalRef.current = setInterval(() => {
+        setRecordedSeconds((prev) => {
+          const next = prev + 1
+          if (next >= MAX_RECORD_SECONDS) {
+            if (intervalRef.current) clearInterval(intervalRef.current)
+            mediaRecorderRef.current?.stop()
+          }
+          return next
+        })
+      }, 1000)
+    } catch {
+      setError('마이크 접근 권한이 필요합니다.')
+    }
+  }
+
+  function stopRecording() {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+    mediaRecorderRef.current?.stop()
+  }
+
+  function skipRecording() {
+    if (recording) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      mediaRecorderRef.current?.stop()
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+      setRecording(false)
+    }
+    audioBlobRef.current = null
+    setMergedFile(null)
+    setStep(4)
   }
 
   const { data: myChallenges = [] } = useQuery<Challenge[]>({
@@ -61,20 +187,21 @@ export default function UploadPage() {
     setError('')
     setUploading(true)
     try {
-      const hash = await sha256(file)
+      const uploadTarget = mergedFile ?? file
+      const hash = await sha256(uploadTarget)
 
       const presignRes = await client.post<{
         data: { upload_url: string; r2_key: string }
       }>('/videos/presigned-url', {
-        filename: file.name,
-        content_type: file.type,
-        file_size: file.size,
+        filename: uploadTarget.name,
+        content_type: uploadTarget.type,
+        file_size: uploadTarget.size,
         file_hash: hash,
       })
       const { upload_url, r2_key } = presignRes.data.data
 
-      await axios.put(upload_url, file, {
-        headers: { 'Content-Type': file.type },
+      await axios.put(upload_url, uploadTarget, {
+        headers: { 'Content-Type': uploadTarget.type },
         onUploadProgress: (e) => {
           if (e.total) setProgress(Math.round((e.loaded / e.total) * 100))
         },
@@ -112,7 +239,6 @@ export default function UploadPage() {
 
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
-        {/* 증명 카드 */}
         <div className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-700 p-6 shadow-2xl">
           <div className="flex items-center gap-2 mb-4">
             <Flame size={20} className="text-orange-400" />
@@ -130,7 +256,6 @@ export default function UploadPage() {
           <p className="mt-3 text-center text-xs text-zinc-600">Stack Health</p>
         </div>
 
-        {/* 액션 버튼 */}
         <div className="flex w-full max-w-sm flex-col gap-3">
           <button
             onClick={() => {
@@ -156,6 +281,8 @@ export default function UploadPage() {
     )
   }
 
+  const progressPct = (recordedSeconds / MAX_RECORD_SECONDS) * 100
+
   return (
     <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-16">
       {uploading && (
@@ -169,6 +296,13 @@ export default function UploadPage() {
             />
           </div>
           <p className="text-sm text-theme-muted">{progress}%</p>
+        </div>
+      )}
+
+      {ffmpegMerging && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <p className="text-sm text-theme-muted">음성과 영상을 합치는 중...</p>
         </div>
       )}
 
@@ -290,6 +424,72 @@ export default function UploadPage() {
       )}
 
       {step === 3 && (
+        <div className="flex flex-1 flex-col px-6 pt-4 gap-4">
+          {previewUrl && (
+            <video
+              src={previewUrl}
+              className="h-48 w-full rounded-xl object-cover"
+              muted
+              autoPlay
+              loop
+              playsInline
+            />
+          )}
+
+          <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-4">
+            <div>
+              <p className="font-semibold text-theme-primary">음성 녹음 (선택)</p>
+              <p className="text-xs text-theme-muted mt-1">영상을 보며 목소리를 녹음하세요</p>
+            </div>
+
+            <div className="flex flex-col items-center gap-3">
+              {!recording ? (
+                <button
+                  onClick={startRecording}
+                  className="flex items-center gap-2 rounded-xl bg-accent px-6 py-3 font-semibold text-accent-fg"
+                >
+                  <Mic size={18} />
+                  녹음 시작
+                </button>
+              ) : (
+                <button
+                  onClick={stopRecording}
+                  className="flex items-center gap-2 rounded-xl bg-red-600 px-6 py-3 font-semibold text-white"
+                >
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                  <MicOff size={18} />
+                  {String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:
+                  {String(recordedSeconds % 60).padStart(2, '0')}
+                </button>
+              )}
+
+              <div className="w-full h-1.5 rounded-full bg-theme-surface2 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-red-500 transition-all duration-1000"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              {recording && (
+                <p className="text-xs text-theme-muted">{MAX_RECORD_SECONDS - recordedSeconds}초 남음</p>
+              )}
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          <div className="mt-auto flex gap-3">
+            <button
+              onClick={skipRecording}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
+            >
+              <SkipForward size={16} />
+              건너뛰기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 4 && (
         <div className="flex flex-1 flex-col px-6 pt-4">
           <p className="mb-3 font-semibold text-theme-primary">설명을 추가하세요 (선택)</p>
           <textarea
