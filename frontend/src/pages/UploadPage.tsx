@@ -20,23 +20,7 @@ function getSupportedAudioMimeType(): string {
   return PREFERRED_AUDIO_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? ''
 }
 
-const EXT_TO_MIME: Record<string, string> = {
-  mp4: 'video/mp4',
-  mov: 'video/quicktime',
-  webm: 'video/webm',
-  m4v: 'video/x-m4v',
-  '3gp': 'video/3gpp',
-  '3gpp': 'video/3gpp',
-  mkv: 'video/x-matroska',
-  mpeg: 'video/mpeg',
-  mpg: 'video/mpeg',
-}
 
-function resolveContentType(file: File): string {
-  if (file.type) return file.type
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-  return EXT_TO_MIME[ext] ?? 'video/mp4'
-}
 
 async function sha256(file: File | Blob): Promise<string> {
   const buffer = await file.arrayBuffer()
@@ -68,13 +52,6 @@ export default function UploadPage() {
   const [serverMerging, setServerMerging] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordedSeconds, setRecordedSeconds] = useState(0)
-  const [debugLogs, setDebugLogs] = useState<string[]>([])
-
-  const addLog = (msg: string) => {
-    const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false })
-    setDebugLogs((prev) => [...prev, `${ts} ${msg}`])
-  }
-
   // 녹음 관련 ref (stale closure 방지)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -215,10 +192,7 @@ export default function UploadPage() {
     setUploading(true)
     try {
       // 1. 영상 서버 경유 R2 업로드 (CORS 우회)
-      const contentType = resolveContentType(file)
-      addLog(`[Upload] 영상: ${file.name}, ${(file.size / 1024).toFixed(0)}KB, type=${contentType}`)
       const hash = await sha256(file)
-      addLog(`[Upload] SHA-256: ${hash.slice(0, 12)}...`)
 
       const uploadForm = new FormData()
       uploadForm.append('file', file, file.name)
@@ -233,7 +207,6 @@ export default function UploadPage() {
         },
       })
       let { r2_key } = uploadRes.data.data
-      addLog(`[R2] 영상 업로드 완료: ${r2_key}`)
 
       // 3. 오디오가 녹음됐으면 서버에서 merge
       let finalDurationSec: number | null = null
@@ -243,9 +216,6 @@ export default function UploadPage() {
         setServerMerging(true)
         const audioMimeType = audioBlob.type || audioMimeTypeRef.current || 'audio/webm'
         const audioExt = audioMimeType.includes('mp4') ? 'mp4' : 'webm'
-        addLog(
-          `[Merge] 서버 병합 시작: 음성 ${(audioBlob.size / 1024).toFixed(0)}KB (${audioMimeType}, ${AUDIO_BITS_PER_SECOND / 1000}kbps)`,
-        )
 
         const formData = new FormData()
         formData.append('video_r2_key', r2_key)
@@ -257,7 +227,6 @@ export default function UploadPage() {
             data: { job_id: string; status: string }
           }>('/videos/merge-audio', formData)
           const jobId = enqueueRes.data.data.job_id
-          addLog(`[Merge] 잡 등록 완료: ${jobId}, 워커 처리 대기 중...`)
 
           // 잡 완료까지 폴링 (최대 120초, 3초 간격)
           const MAX_POLLS = 40
@@ -266,27 +235,18 @@ export default function UploadPage() {
             const pollRes = await client.get<{
               data: { job_id: string; status: string; r2_key: string; cdn_url: string; error: string }
             }>(`/videos/merge-job/${jobId}`)
-            const { status, r2_key: mergedKey, error: jobError } = pollRes.data.data
-            addLog(`[Merge] 폴링 ${i + 1}/${MAX_POLLS}: ${status}`)
+            const { status, r2_key: mergedKey } = pollRes.data.data
 
             if (status === 'completed') {
               r2_key = mergedKey
               finalDurationSec = recordedSecondsRef.current
-              addLog(`[Merge] 완료: ${r2_key}, ${finalDurationSec}초`)
               break
             } else if (status === 'failed') {
-              addLog(`[Merge] ERROR: 워커 처리 실패 — ${jobError ?? '알 수 없는 오류'}, 원본 영상으로 업로드합니다`)
               break
             }
-            if (i === MAX_POLLS - 1) {
-              addLog(`[Merge] ERROR: 타임아웃 — 원본 영상으로 업로드합니다`)
-            }
           }
-        } catch (mergeErr: unknown) {
-          const mergeMsg =
-            (mergeErr as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-            '병합 실패 — 원본 영상으로 업로드합니다'
-          addLog(`[Merge] ERROR: ${mergeMsg}`)
+        } catch {
+          // merge 실패 시 원본 영상으로 업로드
         } finally {
           setServerMerging(false)
         }
@@ -304,7 +264,6 @@ export default function UploadPage() {
           videoEl.onerror = () => resolve(10)
         })
       }
-      addLog(`[Upload] 최종 영상 길이: ${duration}초`)
 
       // 5. confirm
       const confirmRes = await client.post<{ data: { points_earned: number } }>('/videos/confirm', {
@@ -316,7 +275,6 @@ export default function UploadPage() {
         challenge_id: selectedChallengeId,
       })
       setProgress(100)
-      addLog(`[R2] DB 등록 완료, +${confirmRes.data.data.points_earned}pt`)
       setPointsEarned(confirmRes.data.data.points_earned)
       setDone(true)
     } catch (err: unknown) {
@@ -325,10 +283,8 @@ export default function UploadPage() {
         message?: string
         code?: string
       }
-      const status = e.response?.status
       const detail = e.response?.data?.detail
       const msg = detail ?? (err instanceof Error ? err.message : '업로드 실패')
-      addLog(`[Upload] ERROR: ${msg} (status=${status ?? 'N/A'}, code=${e.code ?? 'N/A'})`)
       setError(msg)
       setServerMerging(false)
     } finally {
