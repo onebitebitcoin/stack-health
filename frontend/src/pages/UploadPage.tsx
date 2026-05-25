@@ -94,6 +94,7 @@ export default function UploadPage() {
   const audioChunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const recordedSecondsRef = useRef(0)
 
   useEffect(() => {
     return () => {
@@ -121,6 +122,7 @@ export default function UploadPage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       audioChunksRef.current = []
+      recordedSecondsRef.current = 0
       setRecordedSeconds(0)
 
       const mr = new MediaRecorder(stream)
@@ -140,7 +142,7 @@ export default function UploadPage() {
 
         if (file) {
           setFfmpegMerging(true)
-          const result = await mergeWithFFmpeg(file, blob, recordedSeconds)
+          const result = await mergeWithFFmpeg(file, blob, recordedSecondsRef.current)
           setMergedFile(result)
           setFfmpegMerging(false)
         }
@@ -153,6 +155,7 @@ export default function UploadPage() {
       intervalRef.current = setInterval(() => {
         setRecordedSeconds((prev) => {
           const next = prev + 1
+          recordedSecondsRef.current = next
           if (next >= MAX_RECORD_SECONDS) {
             if (intervalRef.current) clearInterval(intervalRef.current)
             mediaRecorderRef.current?.stop()
