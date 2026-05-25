@@ -38,8 +38,6 @@ export default function UploadPage() {
 
   // 음성 녹음 상태
   const audioBlobRef = useRef<Blob | null>(null)
-  const mergedR2KeyRef = useRef<string | null>(null)
-  const mergedDurationSecRef = useRef<number | null>(null)
   const [serverMerging, setServerMerging] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordedSeconds, setRecordedSeconds] = useState(0)
