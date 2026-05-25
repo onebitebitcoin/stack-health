@@ -67,11 +67,14 @@ export interface AdminVideo {
 
 export interface AdminUser {
   id: number
-  email: string
+  email: string | null
   username: string
   is_banned: boolean
   is_admin: boolean
   video_count: number
+  total_points: number
+  challenge_count: number
+  lightning_address: string | null
   created_at: string
 }
 

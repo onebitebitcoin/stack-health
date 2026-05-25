@@ -1,16 +1,17 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.database import get_db
 from app.models.admin_log import AdminLog
+from app.models.challenge import ChallengeParticipation
 from app.models.claim import LightningClaim
 from app.models.reward import RewardPoint
 from app.models.video import Video
 from app.models.user import User
+from app.routes.auth import get_current_user
 from app.schemas.reward import ClaimSchema, ClaimWithUserSchema
 from app.schemas.video import VideoSchema
 from app.services.reward import get_week_label, points_to_sats
@@ -18,9 +19,10 @@ from app.services.reward import get_week_label, points_to_sats
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-def require_admin(x_admin_key: str = Header(...)) -> None:
-    if x_admin_key != settings.admin_secret_key:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+    return current_user
 
 
 @router.get("/claims")
@@ -28,7 +30,7 @@ def list_claims(
     status: Optional[str] = None,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: None = Depends(require_admin),
+    _: User = Depends(require_admin),
 ) -> dict:
     query = db.query(LightningClaim)
     if status:
@@ -53,7 +55,7 @@ def mark_paid(
     claim_id: int,
     payment_memo: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: None = Depends(require_admin),
+    _: User = Depends(require_admin),
 ) -> dict:
     claim = db.query(LightningClaim).filter(LightningClaim.id == claim_id).first()
     if claim is None:
@@ -70,7 +72,7 @@ def mark_paid(
 @router.get("/videos")
 def list_videos(
     db: Session = Depends(get_db),
-    _: None = Depends(require_admin),
+    _: User = Depends(require_admin),
 ) -> dict:
     videos = db.query(Video).order_by(Video.created_at.desc()).all()
     result = []
@@ -93,7 +95,7 @@ def list_videos(
 def reject_video(
     video_id: int,
     db: Session = Depends(get_db),
-    _: None = Depends(require_admin),
+    _: User = Depends(require_admin),
 ) -> dict:
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
@@ -109,7 +111,7 @@ def reject_video(
 def delete_video(
     video_id: int,
     db: Session = Depends(get_db),
-    _: None = Depends(require_admin),
+    _: User = Depends(require_admin),
 ) -> dict:
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
@@ -129,23 +131,36 @@ def delete_video(
 @router.get("/users")
 def list_users(
     db: Session = Depends(get_db),
-    _: None = Depends(require_admin),
+    _: User = Depends(require_admin),
 ) -> dict:
     users = db.query(User).order_by(User.created_at.desc()).all()
     result = []
     for u in users:
         video_count = (
-            db.query(Video)
+            db.query(func.count(Video.id))
             .filter(Video.user_id == u.id, Video.status == "active")
-            .count()
+            .scalar() or 0
+        )
+        total_points = (
+            db.query(func.sum(RewardPoint.points))
+            .filter(RewardPoint.user_id == u.id)
+            .scalar() or 0
+        )
+        challenge_count = (
+            db.query(func.count(ChallengeParticipation.id))
+            .filter(ChallengeParticipation.user_id == u.id)
+            .scalar() or 0
         )
         result.append({
             "id": u.id,
             "email": u.email,
             "username": u.username,
+            "lightning_address": u.lightning_address,
             "is_banned": u.is_banned,
             "is_admin": u.is_admin,
             "video_count": video_count,
+            "total_points": total_points,
+            "challenge_count": challenge_count,
             "created_at": u.created_at.isoformat(),
         })
     return {"data": {"users": result}}
@@ -155,7 +170,7 @@ def list_users(
 def toggle_ban(
     user_id: int,
     db: Session = Depends(get_db),
-    _: None = Depends(require_admin),
+    _: User = Depends(require_admin),
 ) -> dict:
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
@@ -173,17 +188,109 @@ def toggle_ban(
     return {"data": {"user_id": user_id, "is_banned": user.is_banned}}
 
 
+@router.get("/users/{user_id}")
+def get_user_detail(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> dict:
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    videos = (
+        db.query(Video)
+        .filter(Video.user_id == user_id)
+        .order_by(Video.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    participations = (
+        db.query(ChallengeParticipation)
+        .filter(ChallengeParticipation.user_id == user_id)
+        .order_by(ChallengeParticipation.joined_at.desc())
+        .all()
+    )
+
+    points_by_week = (
+        db.query(RewardPoint.week_label, func.sum(RewardPoint.points).label("pts"))
+        .filter(RewardPoint.user_id == user_id)
+        .group_by(RewardPoint.week_label)
+        .order_by(RewardPoint.week_label.desc())
+        .limit(10)
+        .all()
+    )
+
+    claims = (
+        db.query(LightningClaim)
+        .filter(LightningClaim.user_id == user_id)
+        .order_by(LightningClaim.created_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    return {
+        "data": {
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "lightning_address": user.lightning_address,
+                "is_banned": user.is_banned,
+                "is_admin": user.is_admin,
+                "created_at": user.created_at.isoformat(),
+            },
+            "videos": [
+                {
+                    "id": v.id,
+                    "cdn_url": v.cdn_url,
+                    "status": v.status,
+                    "created_at": v.created_at.isoformat(),
+                }
+                for v in videos
+            ],
+            "challenges": [
+                {
+                    "challenge_id": p.challenge_id,
+                    "title": p.challenge.title if p.challenge else "",
+                    "upload_count": p.upload_count,
+                    "condition_value": p.challenge.condition_value if p.challenge else 0,
+                    "completed": p.completed_at is not None,
+                    "joined_at": p.joined_at.isoformat(),
+                }
+                for p in participations
+            ],
+            "points_by_week": [
+                {"week_label": row.week_label, "points": row.pts}
+                for row in points_by_week
+            ],
+            "claims": [
+                {
+                    "id": c.id,
+                    "week_label": c.week_label,
+                    "points_used": c.points_used,
+                    "satoshi_amount": c.satoshi_amount,
+                    "ln_address": c.ln_address,
+                    "status": c.status,
+                    "created_at": c.created_at.isoformat(),
+                }
+                for c in claims
+            ],
+        }
+    }
+
+
 @router.get("/weekly-summary")
 def weekly_summary(
     week_label: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     db: Session = Depends(get_db),
-    _: None = Depends(require_admin),
+    _: User = Depends(require_admin),
 ) -> dict:
     wlabel = week_label or get_week_label()
 
-    # 해당 주 포인트가 있는 비밴 유저의 총합 집계
     base_query = (
         db.query(
             RewardPoint.user_id,
