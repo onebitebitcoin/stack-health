@@ -186,6 +186,15 @@ export interface UserProfile {
   active_challenges: ActiveChallenge[]
 }
 
+export interface ProfilePost {
+  id: number
+  cdn_url: string
+  like_count: number
+  view_count: number
+  caption: string | null
+  created_at: string
+}
+
 export interface MyStats {
   total_posts: number
   total_points: number

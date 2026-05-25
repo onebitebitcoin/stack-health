@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LogOut, Zap, Check, Moon, Sun, Droplets } from 'lucide-react'
+import { LogOut, Zap, Check, Moon, Sun, Droplets, Heart, Video } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { useThemeStore, type Theme } from '../store/theme'
-import type { MyStats } from '../api/types'
+import type { MyStats, ProfilePost } from '../api/types'
 import LoadingScreen from '../components/LoadingScreen'
 
 
@@ -41,6 +41,15 @@ export default function ProfilePage() {
     queryFn: async () => {
       const res = await client.get<{ data: MyStats }>('/me/stats')
       return res.data.data
+    },
+    enabled: !!user,
+  })
+
+  const { data: myPosts = [] } = useQuery<ProfilePost[]>({
+    queryKey: ['my-posts', user?.id],
+    queryFn: async () => {
+      const res = await client.get<{ data: { posts: ProfilePost[] } }>(`/users/${user!.id}/profile`)
+      return res.data.data.posts
     },
     enabled: !!user,
   })
@@ -92,6 +101,45 @@ export default function ProfilePage() {
           <span className="text-lg font-medium text-theme-muted ml-1">ml</span>
         </span>
         <span className="text-xs text-theme-muted mt-0.5">내가 흘린 땀</span>
+      </div>
+
+      {/* ── 내 영상 그리드 ── */}
+      <div className="mx-4 mb-4">
+        <p className="text-[10px] font-medium uppercase tracking-widest text-theme-muted px-1 mb-2">
+          내 영상 ({myPosts.length})
+        </p>
+        {myPosts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-theme-surface py-8">
+            <Video size={28} className="text-theme-muted" strokeWidth={1.5} />
+            <p className="text-sm text-theme-muted">아직 업로드한 영상이 없어요</p>
+            <Link
+              to="/upload"
+              className="mt-1 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white"
+            >
+              첫 영상 올리기
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-0.5 rounded-xl overflow-hidden">
+            {myPosts.map((post) => (
+              <div key={post.id} className="relative aspect-[9/16] bg-theme-surface2">
+                <video
+                  src={post.cdn_url}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-1 left-1 flex items-center gap-0.5">
+                  <Heart size={10} className="text-white" fill="white" />
+                  <span className="text-[10px] font-semibold text-white drop-shadow">
+                    {post.like_count}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Lightning 주소 ── */}
