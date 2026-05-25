@@ -238,7 +238,7 @@ export default function AdminPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-theme-primary">Admin</h1>
-          <p className="text-xs text-theme-muted">@{user.username}</p>
+          <p className="text-xs text-theme-muted">@{user?.username}</p>
         </div>
       </div>
 
