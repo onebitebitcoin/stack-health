@@ -51,6 +51,7 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
         my_upload_count=my_upload_count,
         joined=joined,
         completed=completed,
+        creator_id=challenge.creator_id,
     )
 
 
@@ -86,6 +87,7 @@ def create_challenge(
         end_date=body.end_date,
         categories=body.categories,
         is_active=True,
+        creator_id=current_user.id,
     )
     db.add(challenge)
     db.commit()
@@ -93,38 +95,41 @@ def create_challenge(
     return {"data": {"challenge": _to_schema(challenge, current_user.id, db)}}
 
 
-@router.post("/{challenge_id}/join")
-def join_challenge(
-    challenge_id: int,
+@router.get("/created")
+def my_created_challenges(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
-    if not challenge:
-        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
-    if not challenge.is_active:
-        raise HTTPException(status_code=400, detail="종료된 챌린지입니다")
-
-    existing = (
-        db.query(ChallengeParticipation)
-        .filter(
-            ChallengeParticipation.challenge_id == challenge_id,
-            ChallengeParticipation.user_id == current_user.id,
+    challenges = (
+        db.query(Challenge)
+        .filter(Challenge.creator_id == current_user.id)
+        .order_by(Challenge.created_at.desc())
+        .all()
+    )
+    result = []
+    for c in challenges:
+        participant_count = (
+            db.query(func.count(ChallengeParticipation.id))
+            .filter(ChallengeParticipation.challenge_id == c.id)
+            .scalar()
+            or 0
         )
-        .first()
-    )
-    if existing:
-        raise HTTPException(status_code=409, detail="이미 참여 중인 챌린지입니다")
-
-    participation = ChallengeParticipation(
-        user_id=current_user.id,
-        challenge_id=challenge_id,
-        upload_count=0,
-    )
-    db.add(participation)
-    db.commit()
-    db.refresh(participation)
-    return {"data": {"joined": True, "challenge_id": challenge_id}}
+        completed_count = (
+            db.query(func.count(ChallengeParticipation.id))
+            .filter(
+                ChallengeParticipation.challenge_id == c.id,
+                ChallengeParticipation.completed_at != None,  # noqa: E711
+            )
+            .scalar()
+            or 0
+        )
+        schema = _to_schema(c, current_user.id, db)
+        result.append({
+            **schema.model_dump(),
+            "participant_count": participant_count,
+            "completed_count": completed_count,
+        })
+    return {"data": {"challenges": result}}
 
 
 @router.get("/my")
@@ -168,6 +173,85 @@ def my_titles(
         for p in completed
     ]
     return {"data": {"titles": titles}}
+
+
+@router.post("/{challenge_id}/join")
+def join_challenge(
+    challenge_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+    if not challenge.is_active:
+        raise HTTPException(status_code=400, detail="종료된 챌린지입니다")
+
+    existing = (
+        db.query(ChallengeParticipation)
+        .filter(
+            ChallengeParticipation.challenge_id == challenge_id,
+            ChallengeParticipation.user_id == current_user.id,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="이미 참여 중인 챌린지입니다")
+
+    participation = ChallengeParticipation(
+        user_id=current_user.id,
+        challenge_id=challenge_id,
+        upload_count=0,
+    )
+    db.add(participation)
+    db.commit()
+    db.refresh(participation)
+    return {"data": {"joined": True, "challenge_id": challenge_id}}
+
+
+@router.get("/{challenge_id}/participants")
+def challenge_participants(
+    challenge_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+    if challenge.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="챌린지 생성자만 접근할 수 있습니다")
+    participations = (
+        db.query(ChallengeParticipation)
+        .filter(ChallengeParticipation.challenge_id == challenge_id)
+        .order_by(
+            ChallengeParticipation.completed_at.desc().nulls_last(),
+            ChallengeParticipation.upload_count.desc(),
+        )
+        .all()
+    )
+    result = []
+    for p in participations:
+        user = db.query(User).filter(User.id == p.user_id).first()
+        progress = (
+            min(100, round((p.upload_count / challenge.condition_value) * 100))
+            if challenge.condition_value > 0
+            else 0
+        )
+        result.append({
+            "user_id": p.user_id,
+            "username": user.username if user else "",
+            "upload_count": p.upload_count,
+            "condition_value": challenge.condition_value,
+            "completed_at": p.completed_at.isoformat() if p.completed_at else None,
+            "joined_at": p.joined_at.isoformat(),
+            "progress": progress,
+        })
+    return {
+        "data": {
+            "challenge": _to_schema(challenge, current_user.id, db).model_dump(),
+            "participants": result,
+        }
+    }
 
 
 def increment_challenge_upload(db: Session, user_id: int, challenge_id: int) -> None:

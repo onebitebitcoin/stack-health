@@ -18,14 +18,6 @@ const CATEGORIES = [
 export default function ChallengeCreatePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-
-  if (!user) {
-    return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page">
-        <p className="text-theme-muted text-sm">로그인이 필요합니다</p>
-      </div>
-    )
-  }
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -57,10 +49,10 @@ export default function ChallengeCreatePage() {
     )
   }
 
-  if (!user?.is_admin) {
+  if (!user) {
     return (
-      <div className="flex h-[100dvh] items-center justify-center">
-        <p className="text-sm text-theme-muted">관리자만 접근할 수 있습니다</p>
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page">
+        <p className="text-theme-muted text-sm">로그인이 필요합니다</p>
       </div>
     )
   }

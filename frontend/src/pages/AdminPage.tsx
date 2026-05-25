@@ -149,7 +149,65 @@ export default function AdminPage() {
   const [leaderboardItems, setLeaderboardItems] = useState<AdminWeeklySummaryItem[]>([])
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
 
-  if (!user?.is_admin) {
+  const isAdmin = user?.is_admin ?? false
+
+  const { data: users = [], isLoading: usersLoading, isError: usersError } = useQuery<AdminUser[]>({
+    queryKey: ['admin-users'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { users: AdminUser[] } }>('/admin/users')
+      return res.data.data.users
+    },
+    enabled: isAdmin && activeTab === 'users',
+  })
+
+  const toggleBan = useMutation({
+    mutationFn: (id: number) => client.patch(`/admin/users/${id}/ban`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }).catch(() => undefined),
+  })
+
+  const { data: videos = [], isLoading: videosLoading, isError: videosError } = useQuery<AdminVideo[]>({
+    queryKey: ['admin-videos'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { videos: AdminVideo[] } }>('/admin/videos')
+      return res.data.data.videos
+    },
+    enabled: isAdmin && activeTab === 'videos',
+  })
+
+  const deleteVideo = useMutation({
+    mutationFn: (id: number) => client.delete(`/admin/videos/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-videos'] }).catch(() => undefined),
+  })
+
+  const { data: claims = [] } = useQuery<AdminClaim[]>({
+    queryKey: ['admin-claims'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { claims: AdminClaim[] } }>('/admin/claims')
+      return res.data.data.claims ?? []
+    },
+    enabled: isAdmin && activeTab === 'rewards',
+  })
+
+  const markPaid = useMutation({
+    mutationFn: (id: number) => client.patch(`/admin/claims/${id}/mark-paid`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-claims'] }).catch(() => undefined),
+  })
+
+  const { data: leaderboardData } = useQuery<AdminWeeklySummaryResponse>({
+    queryKey: ['admin-weekly-summary', weekOffset, leaderboardPage],
+    queryFn: async () => {
+      const weekLabel = getWeekLabel(weekOffset)
+      const res = await client.get<{ data: AdminWeeklySummaryResponse }>('/admin/weekly-summary', {
+        params: { week_label: weekLabel, page: leaderboardPage, limit: 20 },
+      })
+      if (leaderboardPage === 1) setLeaderboardItems(res.data.data.items)
+      else setLeaderboardItems((prev) => [...prev, ...res.data.data.items])
+      return res.data.data
+    },
+    enabled: isAdmin && activeTab === 'rewards',
+  })
+
+  if (!isAdmin) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page">
         <p className="text-theme-muted text-sm">관리자만 접근할 수 있습니다</p>
@@ -175,62 +233,6 @@ export default function AdminPage() {
     failed: '실패',
     cancelled: '취소',
   }
-
-  const { data: users = [], isLoading: usersLoading, isError: usersError } = useQuery<AdminUser[]>({
-    queryKey: ['admin-users'],
-    queryFn: async () => {
-      const res = await client.get<{ data: { users: AdminUser[] } }>('/admin/users')
-      return res.data.data.users
-    },
-    enabled: activeTab === 'users',
-  })
-
-  const toggleBan = useMutation({
-    mutationFn: (id: number) => client.patch(`/admin/users/${id}/ban`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }).catch(() => undefined),
-  })
-
-  const { data: videos = [], isLoading: videosLoading, isError: videosError } = useQuery<AdminVideo[]>({
-    queryKey: ['admin-videos'],
-    queryFn: async () => {
-      const res = await client.get<{ data: { videos: AdminVideo[] } }>('/admin/videos')
-      return res.data.data.videos
-    },
-    enabled: activeTab === 'videos',
-  })
-
-  const deleteVideo = useMutation({
-    mutationFn: (id: number) => client.delete(`/admin/videos/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-videos'] }).catch(() => undefined),
-  })
-
-  const { data: claims = [] } = useQuery<AdminClaim[]>({
-    queryKey: ['admin-claims'],
-    queryFn: async () => {
-      const res = await client.get<{ data: { claims: AdminClaim[] } }>('/admin/claims')
-      return res.data.data.claims ?? []
-    },
-    enabled: activeTab === 'rewards',
-  })
-
-  const markPaid = useMutation({
-    mutationFn: (id: number) => client.patch(`/admin/claims/${id}/mark-paid`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-claims'] }).catch(() => undefined),
-  })
-
-  const { data: leaderboardData } = useQuery<AdminWeeklySummaryResponse>({
-    queryKey: ['admin-weekly-summary', weekOffset, leaderboardPage],
-    queryFn: async () => {
-      const weekLabel = getWeekLabel(weekOffset)
-      const res = await client.get<{ data: AdminWeeklySummaryResponse }>('/admin/weekly-summary', {
-        params: { week_label: weekLabel, page: leaderboardPage, limit: 20 },
-      })
-      if (leaderboardPage === 1) setLeaderboardItems(res.data.data.items)
-      else setLeaderboardItems((prev) => [...prev, ...res.data.data.items])
-      return res.data.data
-    },
-    enabled: activeTab === 'rewards',
-  })
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
