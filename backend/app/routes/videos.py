@@ -184,28 +184,41 @@ async def merge_audio(
     video_r2_key: str = Form(...),
     audio: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> dict:
-    """이미 R2에 업로드된 비디오에 오디오를 병합한다. (테스트용 - CPU 집약적 작업)"""
+    """R2에 업로드된 비디오와 오디오를 서버에서 ffmpeg으로 병합한다."""
     import os
     import subprocess
     import tempfile
+    import uuid
+
+    from app.config import settings as app_settings
 
     logger.info("merge_audio: user_id=%s video_r2_key=%s", current_user.id, video_r2_key)
 
-    tmp_video = None
-    tmp_audio = None
-    tmp_output = None
-
+    tmp_video = tmp_audio = tmp_output = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
-            tmp_video = f.name
-        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
-            tmp_audio = f.name
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
-            tmp_output = f.name
+        tmp_video = tempfile.mktemp(suffix=".mp4")
+        tmp_audio = tempfile.mktemp(suffix=".webm")
+        tmp_output = tempfile.mktemp(suffix=".mp4")
 
-        from app.config import settings as app_settings
+        # 오디오 저장
+        audio_bytes = await audio.read()
+        with open(tmp_audio, "wb") as f:
+            f.write(audio_bytes)
+
+        # 오디오 길이 측정
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", tmp_audio],
+            capture_output=True, text=True, timeout=10,
+        )
+        try:
+            audio_duration = float(probe.stdout.strip())
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="오디오 길이를 읽을 수 없습니다")
+
+        if audio_duration <= 0 or audio_duration > 35:
+            raise HTTPException(status_code=400, detail="오디오 길이가 올바르지 않습니다")
 
         # R2에서 비디오 다운로드
         client = r2_service.get_r2_client()
@@ -213,21 +226,19 @@ async def merge_audio(
         with open(tmp_video, "wb") as f:
             f.write(response["Body"].read())
 
-        # 업로드된 오디오 저장
-        audio_bytes = await audio.read()
-        with open(tmp_audio, "wb") as f:
-            f.write(audio_bytes)
-
-        # ffmpeg으로 병합
+        # ffmpeg: 짧은 영상을 오디오 길이만큼 루프 후 병합
         cmd = [
             "ffmpeg", "-y",
+            "-stream_loop", "-1",
             "-i", tmp_video,
             "-i", tmp_audio,
-            "-c:v", "copy",
+            "-t", str(audio_duration),
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "28",
             "-c:a", "aac",
             "-map", "0:v:0",
             "-map", "1:a:0",
-            "-shortest",
             tmp_output,
         ]
         result = subprocess.run(cmd, capture_output=True, timeout=120)
@@ -236,7 +247,7 @@ async def merge_audio(
             raise HTTPException(status_code=500, detail="오디오 병합 실패")
 
         # 병합된 파일을 R2에 업로드
-        merged_key = f"merged/{video_r2_key.split('/')[-1]}"
+        merged_key = f"videos/merged-{uuid.uuid4()}.mp4"
         with open(tmp_output, "rb") as f:
             client.put_object(
                 Bucket=app_settings.r2_bucket_name,
@@ -246,8 +257,8 @@ async def merge_audio(
             )
 
         cdn_url = r2_service.get_cdn_url(merged_key)
-        logger.info("merge_audio: merged uploaded as %s", merged_key)
-        return {"data": {"r2_key": merged_key, "cdn_url": cdn_url}}
+        logger.info("merge_audio: done key=%s duration=%.1fs", merged_key, audio_duration)
+        return {"data": {"r2_key": merged_key, "cdn_url": cdn_url, "duration_sec": int(audio_duration)}}
 
     finally:
         for tmp in [tmp_video, tmp_audio, tmp_output]:

@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { Upload, ChevronRight, Trophy, Flame, Share2, Mic, MicOff, SkipForward } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { FFmpeg } from '@ffmpeg/ffmpeg'
-import { fetchFile } from '@ffmpeg/util'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
 
@@ -22,67 +20,6 @@ async function sha256(file: File | Blob): Promise<string> {
     .join('')
 }
 
-async function mergeWithFFmpeg(
-  videoFile: File,
-  audio: Blob,
-  audioDurationSec: number,
-  onLog: (msg: string) => void,
-): Promise<File | null> {
-  try {
-    if (!audioDurationSec || audioDurationSec <= 0) {
-      onLog(`[FFmpeg] SKIP: audioDurationSec=${audioDurationSec}`)
-      return null
-    }
-
-    onLog(`[FFmpeg] 시작: 녹음 ${audioDurationSec}초, 영상 ${(videoFile.size / 1024).toFixed(0)}KB`)
-
-    const ffmpeg = new FFmpeg()
-    ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message))
-
-    onLog('[FFmpeg] 코어 로딩 중...')
-    await ffmpeg.load({
-      coreURL: `${window.location.origin}/ffmpeg/ffmpeg-core.js`,
-      wasmURL: `${window.location.origin}/ffmpeg/ffmpeg-core.wasm`,
-    })
-    onLog('[FFmpeg] 코어 로드 완료')
-
-    await ffmpeg.writeFile('video.mp4', await fetchFile(videoFile))
-    await ffmpeg.writeFile('audio.webm', await fetchFile(audio))
-
-    onLog(`[FFmpeg] exec: -stream_loop -1 -t ${audioDurationSec} -c:v libx264`)
-    const ret = await ffmpeg.exec([
-      '-stream_loop', '-1',
-      '-i', 'video.mp4',
-      '-i', 'audio.webm',
-      '-t', String(audioDurationSec),
-      '-c:v', 'libx264',
-      '-preset', 'ultrafast',
-      '-crf', '28',
-      '-c:a', 'aac',
-      '-map', '0:v:0',
-      '-map', '1:a:0',
-      'output.mp4',
-    ])
-
-    if (ret !== 0) {
-      onLog(`[FFmpeg] FAIL: exit code ${ret}`)
-      return null
-    }
-
-    const data = await ffmpeg.readFile('output.mp4')
-    if (typeof data === 'string') {
-      onLog('[FFmpeg] FAIL: readFile returned string')
-      return null
-    }
-    const plain: ArrayBuffer = new Uint8Array(data).buffer as ArrayBuffer
-    const outFile = new File([plain], 'merged.mp4', { type: 'video/mp4' })
-    onLog(`[FFmpeg] 성공: ${(outFile.size / 1024).toFixed(0)}KB, ${audioDurationSec}초`)
-    return outFile
-  } catch (err) {
-    onLog(`[FFmpeg] ERROR: ${err instanceof Error ? err.message : String(err)}`)
-    return null
-  }
-}
 
 export default function UploadPage() {
   const navigate = useNavigate()
@@ -101,8 +38,9 @@ export default function UploadPage() {
 
   // 음성 녹음 상태
   const audioBlobRef = useRef<Blob | null>(null)
-  const [mergedFile, setMergedFile] = useState<File | null>(null)
-  const [ffmpegMerging, setFfmpegMerging] = useState(false)
+  const [mergedR2Key, setMergedR2Key] = useState<string | null>(null)
+  const [mergedDurationSec, setMergedDurationSec] = useState<number | null>(null)
+  const [serverMerging, setServerMerging] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordedSeconds, setRecordedSeconds] = useState(0)
   const [debugLogs, setDebugLogs] = useState<string[]>([])
@@ -162,14 +100,6 @@ export default function UploadPage() {
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
         audioBlobRef.current = blob
         setRecording(false)
-
-        if (file) {
-          setFfmpegMerging(true)
-          const result = await mergeWithFFmpeg(file, blob, recordedSecondsRef.current, addLog)
-          setMergedFile(result)
-          setFfmpegMerging(false)
-          if (!result) addLog('[FFmpeg] merge 실패 — 원본 영상으로 업로드됩니다')
-        }
         setStep(4)
       }
 
@@ -229,37 +159,77 @@ export default function UploadPage() {
     setError('')
     setUploading(true)
     try {
-      const uploadTarget = mergedFile ?? file
-      addLog(`[Upload] 파일: ${uploadTarget.name}, ${(uploadTarget.size / 1024).toFixed(0)}KB`)
-      const hash = await sha256(uploadTarget)
+      // 1. 영상 R2 presigned URL 발급
+      addLog(`[Upload] 영상: ${file.name}, ${(file.size / 1024).toFixed(0)}KB`)
+      const hash = await sha256(file)
       addLog(`[Upload] SHA-256: ${hash.slice(0, 12)}...`)
 
       const presignRes = await client.post<{
         data: { upload_url: string; r2_key: string }
       }>('/videos/presigned-url', {
-        filename: uploadTarget.name,
-        content_type: uploadTarget.type,
-        file_size: uploadTarget.size,
+        filename: file.name,
+        content_type: file.type,
+        file_size: file.size,
         file_hash: hash,
       })
-      const { upload_url, r2_key } = presignRes.data.data
+      let { r2_key } = presignRes.data.data
+      const { upload_url } = presignRes.data.data
       addLog(`[R2] presigned URL 발급: ${r2_key}`)
 
-      await axios.put(upload_url, uploadTarget, {
-        headers: { 'Content-Type': uploadTarget.type },
+      // 2. 영상 R2 업로드
+      await axios.put(upload_url, file, {
+        headers: { 'Content-Type': file.type },
         onUploadProgress: (e) => {
-          if (e.total) setProgress(Math.round((e.loaded / e.total) * 100))
+          if (e.total) setProgress(Math.round((e.loaded / e.total) * 40))
         },
       })
-      addLog(`[R2] 업로드 완료`)
+      addLog('[R2] 영상 업로드 완료')
 
-      const videoEl = document.createElement('video')
-      videoEl.src = previewUrl!
-      const duration = await new Promise<number>((resolve) => {
-        videoEl.onloadedmetadata = () => resolve(Math.round(videoEl.duration))
-      })
-      addLog(`[Upload] 영상 길이: ${duration}초`)
+      // 3. 오디오가 녹음됐으면 서버에서 merge
+      let finalDurationSec: number | null = null
+      const audioBlob = audioBlobRef.current
 
+      if (audioBlob && audioBlob.size > 0) {
+        setUploading(false)
+        setServerMerging(true)
+        addLog(`[Merge] 서버 병합 시작: 음성 ${(audioBlob.size / 1024).toFixed(0)}KB`)
+
+        const formData = new FormData()
+        formData.append('video_r2_key', r2_key)
+        formData.append('audio', audioBlob, 'audio.webm')
+
+        const mergeRes = await client.post<{
+          data: { r2_key: string; cdn_url: string; duration_sec: number }
+        }>('/videos/merge-audio', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (e) => {
+            if (e.total) setProgress(40 + Math.round((e.loaded / e.total) * 30))
+          },
+        })
+        r2_key = mergeRes.data.data.r2_key
+        finalDurationSec = mergeRes.data.data.duration_sec
+        addLog(`[Merge] 완료: ${r2_key}, ${finalDurationSec}초`)
+        setMergedR2Key(r2_key)
+        setMergedDurationSec(finalDurationSec)
+        setServerMerging(false)
+        setUploading(true)
+      }
+
+      setProgress(75)
+
+      // 4. 영상 길이 계산 (merge 결과 우선)
+      let duration = finalDurationSec
+      if (!duration) {
+        const videoEl = document.createElement('video')
+        videoEl.src = previewUrl!
+        duration = await new Promise<number>((resolve) => {
+          videoEl.onloadedmetadata = () => resolve(Math.round(videoEl.duration))
+          videoEl.onerror = () => resolve(10)
+        })
+      }
+      addLog(`[Upload] 최종 영상 길이: ${duration}초`)
+
+      // 5. confirm
       const confirmRes = await client.post<{ data: { points_earned: number } }>('/videos/confirm', {
         r2_key,
         file_hash: hash,
@@ -268,6 +238,7 @@ export default function UploadPage() {
         tags: selectedTags,
         challenge_id: selectedChallengeId,
       })
+      setProgress(100)
       addLog(`[R2] DB 등록 완료, +${confirmRes.data.data.points_earned}pt`)
       setPointsEarned(confirmRes.data.data.points_earned)
       setDone(true)
@@ -277,6 +248,7 @@ export default function UploadPage() {
         '업로드 실패'
       addLog(`[Upload] ERROR: ${msg}`)
       setError(msg)
+      setServerMerging(false)
     } finally {
       setUploading(false)
     }
@@ -355,10 +327,10 @@ export default function UploadPage() {
         </div>
       )}
 
-      {ffmpegMerging && (
+      {serverMerging && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          <p className="text-sm text-theme-muted">음성과 영상을 합치는 중...</p>
+          <p className="text-sm text-theme-muted">서버에서 음성과 영상을 합치는 중...</p>
           {debugLogs.length > 0 && (
             <div className="w-full max-w-sm rounded-xl bg-zinc-900 border border-zinc-700 p-3 max-h-40 overflow-y-auto">
               {debugLogs.map((log, i) => (
