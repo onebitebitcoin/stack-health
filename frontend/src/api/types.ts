@@ -133,6 +133,18 @@ export interface Challenge {
   joined: boolean
   completed: boolean
   categories: string[]
+  creator_id?: number | null
+  completed_count?: number
+}
+
+export interface ChallengeParticipant {
+  user_id: number
+  username: string
+  upload_count: number
+  condition_value: number
+  completed_at: string | null
+  joined_at: string
+  progress: number
 }
 
 export interface EarnedTitle {

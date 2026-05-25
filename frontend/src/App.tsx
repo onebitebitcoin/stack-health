@@ -17,6 +17,8 @@ import HistoryPage from './pages/HistoryPage'
 import TeamPage from './pages/TeamPage'
 import UserProfilePage from './pages/UserProfilePage'
 import SetupUsernamePage from './pages/SetupUsernamePage'
+import MyChallengeDashboardPage from './pages/MyChallengeDashboardPage'
+import ChallengeDashboardPage from './pages/ChallengeDashboardPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -93,6 +95,8 @@ function Layout() {
         />
         <Route path="/challenges" element={<ChallengePage />} />
         <Route path="/challenges/create" element={<ChallengeCreatePage />} />
+        <Route path="/my-challenges" element={<RequireAuth><MyChallengeDashboardPage /></RequireAuth>} />
+        <Route path="/challenges/:id/dashboard" element={<RequireAuth><ChallengeDashboardPage /></RequireAuth>} />
         <Route
           path="/profile"
           element={
