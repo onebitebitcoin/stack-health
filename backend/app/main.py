@@ -29,7 +29,7 @@ app.add_middleware(
 async def add_coop_coep_headers(request: Request, call_next) -> Response:
     response = await call_next(request)
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+    response.headers["Cross-Origin-Embedder-Policy"] = "credentialless"
     return response
 
 app.include_router(auth.router)
