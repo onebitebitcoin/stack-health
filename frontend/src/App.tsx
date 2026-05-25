@@ -30,6 +30,19 @@ function Layout() {
   const hideNav = HIDE_NAV.includes(pathname)
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
+  const { token, setUser } = useAuthStore()
+
+  // 앱 시작 시 저장된 토큰으로 유저 정보 최신화 (is_admin 등 DB 변경사항 반영)
+  useEffect(() => {
+    if (!token) return
+    client
+      .get<{ data: User }>('/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => setUser(res.data.data))
+      .catch(() => undefined)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
