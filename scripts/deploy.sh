@@ -22,6 +22,8 @@ cd backend && .venv/bin/alembic upgrade head
 cd "$APP_DIR"
 
 echo "[deploy] 서비스 재시작..."
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus
 systemctl --user restart stack-health-app stack-health-worker
 
 sleep 3
