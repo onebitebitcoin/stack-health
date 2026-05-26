@@ -50,16 +50,25 @@ function ChallengeCard({
 
   return (
     <div className="rounded-2xl bg-theme-surface p-4">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-theme-primary text-sm leading-snug">{challenge.title}</h3>
-          <p className="text-xs text-theme-muted mt-0.5 line-clamp-2">{challenge.description}</p>
+      <div className="flex items-start gap-3 mb-2">
+        {challenge.image_url && (
+          <img
+            src={challenge.image_url}
+            alt=""
+            className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
+          />
+        )}
+        <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-theme-primary text-sm leading-snug">{challenge.title}</h3>
+            <p className="text-xs text-theme-muted mt-0.5 line-clamp-2">{challenge.description}</p>
+          </div>
+          {challenge.completed ? (
+            <CheckCircle size={20} className="text-accent flex-shrink-0 mt-0.5" />
+          ) : challenge.joined ? (
+            <Lock size={16} className="text-theme-subtle flex-shrink-0 mt-1" />
+          ) : null}
         </div>
-        {challenge.completed ? (
-          <CheckCircle size={20} className="text-accent flex-shrink-0 mt-0.5" />
-        ) : challenge.joined ? (
-          <Lock size={16} className="text-theme-subtle flex-shrink-0 mt-1" />
-        ) : null}
       </div>
 
       {/* 리워드 배지 */}

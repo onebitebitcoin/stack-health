@@ -18,6 +18,7 @@ class ChallengeSchema(BaseModel):
     joined: bool = False
     completed: bool = False
     creator_id: int | None = None
+    image_url: str | None = None
 
     model_config = {"from_attributes": True}
 

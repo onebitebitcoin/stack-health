@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LogOut, Droplets, ShieldCheck, Settings,
-  ChevronLeft, ChevronRight, Flame, Heart, Eye, ArrowLeft, Award, Share2, X, Zap, Trash2, Play,
+  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, ArrowLeft, Award, Share2, Trash2, Play,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
-import type { MyStats, HistoryResponse, HistoryWorkoutPost } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost, Claim } from '../api/types'
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 
@@ -37,7 +37,7 @@ export default function ProfilePage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedPosts, setSelectedPosts] = useState<HistoryWorkoutPost[]>([])
   const [videoIdx, setVideoIdx] = useState(0)
-  const [showRewardModal, setShowRewardModal] = useState(false)
+  const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
   const { data: myStats, isLoading } = useQuery<MyStats>({
@@ -47,6 +47,15 @@ export default function ProfilePage() {
       return res.data.data
     },
     enabled: !!user,
+  })
+
+  const { data: claimsData } = useQuery<Claim[]>({
+    queryKey: ['my-claims'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { claims: Claim[] } }>('/rewards/claims')
+      return res.data.data.claims
+    },
+    enabled: !!user && showWeeklyHistory,
   })
 
   const { data: myPostsData, isLoading: myPostsLoading } = useQuery<{ id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number }[]>({
@@ -116,7 +125,7 @@ export default function ProfilePage() {
   const displayedSweatPoints = confirmedSweatPoints + pendingSweatPoints
   const weekPoints = myStats?.week_points ?? 0
   const weekQueuedPoints = myStats?.week_queued_points ?? 0
-  const weekSats = myStats?.week_sats ?? 0
+
 
   const cells: Array<{ day: number | null; dateStr: string | null }> = []
   for (let i = 0; i < firstIdx; i++) cells.push({ day: null, dateStr: null })
@@ -178,121 +187,66 @@ export default function ProfilePage() {
 
       {/* ── 땀 카드 ── */}
       <button
-        onClick={() => setShowRewardModal(true)}
-        className="mx-4 mb-4 rounded-2xl bg-theme-surface px-6 py-5 flex flex-col items-center gap-1 w-[calc(100%-2rem)] text-left active:scale-[0.98] transition-transform"
+        onClick={() => setShowWeeklyHistory((v) => !v)}
+        className={`mx-4 flex flex-col items-center gap-2 w-[calc(100%-2rem)] bg-theme-surface px-6 py-6 active:scale-[0.98] transition-transform ${showWeeklyHistory ? 'rounded-t-2xl mb-0' : 'rounded-2xl mb-4'}`}
       >
-        {/* 이번 주 리워드 */}
-        <div className="w-full flex items-center justify-between mb-3 pb-3 border-b border-theme-border">
-          <span className="text-xs text-theme-muted">이번 주 흘린 땀</span>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-theme-primary">
-              {(weekPoints / 100).toFixed(2)}
-              <span className="text-xs font-normal text-theme-muted ml-0.5">L</span>
-            </span>
-            {weekSats > 0 && (
-              <span className="flex items-center gap-0.5 text-xs font-medium text-amber-400">
-                <Zap size={11} strokeWidth={2} />
-                {weekSats.toLocaleString()} sats
-              </span>
-            )}
-            {weekQueuedPoints > 0 && (
-              <span className="flex items-center gap-1 text-xs text-theme-muted">
-                <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                +{(weekQueuedPoints / 100).toFixed(2)}L 대기
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* 누적 */}
-        <Droplets size={26} className="text-blue-400 mb-1" strokeWidth={1.5} />
-        <span className="text-4xl font-bold font-mono text-theme-primary">
-          {(displayedSweatPoints / 100).toFixed(1)}
-          <span className="text-lg font-medium text-theme-muted ml-1">L</span>
+        <span className="text-xs text-theme-muted">이번 주 흘린 땀</span>
+        <Droplets size={30} className="text-blue-400" strokeWidth={1.5} />
+        <span className="text-5xl font-bold font-mono text-theme-primary">
+          {(weekPoints / 100).toFixed(2)}
+          <span className="text-xl font-medium text-theme-muted ml-1">L</span>
         </span>
-        <span className="text-xs text-theme-muted mt-0.5">누적 흘린 땀 (탭해서 상세보기)</span>
-        {pendingSweatPoints > 0 && (
-          <div className="mt-2 flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1">
+        {weekQueuedPoints > 0 && (
+          <div className="flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-            <span className="text-xs text-theme-muted">
-              +{(pendingSweatPoints / 100).toFixed(1)}L 확정 대기 중
-            </span>
+            <span className="text-xs text-theme-muted">+{(weekQueuedPoints / 100).toFixed(2)}L 대기 중</span>
           </div>
         )}
+        <div className="flex items-center gap-1 text-xs text-theme-muted mt-1">
+          <span>주간 이력</span>
+          <ChevronDown size={13} className={`transition-transform ${showWeeklyHistory ? 'rotate-180' : ''}`} />
+        </div>
       </button>
 
-      {/* ── 리워드 상세 모달 ── */}
-      {showRewardModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
-          onClick={() => setShowRewardModal(false)}
-        >
-          <div
-            className="w-full max-w-lg rounded-t-3xl bg-theme-surface px-6 pt-5 pb-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <span className="text-base font-bold text-theme-primary">리워드 상세</span>
-              <button onClick={() => setShowRewardModal(false)} className="text-theme-muted">
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* 이번 주 */}
-            <div className="rounded-xl bg-theme-surface2 px-5 py-4 mb-3">
-              <p className="text-xs font-medium text-theme-muted mb-3">이번 주</p>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Droplets size={18} className="text-blue-400" strokeWidth={1.5} />
-                  <span className="text-sm text-theme-muted">흘린 땀</span>
-                </div>
-                <span className="text-lg font-bold text-theme-primary">
-                  {(weekPoints / 100).toFixed(2)}
-                  <span className="text-sm font-normal text-theme-muted ml-0.5">L</span>
-                </span>
-              </div>
-              <div className="flex items-center justify-between mt-2.5">
-                <div className="flex items-center gap-2">
-                  <Zap size={18} className="text-amber-400" strokeWidth={1.5} />
-                  <span className="text-sm text-theme-muted">비트코인 보상</span>
-                </div>
-                <span className="text-lg font-bold text-amber-400">
-                  {weekSats.toLocaleString()}
-                  <span className="text-sm font-normal text-theme-muted ml-0.5">sats</span>
-                </span>
-              </div>
-              {weekQueuedPoints > 0 && (
-                <p className="mt-2.5 text-xs text-theme-muted text-right">
-                  +{(weekQueuedPoints / 100).toFixed(2)}L 확정 대기 중
-                </p>
-              )}
-            </div>
-
-            {/* 누적 */}
-            <div className="rounded-xl bg-theme-surface2 px-5 py-4">
-              <p className="text-xs font-medium text-theme-muted mb-3">누적 (전체)</p>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Droplets size={18} className="text-blue-400" strokeWidth={1.5} />
-                  <span className="text-sm text-theme-muted">흘린 땀</span>
-                </div>
-                <span className="text-lg font-bold text-theme-primary">
-                  {(displayedSweatPoints / 100).toFixed(1)}
-                  <span className="text-sm font-normal text-theme-muted ml-0.5">L</span>
-                </span>
-              </div>
-              <div className="flex items-center justify-between mt-2.5">
-                <div className="flex items-center gap-2">
-                  <Zap size={18} className="text-amber-400" strokeWidth={1.5} />
-                  <span className="text-sm text-theme-muted">비트코인 보상 (누적)</span>
-                </div>
-                <span className="text-lg font-bold text-amber-400">
-                  {Math.floor(confirmedSweatPoints * 10).toLocaleString()}
-                  <span className="text-sm font-normal text-theme-muted ml-0.5">sats</span>
-                </span>
-              </div>
-            </div>
+      {/* ── 주간 이력 collapse ── */}
+      {showWeeklyHistory && (
+        <div className="mx-4 mb-4 rounded-b-2xl bg-theme-surface overflow-hidden border-t border-theme-border">
+          {/* 누적 합계 */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-theme-border">
+            <span className="text-xs font-medium text-theme-muted">누적 총 땀</span>
+            <span className="text-sm font-semibold text-theme-primary">
+              {(displayedSweatPoints / 100).toFixed(1)}
+              <span className="text-xs font-normal text-theme-muted ml-0.5">L</span>
+            </span>
           </div>
+
+          {/* 클레임 이력 리스트 */}
+          {!claimsData ? (
+            <div className="py-6 text-center text-xs text-theme-muted">불러오는 중...</div>
+          ) : claimsData.length === 0 ? (
+            <div className="py-6 text-center text-xs text-theme-muted">클레임 이력이 없습니다</div>
+          ) : (
+            claimsData.map((claim) => (
+              <div key={claim.id} className="flex items-center justify-between px-5 py-3 border-b border-theme-border last:border-0">
+                <div>
+                  <p className="text-xs font-medium text-theme-primary">{claim.week_label}</p>
+                  <p className="text-xs text-theme-muted mt-0.5">
+                    {(claim.points_used / 100).toFixed(2)} L
+                  </p>
+                </div>
+                <span className={`text-xs font-semibold ${
+                  claim.status === 'paid' ? 'text-green-400' :
+                  claim.status === 'pending' ? 'text-yellow-400' :
+                  claim.status === 'failed' ? 'text-red-400' :
+                  'text-theme-muted'
+                }`}>
+                  {claim.status === 'paid' ? '지급완료' :
+                   claim.status === 'pending' ? '대기' :
+                   claim.status === 'failed' ? '실패' : '취소'}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       )}
 

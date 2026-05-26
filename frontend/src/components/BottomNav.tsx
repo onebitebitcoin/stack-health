@@ -1,19 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Plus, UserCircle, Users } from 'lucide-react'
+import { Home, Plus, UserCircle, Users, Dumbbell } from 'lucide-react'
 import { useAuthStore } from '../store/auth'
-
-function PersonRunning({ size = 22, strokeWidth = 1.5 }: { size?: number; strokeWidth?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="14" cy="3.5" r="1.5" />
-      <path d="M13 5.5 L10.5 11" />
-      <path d="M11.5 8 L15.5 6" />
-      <path d="M11.5 8 L8.5 10" />
-      <path d="M10.5 11 L14 16 L11.5 20" />
-      <path d="M10.5 11 L7 15.5" />
-    </svg>
-  )
-}
 
 export default function BottomNav() {
   const navigate = useNavigate()
@@ -43,7 +30,7 @@ export default function BottomNav() {
 
         {/* 챌린지 */}
         <NavLink to="/challenges" className={navItem}>
-          <PersonRunning size={22} strokeWidth={1.5} />
+          <Dumbbell size={22} strokeWidth={1.5} />
           <span>챌린지</span>
         </NavLink>
 

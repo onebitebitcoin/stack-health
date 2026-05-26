@@ -1,7 +1,8 @@
 import logging
+import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -10,6 +11,8 @@ from app.models.challenge import Challenge, ChallengeParticipation
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, EarnedTitleSchema
+from app.config import settings as app_settings
+from app.services import r2 as r2_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/challenges", tags=["challenges"])
@@ -54,6 +57,7 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
         joined=joined,
         completed=completed,
         creator_id=challenge.creator_id,
+        image_url=challenge.image_url,
     )
 
 
@@ -103,6 +107,37 @@ def create_challenge(
         db.rollback()
         logger.exception("Failed to create challenge for user_id=%s: %s", current_user.id, e)
         raise HTTPException(status_code=500, detail=f"챌린지 생성 실패: {e}")
+
+
+@router.post("/{challenge_id}/image")
+async def upload_challenge_image(
+    challenge_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="관리자만 이미지를 업로드할 수 있습니다")
+    challenge = db.get(Challenge, challenge_id)
+    if not challenge:
+        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+    content_type = file.content_type or "image/jpeg"
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
+    ext = (file.filename or "img.jpg").rsplit(".", 1)[-1].lower()
+    r2_key = f"challenges/{uuid.uuid4()}.{ext}"
+    client = r2_service.get_r2_client()
+    client.upload_fileobj(
+        file.file,
+        app_settings.r2_bucket_name,
+        r2_key,
+        ExtraArgs={"ContentType": content_type},
+    )
+    image_url = r2_service.get_cdn_url(r2_key)
+    challenge.image_url = image_url
+    db.commit()
+    logger.info("Challenge image uploaded: challenge_id=%s url=%s", challenge_id, image_url)
+    return {"data": {"image_url": image_url}}
 
 
 @router.get("/created")

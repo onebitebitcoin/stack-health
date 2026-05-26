@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X, Bitcoin, Pickaxe } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X, Bitcoin, Pickaxe, ArrowLeft } from 'lucide-react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { AdminClaim, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse, MiningParticipant, MiningParticipantsResponse, MiningRound, LotteryResult } from '../api/types'
 import { useAuthStore } from '../store/auth'
@@ -162,6 +162,7 @@ function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => v
 export default function AdminPage() {
   const qc = useQueryClient()
   const user = useAuthStore((s) => s.user)
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab: TabId = (searchParams.get('tab') as TabId) ?? 'users'
   const [weekOffset, setWeekOffset] = useState(0)
@@ -272,7 +273,13 @@ export default function AdminPage() {
   return (
     <div className="flex flex-col h-[100dvh] bg-theme-page">
       <div className="flex-none px-4 pt-6 pb-3 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/profile')}
+            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-theme-surface transition-colors"
+          >
+            <ArrowLeft size={18} strokeWidth={2} className="text-theme-primary" />
+          </button>
           <div>
             <h1 className="text-xl font-bold text-theme-primary">Admin</h1>
             <p className="text-xs text-theme-muted">@{user?.username}</p>
