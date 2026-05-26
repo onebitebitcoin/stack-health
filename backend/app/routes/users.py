@@ -91,6 +91,38 @@ def get_my_stats(
     return {"data": {"total_posts": total_posts, "total_points": int(total_points), "queued_points": int(queued_points)}}
 
 
+@router.get("/leaderboard")
+def get_leaderboard(db: Session = Depends(get_db)) -> dict:
+    rows = (
+        db.query(
+            User,
+            sqlfunc.sum(RewardPoint.points).label("total_points"),
+        )
+        .join(RewardPoint, RewardPoint.user_id == User.id)
+        .filter(
+            User.is_banned.is_(False),
+            RewardPoint.points > 0,
+            RewardPoint.status == REWARD_STATUS_FIXED,
+        )
+        .group_by(User.id)
+        .order_by(sqlfunc.sum(RewardPoint.points).desc())
+        .limit(50)
+        .all()
+    )
+    return {
+        "data": [
+            {
+                "rank": idx + 1,
+                "user_id": user.id,
+                "username": user.username,
+                "avatar_url": user.avatar_url,
+                "total_points": int(total_points or 0),
+            }
+            for idx, (user, total_points) in enumerate(rows)
+        ]
+    }
+
+
 @router.get("/{user_id}/profile")
 def get_user_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
     user = db.query(User).filter(User.id == user_id).first()

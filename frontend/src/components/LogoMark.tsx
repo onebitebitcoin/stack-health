@@ -16,16 +16,16 @@ export default function LogoMark({ size = 48, className = '', ...props }: LogoMa
       {...props}
     >
       {/* Left weight plate */}
-      <rect x="2" y="16" width="6" height="16" rx="2" fill="currentColor" />
+      <rect x="3" y="16" width="6" height="16" rx="2" fill="currentColor" />
       {/* Left bar */}
-      <rect x="8" y="21" width="9" height="6" rx="1.5" fill="currentColor" />
+      <rect x="9" y="21" width="10" height="6" rx="1.5" fill="currentColor" />
       {/* Right bar */}
-      <rect x="31" y="21" width="9" height="6" rx="1.5" fill="currentColor" />
+      <rect x="29" y="21" width="10" height="6" rx="1.5" fill="currentColor" />
       {/* Right weight plate */}
-      <rect x="40" y="16" width="6" height="16" rx="2" fill="currentColor" />
-      {/* Lightning bolt (bitcoin energy) */}
+      <rect x="39" y="16" width="6" height="16" rx="2" fill="currentColor" />
+      {/* Centered lightning bolt (bitcoin energy) */}
       <path
-        d="M27 10L19 25h6l-3 13 10-16h-6l3-12z"
+        d="M26 9L18 25h6l-3 14 9-17h-6l2-13z"
         fill="currentColor"
       />
     </svg>

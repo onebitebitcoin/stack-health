@@ -19,6 +19,7 @@ import SetupUsernamePage from './pages/SetupUsernamePage'
 import MyChallengeDashboardPage from './pages/MyChallengeDashboardPage'
 import ChallengeDashboardPage from './pages/ChallengeDashboardPage'
 import SettingsPage from './pages/SettingsPage'
+import LeaderboardPage from './pages/LeaderboardPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -111,6 +112,7 @@ function Layout() {
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
         <Route path="/team" element={<TeamPage />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
       </Routes>
       {!hideNav && <BottomNav />}
     </div>

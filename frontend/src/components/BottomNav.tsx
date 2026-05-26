@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Plus, Trophy, User } from 'lucide-react'
+import { Home, Plus, Trophy, User, Medal } from 'lucide-react'
 import { useAuthStore } from '../store/auth'
 
 export default function BottomNav() {
@@ -26,6 +26,12 @@ export default function BottomNav() {
         <NavLink to="/" end className={navItem}>
           <Home size={22} strokeWidth={1.5} />
           <span>피드</span>
+        </NavLink>
+
+        {/* 랭킹 */}
+        <NavLink to="/leaderboard" className={navItem}>
+          <Medal size={22} strokeWidth={1.5} />
+          <span>랭킹</span>
         </NavLink>
 
         {/* FAB — 업로드 */}

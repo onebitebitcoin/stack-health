@@ -202,3 +202,11 @@ export interface MyStats {
   total_points: number
   queued_points: number
 }
+
+export interface LeaderboardEntry {
+  rank: number
+  user_id: number
+  username: string
+  avatar_url: string | null
+  total_points: number
+}

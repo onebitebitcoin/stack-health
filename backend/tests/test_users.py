@@ -132,3 +132,35 @@ def test_user_profile_with_completed_title(client: TestClient, db: Session) -> N
     assert len(data["titles"]) == 1
     assert data["titles"][0]["title"] == "테스트 타이틀"
     assert data["active_challenges"] == []
+
+
+def test_leaderboard_ranks_fixed_positive_rewards(client: TestClient, db: Session) -> None:
+    from app.models.reward import RewardPoint
+    from app.models.user import User
+
+    first_token = _register(client, "first@x.com", "first")
+    second_token = _register(client, "second@x.com", "second")
+    banned_token = _register(client, "banned_rank@x.com", "bannedrank")
+
+    first_id = client.get("/api/v1/auth/me", headers=_auth(first_token)).json()["data"]["id"]
+    second_id = client.get("/api/v1/auth/me", headers=_auth(second_token)).json()["data"]["id"]
+    banned_id = client.get("/api/v1/auth/me", headers=_auth(banned_token)).json()["data"]["id"]
+
+    db.add_all([
+        RewardPoint(user_id=first_id, week_label="2026-W21", points=30, reason="upload", status="fixed"),
+        RewardPoint(user_id=second_id, week_label="2026-W21", points=50, reason="upload", status="fixed"),
+        RewardPoint(user_id=first_id, week_label="2026-W21", points=100, reason="upload", status="queued"),
+        RewardPoint(user_id=banned_id, week_label="2026-W21", points=999, reason="upload", status="fixed"),
+    ])
+    banned_user = db.query(User).filter(User.id == banned_id).first()
+    assert banned_user is not None
+    banned_user.is_banned = True
+    db.commit()
+
+    res = client.get("/api/v1/users/leaderboard")
+
+    assert res.status_code == 200
+    assert res.json()["data"] == [
+        {"rank": 1, "user_id": second_id, "username": "second", "avatar_url": None, "total_points": 50},
+        {"rank": 2, "user_id": first_id, "username": "first", "avatar_url": None, "total_points": 30},
+    ]
