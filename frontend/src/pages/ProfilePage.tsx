@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LogOut, Zap, Check, Moon, Sun, Droplets, Heart, Video } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { LogOut, Zap, Check, Moon, Sun, Droplets, Heart, Video, ShieldCheck } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { useThemeStore, type Theme } from '../store/theme'
@@ -14,6 +14,7 @@ export default function ProfilePage() {
   const logout = useAuthStore((s) => s.logout)
   const setUser = useAuthStore((s) => s.setUser)
 
+  const navigate = useNavigate()
   const { theme, setTheme } = useThemeStore()
 
   const [editingLn, setEditingLn] = useState(false)
@@ -79,9 +80,17 @@ export default function ProfilePage() {
           {user?.username?.[0]?.toUpperCase() ?? '?'}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-theme-primary leading-tight truncate">
-            {user?.username}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-theme-primary leading-tight truncate">
+              {user?.username}
+            </p>
+            {user?.is_admin && (
+              <span className="flex-shrink-0 flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                <ShieldCheck size={9} />
+                관리자
+              </span>
+            )}
+          </div>
           <p className="text-xs text-theme-muted truncate">{user?.email}</p>
         </div>
         <button
@@ -92,6 +101,19 @@ export default function ProfilePage() {
           <LogOut size={16} strokeWidth={1.5} />
         </button>
       </div>
+
+      {/* ── 관리자 모드 버튼 ── */}
+      {user?.is_admin && (
+        <div className="mx-4 mb-3">
+          <button
+            onClick={() => navigate('/admin')}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent/10 border border-accent/30 px-4 py-3 text-sm font-semibold text-accent hover:bg-accent/20 transition-colors"
+          >
+            <ShieldCheck size={15} />
+            관리자 페이지로 이동
+          </button>
+        </div>
+      )}
 
       {/* ── 땀 카드 ── */}
       <div className="mx-4 mb-4 rounded-2xl bg-theme-surface px-6 py-6 flex flex-col items-center gap-1">
