@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/auth'
 interface ClaimBottomSheetProps {
   satoshiAmount: number
   weekLabel: string
+  contributionPct: number
   savedAddress: string | null
   onClose: () => void
   onSuccess: () => void
@@ -15,6 +16,7 @@ interface ClaimBottomSheetProps {
 export default function ClaimBottomSheet({
   satoshiAmount,
   weekLabel,
+  contributionPct,
   savedAddress,
   onClose,
   onSuccess,
@@ -62,9 +64,16 @@ export default function ClaimBottomSheet({
           </button>
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-4">
-          <Zap size={24} className="text-accent" fill="currentColor" />
-          <span className="text-2xl font-bold text-accent">{satoshiAmount.toLocaleString()} sats</span>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="flex flex-col items-center justify-center rounded-xl bg-theme-surface2 py-4">
+            <Zap size={20} className="text-accent mb-1" fill="currentColor" />
+            <span className="text-xl font-bold text-accent">{satoshiAmount.toLocaleString()}</span>
+            <span className="text-xs text-theme-muted">sats</span>
+          </div>
+          <div className="flex flex-col items-center justify-center rounded-xl bg-theme-surface2 py-4">
+            <span className="text-xl font-bold text-theme-primary">{contributionPct.toFixed(1)}%</span>
+            <span className="text-xs text-theme-muted">기여율</span>
+          </div>
         </div>
 
         <form onSubmit={handleClaim} className="mt-4 space-y-3">

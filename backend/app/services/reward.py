@@ -174,6 +174,18 @@ def add_points(
     return rp
 
 
+def get_total_weekly_points_all_users(db: Session, week_label: str) -> float:
+    result = (
+        db.query(func.sum(RewardPoint.points))
+        .filter(
+            RewardPoint.week_label == week_label,
+            RewardPoint.status == REWARD_STATUS_FIXED,
+        )
+        .scalar()
+    )
+    return result or 0
+
+
 def has_claimed_this_week(db: Session, user_id: int, week_label: str) -> bool:
     return (
         db.query(LightningClaim)

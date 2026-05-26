@@ -164,6 +164,7 @@ export default function RewardsPage() {
         <ClaimBottomSheet
           satoshiAmount={summary.satoshi_amount}
           weekLabel={summary.week_label}
+          contributionPct={summary.contribution_pct}
           savedAddress={user?.lightning_address ?? null}
           onClose={() => setShowSheet(false)}
           onSuccess={handleClaimSuccess}

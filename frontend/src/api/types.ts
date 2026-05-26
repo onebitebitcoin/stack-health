@@ -41,6 +41,7 @@ export interface RewardSummary {
   already_claimed: boolean
   claim_deadline: string
   next_claim_date: string
+  contribution_pct: number
 }
 
 export interface Claim {

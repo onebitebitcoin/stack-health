@@ -10,6 +10,7 @@ from app.routes.auth import get_current_user
 from app.schemas.reward import ClaimRequest, ClaimSchema, RewardSummarySchema
 from app.services.reward import (
     MIN_CLAIM_SATS,
+    get_total_weekly_points_all_users,
     get_week_label,
     get_week_claim_deadline,
     get_weekly_queued_points,
@@ -36,6 +37,8 @@ def get_summary(
 
     fixed_pts = get_weekly_points(db, current_user.id, week_label)
     queued_pts = get_weekly_queued_points(db, current_user.id, week_label)
+    total_pts = get_total_weekly_points_all_users(db, week_label)
+    contribution_pct = round(fixed_pts / total_pts * 100, 1) if total_pts > 0 else 0.0
     sats = points_to_sats(fixed_pts)
     claimed = has_claimed_this_week(db, current_user.id, week_label)
     claimable = sats >= MIN_CLAIM_SATS and not claimed
@@ -53,6 +56,7 @@ def get_summary(
             deadline=deadline,
             claim_deadline=deadline,
             next_claim_date=deadline,
+            contribution_pct=contribution_pct,
         )
     }
 

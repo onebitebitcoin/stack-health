@@ -502,6 +502,7 @@ export default function AdminPage() {
       )}
 
       {activeTab === 'rewards' && (
+        <>
         <div className="space-y-4">
           <div className="rounded-xl bg-theme-surface p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -592,6 +593,7 @@ export default function AdminPage() {
         </div>
 
         <MiningPanel />
+        </>
       )}
 
       {selectedUserId !== null && (

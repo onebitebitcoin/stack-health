@@ -14,6 +14,7 @@ class RewardSummarySchema(BaseModel):
     already_claimed: bool = False
     claim_deadline: datetime
     next_claim_date: datetime
+    contribution_pct: float = 0.0
 
 
 class ClaimRequest(BaseModel):
