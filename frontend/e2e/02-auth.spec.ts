@@ -7,7 +7,7 @@ test.describe('인증 플로우', () => {
     await page.screenshot({ path: 'e2e/screenshots/03-login.png', fullPage: true })
 
     await expect(page.locator('input[type="email"]')).not.toBeVisible()  // email form hidden by default
-    await expect(page.locator('text=Stack Health')).toBeVisible()
+    await expect(page.getByLabel('Stack Health 로고')).toBeVisible()
     await expect(page.locator('text=이메일로 로그인')).toBeVisible()
   })
 
@@ -30,11 +30,10 @@ test.describe('인증 플로우', () => {
     expect(page.url()).toMatch(/\/$/)
   })
 
-  test('업로드 버튼 → 비로그인이면 로그인 페이지로 이동', async ({ page }) => {
+  test('비로그인 시 / 접근하면 로그인 페이지로 이동', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: '운동 영상 올리기' }).click()
     await page.screenshot({ path: 'e2e/screenshots/06-upload-auth-gate.png', fullPage: true })
 
-    expect(page.url()).toMatch(/upload|login/)
+    expect(page.url()).toMatch(/login/)
   })
 })

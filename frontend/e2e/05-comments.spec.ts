@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { registerAndLogin } from './helpers'
 
 const FAKE_POST = {
   id: 1,
@@ -17,7 +18,7 @@ const FAKE_POST = {
 
 test.describe('댓글 기능', () => {
   test.beforeEach(async ({ page }) => {
-    // 피드 API 모킹
+    // 피드 API 모킹 (route 설정 먼저, 그 후 로그인)
     await page.route('**/api/v1/feed**', async (route) => {
       await route.fulfill({
         status: 200,
@@ -47,7 +48,7 @@ test.describe('댓글 기능', () => {
     // view API 무시
     await page.route('**/api/v1/feed/*/view**', (route) => route.fulfill({ status: 200, body: '{}' }))
 
-    await page.goto('/')
+    await registerAndLogin(page)
   })
 
   test('댓글 버튼 클릭 시 CommentSheet가 열린다', async ({ page }) => {

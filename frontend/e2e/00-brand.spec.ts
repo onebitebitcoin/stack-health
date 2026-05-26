@@ -27,10 +27,10 @@ test.describe('브랜드 공유 패키지', () => {
     expect(ogResponse.ok()).toBeTruthy()
   })
 
-  test('로그인 첫 화면에 로고와 브랜드 카피를 노출한다', async ({ page }) => {
+  test('로그인 첫 화면에 로고를 노출한다', async ({ page }) => {
     await page.goto('/login')
 
     await expect(page.getByLabel('Stack Health 로고')).toBeVisible()
-    await expect(page.getByText('건강과 비트코인, 두 마리 토끼를 한 번에')).toBeVisible()
+    await expect(page.locator('text=이메일로 로그인')).toBeVisible()
   })
 })

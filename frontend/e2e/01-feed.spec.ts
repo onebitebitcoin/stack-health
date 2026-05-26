@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test'
+import { registerAndLogin } from './helpers'
 
 test.describe('피드 페이지', () => {
   test('피드 페이지 기본 렌더링', async ({ page }) => {
-    await page.goto('/')
+    await registerAndLogin(page)
     await page.screenshot({ path: 'e2e/screenshots/01-feed-empty.png', fullPage: true })
 
     const emptyMsg = page.locator('text=아직 업로드된 영상이 없어요')
@@ -17,7 +18,7 @@ test.describe('피드 페이지', () => {
   })
 
   test('BottomNav 5탭 표시', async ({ page }) => {
-    await page.goto('/')
+    await registerAndLogin(page)
     await page.screenshot({ path: 'e2e/screenshots/02-bottomnav.png', fullPage: true })
 
     // 피드, 기록, 챌린지, 프로필 NavLink(a 태그)
