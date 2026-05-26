@@ -122,6 +122,8 @@ def confirm_upload(
         user_id=current_user.id,
         caption=req.caption,
         tags=json.dumps(tags, ensure_ascii=False),
+        workout_start=req.workout_start,
+        workout_end=req.workout_end,
     )
     db.add(post)
     db.flush()
@@ -148,6 +150,8 @@ def confirm_upload(
         created_at=post.created_at,
         cdn_url=video.cdn_url,
         username=current_user.username,
+        workout_start=post.workout_start,
+        workout_end=post.workout_end,
     )
     return {"data": {"post": post_schema, "points_earned": points_earned}}
 
@@ -184,6 +188,8 @@ def my_posts(
                 created_at=post.created_at,
                 cdn_url=post.video.cdn_url,
                 username=current_user.username,
+                workout_start=post.workout_start,
+                workout_end=post.workout_end,
             )
         )
     return {"data": {"posts": result}}

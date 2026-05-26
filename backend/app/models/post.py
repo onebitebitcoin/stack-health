@@ -18,6 +18,8 @@ class Post(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     caption: Mapped[str | None] = mapped_column(String(140), nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array string
+    workout_start: Mapped[str | None] = mapped_column(String(5), nullable=True)  # "HH:MM"
+    workout_end: Mapped[str | None] = mapped_column(String(5), nullable=True)    # "HH:MM"
     like_count: Mapped[int] = mapped_column(Integer, default=0)
     view_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(

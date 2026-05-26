@@ -42,6 +42,8 @@ export default function UploadPage() {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([])
   const [caption, setCaption] = useState('')
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
+  const [workoutStart, setWorkoutStart] = useState('')
+  const [workoutEnd, setWorkoutEnd] = useState('')
   const [progress, setProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [done, setDone] = useState(false)
@@ -273,6 +275,8 @@ export default function UploadPage() {
         caption: caption || null,
         tags: selectedTags,
         challenge_id: selectedChallengeId,
+        workout_start: workoutStart || null,
+        workout_end: workoutEnd || null,
       })
       setProgress(100)
       setPointsEarned(confirmRes.data.data.points_earned)
@@ -553,6 +557,24 @@ export default function UploadPage() {
       {step === 4 && (
         <div className="flex flex-1 flex-col px-6 pt-4">
           <p className="mb-3 font-semibold text-theme-primary">설명을 추가하세요 (선택)</p>
+          <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-3">
+            <p className="text-xs font-medium text-theme-muted">운동 시간대 (선택)</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="time"
+                value={workoutStart}
+                onChange={(e) => setWorkoutStart(e.target.value)}
+                className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent"
+              />
+              <span className="text-theme-muted text-sm">~</span>
+              <input
+                type="time"
+                value={workoutEnd}
+                onChange={(e) => setWorkoutEnd(e.target.value)}
+                className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent"
+              />
+            </div>
+          </div>
           <textarea
             value={caption}
             onChange={(e) => setCaption(e.target.value.slice(0, 140))}

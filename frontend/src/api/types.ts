@@ -21,6 +21,8 @@ export interface Post {
   created_at: string
   cdn_url: string
   username: string
+  workout_start: string | null
+  workout_end: string | null
 }
 
 export interface FeedResponse {

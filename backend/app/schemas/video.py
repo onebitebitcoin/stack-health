@@ -34,6 +34,8 @@ class ConfirmUploadRequest(BaseModel):
     caption: str | None = None
     tags: list[str] | None = None
     challenge_id: int | None = None
+    workout_start: str | None = None
+    workout_end: str | None = None
 
 
 class PostSchema(BaseModel):
@@ -49,5 +51,7 @@ class PostSchema(BaseModel):
     created_at: datetime
     cdn_url: str
     username: str
+    workout_start: str | None = None
+    workout_end: str | None = None
 
     model_config = {"from_attributes": True}

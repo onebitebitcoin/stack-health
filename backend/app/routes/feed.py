@@ -49,6 +49,8 @@ def _post_to_schema(
         created_at=post.created_at,
         cdn_url=post.video.cdn_url,
         username=post.user.username,
+        workout_start=post.workout_start,
+        workout_end=post.workout_end,
     )
 
 

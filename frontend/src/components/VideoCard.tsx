@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play } from 'lucide-react'
+import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock } from 'lucide-react'
 import type { Post } from '../api/types'
 import TagChip from './TagChip'
 import PointBadge from './PointBadge'
@@ -234,6 +234,12 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
               <TagChip key={tag} label={tag} />
             ))}
           </div>
+        )}
+        {post.workout_start && post.workout_end && (
+          <p className="mt-1 text-xs text-white/80 flex items-center gap-1">
+            <Clock size={12} />
+            {post.workout_start} ~ {post.workout_end}
+          </p>
         )}
       </div>
 
