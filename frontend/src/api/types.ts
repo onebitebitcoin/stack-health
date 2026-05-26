@@ -230,3 +230,44 @@ export interface LeaderboardResponse {
   limit: number
   has_next: boolean
 }
+
+export interface MiningParticipant {
+  claim_id: number
+  user_id: number
+  username: string
+  ln_address: string
+  points: number
+  sats_bid: number
+  hash_power_pct: number
+}
+
+export interface MiningParticipantsResponse {
+  week_label: string
+  participants: MiningParticipant[]
+  total_pool_sats: number
+  participant_count: number
+}
+
+export interface MiningRound {
+  id: number
+  week_label: string
+  total_pool_sats: number
+  sats_per_block: number
+  total_blocks: number
+  participant_count: number
+  winner_count: number
+  status: 'open' | 'distributed' | 'closed'
+  created_at: string
+  distributed_at: string | null
+  closed_at: string | null
+}
+
+export interface LotteryResult {
+  week_label: string
+  total_pool_sats: number
+  total_blocks: number
+  sats_per_block: number
+  participant_count: number
+  winner_count: number
+  results: { user_id: number; sats_won: number; status: string }[]
+}

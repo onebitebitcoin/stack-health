@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
+import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X, Bitcoin, Pickaxe } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import client from '../api/client'
-import type { AdminClaim, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse } from '../api/types'
+import type { AdminClaim, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse, MiningParticipant, MiningParticipantsResponse, MiningRound, LotteryResult } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
-type TabId = 'users' | 'videos' | 'rewards'
+type TabId = 'users' | 'videos' | 'rewards' | 'mining'
 
 interface AdminVideosResponse {
   videos: AdminVideo[]
@@ -267,6 +267,7 @@ export default function AdminPage() {
     { id: 'users', label: '유저', icon: <User size={14} /> },
     { id: 'videos', label: '영상', icon: <Video size={14} /> },
     { id: 'rewards', label: '리워드', icon: <Award size={14} /> },
+    { id: 'mining', label: '채굴', icon: <Pickaxe size={14} /> },
   ]
 
   return (
@@ -592,10 +593,220 @@ export default function AdminPage() {
         </div>
       )}
 
+      {activeTab === 'mining' && (
+        <MiningPanel />
+      )}
+
       {selectedUserId !== null && (
         <UserDetailPanel userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
       )}
       </div>
+    </div>
+  )
+}
+
+function MiningPanel() {
+  const queryClient = useQueryClient()
+  const [weekLabel, setWeekLabel] = useState(() => {
+    const d = new Date()
+    const jan4 = new Date(d.getFullYear(), 0, 4)
+    const startOfWeek = new Date(jan4)
+    startOfWeek.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7))
+    const diff = d.getTime() - startOfWeek.getTime()
+    const week = Math.floor(diff / (7 * 86400000)) + 1
+    return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
+  })
+  const [satsPerBlock, setSatsPerBlock] = useState(1000)
+  const [lotteryResult, setLotteryResult] = useState<LotteryResult | null>(null)
+  const [closeResult, setCloseResult] = useState<{ reduced_user_count: number; claimed_user_count: number } | null>(null)
+
+  const { data: participantsData, isLoading: loadingParts } = useQuery<{ data: MiningParticipantsResponse }>({
+    queryKey: ['mining-participants', weekLabel],
+    queryFn: () => client.get(`/admin/mining/participants?week_label=${weekLabel}`).then(r => r.data),
+  })
+
+  const { data: roundsData } = useQuery<{ data: { rounds: MiningRound[] } }>({
+    queryKey: ['mining-rounds'],
+    queryFn: () => client.get('/admin/mining/rounds').then(r => r.data),
+  })
+
+  const lotteryMutation = useMutation({
+    mutationFn: () => client.post('/admin/mining/run-lottery', { week_label: weekLabel, sats_per_block: satsPerBlock }).then(r => r.data),
+    onSuccess: (res) => {
+      setLotteryResult(res.data)
+      queryClient.invalidateQueries({ queryKey: ['mining-participants', weekLabel] })
+      queryClient.invalidateQueries({ queryKey: ['mining-rounds'] })
+    },
+  })
+
+  const closeMutation = useMutation({
+    mutationFn: () => client.post('/admin/mining/close-week', { week_label: weekLabel }).then(r => r.data),
+    onSuccess: (res) => {
+      setCloseResult(res.data)
+      queryClient.invalidateQueries({ queryKey: ['mining-rounds'] })
+    },
+  })
+
+  const participants: MiningParticipant[] = participantsData?.data?.participants ?? []
+  const totalPool = participantsData?.data?.total_pool_sats ?? 0
+  const rounds: MiningRound[] = roundsData?.data?.rounds ?? []
+
+  const ROUND_STATUS: Record<string, string> = { open: '진행중', distributed: '분배완료', closed: '종료' }
+  const ROUND_COLOR: Record<string, string> = { open: 'text-yellow-400', distributed: 'text-green-400', closed: 'text-theme-muted' }
+
+  return (
+    <div className="space-y-4">
+      {/* 주간 설정 */}
+      <div className="rounded-xl bg-theme-surface p-4 space-y-3">
+        <p className="text-sm font-semibold text-theme-primary flex items-center gap-2">
+          <Pickaxe size={14} className="text-accent" />
+          마이닝 분배 설정
+        </p>
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className="text-xs text-theme-muted mb-1 block">주차</label>
+            <input
+              type="text"
+              value={weekLabel}
+              onChange={e => setWeekLabel(e.target.value)}
+              className="w-full rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none"
+              placeholder="2026-W21"
+            />
+          </div>
+          <div className="w-32">
+            <label className="text-xs text-theme-muted mb-1 block">블록당 sats</label>
+            <input
+              type="number"
+              value={satsPerBlock}
+              onChange={e => setSatsPerBlock(Number(e.target.value))}
+              className="w-full rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none"
+              min={100}
+              step={100}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 해시파워 분포 */}
+      <div className="rounded-xl bg-theme-surface p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-theme-primary">해시파워 분포</p>
+          <span className="text-xs text-theme-muted">
+            {participants.length}명 · {totalPool.toLocaleString()} sats 풀
+          </span>
+        </div>
+
+        {loadingParts ? (
+          <p className="text-xs text-theme-muted text-center py-4">불러오는 중...</p>
+        ) : participants.length === 0 ? (
+          <p className="text-xs text-theme-subtle text-center py-4">참여자가 없습니다</p>
+        ) : (
+          <div className="space-y-2">
+            {participants.map((p) => (
+              <div key={p.claim_id} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-theme-primary">@{p.username}</span>
+                  <span className="text-theme-muted">
+                    {p.points.toFixed(1)}L · {p.hash_power_pct}%
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-theme-surface2 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${p.hash_power_pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {totalPool > 0 && (
+          <p className="text-xs text-theme-muted border-t border-theme-border pt-2">
+            예상 블록 수: {Math.floor(totalPool / satsPerBlock)}개
+          </p>
+        )}
+      </div>
+
+      {/* 복권 실행 */}
+      <div className="rounded-xl bg-theme-surface p-4 space-y-3">
+        <p className="text-sm font-semibold text-theme-primary">복권 실행</p>
+        <p className="text-xs text-theme-muted">
+          해시파워 비례 가중 무작위 분배. 더 많은 L = 더 높은 확률. 비례 지급이 아닌 블록 단위 확률 지급.
+        </p>
+
+        <button
+          onClick={() => lotteryMutation.mutate()}
+          disabled={lotteryMutation.isPending || participants.length === 0}
+          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+        >
+          <Bitcoin size={14} />
+          {lotteryMutation.isPending ? '실행 중...' : '복권 실행'}
+        </button>
+
+        {lotteryMutation.isError && (
+          <p className="text-xs text-red-400">{String((lotteryMutation.error as Error)?.message ?? '오류 발생')}</p>
+        )}
+
+        {lotteryResult && (
+          <div className="rounded-lg bg-theme-surface2 p-3 space-y-1 text-xs">
+            <p className="font-semibold text-theme-primary">
+              결과: {lotteryResult.total_blocks}블록 · {lotteryResult.winner_count}명 당첨 / {lotteryResult.participant_count}명 참여
+            </p>
+            {lotteryResult.results.map((r) => (
+              <div key={r.user_id} className="flex items-center justify-between text-theme-muted">
+                <span>uid:{r.user_id}</span>
+                <span className={r.status === 'paid' ? 'text-green-400' : r.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}>
+                  +{r.sats_won.toLocaleString()} sats ({r.status})
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 주차 종료 */}
+      <div className="rounded-xl bg-theme-surface p-4 space-y-3">
+        <p className="text-sm font-semibold text-theme-primary">주차 종료</p>
+        <p className="text-xs text-theme-muted">
+          미청구 사용자의 주간 포인트를 1/7로 감소시킵니다.
+        </p>
+        <button
+          onClick={() => closeMutation.mutate()}
+          disabled={closeMutation.isPending}
+          className="flex items-center gap-2 rounded-lg bg-red-600/80 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {closeMutation.isPending ? '처리 중...' : '주차 종료'}
+        </button>
+        {closeResult && (
+          <p className="text-xs text-green-400">
+            완료: 청구자 {closeResult.claimed_user_count}명 / 미청구 {closeResult.reduced_user_count}명 포인트 1/7 감소
+          </p>
+        )}
+        {closeMutation.isError && (
+          <p className="text-xs text-red-400">오류 발생</p>
+        )}
+      </div>
+
+      {/* 라운드 기록 */}
+      {rounds.length > 0 && (
+        <div className="rounded-xl bg-theme-surface p-4 space-y-2">
+          <p className="text-sm font-semibold text-theme-primary">분배 기록</p>
+          {rounds.map((r) => (
+            <div key={r.id} className="flex items-center justify-between rounded-lg bg-theme-surface2 px-3 py-2 text-xs">
+              <div>
+                <span className="font-semibold text-theme-primary">{r.week_label}</span>
+                <span className="ml-2 text-theme-muted">
+                  {r.total_blocks}블록 · {r.participant_count}명 · {r.total_pool_sats.toLocaleString()}sats
+                </span>
+              </div>
+              <span className={`font-semibold ${ROUND_COLOR[r.status] ?? 'text-theme-muted'}`}>
+                {ROUND_STATUS[r.status] ?? r.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,7 @@ from app.models.admin_log import AdminLog
 from app.models.challenge import ChallengeParticipation
 from app.models.claim import LightningClaim
 from app.models.comment import Comment
+from app.models.mining import MiningRound
 from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.video import Video
@@ -17,6 +19,7 @@ from app.routes.auth import get_current_user
 from app.services import r2 as r2_service
 from app.schemas.reward import ClaimSchema, ClaimWithUserSchema
 from app.schemas.video import VideoSchema
+from app.services import mining as mining_service
 from app.services.reward import (
     REWARD_STATUS_FIXED,
     get_week_label,
@@ -487,5 +490,93 @@ def weekly_summary(
             "page": page,
             "has_next": has_next,
             "total_users": total_users,
+        }
+    }
+
+
+# ─── Mining Distribution ───────────────────────────────────────────────────────
+
+class LotteryRequest(BaseModel):
+    week_label: str
+    sats_per_block: int = 1000
+
+
+class CloseWeekRequest(BaseModel):
+    week_label: str
+
+
+@router.get("/mining/participants")
+def get_mining_participants(
+    week_label: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> dict:
+    wlabel = week_label or get_week_label()
+    participants = mining_service.get_hash_power_distribution(db, wlabel)
+    total_pool = sum(p["sats_bid"] for p in participants)
+    return {
+        "data": {
+            "week_label": wlabel,
+            "participants": participants,
+            "total_pool_sats": total_pool,
+            "participant_count": len(participants),
+        }
+    }
+
+
+@router.post("/mining/run-lottery")
+def run_mining_lottery(
+    req: LotteryRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> dict:
+    result = mining_service.run_lottery(db, req.week_label, req.sats_per_block)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    db.commit()
+    return {"data": result}
+
+
+@router.post("/mining/close-week")
+def close_mining_week(
+    req: CloseWeekRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> dict:
+    result = mining_service.close_week(db, req.week_label)
+    db.commit()
+    return {"data": result}
+
+
+@router.get("/mining/rounds")
+def list_mining_rounds(
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> dict:
+    rounds = (
+        db.query(MiningRound)
+        .order_by(MiningRound.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "data": {
+            "rounds": [
+                {
+                    "id": r.id,
+                    "week_label": r.week_label,
+                    "total_pool_sats": r.total_pool_sats,
+                    "sats_per_block": r.sats_per_block,
+                    "total_blocks": r.total_blocks,
+                    "participant_count": r.participant_count,
+                    "winner_count": r.winner_count,
+                    "status": r.status,
+                    "created_at": r.created_at.isoformat(),
+                    "distributed_at": r.distributed_at.isoformat() if r.distributed_at else None,
+                    "closed_at": r.closed_at.isoformat() if r.closed_at else None,
+                }
+                for r in rounds
+            ]
         }
     }
