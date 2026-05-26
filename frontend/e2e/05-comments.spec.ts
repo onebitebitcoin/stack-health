@@ -58,17 +58,17 @@ test.describe('댓글 기능', () => {
 
     await page.screenshot({ path: 'e2e/screenshots/05-before-comment-click.png' })
 
-    // CommentSheet 초기 상태 확인 (화면 밖에 있어야 함)
+    // CommentSheet 초기 상태 확인 (translate-y-full = 닫힘)
     const sheet = page.locator('[data-testid="comment-sheet"]').first()
-    await expect(sheet).not.toBeInViewport()
+    await expect(sheet).toHaveClass(/translate-y-full/)
 
     // 댓글 버튼 클릭
     await commentBtn.click()
 
     await page.screenshot({ path: 'e2e/screenshots/05-after-comment-click.png' })
 
-    // CommentSheet가 화면에 보여야 함
-    await expect(sheet).toBeInViewport({ timeout: 2000 })
+    // CommentSheet가 열려야 함 (translate-y-0)
+    await expect(sheet).toHaveClass(/translate-y-0/, { timeout: 2000 })
   })
 
   test('CommentSheet에 댓글 목록이 표시된다', async ({ page }) => {
@@ -77,7 +77,7 @@ test.describe('댓글 기능', () => {
     await commentBtn.click()
 
     const sheet = page.locator('[data-testid="comment-sheet"]').first()
-    await expect(sheet).toBeInViewport({ timeout: 2000 })
+    await expect(sheet).toHaveClass(/translate-y-0/, { timeout: 2000 })
 
     await page.screenshot({ path: 'e2e/screenshots/05-comment-list.png' })
 
@@ -92,12 +92,12 @@ test.describe('댓글 기능', () => {
     await commentBtn.click()
 
     const sheet = page.locator('[data-testid="comment-sheet"]').first()
-    await expect(sheet).toBeInViewport({ timeout: 2000 })
+    await expect(sheet).toHaveClass(/translate-y-0/, { timeout: 2000 })
 
     // X 버튼 클릭으로 닫기
     await page.locator('[data-testid="comment-sheet"] button').filter({ hasText: '' }).first().click()
     await page.screenshot({ path: 'e2e/screenshots/05-comment-closed.png' })
 
-    await expect(sheet).not.toBeInViewport({ timeout: 2000 })
+    await expect(sheet).toHaveClass(/translate-y-full/, { timeout: 2000 })
   })
 })
