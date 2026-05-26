@@ -31,6 +31,11 @@ jobs:
           channel: "stable"
           cache: true
 
+      - name: "Create local.properties"
+        run: |
+          echo "flutter.sdk=$FLUTTER_ROOT" > mobile/android/local.properties
+          echo "sdk.dir=$ANDROID_HOME" >> mobile/android/local.properties
+
       - name: "Flutter pub get"
         working-directory: mobile
         run: flutter pub get
