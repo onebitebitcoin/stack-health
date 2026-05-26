@@ -64,7 +64,7 @@ export default function LeaderboardPage() {
       <div className="px-4 pt-5 pb-4">
         <div className="flex items-center gap-2">
           <Medal size={20} strokeWidth={1.5} className="text-amber-400" />
-          <h1 className="text-lg font-bold text-theme-primary">랭킹</h1>
+          <h1 className="text-lg font-bold text-theme-primary">사용자</h1>
         </div>
         <p className="text-xs text-theme-muted mt-0.5">누적 땀방울 기준</p>
       </div>
@@ -172,7 +172,7 @@ export default function LeaderboardPage() {
 
       {data.length === 0 && (
         <div className="flex flex-1 items-center justify-center text-theme-muted text-sm">
-          아직 랭킹 데이터가 없습니다
+          아직 사용자 데이터가 없습니다
         </div>
       )}
     </div>

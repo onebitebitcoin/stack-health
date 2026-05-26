@@ -28,10 +28,10 @@ export default function BottomNav() {
           <span>피드</span>
         </NavLink>
 
-        {/* 랭킹 */}
-        <NavLink to="/leaderboard" className={navItem}>
-          <Medal size={22} strokeWidth={1.5} />
-          <span>랭킹</span>
+        {/* 챌린지 */}
+        <NavLink to="/challenges" className={navItem}>
+          <Trophy size={22} strokeWidth={1.5} />
+          <span>챌린지</span>
         </NavLink>
 
         {/* FAB — 업로드 */}
@@ -46,10 +46,10 @@ export default function BottomNav() {
           <span className="mt-1 text-xs text-transparent select-none">업로드</span>
         </div>
 
-        {/* 챌린지 */}
-        <NavLink to="/challenges" className={navItem}>
-          <Trophy size={22} strokeWidth={1.5} />
-          <span>챌린지</span>
+        {/* 사용자 */}
+        <NavLink to="/leaderboard" className={navItem}>
+          <Medal size={22} strokeWidth={1.5} />
+          <span>사용자</span>
         </NavLink>
 
         {/* 프로필 */}
