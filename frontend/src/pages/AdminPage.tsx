@@ -250,7 +250,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div className="flex rounded-xl bg-theme-surface overflow-hidden">
+      <div className="sticky top-0 z-10 flex rounded-xl bg-theme-surface overflow-hidden">
         {tabs.map((tab) => (
           <button
             key={tab.id}
