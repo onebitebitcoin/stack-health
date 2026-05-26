@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward } from 'lucide-react'
+import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward, Check } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
@@ -358,31 +358,62 @@ export default function UploadPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        {step > 0 ? (
-          <button
-            onClick={handleBack}
-            className="flex-shrink-0 p-1 text-theme-muted hover:text-theme-primary transition-colors"
-            aria-label="이전 단계"
-          >
-            <ChevronLeft size={20} strokeWidth={1.5} />
-          </button>
-        ) : (
-          <div className="w-7 flex-shrink-0" />
-        )}
-        <div data-testid="step-bar" className="flex flex-1 items-center gap-1">
-          {STEPS.map((label, i) => (
-            <div key={label} className="flex flex-1 flex-col items-center gap-1">
-              <div
-                className={`h-1 w-full rounded-full transition-colors ${
-                  i <= step ? 'bg-accent' : 'bg-theme-surface2'
-                }`}
-              />
-              <span className={`text-xs ${i === step ? 'text-accent' : 'text-theme-subtle'}`}>
-                {label}
-              </span>
-            </div>
-          ))}
+      <div className="px-4 pt-4 pb-3">
+        <div className="flex items-center gap-2 mb-3">
+          {step > 0 ? (
+            <button
+              onClick={handleBack}
+              className="flex-shrink-0 p-1 text-theme-muted hover:text-theme-primary transition-colors"
+              aria-label="이전 단계"
+            >
+              <ChevronLeft size={20} strokeWidth={1.5} />
+            </button>
+          ) : (
+            <div className="w-7 flex-shrink-0" />
+          )}
+          <span className="text-sm font-semibold text-theme-primary">영상 업로드</span>
+        </div>
+
+        <div data-testid="step-bar" className="flex items-start">
+          {STEPS.flatMap((label, i) => {
+            const isCompleted = i < step
+            const isActive = i === step
+            const nodes = [
+              <div key={`step-${i}`} className="flex flex-col items-center gap-1.5">
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                    isCompleted
+                      ? 'bg-accent text-accent-fg'
+                      : isActive
+                        ? 'bg-accent text-accent-fg ring-4 ring-accent/20'
+                        : 'bg-theme-surface2 text-theme-subtle'
+                  }`}
+                >
+                  {isCompleted ? (
+                    <Check size={12} strokeWidth={2.5} />
+                  ) : (
+                    <span className="text-[11px] font-bold">{i + 1}</span>
+                  )}
+                </div>
+                <span
+                  className={`text-[9px] leading-tight text-center font-medium ${
+                    isActive ? 'text-accent' : isCompleted ? 'text-theme-muted' : 'text-theme-subtle'
+                  }`}
+                >
+                  {label}
+                </span>
+              </div>,
+            ]
+            if (i < STEPS.length - 1) {
+              nodes.push(
+                <div
+                  key={`line-${i}`}
+                  className={`flex-1 h-0.5 mt-3.5 transition-colors ${isCompleted ? 'bg-accent' : 'bg-theme-surface2'}`}
+                />,
+              )
+            }
+            return nodes
+          })}
         </div>
       </div>
 
