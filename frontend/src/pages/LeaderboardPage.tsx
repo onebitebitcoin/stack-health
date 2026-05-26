@@ -136,7 +136,7 @@ export default function LeaderboardPage() {
                   <span>{entry.username}</span>
                   <span className="ml-auto text-xs text-theme-muted flex items-center gap-0.5">
                     <Droplets size={10} className="text-blue-400" />
-                    {entry.total_points.toFixed(1)}pt
+                    {entry.total_points.toFixed(1)}L
                   </span>
                 </button>
               ))}
@@ -166,7 +166,7 @@ export default function LeaderboardPage() {
                 </button>
                 <div className="flex items-center gap-0.5 text-xs text-theme-muted">
                   <Droplets size={10} className="text-blue-400" />
-                  {top3[1].total_points.toFixed(1)}pt
+                  {top3[1].total_points.toFixed(1)}L
                 </div>
                 <div className="h-12 w-full rounded-t-lg bg-slate-400/20 flex items-center justify-center text-lg font-bold text-slate-400">
                   2
@@ -187,7 +187,7 @@ export default function LeaderboardPage() {
                 </button>
                 <div className="flex items-center gap-0.5 text-xs text-theme-muted">
                   <Droplets size={10} className="text-blue-400" />
-                  {top3[0].total_points.toFixed(1)}pt
+                  {top3[0].total_points.toFixed(1)}L
                 </div>
                 <div className="h-16 w-full rounded-t-lg bg-amber-400/20 flex items-center justify-center text-xl font-bold text-amber-400">
                   1
@@ -207,7 +207,7 @@ export default function LeaderboardPage() {
                 </button>
                 <div className="flex items-center gap-0.5 text-xs text-theme-muted">
                   <Droplets size={10} className="text-blue-400" />
-                  {top3[2].total_points.toFixed(1)}pt
+                  {top3[2].total_points.toFixed(1)}L
                 </div>
                 <div className="h-8 w-full rounded-t-lg bg-amber-700/20 flex items-center justify-center text-lg font-bold text-amber-700">
                   3
@@ -243,7 +243,7 @@ export default function LeaderboardPage() {
                 </span>
                 <div className="flex items-center gap-1 text-sm text-theme-muted">
                   <Droplets size={12} className="text-blue-400" />
-                  <span>{entry.total_points.toFixed(1)}pt</span>
+                  <span>{entry.total_points.toFixed(1)}L</span>
                 </div>
               </button>
             )

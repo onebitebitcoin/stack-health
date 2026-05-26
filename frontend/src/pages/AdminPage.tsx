@@ -111,7 +111,7 @@ function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => v
                   {data.points_by_week.map((w) => (
                     <div key={w.week_label} className="flex justify-between text-xs rounded-lg bg-theme-surface px-3 py-2">
                       <span className="text-theme-muted">{w.week_label}</span>
-                      <span className="font-semibold text-theme-primary">{w.points} pt</span>
+                      <span className="font-semibold text-theme-primary">{w.points}L</span>
                     </div>
                   ))}
                 </div>
@@ -377,7 +377,7 @@ export default function AdminPage() {
                   <div className="flex items-center gap-3 mt-1 text-xs text-theme-subtle">
                     <span>영상 {u.video_count}개</span>
                     <span>챌린지 {u.challenge_count}개</span>
-                    <span>{u.total_points} pt</span>
+                    <span>{u.total_points}L</span>
                   </div>
                 </div>
               </div>
@@ -539,7 +539,7 @@ export default function AdminPage() {
                   <span className="text-sm font-semibold text-theme-primary">@{item.username}</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs text-theme-muted">{item.weekly_points} pt</span>
+                  <span className="text-xs text-theme-muted">{item.weekly_points}L</span>
                   <span className="ml-2 text-xs font-semibold text-theme-primary">{item.satoshi_amount.toLocaleString()} sats</span>
                 </div>
               </div>
@@ -565,7 +565,7 @@ export default function AdminPage() {
                     <p className="font-semibold text-theme-primary">@{c.username}</p>
                     <p className="text-xs text-theme-muted">{c.email}</p>
                     <p className="mt-1 text-sm text-theme-primary">
-                      {c.week_label} · {c.points_used}pt · {c.satoshi_amount.toLocaleString()} sats
+                      {c.week_label} · {c.points_used}L · {c.satoshi_amount.toLocaleString()} sats
                     </p>
                     <p className="text-xs text-theme-subtle mt-0.5 break-all flex items-center gap-1">
                       <Zap size={10} className="text-accent flex-shrink-0" />
