@@ -6,7 +6,7 @@ import client from '../api/client'
 import type { AdminClaim, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse, MiningParticipant, MiningParticipantsResponse, MiningRound, LotteryResult } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
-type TabId = 'users' | 'videos' | 'rewards' | 'mining'
+type TabId = 'users' | 'videos' | 'rewards'
 
 interface AdminVideosResponse {
   videos: AdminVideo[]
@@ -267,7 +267,6 @@ export default function AdminPage() {
     { id: 'users', label: '유저', icon: <User size={14} /> },
     { id: 'videos', label: '영상', icon: <Video size={14} /> },
     { id: 'rewards', label: '리워드', icon: <Award size={14} /> },
-    { id: 'mining', label: '채굴', icon: <Pickaxe size={14} /> },
   ]
 
   return (
@@ -591,9 +590,7 @@ export default function AdminPage() {
             ))}
           </div>
         </div>
-      )}
 
-      {activeTab === 'mining' && (
         <MiningPanel />
       )}
 
@@ -628,14 +625,14 @@ function MiningPanel() {
     const week = Math.floor(diff / (7 * 86400000)) + 1
     return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
   })
-  const [unitSats, setUnitSats] = useState(10)
+  const [unitSats, setUnitSats] = useState(1008)
   const [lotteryResult, setLotteryResult] = useState<LotteryResult | null>(null)
   const [closeResult, setCloseResult] = useState<{ reduced_user_count: number; claimed_user_count: number } | null>(null)
 
   // ── Simulation state ──────────────────────────────────────────────────────
   const [simOpen, setSimOpen] = useState(false)
   const [simPool, setSimPool] = useState(10000)
-  const [simUnitSats, setSimUnitSats] = useState(10)
+  const [simN, setSimN] = useState(1008)
   const [simTrials, setSimTrials] = useState(1)
   const [simUsers, setSimUsers] = useState([
     { id: 1, name: 'Alice',   points: 150 },
@@ -646,8 +643,8 @@ function MiningPanel() {
   ])
   const [simResult, setSimResult] = useState<SimResultRow[] | null>(null)
 
-  const simNDraws = Math.floor(simPool / simUnitSats)
-  const simRemainder = simPool % simUnitSats
+  const simRewardPerDraw = Math.floor(simPool / simN)
+  const simDividend = simPool % simN
   const simTotalPts = simUsers.reduce((s, u) => s + Math.max(1, u.points), 0)
 
   function autoFillPoints() {
@@ -679,8 +676,8 @@ function MiningPanel() {
   function runSimulation() {
     const weights = simUsers.map(u => Math.max(1, u.points))
     const total = weights.reduce((a, b) => a + b, 0)
-    const nDraws = Math.floor(simPool / simUnitSats)
-    const remainder = simPool % simUnitSats
+    const rewardPerDraw = Math.floor(simPool / simN)
+    const dividend = simPool % simN
     const topIdx = weights.indexOf(Math.max(...weights))
 
     function pick() {
@@ -696,8 +693,17 @@ function MiningPanel() {
     const cumulative = new Array(simUsers.length).fill(0)
     for (let t = 0; t < simTrials; t++) {
       const w = new Array(simUsers.length).fill(0)
-      for (let d = 0; d < nDraws; d++) w[pick()] += simUnitSats
-      w[topIdx] += remainder
+      for (let d = 0; d < simN; d++) w[pick()] += rewardPerDraw
+      // dividend distributed proportionally; dust to top hash-power
+      if (dividend > 0) {
+        let distributed = 0
+        for (let i = 0; i < weights.length; i++) {
+          const share = Math.floor(dividend * weights[i] / total)
+          w[i] += share
+          distributed += share
+        }
+        w[topIdx] += dividend - distributed
+      }
       for (let i = 0; i < simUsers.length; i++) cumulative[i] += w[i]
     }
 
@@ -722,7 +728,7 @@ function MiningPanel() {
   })
 
   const lotteryMutation = useMutation({
-    mutationFn: () => client.post('/admin/mining/run-lottery', { week_label: weekLabel, unit_sats: unitSats }).then(r => r.data),
+    mutationFn: () => client.post('/admin/mining/run-lottery', { week_label: weekLabel, n: unitSats }).then(r => r.data),
     onSuccess: (res) => {
       setLotteryResult(res.data)
       queryClient.invalidateQueries({ queryKey: ['mining-participants', weekLabel] })
@@ -765,7 +771,7 @@ function MiningPanel() {
             />
           </div>
           <div className="w-32">
-            <label className="text-xs text-theme-muted mb-1 block">단위 sats (낮을수록 정밀)</label>
+            <label className="text-xs text-theme-muted mb-1 block">N (드로우 횟수)</label>
             <input
               type="number"
               value={unitSats}
@@ -814,7 +820,7 @@ function MiningPanel() {
 
         {totalPool > 0 && (
           <p className="text-xs text-theme-muted border-t border-theme-border pt-2">
-            단위: {unitSats} sats · 추첨 횟수: {totalPool > 0 ? Math.floor(totalPool / unitSats).toLocaleString() : 0}회 · 나머지: {totalPool > 0 ? (totalPool % unitSats) : 0} sats
+            N: {unitSats}회 드로우 · 드로우당 보상: {Math.floor(totalPool / unitSats).toLocaleString()} sats · 배당금: {(totalPool % unitSats).toLocaleString()} sats
           </p>
         )}
       </div>
@@ -926,11 +932,11 @@ function MiningPanel() {
                 />
               </div>
               <div>
-                <label className="text-xs text-theme-muted mb-1 block">단위 sats (N)</label>
+                <label className="text-xs text-theme-muted mb-1 block">N (드로우 횟수)</label>
                 <input
                   type="number" min={1} step={1}
-                  value={simUnitSats}
-                  onChange={e => { setSimUnitSats(Number(e.target.value)); setSimResult(null) }}
+                  value={simN}
+                  onChange={e => { setSimN(Number(e.target.value)); setSimResult(null) }}
                   className="w-full rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none"
                 />
               </div>
@@ -950,8 +956,8 @@ function MiningPanel() {
             </div>
 
             <div className="text-xs text-theme-muted">
-              추첨 횟수: <span className="text-theme-primary font-semibold">{simNDraws.toLocaleString()}회</span>
-              &nbsp;·&nbsp;나머지: <span className="text-theme-primary font-semibold">{simRemainder} sats</span>
+              드로우당 보상: <span className="text-theme-primary font-semibold">{simRewardPerDraw.toLocaleString()} sats</span>
+              &nbsp;·&nbsp;배당금: <span className="text-theme-primary font-semibold">{simDividend.toLocaleString()} sats</span>
               &nbsp;·&nbsp;총 포인트: <span className="text-theme-primary font-semibold">{simTotalPts.toLocaleString()}</span>
             </div>
 
@@ -1002,7 +1008,7 @@ function MiningPanel() {
             {/* 실행 버튼 */}
             <button
               onClick={runSimulation}
-              disabled={simNDraws === 0}
+              disabled={simRewardPerDraw === 0}
               className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg disabled:opacity-50 w-full justify-center"
             >
               <Bitcoin size={14} />

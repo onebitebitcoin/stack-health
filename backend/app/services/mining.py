@@ -56,14 +56,15 @@ def get_hash_power_distribution(db: Session, week_label: str) -> list[dict]:
 def run_lottery(
     db: Session,
     week_label: str,
-    unit_sats: int = 10,
+    n: int = 1008,
     do_pay: bool = True,
 ) -> dict:
     """Run probabilistic lottery for the week.
 
-    Splits the pool into unit_sats-sized chunks and performs one weighted draw
-    per chunk. Remainder (<unit_sats) goes to the top hash-power participant.
-    Lower unit_sats = more draws = closer to proportional distribution.
+    N = number of draws (fixed).
+    reward_per_draw = floor(pool / N) → sats awarded per winning draw.
+    dividend = pool % N → distributed proportionally to all participants.
+    Each draw: winner selected by hash-power weighted random.
     """
     claims = (
         db.query(LightningClaim)
@@ -78,27 +79,35 @@ def run_lottery(
         return {"error": "참여자가 없습니다"}
 
     total_pool = sum(c.satoshi_amount for c in claims)
-    unit = unit_sats
-    n_draws = total_pool // unit
+    reward_per_draw = total_pool // n
 
-    if n_draws == 0:
-        return {"error": f"풀이 너무 작습니다 ({total_pool} sats, unit={unit_sats} sats). unit_sats를 줄여주세요."}
+    if reward_per_draw == 0:
+        return {"error": f"풀이 너무 작습니다 ({total_pool} sats, N={n}). N을 줄여주세요."}
 
     user_ids = [c.user_id for c in claims]
     weights = [float(c.points_used) for c in claims]
     claim_by_uid = {c.user_id: c for c in claims}
 
-    draw_winners = random.choices(user_ids, weights=weights, k=n_draws)
+    draw_winners = random.choices(user_ids, weights=weights, k=n)
 
     winnings: dict[int, int] = {}
     for winner_id in draw_winners:
-        winnings[winner_id] = winnings.get(winner_id, 0) + unit
+        winnings[winner_id] = winnings.get(winner_id, 0) + reward_per_draw
 
-    # remainder goes to the highest hash-power participant
-    remainder = total_pool - sum(winnings.values())
-    if remainder > 0 and winnings:
-        top_uid = max(winnings, key=lambda uid: next(c.points_used for c in claims if c.user_id == uid))
-        winnings[top_uid] = winnings[top_uid] + remainder
+    # dividend distributed proportionally to all participants; dust to top hash-power
+    dividend = total_pool - sum(winnings.values())
+    if dividend > 0:
+        total_weights = sum(weights)
+        top_uid = user_ids[weights.index(max(weights))]
+        distributed = 0
+        for uid, w in zip(user_ids, weights):
+            share = int(dividend * w / total_weights)
+            if share > 0:
+                winnings[uid] = winnings.get(uid, 0) + share
+                distributed += share
+        dust = dividend - distributed
+        if dust > 0:
+            winnings[top_uid] = winnings.get(top_uid, 0) + dust
 
     mining_round = db.query(MiningRound).filter(MiningRound.week_label == week_label).first()
     if mining_round is None:
@@ -106,8 +115,8 @@ def run_lottery(
         db.add(mining_round)
 
     mining_round.total_pool_sats = total_pool
-    mining_round.sats_per_block = unit
-    mining_round.total_blocks = n_draws
+    mining_round.sats_per_block = reward_per_draw
+    mining_round.total_blocks = n
     mining_round.participant_count = len(claims)
     mining_round.winner_count = len(winnings)
     mining_round.result_json = json.dumps({str(k): v for k, v in winnings.items()})
@@ -146,8 +155,8 @@ def run_lottery(
     return {
         "week_label": week_label,
         "total_pool_sats": total_pool,
-        "n_draws": n_draws,
-        "unit_sats": unit,
+        "n": n,
+        "reward_per_draw": reward_per_draw,
         "participant_count": len(claims),
         "winner_count": len(winnings),
         "results": paid_results,
