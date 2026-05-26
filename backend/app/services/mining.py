@@ -57,10 +57,16 @@ def get_hash_power_distribution(db: Session, week_label: str) -> list[dict]:
 def run_lottery(
     db: Session,
     week_label: str,
-    sats_per_block: int = 1000,
+    n_draws: int = 10,
     do_pay: bool = True,
 ) -> dict:
-    """Run probabilistic mining lottery for the week. Returns distribution results."""
+    """Run probabilistic lottery for the week.
+
+    Performs n_draws weighted random draws from the pool.
+    Each draw allocates pool/n_draws sats to one winner (weighted by points).
+    Higher n_draws = closer to proportional; lower = more random.
+    Default n_draws=10 gives meaningful variance while staying fair long-term.
+    """
     claims = (
         db.query(LightningClaim)
         .filter(
@@ -74,20 +80,26 @@ def run_lottery(
         return {"error": "참여자가 없습니다"}
 
     total_pool = sum(c.satoshi_amount for c in claims)
-    total_blocks = total_pool // sats_per_block
+    unit = total_pool // n_draws
 
-    if total_blocks == 0:
-        return {"error": f"풀이 너무 작습니다 ({total_pool} sats). 블록 크기를 줄여주세요."}
+    if unit == 0:
+        return {"error": f"풀이 너무 작습니다 ({total_pool} sats). 추첨 횟수를 줄여주세요."}
 
     user_ids = [c.user_id for c in claims]
     weights = [float(c.points_used) for c in claims]
     claim_by_uid = {c.user_id: c for c in claims}
 
-    block_winners = random.choices(user_ids, weights=weights, k=int(total_blocks))
+    draw_winners = random.choices(user_ids, weights=weights, k=n_draws)
 
     winnings: dict[int, int] = {}
-    for winner_id in block_winners:
-        winnings[winner_id] = winnings.get(winner_id, 0) + sats_per_block
+    for winner_id in draw_winners:
+        winnings[winner_id] = winnings.get(winner_id, 0) + unit
+
+    # remainder goes to the highest hash-power participant
+    remainder = total_pool - sum(winnings.values())
+    if remainder > 0 and winnings:
+        top_uid = max(winnings, key=lambda uid: next(c.points_used for c in claims if c.user_id == uid))
+        winnings[top_uid] = winnings[top_uid] + remainder
 
     mining_round = db.query(MiningRound).filter(MiningRound.week_label == week_label).first()
     if mining_round is None:
@@ -95,8 +107,8 @@ def run_lottery(
         db.add(mining_round)
 
     mining_round.total_pool_sats = total_pool
-    mining_round.sats_per_block = sats_per_block
-    mining_round.total_blocks = int(total_blocks)
+    mining_round.sats_per_block = unit
+    mining_round.total_blocks = n_draws
     mining_round.participant_count = len(claims)
     mining_round.winner_count = len(winnings)
     mining_round.result_json = json.dumps({str(k): v for k, v in winnings.items()})
@@ -111,7 +123,7 @@ def run_lottery(
             continue
 
         claim.satoshi_amount = sats_won
-        claim.payment_memo = f"Mining {week_label}: {sats_won}sats ({int(total_blocks)}블록 중 {sats_won // sats_per_block}블록)"
+        claim.payment_memo = f"Distribution {week_label}: {sats_won} sats"
 
         if do_pay and settings.blink_api_key:
             result = blink_service.pay_lightning_address(claim.ln_address, sats_won)
@@ -135,8 +147,8 @@ def run_lottery(
     return {
         "week_label": week_label,
         "total_pool_sats": total_pool,
-        "total_blocks": int(total_blocks),
-        "sats_per_block": sats_per_block,
+        "n_draws": n_draws,
+        "unit_sats": unit,
         "participant_count": len(claims),
         "winner_count": len(winnings),
         "results": paid_results,

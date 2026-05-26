@@ -616,7 +616,7 @@ function MiningPanel() {
     const week = Math.floor(diff / (7 * 86400000)) + 1
     return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
   })
-  const [satsPerBlock, setSatsPerBlock] = useState(1000)
+  const [nDraws, setNDraws] = useState(10)
   const [lotteryResult, setLotteryResult] = useState<LotteryResult | null>(null)
   const [closeResult, setCloseResult] = useState<{ reduced_user_count: number; claimed_user_count: number } | null>(null)
 
@@ -631,7 +631,7 @@ function MiningPanel() {
   })
 
   const lotteryMutation = useMutation({
-    mutationFn: () => client.post('/admin/mining/run-lottery', { week_label: weekLabel, sats_per_block: satsPerBlock }).then(r => r.data),
+    mutationFn: () => client.post('/admin/mining/run-lottery', { week_label: weekLabel, n_draws: nDraws }).then(r => r.data),
     onSuccess: (res) => {
       setLotteryResult(res.data)
       queryClient.invalidateQueries({ queryKey: ['mining-participants', weekLabel] })
@@ -674,14 +674,15 @@ function MiningPanel() {
             />
           </div>
           <div className="w-32">
-            <label className="text-xs text-theme-muted mb-1 block">블록당 sats</label>
+            <label className="text-xs text-theme-muted mb-1 block">추첨 횟수 (분산↑낮을수록)</label>
             <input
               type="number"
-              value={satsPerBlock}
-              onChange={e => setSatsPerBlock(Number(e.target.value))}
+              value={nDraws}
+              onChange={e => setNDraws(Number(e.target.value))}
               className="w-full rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none"
-              min={100}
-              step={100}
+              min={1}
+              max={100}
+              step={1}
             />
           </div>
         </div>
@@ -723,7 +724,7 @@ function MiningPanel() {
 
         {totalPool > 0 && (
           <p className="text-xs text-theme-muted border-t border-theme-border pt-2">
-            예상 블록 수: {Math.floor(totalPool / satsPerBlock)}개
+            추첨 횟수: {nDraws}회 · 회당 {totalPool > 0 ? Math.floor(totalPool / nDraws).toLocaleString() : 0} sats
           </p>
         )}
       </div>
@@ -732,7 +733,7 @@ function MiningPanel() {
       <div className="rounded-xl bg-theme-surface p-4 space-y-3">
         <p className="text-sm font-semibold text-theme-primary">복권 실행</p>
         <p className="text-xs text-theme-muted">
-          해시파워 비례 가중 무작위 분배. 더 많은 L = 더 높은 확률. 비례 지급이 아닌 블록 단위 확률 지급.
+          해시파워 비례 가중 추첨. 더 많은 L = 더 높은 확률. 추첨 횟수가 낮을수록 랜덤성 증가, 높을수록 비례에 가까워짐.
         </p>
 
         <button
@@ -751,7 +752,7 @@ function MiningPanel() {
         {lotteryResult && (
           <div className="rounded-lg bg-theme-surface2 p-3 space-y-1 text-xs">
             <p className="font-semibold text-theme-primary">
-              결과: {lotteryResult.total_blocks}블록 · {lotteryResult.winner_count}명 당첨 / {lotteryResult.participant_count}명 참여
+              결과: {lotteryResult.winner_count}명 당첨 / {lotteryResult.participant_count}명 참여 · 총 {lotteryResult.total_pool_sats.toLocaleString()} sats
             </p>
             {lotteryResult.results.map((r) => (
               <div key={r.user_id} className="flex items-center justify-between text-theme-muted">
@@ -797,7 +798,7 @@ function MiningPanel() {
               <div>
                 <span className="font-semibold text-theme-primary">{r.week_label}</span>
                 <span className="ml-2 text-theme-muted">
-                  {r.total_blocks}블록 · {r.participant_count}명 · {r.total_pool_sats.toLocaleString()}sats
+                  {r.total_blocks}회 추첨 · {r.participant_count}명 · {r.total_pool_sats.toLocaleString()}sats
                 </span>
               </div>
               <span className={`font-semibold ${ROUND_COLOR[r.status] ?? 'text-theme-muted'}`}>
