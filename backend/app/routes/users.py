@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
@@ -92,8 +92,13 @@ def get_my_stats(
 
 
 @router.get("/leaderboard")
-def get_leaderboard(db: Session = Depends(get_db)) -> dict:
-    rows = (
+def get_leaderboard(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=50),
+    search: str = Query(""),
+) -> dict:
+    base_query = (
         db.query(
             User,
             sqlfunc.sum(RewardPoint.points).label("total_points"),
@@ -105,21 +110,40 @@ def get_leaderboard(db: Session = Depends(get_db)) -> dict:
             RewardPoint.status == REWARD_STATUS_FIXED,
         )
         .group_by(User.id)
+    )
+
+    if search:
+        base_query = base_query.filter(User.username.ilike(f"%{search}%"))
+
+    total: int = base_query.count()
+    offset = (page - 1) * limit
+
+    rows = (
+        base_query
         .order_by(sqlfunc.sum(RewardPoint.points).desc())
-        .limit(50)
+        .offset(offset)
+        .limit(limit + 1)
         .all()
     )
+
+    has_next = len(rows) > limit
+    rows = rows[:limit]
+
     return {
         "data": [
             {
-                "rank": idx + 1,
+                "rank": offset + idx + 1,
                 "user_id": user.id,
                 "username": user.username,
                 "avatar_url": user.avatar_url,
-                "total_points": int(total_points or 0),
+                "total_points": round(float(total_points or 0), 1),
             }
             for idx, (user, total_points) in enumerate(rows)
-        ]
+        ],
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "has_next": has_next,
     }
 
 

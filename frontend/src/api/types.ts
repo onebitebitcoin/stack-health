@@ -218,3 +218,11 @@ export interface LeaderboardEntry {
   avatar_url: string | null
   total_points: number
 }
+
+export interface LeaderboardResponse {
+  data: LeaderboardEntry[]
+  total: number
+  page: number
+  limit: number
+  has_next: boolean
+}
