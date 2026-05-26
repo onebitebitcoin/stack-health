@@ -1,0 +1,109 @@
+name: Flutter APK Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/flutter-build.yml'
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: '강제 빌드 (mobile 변경 없어도 실행)'
+        required: false
+        default: 'false'
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Flutter pub get
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Decode keystore (서명용)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > mobile/android/app/release.keystore
+          cat > mobile/android/key.properties <<EOF
+          storePassword=${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=release.keystore
+          EOF
+
+      - name: Build APK
+        working-directory: mobile
+        run: |
+          flutter build apk --release \
+            --dart-define=APP_URL=${{ secrets.APP_URL }}
+
+      - name: Upload APK to R2
+        id: upload
+        run: |
+          APK_PATH="mobile/build/app/outputs/flutter-apk/app-release.apk"
+          FILENAME="stack-health-$(date +%Y%m%d-%H%M%S).apk"
+
+          # presigned URL 요청
+          PRESIGN_RESPONSE=$(curl -sf -X POST \
+            "${{ secrets.APP_URL }}/api/v1/admin/app-links/upload-url" \
+            -H "Content-Type: application/json" \
+            -H "X-Admin-Key: ${{ secrets.ADMIN_SECRET_KEY }}" \
+            -d "{\"platform\":\"android\",\"filename\":\"$FILENAME\",\"content_type\":\"application/vnd.android.package-archive\"}")
+
+          UPLOAD_URL=$(echo $PRESIGN_RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'])")
+          R2_KEY=$(echo $PRESIGN_RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin)['r2_key'])")
+
+          # R2 직접 업로드
+          curl -sf -X PUT "$UPLOAD_URL" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary @"$APK_PATH"
+
+          # CDN URL 계산 (R2_PUBLIC_URL + r2_key)
+          CDN_URL="${{ secrets.R2_PUBLIC_URL }}/$R2_KEY"
+          echo "cdn_url=$CDN_URL" >> $GITHUB_OUTPUT
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+          echo "APK uploaded: $CDN_URL"
+
+      - name: Register APK URL in admin
+        run: |
+          curl -sf -X POST \
+            "${{ secrets.APP_URL }}/api/v1/admin/app-links/confirm-upload" \
+            -H "Content-Type: application/json" \
+            -H "X-Admin-Key: ${{ secrets.ADMIN_SECRET_KEY }}" \
+            -d "{\"platform\":\"android\",\"cdn_url\":\"${{ steps.upload.outputs.cdn_url }}\",\"filename\":\"${{ steps.upload.outputs.filename }}\"}"
+          echo "Admin API updated with new APK URL"
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-health-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          echo "## APK 빌드 완료" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **다운로드 URL**: ${{ steps.upload.outputs.cdn_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **파일명**: ${{ steps.upload.outputs.filename }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **앱 URL**: ${{ secrets.APP_URL }}" >> $GITHUB_STEP_SUMMARY

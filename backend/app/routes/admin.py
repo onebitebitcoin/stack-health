@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -17,7 +17,7 @@ from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.video import Video
 from app.models.user import User
-from app.routes.auth import get_current_user
+from app.config import settings
 from app.services import r2 as r2_service
 from app.schemas.reward import ClaimSchema, ClaimWithUserSchema
 from app.schemas.video import VideoSchema
@@ -33,10 +33,28 @@ from app.services.reward import (
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
-def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if not current_user.is_admin:
+def require_admin(
+    request: Request,
+    x_admin_key: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User | None:
+    # CI/CD 서버-to-서버: X-Admin-Key 헤더로 인증
+    if x_admin_key and x_admin_key == settings.admin_secret_key:
+        return None
+
+    # 일반 브라우저: Bearer JWT 인증
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    from app.services.auth import decode_token
+    from app.services.auth import get_user_by_id
+    user_id = decode_token(auth.removeprefix("Bearer "))
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    user = get_user_by_id(db, user_id)
+    if user is None or not user.is_admin:
         raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
-    return current_user
+    return user
 
 
 @router.get("/claims")
@@ -44,7 +62,7 @@ def list_claims(
     status: Optional[str] = None,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     query = db.query(LightningClaim)
     if status:
@@ -75,7 +93,7 @@ def mark_paid(
     claim_id: int,
     payment_memo: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     claim = db.query(LightningClaim).filter(LightningClaim.id == claim_id).first()
     if claim is None:
@@ -94,7 +112,7 @@ def list_videos(
     page: int = 1,
     limit: int = 20,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     offset = (page - 1) * limit
     base_q = db.query(Video)
@@ -134,7 +152,7 @@ def list_videos(
 def reject_video(
     video_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
@@ -151,7 +169,7 @@ def reject_video(
 def delete_video(
     video_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
@@ -188,7 +206,7 @@ def list_users(
     limit: int = 20,
     search: str = "",
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     settled_count = settle_queued_rewards(db)
     if settled_count:
@@ -264,7 +282,7 @@ def list_users(
 def toggle_ban(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
@@ -286,12 +304,12 @@ def toggle_ban(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User | None = Depends(require_admin),
 ) -> dict:
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.id == admin.id:
+    if admin is not None and user.id == admin.id:
         raise HTTPException(status_code=400, detail="자신의 계정은 삭제할 수 없습니다")
 
     # 영상 R2 키 수집 후 DB 삭제
@@ -336,7 +354,7 @@ def delete_user(
 def get_user_detail(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     settled_count = settle_queued_rewards(db, user_id)
     if settled_count:
@@ -438,7 +456,7 @@ def weekly_summary(
     page: int = 1,
     limit: int = 20,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     wlabel = week_label or get_week_label()
     settled_count = settle_queued_rewards(db)
@@ -511,7 +529,7 @@ class CloseWeekRequest(BaseModel):
 def get_mining_participants(
     week_label: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     wlabel = week_label or get_week_label()
     participants = mining_service.get_hash_power_distribution(db, wlabel)
@@ -530,7 +548,7 @@ def get_mining_participants(
 def run_mining_lottery(
     req: LotteryRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     result = mining_service.run_lottery(db, req.week_label, req.n)
     if "error" in result:
@@ -543,7 +561,7 @@ def run_mining_lottery(
 def close_mining_week(
     req: CloseWeekRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     result = mining_service.close_week(db, req.week_label)
     db.commit()
@@ -581,7 +599,7 @@ def _app_links_data(links: AppLinks | None) -> dict:
 @router.get("/app-links")
 def get_app_links(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     links = db.query(AppLinks).first()
     return {"data": _app_links_data(links)}
@@ -591,7 +609,7 @@ def get_app_links(
 def update_app_links(
     body: AppLinksRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     links = db.query(AppLinks).first()
     if not links:
@@ -609,7 +627,7 @@ def update_app_links(
 def get_app_upload_url(
     body: AppUploadUrlRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     try:
         upload_url, r2_key = r2_service.generate_apk_presigned_url(
@@ -625,7 +643,7 @@ def get_app_upload_url(
 def confirm_app_upload(
     body: AppUploadConfirmRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     links = db.query(AppLinks).first()
     if not links:
@@ -647,7 +665,7 @@ def confirm_app_upload(
 def list_mining_rounds(
     limit: int = 20,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    _: User | None = Depends(require_admin),
 ) -> dict:
     rounds = (
         db.query(MiningRound)
