@@ -263,7 +263,7 @@ export default function HistoryPage() {
 
       {/* 풀스크린 영상 뷰어 */}
       {selectedDate && selectedPosts.length > 0 && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+        <div className="fixed inset-0 z-[70] bg-black flex flex-col">
 
           {/* 상단 바 */}
           <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/60 to-transparent">

@@ -211,11 +211,11 @@ export default function ChallengeDetailPage() {
       {/* 삭제 확인 시트 */}
       {showDeleteConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setShowDeleteConfirm(false)}
         >
           <div
-            className="w-full max-w-sm rounded-t-3xl bg-theme-surface p-5 flex flex-col gap-4"
+            className="w-full max-w-sm rounded-3xl bg-theme-surface p-5 flex flex-col gap-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div>

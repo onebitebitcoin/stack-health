@@ -9,12 +9,12 @@ export default function LoginPromptSheet({ onClose }: LoginPromptSheetProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4"
       style={{ backgroundColor: 'var(--overlay)' }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-t-2xl bg-theme-surface p-6"
+        className="w-full max-w-lg rounded-2xl bg-theme-surface p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-1 h-1 w-10 rounded-full bg-theme-border mx-auto" />

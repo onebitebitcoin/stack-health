@@ -439,11 +439,11 @@ export default function ProfilePage() {
       {/* ── 삭제 확인 다이얼로그 ── */}
       {deleteConfirmId !== null && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setDeleteConfirmId(null)}
         >
           <div
-            className="w-full max-w-lg rounded-t-3xl bg-theme-surface px-6 pt-5 pb-8"
+            className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-base font-bold text-theme-primary mb-1">영상 삭제</p>
@@ -469,7 +469,7 @@ export default function ProfilePage() {
 
       {/* ── 풀스크린 영상 뷰어 ── */}
       {selectedDate && selectedPosts.length > 0 && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+        <div className="fixed inset-0 z-[70] bg-black flex flex-col">
           <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/60 to-transparent">
             <button
               onClick={closeModal}

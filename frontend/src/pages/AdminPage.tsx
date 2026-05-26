@@ -81,9 +81,9 @@ function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => v
   })
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="w-full max-h-[80dvh] overflow-y-auto rounded-t-2xl bg-theme-page p-4 space-y-4"
+        className="w-full max-w-lg max-h-[80dvh] overflow-y-auto rounded-2xl bg-theme-page p-4 space-y-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {isLoading && <p className="text-center text-theme-muted py-8">불러오는 중...</p>}
