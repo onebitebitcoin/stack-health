@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight } from 'lucide-react'
+import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import client from '../api/client'
 import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse } from '../api/types'
@@ -169,6 +169,7 @@ export default function AdminPage() {
   const [leaderboardPage, setLeaderboardPage] = useState(1)
   const [leaderboardItems, setLeaderboardItems] = useState<AdminWeeklySummaryItem[]>([])
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
+  const [userSearch, setUserSearch] = useState('')
 
   const isAdmin = user?.is_admin ?? false
 
@@ -180,6 +181,25 @@ export default function AdminPage() {
     },
     enabled: isAdmin && activeTab === 'users',
   })
+
+  const normalizedUserSearch = userSearch.trim().toLowerCase()
+  const filteredUsers = useMemo(() => {
+    if (!normalizedUserSearch) return users
+    return users.filter((u) => {
+      const haystack = [
+        u.username,
+        u.email ?? '',
+        u.lightning_address ?? '',
+        String(u.id),
+      ].join(' ').toLowerCase()
+      return haystack.includes(normalizedUserSearch)
+    })
+  }, [users, normalizedUserSearch])
+
+  const userAutocompleteOptions = useMemo(
+    () => users.slice(0, 80).map((u) => `@${u.username}${u.email ? ` · ${u.email}` : ''}`),
+    [users],
+  )
 
   const deleteUser = useMutation({
     mutationFn: (id: number) => client.delete(`/admin/users/${id}`),
@@ -268,7 +288,7 @@ export default function AdminPage() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => { setSearchParams({ tab: tab.id }); setVideoPage(1) }}
+              onClick={() => { setSearchParams({ tab: tab.id }); setVideoPage(1); setUserSearch('') }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors ${
                 activeTab === tab.id ? 'bg-accent text-accent-fg' : 'text-theme-muted hover:text-theme-primary'
               }`}
@@ -284,12 +304,48 @@ export default function AdminPage() {
 
       {activeTab === 'users' && (
         <div className="space-y-3">
+          <div className="sticky top-0 z-10 -mx-4 bg-theme-page px-4 pb-2">
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted" />
+              <input
+                list="admin-user-autocomplete"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value.replace(/^@/, '').split(' · ')[0])}
+                placeholder="닉네임, 이메일, Lightning 주소, ID 검색"
+                className="w-full rounded-xl border border-theme-border bg-theme-surface py-3 pl-9 pr-9 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
+              />
+              {userSearch && (
+                <button
+                  type="button"
+                  onClick={() => setUserSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-primary"
+                  aria-label="검색어 지우기"
+                >
+                  <X size={14} />
+                </button>
+              )}
+              <datalist id="admin-user-autocomplete">
+                {userAutocompleteOptions.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            </div>
+            {!usersLoading && !usersError && (
+              <p className="mt-2 text-xs text-theme-muted">
+                {normalizedUserSearch ? `${filteredUsers.length}명 검색됨 · 전체 ${users.length}명` : `전체 ${users.length}명`}
+              </p>
+            )}
+          </div>
+
           {usersLoading && <p className="text-center text-theme-muted py-10">불러오는 중...</p>}
           {!usersLoading && usersError && <p className="text-center text-red-400 py-10">조회 실패</p>}
           {!usersLoading && !usersError && users.length === 0 && (
             <p className="text-center text-theme-subtle py-10">유저가 없습니다</p>
           )}
-          {users.map((u) => (
+          {!usersLoading && !usersError && users.length > 0 && filteredUsers.length === 0 && (
+            <p className="text-center text-theme-subtle py-10">검색 결과가 없습니다</p>
+          )}
+          {filteredUsers.map((u) => (
             <div key={u.id} className="rounded-xl bg-theme-surface p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">

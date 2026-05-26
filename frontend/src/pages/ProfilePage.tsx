@@ -40,7 +40,7 @@ export default function ProfilePage() {
   const { data: myStats, isLoading } = useQuery<MyStats>({
     queryKey: ['my-stats'],
     queryFn: async () => {
-      const res = await client.get<{ data: MyStats }>('/me/stats')
+      const res = await client.get<{ data: MyStats }>('/users/me/stats')
       return res.data.data
     },
     enabled: !!user,
@@ -89,6 +89,9 @@ export default function ProfilePage() {
   const totalWorkoutDays = historyData?.total_days ?? 0
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
   const todayNum = isCurrentMonth ? now.getDate() : -1
+  const confirmedSweatPoints = myStats?.total_points ?? 0
+  const pendingSweatPoints = myStats?.queued_points ?? 0
+  const displayedSweatPoints = confirmedSweatPoints + pendingSweatPoints
 
   const cells: Array<{ day: number | null; dateStr: string | null }> = []
   for (let i = 0; i < firstIdx; i++) cells.push({ day: null, dateStr: null })
@@ -152,15 +155,15 @@ export default function ProfilePage() {
       <div className="mx-4 mb-4 rounded-2xl bg-theme-surface px-6 py-5 flex flex-col items-center gap-1">
         <Droplets size={26} className="text-blue-400 mb-1" strokeWidth={1.5} />
         <span className="text-4xl font-bold font-mono text-theme-primary">
-          {((myStats?.total_points ?? 0) / 100).toFixed(1)}
+          {(displayedSweatPoints / 100).toFixed(1)}
           <span className="text-lg font-medium text-theme-muted ml-1">L</span>
         </span>
         <span className="text-xs text-theme-muted mt-0.5">내가 흘린 땀</span>
-        {(myStats?.queued_points ?? 0) > 0 && (
+        {pendingSweatPoints > 0 && (
           <div className="mt-2 flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
             <span className="text-xs text-theme-muted">
-              +{((myStats?.queued_points ?? 0) / 100).toFixed(1)}L 확정 대기 중
+              +{(pendingSweatPoints / 100).toFixed(1)}L 확정 대기 중
             </span>
           </div>
         )}
