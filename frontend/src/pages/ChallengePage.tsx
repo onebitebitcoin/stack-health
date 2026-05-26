@@ -28,11 +28,13 @@ function ChallengeCard({
   onJoin,
   joining,
   onLoginRequired,
+  onNavigate,
 }: {
   challenge: Challenge
   onJoin: (id: number) => void
   joining: boolean
   onLoginRequired: () => void
+  onNavigate: (id: number) => void
 }) {
   const token = useAuthStore((s) => s.token)
   const progress = Math.min(
@@ -40,7 +42,8 @@ function ChallengeCard({
     Math.round((challenge.my_upload_count / challenge.condition_value) * 100),
   )
 
-  function handleJoin() {
+  function handleJoin(e: React.MouseEvent) {
+    e.stopPropagation()
     if (!token) {
       onLoginRequired()
       return
@@ -49,7 +52,10 @@ function ChallengeCard({
   }
 
   return (
-    <div className="rounded-2xl bg-theme-surface p-4">
+    <div
+      className="rounded-2xl bg-theme-surface p-4 cursor-pointer active:opacity-80"
+      onClick={() => onNavigate(challenge.id)}
+    >
       <div className="flex items-start gap-3 mb-2">
         {challenge.image_url && (
           <img
@@ -128,6 +134,7 @@ function ChallengeCard({
             참여하기
           </button>
         )}
+
       </div>
     </div>
   )
@@ -249,6 +256,7 @@ export default function ChallengePage() {
               onJoin={(id) => joinMutation.mutate(id)}
               joining={joiningId === c.id}
               onLoginRequired={() => setShowLogin(true)}
+              onNavigate={(id) => navigate(`/challenges/${id}`)}
             />
           ))}
         </div>

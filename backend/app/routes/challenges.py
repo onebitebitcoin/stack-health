@@ -299,6 +299,36 @@ def challenge_participants(
     }
 
 
+@router.get("/{challenge_id}")
+def get_challenge(
+    challenge_id: int,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+) -> dict:
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id, Challenge.is_active == True).first()  # noqa: E712
+    if not challenge:
+        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+    uid = current_user.id if current_user else None
+    return {"data": {"challenge": _to_schema(challenge, uid, db)}}
+
+
+@router.delete("/{challenge_id}")
+def delete_challenge(
+    challenge_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+    if challenge.creator_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="삭제 권한이 없습니다")
+    challenge.is_active = False
+    db.commit()
+    logger.info("Challenge deleted: id=%s by user_id=%s", challenge_id, current_user.id)
+    return {"data": {"deleted": True}}
+
+
 def increment_challenge_upload(db: Session, user_id: int, challenge_id: int) -> None:
     participation = (
         db.query(ChallengeParticipation)

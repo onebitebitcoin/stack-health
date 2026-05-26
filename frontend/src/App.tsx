@@ -18,6 +18,7 @@ import UserProfilePage from './pages/UserProfilePage'
 import SetupUsernamePage from './pages/SetupUsernamePage'
 import MyChallengeDashboardPage from './pages/MyChallengeDashboardPage'
 import ChallengeDashboardPage from './pages/ChallengeDashboardPage'
+import ChallengeDetailPage from './pages/ChallengeDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import LeaderboardPage from './pages/LeaderboardPage'
 
@@ -96,6 +97,7 @@ function Layout() {
         />
         <Route path="/challenges" element={<ChallengePage />} />
         <Route path="/challenges/create" element={<ChallengeCreatePage />} />
+        <Route path="/challenges/:id" element={<ChallengeDetailPage />} />
         <Route path="/my-challenges" element={<RequireAuth><MyChallengeDashboardPage /></RequireAuth>} />
         <Route path="/challenges/:id/dashboard" element={<RequireAuth><ChallengeDashboardPage /></RequireAuth>} />
         <Route

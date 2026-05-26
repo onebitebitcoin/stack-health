@@ -16,6 +16,8 @@ const CATEGORIES = [
   { value: 'beginner', label: '입문' },
 ]
 
+const CROP_INSET = 24
+
 export default function ChallengeCreatePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
@@ -30,21 +32,41 @@ export default function ChallengeCreatePage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [error, setError] = useState('')
 
-  // Image crop state
   const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [imgReady, setImgReady] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef({ startX: 0, startY: 0, ox: 0, oy: 0 })
   const previewRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const renderedRef = useRef({ w: 0, h: 0 })
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
-    const url = URL.createObjectURL(f)
-    setImageSrc(url)
+    setImageSrc(URL.createObjectURL(f))
     setOffset({ x: 0, y: 0 })
+    setImgReady(false)
+    renderedRef.current = { w: 0, h: 0 }
+  }
+
+  function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const img = e.currentTarget
+    const container = previewRef.current
+    if (!container) return
+    const containerSize = container.getBoundingClientRect().width
+    if (!containerSize) return
+    const cropSize = containerSize - CROP_INSET * 2
+    const scale = Math.max(cropSize / img.naturalWidth, cropSize / img.naturalHeight)
+    const w = img.naturalWidth * scale
+    const h = img.naturalHeight * scale
+    renderedRef.current = { w, h }
+    setOffset({
+      x: CROP_INSET + (cropSize - w) / 2,
+      y: CROP_INSET + (cropSize - h) / 2,
+    })
+    setImgReady(true)
   }
 
   function onPointerDown(e: React.PointerEvent) {
@@ -55,18 +77,15 @@ export default function ChallengeCreatePage() {
 
   function onPointerMove(e: React.PointerEvent) {
     if (!isDragging) return
-    const { startX, startY, ox, oy } = dragRef.current
-    const img = imgRef.current
     const container = previewRef.current
-    if (!img || !container) return
+    if (!container) return
+    const { w, h } = renderedRef.current
+    if (!w || !h) return
+    const { startX, startY, ox, oy } = dragRef.current
     const containerSize = container.getBoundingClientRect().width
-    const scale = Math.max(containerSize / img.naturalWidth, containerSize / img.naturalHeight)
-    const renderedW = img.naturalWidth * scale
-    const renderedH = img.naturalHeight * scale
-    const minX = containerSize - renderedW
-    const minY = containerSize - renderedH
-    const newX = Math.min(0, Math.max(minX, ox + (e.clientX - startX)))
-    const newY = Math.min(0, Math.max(minY, oy + (e.clientY - startY)))
+    const cropSize = containerSize - CROP_INSET * 2
+    const newX = Math.min(CROP_INSET, Math.max(CROP_INSET + cropSize - w, ox + (e.clientX - startX)))
+    const newY = Math.min(CROP_INSET, Math.max(CROP_INSET + cropSize - h, oy + (e.clientY - startY)))
     setOffset({ x: newX, y: newY })
   }
 
@@ -78,12 +97,12 @@ export default function ChallengeCreatePage() {
     const img = imgRef.current
     const container = previewRef.current
     if (!img || !container || !imageSrc) return
-
     const containerSize = container.getBoundingClientRect().width
-    const scale = Math.max(containerSize / img.naturalWidth, containerSize / img.naturalHeight)
-    const srcX = -offset.x / scale
-    const srcY = -offset.y / scale
-    const srcSize = containerSize / scale
+    const cropSize = containerSize - CROP_INSET * 2
+    const scale = Math.max(cropSize / img.naturalWidth, cropSize / img.naturalHeight)
+    const srcX = (CROP_INSET - offset.x) / scale
+    const srcY = (CROP_INSET - offset.y) / scale
+    const srcSize = cropSize / scale
 
     const canvas = document.createElement('canvas')
     canvas.width = 400
@@ -156,10 +175,9 @@ export default function ChallengeCreatePage() {
           <label className="block text-xs text-theme-muted mb-2">챌린지 이미지</label>
           {imageSrc ? (
             <div className="flex flex-col gap-2">
-              {/* 크롭 프리뷰 */}
               <div
                 ref={previewRef}
-                className="relative w-full aspect-square overflow-hidden rounded-2xl bg-theme-surface2 cursor-grab active:cursor-grabbing touch-none"
+                className="relative w-full aspect-square overflow-hidden rounded-2xl bg-black cursor-grab active:cursor-grabbing touch-none"
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
@@ -169,20 +187,35 @@ export default function ChallengeCreatePage() {
                   ref={imgRef}
                   src={imageSrc}
                   alt=""
-                  className="absolute max-w-none select-none"
-                  style={{
-                    transform: `translate(${offset.x}px, ${offset.y}px)`,
-                    width: 'auto',
-                    height: 'auto',
-                    minWidth: '100%',
-                    minHeight: '100%',
-                    objectFit: 'cover',
-                  }}
                   draggable={false}
+                  onLoad={onImageLoad}
+                  className={`absolute max-w-none select-none transition-opacity duration-200 ${imgReady ? 'opacity-100' : 'opacity-0'}`}
+                  style={{
+                    width: renderedRef.current.w ? `${renderedRef.current.w}px` : '100%',
+                    height: renderedRef.current.h ? `${renderedRef.current.h}px` : 'auto',
+                    transform: `translate(${offset.x}px, ${offset.y}px)`,
+                  }}
                 />
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5">
-                    <Move size={13} className="text-white/80" />
+
+                {/* 크롭 외곽 어둡게 처리 */}
+                <div className="absolute top-0 left-0 right-0 bg-black/50 pointer-events-none" style={{ height: CROP_INSET }} />
+                <div className="absolute bottom-0 left-0 right-0 bg-black/50 pointer-events-none" style={{ height: CROP_INSET }} />
+                <div className="absolute bg-black/50 pointer-events-none" style={{ top: CROP_INSET, bottom: CROP_INSET, left: 0, width: CROP_INSET }} />
+                <div className="absolute bg-black/50 pointer-events-none" style={{ top: CROP_INSET, bottom: CROP_INSET, right: 0, width: CROP_INSET }} />
+
+                {/* 크롭 프레임 테두리 */}
+                <div
+                  className="absolute border border-white/60 pointer-events-none"
+                  style={{ inset: CROP_INSET }}
+                />
+
+                {/* 드래그 안내 */}
+                <div
+                  className="absolute pointer-events-none flex items-center justify-center"
+                  style={{ inset: CROP_INSET }}
+                >
+                  <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1">
+                    <Move size={12} className="text-white/80" />
                     <span className="text-xs text-white/80">드래그해서 위치 조정</span>
                   </div>
                 </div>
