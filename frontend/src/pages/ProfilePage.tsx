@@ -1,41 +1,17 @@
-import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LogOut, Zap, Check, Moon, Sun, Droplets, Heart, Video, ShieldCheck } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
-import client from '../api/client'
+import { LogOut, Droplets, Heart, Video, ShieldCheck, Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
-import { useThemeStore, type Theme } from '../store/theme'
 import type { MyStats, ProfilePost } from '../api/types'
+import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
-  const setUser = useAuthStore((s) => s.setUser)
 
   const navigate = useNavigate()
-  const { theme, setTheme } = useThemeStore()
-
-  const [editingLn, setEditingLn] = useState(false)
-  const [lnInput, setLnInput] = useState(user?.lightning_address ?? '')
-  const [saving, setSaving] = useState(false)
-
-  const DARK_THEMES: Theme[] = ['volt', 'sapphire', 'indigo']
-  const isDark = DARK_THEMES.includes(theme)
-
-  async function handleThemeChange(dark: boolean) {
-    const next: Theme = dark ? 'volt' : 'volt-light'
-    setTheme(next)
-    try {
-      const res = await client.patch<{ data: typeof user }>('/auth/me', {
-        app_settings: { ...((user?.app_settings ?? {}) as object), theme: next },
-      })
-      if (res.data.data) setUser(res.data.data)
-    } catch {
-      // silently ignore — theme is already applied locally
-    }
-  }
 
   const { data: myStats, isLoading } = useQuery<MyStats>({
     queryKey: ['my-stats'],
@@ -93,6 +69,13 @@ export default function ProfilePage() {
           </div>
           <p className="text-xs text-theme-muted truncate">{user?.email}</p>
         </div>
+        <button
+          onClick={() => navigate('/settings')}
+          className="text-theme-muted hover:text-theme-primary transition-colors p-1"
+          aria-label="설정"
+        >
+          <Settings size={16} strokeWidth={1.5} />
+        </button>
         <button
           onClick={() => { logout(); window.location.href = '/login' }}
           className="text-theme-muted hover:text-red-400 transition-colors p-1"
@@ -172,81 +155,6 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* ── Lightning 주소 ── */}
-      <div className="mx-4 mb-4 rounded-xl bg-theme-surface px-4 py-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-theme-muted flex items-center gap-1.5">
-            <Zap size={11} className="text-accent" />
-            Lightning 주소
-          </span>
-          {editingLn ? (
-            <form onSubmit={saveLightningAddress} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={lnInput}
-                onChange={(e) => setLnInput(e.target.value)}
-                placeholder="you@wallet.com"
-                autoFocus
-                className="bg-transparent text-xs text-theme-primary outline-none text-right min-w-0 w-36"
-              />
-              <button type="submit" disabled={saving}>
-                <Check size={13} className="text-accent" />
-              </button>
-            </form>
-          ) : (
-            <button
-              onClick={() => setEditingLn(true)}
-              className="text-xs font-mono text-theme-primary truncate max-w-[180px]"
-            >
-              {user?.lightning_address ?? '미설정'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── 앱 설정 ── */}
-      <div className="mx-4 mb-4">
-        <p className="text-[10px] font-medium uppercase tracking-widest text-theme-muted px-1 mb-2">
-          앱 설정
-        </p>
-        <div className="flex items-center justify-between rounded-xl bg-theme-surface px-4 py-3">
-          <span className="text-xs text-theme-primary">화면 모드</span>
-          <div className="flex items-center gap-1 rounded-lg bg-theme-surface2 p-0.5">
-            <button
-              onClick={() => handleThemeChange(true)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                isDark
-                  ? 'bg-theme-page text-theme-primary shadow-sm'
-                  : 'text-theme-muted hover:text-theme-primary'
-              }`}
-            >
-              <Moon size={11} strokeWidth={1.5} />
-              다크
-            </button>
-            <button
-              onClick={() => handleThemeChange(false)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                !isDark
-                  ? 'bg-theme-page text-theme-primary shadow-sm'
-                  : 'text-theme-muted hover:text-theme-primary'
-              }`}
-            >
-              <Sun size={11} strokeWidth={1.5} />
-              라이트
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── 이용약관 (중앙 배치) ── */}
-      <div className="flex justify-center mt-2 mb-4">
-        <Link
-          to="/terms"
-          className="text-xs text-theme-muted hover:text-theme-primary transition-colors px-4 py-2 rounded-lg bg-theme-surface"
-        >
-          이용약관
-        </Link>
-      </div>
 
     </div>
   )
