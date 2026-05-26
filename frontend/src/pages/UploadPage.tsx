@@ -304,7 +304,7 @@ export default function UploadPage() {
           )}
           <div className="flex items-center justify-between rounded-xl bg-theme-surface2 px-4 py-3">
             <span className="text-xs text-theme-muted">흘린 땀</span>
-            <span className="text-lg font-bold text-accent">+{pointsEarned} ml</span>
+            <span className="text-lg font-bold text-accent">+{(pointsEarned / 100).toFixed(1)} L</span>
           </div>
         </div>
 

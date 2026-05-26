@@ -119,8 +119,8 @@ export default function ProfilePage() {
       <div className="mx-4 mb-4 rounded-2xl bg-theme-surface px-6 py-6 flex flex-col items-center gap-1">
         <Droplets size={28} className="text-blue-400 mb-1" strokeWidth={1.5} />
         <span className="text-4xl font-bold font-mono text-theme-primary">
-          {(myStats?.total_points ?? 0).toLocaleString()}
-          <span className="text-lg font-medium text-theme-muted ml-1">ml</span>
+          {((myStats?.total_points ?? 0) / 100).toFixed(1)}
+          <span className="text-lg font-medium text-theme-muted ml-1">L</span>
         </span>
         <span className="text-xs text-theme-muted mt-0.5">내가 흘린 땀</span>
       </div>

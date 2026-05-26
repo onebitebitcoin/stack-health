@@ -87,7 +87,7 @@ export default function RewardsPage() {
           </div>
           {summary.queued_week_points > 0 && (
             <div className="mt-2 rounded-xl bg-theme-surface2 px-3 py-2 text-xs text-theme-muted">
-              대기 중 {summary.queued_week_points.toLocaleString()}pt · 업로드 후 24시간이 지나면 확정됩니다
+              대기 중 {(summary.queued_week_points / 100).toFixed(1)}L · 잠시 후 확정됩니다
             </div>
           )}
           <div className="mt-2 text-sm text-theme-subtle">
