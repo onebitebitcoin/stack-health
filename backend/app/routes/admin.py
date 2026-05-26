@@ -22,7 +22,7 @@ from app.services.reward import (
     settle_queued_rewards,
 )
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
