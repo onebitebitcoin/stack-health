@@ -616,7 +616,7 @@ function MiningPanel() {
     const week = Math.floor(diff / (7 * 86400000)) + 1
     return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
   })
-  const [nDraws, setNDraws] = useState(100)
+  const [nDraws, setNDraws] = useState(1000)
   const [lotteryResult, setLotteryResult] = useState<LotteryResult | null>(null)
   const [closeResult, setCloseResult] = useState<{ reduced_user_count: number; claimed_user_count: number } | null>(null)
 
