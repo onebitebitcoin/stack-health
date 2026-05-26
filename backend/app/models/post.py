@@ -20,6 +20,7 @@ class Post(Base):
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array string
     workout_start: Mapped[str | None] = mapped_column(String(5), nullable=True)  # "HH:MM"
     workout_end: Mapped[str | None] = mapped_column(String(5), nullable=True)    # "HH:MM"
+    proof_image_url: Mapped[str | None] = mapped_column(String, nullable=True)
     like_count: Mapped[int] = mapped_column(Integer, default=0)
     view_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(

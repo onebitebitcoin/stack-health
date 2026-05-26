@@ -36,6 +36,7 @@ class ConfirmUploadRequest(BaseModel):
     challenge_id: int | None = None
     workout_start: str | None = None
     workout_end: str | None = None
+    proof_image_url: str | None = None
 
 
 class PostSchema(BaseModel):

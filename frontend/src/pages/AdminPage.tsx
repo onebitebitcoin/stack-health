@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import client from '../api/client'
-import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse } from '../api/types'
+import type { AdminClaim, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
 type TabId = 'users' | 'videos' | 'rewards'

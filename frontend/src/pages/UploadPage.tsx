@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward, Check } from 'lucide-react'
+import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward, Check, ImagePlus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
@@ -10,7 +10,7 @@ import type { Challenge } from '../api/types'
 const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as const
 type Tag = (typeof ALLOWED_TAGS)[number]
 
-const STEPS = ['영상 선택', '태그', '챌린지', '음성 녹음', '설명'] as const
+const STEPS = ['영상 선택', '태그', '챌린지', '음성 녹음', '설명', '증거 사진'] as const
 const MAX_RECORD_SECONDS = 30
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
@@ -49,6 +49,12 @@ export default function UploadPage() {
   const [done, setDone] = useState(false)
   const [pointsEarned, setPointsEarned] = useState(0)
   const [error, setError] = useState('')
+
+  // 증거 사진 상태
+  const proofImageRef = useRef<HTMLInputElement>(null)
+  const proofFileRef = useRef<File | null>(null)
+  const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null)
+  const [proofMerging, setProofMerging] = useState(false)
 
   // 음성 녹음 상태
   const audioBlobRef = useRef<Blob | null>(null)
@@ -254,6 +260,48 @@ export default function UploadPage() {
         }
       }
 
+      // 3b. 증거 사진이 있으면 비디오 끝에 3초 슬라이드로 붙임
+      let proofImageUrl: string | null = null
+      const proofFile = proofFileRef.current
+      if (proofFile) {
+        setProofMerging(true)
+        try {
+          const proofForm = new FormData()
+          proofForm.append('file', proofFile, proofFile.name)
+          const proofUploadRes = await client.post<{
+            data: { proof_r2_key: string; proof_cdn_url: string }
+          }>('/videos/upload-proof', proofForm)
+          const { proof_r2_key, proof_cdn_url } = proofUploadRes.data.data
+          proofImageUrl = proof_cdn_url
+
+          const mergeProofForm = new FormData()
+          mergeProofForm.append('video_r2_key', r2_key)
+          mergeProofForm.append('proof_r2_key', proof_r2_key)
+          const mergeProofRes = await client.post<{
+            data: { job_id: string; status: string }
+          }>('/videos/merge-proof', mergeProofForm)
+          const proofJobId = mergeProofRes.data.data.job_id
+
+          for (let i = 0; i < MERGE_POLL_MAX_ATTEMPTS; i++) {
+            await new Promise<void>((resolve) => setTimeout(resolve, MERGE_POLL_INTERVAL_MS))
+            const pollRes = await client.get<{
+              data: { status: string; r2_key: string; cdn_url: string; proof_image_url: string }
+            }>(`/videos/merge-job/${proofJobId}`)
+            const { status, r2_key: mergedKey } = pollRes.data.data
+            if (status === 'completed') {
+              r2_key = mergedKey
+              break
+            } else if (status === 'failed') {
+              break
+            }
+          }
+        } catch {
+          // proof merge 실패 시 원본 영상으로 계속
+        } finally {
+          setProofMerging(false)
+        }
+      }
+
       setProgress(75)
 
       // 4. 영상 길이 계산 (merge 결과 우선)
@@ -277,6 +325,7 @@ export default function UploadPage() {
         challenge_id: selectedChallengeId,
         workout_start: workoutStart || null,
         workout_end: workoutEnd || null,
+        proof_image_url: proofImageUrl,
       })
       setProgress(100)
       setPointsEarned(confirmRes.data.data.points_earned)
@@ -355,6 +404,13 @@ export default function UploadPage() {
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           <p className="text-sm text-theme-muted">음성과 영상을 합치는 중...</p>
+        </div>
+      )}
+
+      {proofMerging && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <p className="text-sm text-theme-muted">증거 사진을 영상에 합치는 중...</p>
         </div>
       )}
 
@@ -617,12 +673,83 @@ export default function UploadPage() {
           <p className="mt-1 text-right text-xs text-theme-subtle">{caption.length}/140</p>
           {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
           <button
-            onClick={handleUpload}
-            disabled={uploading}
-            className="mt-auto mb-4 w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
+            onClick={() => setStep(5)}
+            className="mt-auto mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
-            업로드 시작
+            다음 <ChevronRight size={18} />
           </button>
+        </div>
+      )}
+
+      {step === 5 && (
+        <div className="flex flex-1 flex-col px-6 pt-4">
+          <p className="mb-1 font-semibold text-theme-primary">증거 사진 (선택)</p>
+          <p className="mb-4 text-xs text-theme-muted">운동 인증 사진을 추가하면 영상 끝에 3초간 표시됩니다</p>
+
+          <input
+            ref={proofImageRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (!f) return
+              proofFileRef.current = f
+              setProofPreviewUrl(URL.createObjectURL(f))
+            }}
+          />
+
+          {proofPreviewUrl ? (
+            <div className="relative mb-4">
+              <img
+                src={proofPreviewUrl}
+                alt="증거 사진 미리보기"
+                className="w-full rounded-xl object-cover max-h-64"
+              />
+              <button
+                onClick={() => {
+                  proofFileRef.current = null
+                  setProofPreviewUrl(null)
+                  if (proofImageRef.current) proofImageRef.current.value = ''
+                }}
+                className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
+              >
+                <ChevronLeft size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => proofImageRef.current?.click()}
+              className="mb-4 flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-theme-border p-10 text-theme-muted transition-colors hover:border-accent hover:text-accent"
+            >
+              <ImagePlus size={40} strokeWidth={1.5} />
+              <span className="text-sm">사진을 선택하세요</span>
+              <span className="text-xs">JPEG / PNG · 최대 10MB</span>
+            </button>
+          )}
+
+          {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+
+          <div className="mt-auto mb-4 flex gap-3">
+            <button
+              onClick={() => {
+                proofFileRef.current = null
+                setProofPreviewUrl(null)
+                handleUpload()
+              }}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
+            >
+              <SkipForward size={16} />
+              건너뛰기
+            </button>
+            <button
+              onClick={handleUpload}
+              disabled={uploading}
+              className="flex-[2] rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
+            >
+              업로드 시작
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -169,3 +169,130 @@ def enqueue_merge_job_local(job_payload: dict) -> str:
     t.start()
     logger.warning("[fallback] Redis 없음 — job=%s 로컬 처리 시작", job_id)
     return job_id
+
+
+def _run_local_proof_merge(
+    job_id: str,
+    video_r2_key: str,
+    proof_r2_key: str,
+) -> None:
+    """Proof 이미지를 3초 영상으로 변환 후 원본 비디오 끝에 붙인다."""
+    tmp_video = tmp_image = tmp_proof_clip = tmp_output = tmp_list = None
+    try:
+        r2 = boto3.client(
+            "s3",
+            endpoint_url=f"https://{settings.r2_account_id}.r2.cloudflarestorage.com",
+            aws_access_key_id=settings.r2_access_key_id,
+            aws_secret_access_key=settings.r2_secret_access_key,
+            config=Config(signature_version="s3v4"),
+            region_name="auto",
+        )
+
+        img_suffix = ".jpg" if proof_r2_key.lower().endswith((".jpg", ".jpeg")) else ".png"
+        tmp_video = tempfile.mktemp(suffix=".mp4")
+        tmp_image = tempfile.mktemp(suffix=img_suffix)
+        tmp_proof_clip = tempfile.mktemp(suffix=".mp4")
+        tmp_output = tempfile.mktemp(suffix=".mp4")
+        tmp_list = tempfile.mktemp(suffix=".txt")
+
+        logger.info("[proof-merge] job=%s: 비디오 다운로드", job_id)
+        resp = r2.get_object(Bucket=settings.r2_bucket_name, Key=video_r2_key)
+        with open(tmp_video, "wb") as f:
+            f.write(resp["Body"].read())
+
+        logger.info("[proof-merge] job=%s: 이미지 다운로드", job_id)
+        resp = r2.get_object(Bucket=settings.r2_bucket_name, Key=proof_r2_key)
+        with open(tmp_image, "wb") as f:
+            f.write(resp["Body"].read())
+
+        # 비디오 해상도 조회
+        probe = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=width,height",
+                "-of", "csv=p=0",
+                tmp_video,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        dims = probe.stdout.strip().split(",")
+        vw = dims[0].strip() if len(dims) >= 2 else "720"
+        vh = dims[1].strip() if len(dims) >= 2 else "1280"
+
+        # 이미지 → 3초 클립 (비디오와 같은 해상도)
+        clip_cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1", "-t", "3", "-i", tmp_image,
+            "-vf",
+            f"scale={vw}:{vh}:force_original_aspect_ratio=decrease,"
+            f"pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1",
+            "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-an",
+            tmp_proof_clip,
+        ]
+        result = subprocess.run(clip_cmd, capture_output=True, timeout=60)
+        if result.returncode != 0:
+            raise RuntimeError(f"이미지 클립 생성 실패: {result.stderr.decode()[:500]}")
+
+        # concat demuxer로 두 영상 연결
+        with open(tmp_list, "w") as f:
+            f.write(f"file '{tmp_video}'\n")
+            f.write(f"file '{tmp_proof_clip}'\n")
+
+        concat_cmd = [
+            "ffmpeg", "-y",
+            "-f", "concat", "-safe", "0", "-i", tmp_list,
+            "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            tmp_output,
+        ]
+        result = subprocess.run(concat_cmd, capture_output=True, timeout=120)
+        if result.returncode != 0:
+            raise RuntimeError(f"concat 실패: {result.stderr.decode()[:500]}")
+
+        merged_key = f"videos/proof-merged-{uuid.uuid4()}.mp4"
+        logger.info("[proof-merge] job=%s: R2 업로드 → %s", job_id, merged_key)
+        with open(tmp_output, "rb") as f:
+            r2.put_object(
+                Bucket=settings.r2_bucket_name,
+                Key=merged_key,
+                Body=f,
+                ContentType="video/mp4",
+            )
+
+        cdn_url = f"{settings.r2_public_url.rstrip('/')}/{merged_key}"
+        proof_cdn_url = f"{settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
+        _set_local_job(job_id, {
+            "status": "completed",
+            "output_r2_key": merged_key,
+            "cdn_url": cdn_url,
+            "proof_image_url": proof_cdn_url,
+        })
+        logger.info("[proof-merge] job=%s: 완료 %s", job_id, cdn_url)
+
+    except Exception as e:
+        logger.exception("[proof-merge] job=%s: 실패 %s", job_id, e)
+        _set_local_job(job_id, {"status": "failed", "error": str(e)})
+    finally:
+        for tmp in [tmp_video, tmp_image, tmp_proof_clip, tmp_output, tmp_list]:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
+
+
+def enqueue_proof_merge_job_local(video_r2_key: str, proof_r2_key: str) -> str:
+    """Proof 이미지+비디오 병합을 로컬 백그라운드 스레드에서 처리. job_id 즉시 반환."""
+    job_id = str(uuid.uuid4())
+    _set_local_job(job_id, {"status": "processing"})
+
+    t = threading.Thread(
+        target=_run_local_proof_merge,
+        args=(job_id, video_r2_key, proof_r2_key),
+        daemon=True,
+    )
+    t.start()
+    logger.info("[proof-merge] job=%s 시작", job_id)
+    return job_id

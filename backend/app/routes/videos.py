@@ -19,7 +19,7 @@ from app.schemas.video import (
     PresignedUrlResponse,
 )
 from app.services import r2 as r2_service
-from app.services.job_queue import enqueue_merge_job, enqueue_merge_job_local, get_job_status
+from app.services.job_queue import enqueue_merge_job, enqueue_merge_job_local, enqueue_proof_merge_job_local, get_job_status
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
     POINTS_PER_UPLOAD,
@@ -124,6 +124,7 @@ def confirm_upload(
         tags=json.dumps(tags, ensure_ascii=False),
         workout_start=req.workout_start,
         workout_end=req.workout_end,
+        proof_image_url=req.proof_image_url,
     )
     db.add(post)
     db.flush()
@@ -281,7 +282,7 @@ def get_merge_job_status(
     job_id: str,
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """merge-audio 잡 상태를 폴링한다."""
+    """merge-audio / merge-proof 잡 상태를 폴링한다."""
     job = get_job_status(job_id)  # 로컬 스토어 → Redis 순 확인, 예외 없음
 
     if job is None:
@@ -293,6 +294,61 @@ def get_merge_job_status(
             "status": job.get("status", "unknown"),
             "r2_key": job.get("output_r2_key", ""),
             "cdn_url": job.get("cdn_url", ""),
+            "proof_image_url": job.get("proof_image_url", ""),
             "error": job.get("error", ""),
         }
     }
+
+
+ALLOWED_IMAGE_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+@router.post("/upload-proof")
+async def upload_proof_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """증거 이미지를 R2에 업로드하고 proof_r2_key를 반환한다."""
+    content_type = file.content_type or "image/jpeg"
+    if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식입니다: {content_type}")
+
+    image_bytes = await file.read()
+    if len(image_bytes) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 10MB)")
+
+    ext = "jpg" if "jpeg" in content_type or "jpg" in content_type else "png"
+    proof_r2_key = f"proof/{uuid.uuid4()}.{ext}"
+
+    try:
+        r2_client = r2_service.get_r2_client()
+        r2_client.put_object(
+            Bucket=app_settings.r2_bucket_name,
+            Key=proof_r2_key,
+            Body=image_bytes,
+            ContentType=content_type,
+        )
+    except Exception as e:
+        logger.error("증거 이미지 R2 업로드 실패: %s", e)
+        raise HTTPException(status_code=500, detail="이미지 업로드에 실패했습니다")
+
+    proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
+    logger.info("upload_proof: user_id=%s key=%s", current_user.id, proof_r2_key)
+    return {"data": {"proof_r2_key": proof_r2_key, "proof_cdn_url": proof_cdn_url}}
+
+
+@router.post("/merge-proof")
+def merge_proof(
+    video_r2_key: str = Form(...),
+    proof_r2_key: str = Form(...),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """증거 이미지를 비디오 끝에 3초 슬라이드로 붙인다."""
+    logger.info("merge_proof: user_id=%s video=%s proof=%s", current_user.id, video_r2_key, proof_r2_key)
+    try:
+        job_id = enqueue_proof_merge_job_local(video_r2_key, proof_r2_key)
+    except Exception as e:
+        logger.error("proof merge 실패: %s", e)
+        raise HTTPException(status_code=500, detail="영상 처리에 실패했습니다")
+    return {"data": {"job_id": job_id, "status": "processing"}}
