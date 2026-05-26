@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LogOut, Droplets, ShieldCheck, Settings,
-  ChevronLeft, ChevronRight, Flame, Heart, Eye, ArrowLeft, Award, Share2, X, Zap,
+  ChevronLeft, ChevronRight, Flame, Heart, Eye, ArrowLeft, Award, Share2, X, Zap, Trash2, Play,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
@@ -33,10 +33,12 @@ export default function ProfilePage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
+  const queryClient = useQueryClient()
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedPosts, setSelectedPosts] = useState<HistoryWorkoutPost[]>([])
   const [videoIdx, setVideoIdx] = useState(0)
   const [showRewardModal, setShowRewardModal] = useState(false)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
   const { data: myStats, isLoading } = useQuery<MyStats>({
     queryKey: ['my-stats'],
@@ -45,6 +47,25 @@ export default function ProfilePage() {
       return res.data.data
     },
     enabled: !!user,
+  })
+
+  const { data: myPostsData, isLoading: myPostsLoading } = useQuery<{ id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number }[]>({
+    queryKey: ['my-posts'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { posts: { id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number }[] } }>('/videos/my-posts')
+      return res.data.data.posts
+    },
+    enabled: !!user,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (postId: number) => client.delete(`/videos/posts/${postId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-posts'] })
+      queryClient.invalidateQueries({ queryKey: ['history'] })
+      queryClient.invalidateQueries({ queryKey: ['my-stats'] })
+      setDeleteConfirmId(null)
+    },
   })
 
   const { data: historyData, isLoading: historyLoading } = useQuery<HistoryResponse>({
@@ -414,6 +435,83 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* ── 내 영상 목록 ── */}
+      <div className="mx-4 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-theme-primary">내 영상</p>
+          {myPostsData && myPostsData.length > 0 && (
+            <span className="text-xs text-theme-muted">{myPostsData.length}개</span>
+          )}
+        </div>
+
+        {myPostsLoading ? (
+          <div className="flex h-24 items-center justify-center text-sm text-theme-muted">
+            불러오는 중...
+          </div>
+        ) : !myPostsData || myPostsData.length === 0 ? (
+          <div className="flex h-24 items-center justify-center rounded-xl bg-theme-surface text-sm text-theme-muted">
+            업로드한 영상이 없습니다
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {myPostsData.map((post) => (
+              <div key={post.id} className="relative aspect-[9/16] overflow-hidden rounded-xl bg-theme-surface2 group">
+                <video
+                  src={post.cdn_url}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+                <div className="absolute inset-0 bg-black/20" />
+                <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-white/80">
+                  <Play size={10} strokeWidth={2} />
+                  <span className="text-[10px]">{post.view_count}</span>
+                </div>
+                <button
+                  onClick={() => setDeleteConfirmId(post.id)}
+                  className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity active:opacity-100"
+                  aria-label="삭제"
+                >
+                  <Trash2 size={13} strokeWidth={2} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── 삭제 확인 다이얼로그 ── */}
+      {deleteConfirmId !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
+          onClick={() => setDeleteConfirmId(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-t-3xl bg-theme-surface px-6 pt-5 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-base font-bold text-theme-primary mb-1">영상 삭제</p>
+            <p className="text-sm text-theme-muted mb-5">삭제하면 복구할 수 없습니다.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(deleteConfirmId)}
+                disabled={deleteMutation.isPending}
+                className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {deleteMutation.isPending ? '삭제 중...' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 풀스크린 영상 뷰어 ── */}
       {selectedDate && selectedPosts.length > 0 && (
