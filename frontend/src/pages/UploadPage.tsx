@@ -10,7 +10,7 @@ import type { Challenge } from '../api/types'
 const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as const
 type Tag = (typeof ALLOWED_TAGS)[number]
 
-const STEPS = ['영상 선택', '태그', '챌린지', '음성 녹음', '설명', '증거 사진'] as const
+const STEPS = ['영상 선택', '사진', '태그', '챌린지', '음성 녹음', '설명'] as const
 const MAX_RECORD_SECONDS = 30
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
@@ -128,7 +128,7 @@ export default function UploadPage() {
         const blob = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current })
         audioBlobRef.current = blob
         setRecording(false)
-        setStep(4)
+        setStep(5)
       }
 
       mr.start()
@@ -170,7 +170,7 @@ export default function UploadPage() {
       setRecording(false)
     }
     audioBlobRef.current = null
-    setStep(4)
+    setStep(5)
   }
 
   function handleBack() {
@@ -410,7 +410,7 @@ export default function UploadPage() {
       {proofMerging && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          <p className="text-sm text-theme-muted">증거 사진을 영상에 합치는 중...</p>
+          <p className="text-sm text-theme-muted">사진을 영상에 합치는 중...</p>
         </div>
       )}
 
@@ -493,7 +493,74 @@ export default function UploadPage() {
         </div>
       )}
 
+      {/* step 1: 사진 */}
       {step === 1 && (
+        <div className="flex flex-1 flex-col px-6 pt-4">
+          <p className="mb-1 font-semibold text-theme-primary">사진 (선택)</p>
+          <p className="mb-4 text-xs text-theme-muted">운동 인증 사진을 추가하면 영상 끝에 3초간 표시됩니다</p>
+
+          <input
+            ref={proofImageRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (!f) return
+              proofFileRef.current = f
+              setProofPreviewUrl(URL.createObjectURL(f))
+            }}
+          />
+
+          {proofPreviewUrl ? (
+            <div className="relative mb-4">
+              <img
+                src={proofPreviewUrl}
+                alt="사진 미리보기"
+                className="w-full rounded-xl object-cover max-h-64"
+              />
+              <button
+                onClick={() => {
+                  proofFileRef.current = null
+                  setProofPreviewUrl(null)
+                  if (proofImageRef.current) proofImageRef.current.value = ''
+                }}
+                className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
+              >
+                <ChevronLeft size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => proofImageRef.current?.click()}
+              className="mb-4 flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-theme-border p-10 text-theme-muted transition-colors hover:border-accent hover:text-accent"
+            >
+              <ImagePlus size={40} strokeWidth={1.5} />
+              <span className="text-sm">사진을 선택하세요</span>
+              <span className="text-xs">JPEG / PNG · 최대 10MB</span>
+            </button>
+          )}
+
+          <div className="mt-auto mb-4 flex gap-3">
+            <button
+              onClick={() => { proofFileRef.current = null; setProofPreviewUrl(null); setStep(2) }}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
+            >
+              <SkipForward size={16} />
+              건너뛰기
+            </button>
+            <button
+              onClick={() => setStep(2)}
+              className="flex-[2] flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
+            >
+              다음 <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* step 2: 태그 */}
+      {step === 2 && (
         <div className="flex flex-1 flex-col px-6 pt-4">
           {previewUrl && (
             <video
@@ -522,7 +589,7 @@ export default function UploadPage() {
             ))}
           </div>
           <button
-            onClick={() => setStep(2)}
+            onClick={() => setStep(3)}
             className="mt-auto mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
             다음 <ChevronRight size={18} />
@@ -530,7 +597,8 @@ export default function UploadPage() {
         </div>
       )}
 
-      {step === 2 && (
+      {/* step 3: 챌린지 */}
+      {step === 3 && (
         <div className="flex flex-1 flex-col px-6 pt-4">
           <p className="mb-1 font-semibold text-theme-primary">챌린지 선택 (선택)</p>
           <p className="mb-4 text-xs text-theme-muted">참여 중인 챌린지에 인증하세요</p>
@@ -567,7 +635,7 @@ export default function UploadPage() {
             ))}
           </div>
           <button
-            onClick={() => setStep(3)}
+            onClick={() => setStep(4)}
             className="mt-4 mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
             다음 <ChevronRight size={18} />
@@ -575,7 +643,8 @@ export default function UploadPage() {
         </div>
       )}
 
-      {step === 3 && (
+      {/* step 4: 음성 녹음 */}
+      {step === 4 && (
         <div className="flex flex-1 flex-col px-6 pt-4 gap-4">
           {previewUrl && (
             <video
@@ -591,28 +660,38 @@ export default function UploadPage() {
           <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-4">
             <div>
               <p className="font-semibold text-theme-primary">음성 녹음 (선택)</p>
-              <p className="text-xs text-theme-muted mt-1">영상을 보며 목소리를 녹음하세요</p>
+              <p className="text-xs text-theme-muted mt-1 leading-relaxed">
+                영상에 목소리가 없다면 직접 녹음해보세요. 오늘 운동 경험을 자유롭게 말해보세요.
+              </p>
+              <ul className="mt-2 space-y-0.5 text-xs text-theme-subtle">
+                <li>· 무슨 운동을 얼마나 했나요?</li>
+                <li>· 어디서 했나요?</li>
+                <li>· 오늘 잘된 점과 힘들었던 점은?</li>
+                <li>· 저번보다 나아진 게 있나요?</li>
+              </ul>
             </div>
 
             <div className="flex flex-col items-center gap-3">
               {!recording ? (
                 <button
                   onClick={startRecording}
-                  className="flex items-center gap-2 rounded-xl bg-accent px-6 py-3 font-semibold text-accent-fg"
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-accent"
                 >
-                  <Mic size={18} />
-                  녹음 시작
+                  <Mic size={26} strokeWidth={1.5} />
                 </button>
               ) : (
-                <button
-                  onClick={stopRecording}
-                  className="flex items-center gap-2 rounded-xl bg-red-600 px-6 py-3 font-semibold text-white"
-                >
-                  <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-                  <MicOff size={18} />
-                  {String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:
-                  {String(recordedSeconds % 60).padStart(2, '0')}
-                </button>
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    onClick={stopRecording}
+                    className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600"
+                  >
+                    <MicOff size={26} strokeWidth={1.5} color="white" />
+                  </button>
+                  <span className="text-sm font-mono text-red-400">
+                    {String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:
+                    {String(recordedSeconds % 60).padStart(2, '0')}
+                  </span>
+                </div>
               )}
 
               <div className="w-full h-1.5 rounded-full bg-theme-surface2 overflow-hidden">
@@ -641,7 +720,8 @@ export default function UploadPage() {
         </div>
       )}
 
-      {step === 4 && (
+      {/* step 5: 설명 */}
+      {step === 5 && (
         <div className="flex flex-1 flex-col px-6 pt-4">
           <p className="mb-3 font-semibold text-theme-primary">설명을 추가하세요 (선택)</p>
           <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-3">
@@ -673,83 +753,12 @@ export default function UploadPage() {
           <p className="mt-1 text-right text-xs text-theme-subtle">{caption.length}/140</p>
           {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
           <button
-            onClick={() => setStep(5)}
-            className="mt-auto mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
+            onClick={handleUpload}
+            disabled={uploading}
+            className="mt-auto mb-4 w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
           >
-            다음 <ChevronRight size={18} />
+            업로드 시작
           </button>
-        </div>
-      )}
-
-      {step === 5 && (
-        <div className="flex flex-1 flex-col px-6 pt-4">
-          <p className="mb-1 font-semibold text-theme-primary">증거 사진 (선택)</p>
-          <p className="mb-4 text-xs text-theme-muted">운동 인증 사진을 추가하면 영상 끝에 3초간 표시됩니다</p>
-
-          <input
-            ref={proofImageRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (!f) return
-              proofFileRef.current = f
-              setProofPreviewUrl(URL.createObjectURL(f))
-            }}
-          />
-
-          {proofPreviewUrl ? (
-            <div className="relative mb-4">
-              <img
-                src={proofPreviewUrl}
-                alt="증거 사진 미리보기"
-                className="w-full rounded-xl object-cover max-h-64"
-              />
-              <button
-                onClick={() => {
-                  proofFileRef.current = null
-                  setProofPreviewUrl(null)
-                  if (proofImageRef.current) proofImageRef.current.value = ''
-                }}
-                className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
-              >
-                <ChevronLeft size={14} />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => proofImageRef.current?.click()}
-              className="mb-4 flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-theme-border p-10 text-theme-muted transition-colors hover:border-accent hover:text-accent"
-            >
-              <ImagePlus size={40} strokeWidth={1.5} />
-              <span className="text-sm">사진을 선택하세요</span>
-              <span className="text-xs">JPEG / PNG · 최대 10MB</span>
-            </button>
-          )}
-
-          {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
-
-          <div className="mt-auto mb-4 flex gap-3">
-            <button
-              onClick={() => {
-                proofFileRef.current = null
-                setProofPreviewUrl(null)
-                handleUpload()
-              }}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
-            >
-              <SkipForward size={16} />
-              건너뛰기
-            </button>
-            <button
-              onClick={handleUpload}
-              disabled={uploading}
-              className="flex-[2] rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
-            >
-              업로드 시작
-            </button>
-          </div>
         </div>
       )}
     </div>
