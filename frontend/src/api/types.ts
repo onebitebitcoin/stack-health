@@ -210,6 +210,9 @@ export interface MyStats {
   total_posts: number
   total_points: number
   queued_points: number
+  week_points: number
+  week_queued_points: number
+  week_sats: number
 }
 
 export interface LeaderboardEntry {

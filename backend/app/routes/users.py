@@ -12,7 +12,15 @@ from app.models.reward import RewardPoint
 from app.models.user import User
 from app.models.video import Video
 from app.routes.auth import get_current_user as get_required_user
-from app.services.reward import REWARD_STATUS_FIXED, REWARD_STATUS_QUEUED, settle_queued_rewards
+from app.services.reward import (
+    REWARD_STATUS_FIXED,
+    REWARD_STATUS_QUEUED,
+    get_week_label,
+    get_weekly_points,
+    get_weekly_queued_points,
+    points_to_sats,
+    settle_queued_rewards,
+)
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -88,7 +96,21 @@ def get_my_stats(
         or 0
     )
 
-    return {"data": {"total_posts": total_posts, "total_points": int(total_points), "queued_points": int(queued_points)}}
+    week_label = get_week_label()
+    week_points = get_weekly_points(db, current_user.id, week_label)
+    week_queued = get_weekly_queued_points(db, current_user.id, week_label)
+    week_sats = points_to_sats(week_points)
+
+    return {
+        "data": {
+            "total_posts": total_posts,
+            "total_points": int(total_points),
+            "queued_points": int(queued_points),
+            "week_points": round(float(week_points), 2),
+            "week_queued_points": round(float(week_queued), 2),
+            "week_sats": week_sats,
+        }
+    }
 
 
 @router.get("/leaderboard")
@@ -97,18 +119,23 @@ def get_leaderboard(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=50),
     search: str = Query(""),
+    period: str = Query("week"),  # "week" | "all"
 ) -> dict:
+    filters = [
+        User.is_banned.is_(False),
+        RewardPoint.points > 0,
+        RewardPoint.status == REWARD_STATUS_FIXED,
+    ]
+    if period == "week":
+        filters.append(RewardPoint.week_label == get_week_label())
+
     base_query = (
         db.query(
             User,
             sqlfunc.sum(RewardPoint.points).label("total_points"),
         )
         .join(RewardPoint, RewardPoint.user_id == User.id)
-        .filter(
-            User.is_banned.is_(False),
-            RewardPoint.points > 0,
-            RewardPoint.status == REWARD_STATUS_FIXED,
-        )
+        .filter(*filters)
         .group_by(User.id)
     )
 
@@ -144,6 +171,7 @@ def get_leaderboard(
         "page": page,
         "limit": limit,
         "has_next": has_next,
+        "period": period,
     }
 
 

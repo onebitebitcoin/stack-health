@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Droplets, Medal, Search, X } from 'lucide-react'
+import { Droplets, Users, Search, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
 import client from '../api/client'
@@ -10,24 +10,24 @@ import LoadingScreen from '../components/LoadingScreen'
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1)
     return (
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-white">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-white flex-shrink-0">
         1
       </span>
     )
   if (rank === 2)
     return (
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white flex-shrink-0">
         2
       </span>
     )
   if (rank === 3)
     return (
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-sm font-bold text-white">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-sm font-bold text-white flex-shrink-0">
         3
       </span>
     )
   return (
-    <span className="flex h-7 w-7 items-center justify-center text-sm font-medium text-theme-muted">
+    <span className="flex h-7 w-7 items-center justify-center text-sm font-medium text-theme-subtle flex-shrink-0">
       {rank}
     </span>
   )
@@ -52,9 +52,9 @@ export default function LeaderboardPage() {
   }, [searchInput])
 
   const { data, isLoading, isError } = useQuery<LeaderboardResponse>({
-    queryKey: ['leaderboard', page, search],
+    queryKey: ['leaderboard-week', page, search],
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(page), limit: '20' })
+      const params = new URLSearchParams({ page: String(page), limit: '20', period: 'week' })
       if (search) params.set('search', search)
       const res = await client.get<{ data: LeaderboardEntry[]; total: number; page: number; limit: number; has_next: boolean }>(
         `/users/leaderboard?${params}`
@@ -81,19 +81,17 @@ export default function LeaderboardPage() {
     )
   }
 
-  const top3 = isSearching ? [] : entries.slice(0, 3)
-  const rest = isSearching ? entries : entries.slice(3)
-
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
       {/* 헤더 */}
       <div className="px-4 pt-5 pb-3">
         <div className="flex items-center gap-2 mb-3">
-          <Medal size={20} strokeWidth={1.5} className="text-amber-400" />
+          <Users size={20} strokeWidth={1.5} className="text-theme-primary" />
           <h1 className="text-lg font-bold text-theme-primary">사용자</h1>
+          <span className="ml-auto text-xs text-theme-muted">이번 주 기준</span>
         </div>
 
-        {/* 검색 입력 */}
+        {/* 검색 */}
         <div className="relative">
           <div className="flex items-center gap-2 rounded-xl bg-theme-surface px-3 py-2">
             <Search size={16} className="text-theme-muted flex-shrink-0" />
@@ -117,7 +115,7 @@ export default function LeaderboardPage() {
             )}
           </div>
 
-          {/* 자동완성 드롭다운 */}
+          {/* 자동완성 */}
           {suggestions.length > 0 && (
             <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-xl bg-theme-surface shadow-lg border border-theme-border overflow-hidden">
               {suggestions.map((entry) => (
@@ -143,89 +141,16 @@ export default function LeaderboardPage() {
             </div>
           )}
         </div>
-
-        {!isSearching && (
-          <p className="text-xs text-theme-muted mt-1.5">누적 포인트 기준</p>
-        )}
       </div>
 
-      {/* 상위 3인 포디움 (검색 중에는 숨김) */}
-      {top3.length > 0 && (
-        <div className="mx-4 mb-5 rounded-2xl bg-theme-surface px-4 pt-5 pb-4">
-          <div className="flex items-end justify-center gap-3">
-            {top3[1] && (
-              <div className="flex flex-col items-center gap-1.5 flex-1">
-                <div className="h-10 w-10 rounded-full bg-slate-400/20 flex items-center justify-center text-lg font-bold text-slate-400">
-                  {top3[1].username[0]?.toUpperCase()}
-                </div>
-                <button
-                  onClick={() => navigate(`/users/${top3[1].user_id}`)}
-                  className="text-xs font-medium text-theme-primary truncate max-w-[70px] text-center"
-                >
-                  {top3[1].username}
-                </button>
-                <div className="flex items-center gap-0.5 text-xs text-theme-muted">
-                  <Droplets size={10} className="text-blue-400" />
-                  {top3[1].total_points.toFixed(1)}L
-                </div>
-                <div className="h-12 w-full rounded-t-lg bg-slate-400/20 flex items-center justify-center text-lg font-bold text-slate-400">
-                  2
-                </div>
-              </div>
-            )}
-            {top3[0] && (
-              <div className="flex flex-col items-center gap-1.5 flex-1 -mb-2">
-                <span className="text-lg">👑</span>
-                <div className="h-12 w-12 rounded-full bg-amber-400/20 flex items-center justify-center text-xl font-bold text-amber-400">
-                  {top3[0].username[0]?.toUpperCase()}
-                </div>
-                <button
-                  onClick={() => navigate(`/users/${top3[0].user_id}`)}
-                  className="text-xs font-semibold text-theme-primary truncate max-w-[80px] text-center"
-                >
-                  {top3[0].username}
-                </button>
-                <div className="flex items-center gap-0.5 text-xs text-theme-muted">
-                  <Droplets size={10} className="text-blue-400" />
-                  {top3[0].total_points.toFixed(1)}L
-                </div>
-                <div className="h-16 w-full rounded-t-lg bg-amber-400/20 flex items-center justify-center text-xl font-bold text-amber-400">
-                  1
-                </div>
-              </div>
-            )}
-            {top3[2] && (
-              <div className="flex flex-col items-center gap-1.5 flex-1">
-                <div className="h-10 w-10 rounded-full bg-amber-700/20 flex items-center justify-center text-lg font-bold text-amber-700">
-                  {top3[2].username[0]?.toUpperCase()}
-                </div>
-                <button
-                  onClick={() => navigate(`/users/${top3[2].user_id}`)}
-                  className="text-xs font-medium text-theme-primary truncate max-w-[70px] text-center"
-                >
-                  {top3[2].username}
-                </button>
-                <div className="flex items-center gap-0.5 text-xs text-theme-muted">
-                  <Droplets size={10} className="text-blue-400" />
-                  {top3[2].total_points.toFixed(1)}L
-                </div>
-                <div className="h-8 w-full rounded-t-lg bg-amber-700/20 flex items-center justify-center text-lg font-bold text-amber-700">
-                  3
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 목록 */}
+      {/* 유저 목록 */}
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center py-8">
           <div className="text-sm text-theme-muted">불러오는 중...</div>
         </div>
-      ) : rest.length > 0 ? (
+      ) : entries.length > 0 ? (
         <div className="mx-4 rounded-2xl bg-theme-surface overflow-hidden divide-y divide-theme-border">
-          {rest.map((entry) => {
+          {entries.map((entry) => {
             const isMe = currentUser?.id === entry.user_id
             return (
               <button
@@ -239,7 +164,7 @@ export default function LeaderboardPage() {
                 </div>
                 <span className={`flex-1 text-sm text-left truncate ${isMe ? 'font-semibold text-accent' : 'text-theme-primary'}`}>
                   {entry.username}
-                  {isMe && <span className="ml-1 text-xs">(나)</span>}
+                  {isMe && <span className="ml-1 text-xs font-normal text-accent/70">(나)</span>}
                 </span>
                 <div className="flex items-center gap-1 text-sm text-theme-muted">
                   <Droplets size={12} className="text-blue-400" />
@@ -251,7 +176,7 @@ export default function LeaderboardPage() {
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center text-theme-muted text-sm">
-          {isSearching ? '검색 결과가 없습니다' : '아직 사용자 데이터가 없습니다'}
+          {isSearching ? '검색 결과가 없습니다' : '이번 주 운동 기록이 없습니다'}
         </div>
       )}
 
