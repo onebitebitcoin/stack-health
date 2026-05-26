@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.video import Video
 from app.routes.auth import get_current_user as get_required_user
 from app.services.reward import (
+    KST,
     REWARD_STATUS_FIXED,
     REWARD_STATUS_QUEUED,
     get_week_label,
@@ -109,6 +110,61 @@ def get_my_stats(
             "week_points": round(float(week_points), 2),
             "week_queued_points": round(float(week_queued), 2),
             "week_sats": week_sats,
+        }
+    }
+
+
+@router.get("/me/weekly-points")
+def get_my_weekly_points(
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    week_label = get_week_label()
+    year, week = int(week_label[:4]), int(week_label[6:])
+    # Monday of current ISO week (KST)
+    monday = datetime.fromisocalendar(year, week, 1).replace(tzinfo=KST)
+    sunday = monday + timedelta(days=6)
+    start_date = monday.date().isoformat()
+    end_date = sunday.date().isoformat()
+
+    # Fetch current week's reward points (fixed only)
+    records = (
+        db.query(RewardPoint)
+        .filter(
+            RewardPoint.user_id == current_user.id,
+            RewardPoint.week_label == week_label,
+            RewardPoint.status == REWARD_STATUS_FIXED,
+        )
+        .order_by(RewardPoint.created_at.asc())
+        .all()
+    )
+
+    total_points = sum(r.points for r in records)
+
+    # Convert created_at (stored as naive UTC) to KST date string
+    def to_kst_date(dt: datetime) -> str:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(KST).date().isoformat()
+
+    items = [
+        {
+            "date": to_kst_date(r.created_at),
+            "points": round(float(r.points), 2),
+            "source": r.reason,
+            "post_id": r.reference_id,
+        }
+        for r in records
+    ]
+
+    return {
+        "data": {
+            "week_label": f"{year}년 {week}주차",
+            "week_number": week,
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_points": round(float(total_points), 2),
+            "items": items,
         }
     }
 

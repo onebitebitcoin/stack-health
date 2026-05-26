@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     redis_url: str = ""
 
     # App
+    # APP_URL: the publicly reachable base URL of this backend server.
+    # Used as the redirect_uri base for Google OAuth.
+    # IMPORTANT: Register "{APP_URL}/api/v1/auth/google/callback" in Google Cloud Console
+    #   → APIs & Services → Credentials → OAuth 2.0 Client → Authorized redirect URIs
+    app_url: str = "http://localhost:5173"
     app_base_url: str = "http://localhost:8000"
     frontend_url: str = "http://localhost:5173"
     environment: str = "development"

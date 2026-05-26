@@ -100,7 +100,7 @@ def test_view_dedup_same_user_same_day(client: TestClient) -> None:
     res = client.post(f"/api/v1/feed/{post['id']}/view", headers=_auth(token_viewer))
     assert res.status_code == 200
 
-    feed_res = client.get(f"/api/v1/feed?limit=10")
+    feed_res = client.get("/api/v1/feed?limit=10")
     posts = feed_res.json()["data"]["posts"]
     found = next((p for p in posts if p["id"] == post["id"]), None)
     assert found is not None

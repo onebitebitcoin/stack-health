@@ -195,11 +195,12 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         <button
           onClick={(e) => {
             e.stopPropagation()
-            const text = post.caption ? `"${post.caption}" — @${post.username}` : `@${post.username}의 운동 영상`
+            const shareUrl = `${window.location.origin}/share/${post.id}`
+            const shareTitle = 'Stack Health 운동 영상'
             if (typeof navigator !== 'undefined' && 'share' in navigator) {
-              navigator.share({ title: '운동 영상 공유', text, url: window.location.origin }).catch(() => undefined)
+              navigator.share({ title: shareTitle, url: shareUrl }).catch(() => undefined)
             } else {
-              window.navigator.clipboard?.writeText(text).catch(() => undefined)
+              window.navigator.clipboard?.writeText(shareUrl).catch(() => undefined)
             }
           }}
           className="flex flex-col items-center gap-1"

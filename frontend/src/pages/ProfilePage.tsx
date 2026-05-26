@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LogOut, Droplets, ShieldCheck, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, ArrowLeft, Award, Share2, Trash2,
-  Smartphone, Download,
+  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, ArrowLeft, Award, Trash2,
+  Smartphone, Download, Pencil, Check, X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
-import type { MyStats, HistoryResponse, HistoryWorkoutPost, Claim } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost, Claim, WeeklyPointsHistory } from '../api/types'
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 
@@ -28,6 +28,7 @@ function pad2(n: number): string {
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user)
+  const setUser = useAuthStore((s) => s.setUser)
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
 
@@ -41,6 +42,27 @@ export default function ProfilePage() {
   const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
   const [showIosGuide, setShowIosGuide] = useState(false)
+
+  const [isEditing, setIsEditing] = useState(false)
+  const [editUsername, setEditUsername] = useState(user?.username ?? '')
+  const [editLnAddr, setEditLnAddr] = useState(user?.lightning_address ?? '')
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { username?: string; lightning_address?: string }) => {
+      const res = await client.patch<{ data: typeof user }>('/auth/me', data)
+      return res.data.data
+    },
+    onSuccess: (updatedUser) => {
+      if (updatedUser) setUser(updatedUser)
+      setIsEditing(false)
+      setEditError(null)
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setEditError(msg ?? '저장에 실패했습니다')
+    },
+  })
 
   const { data: appLinks } = useQuery<{ android_url: string | null; android_filename: string | null }>({
     queryKey: ['app-links'],
@@ -65,6 +87,15 @@ export default function ProfilePage() {
     queryFn: async () => {
       const res = await client.get<{ data: { claims: Claim[] } }>('/rewards/claims')
       return res.data.data.claims
+    },
+    enabled: !!user && showWeeklyHistory,
+  })
+
+  const { data: weeklyPointsData } = useQuery<WeeklyPointsHistory>({
+    queryKey: ['my-weekly-points'],
+    queryFn: async () => {
+      const res = await client.get<{ data: WeeklyPointsHistory }>('/users/me/weekly-points')
+      return res.data.data
     },
     enabled: !!user && showWeeklyHistory,
   })
@@ -154,33 +185,93 @@ export default function ProfilePage() {
           {user?.username?.[0]?.toUpperCase() ?? '?'}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p className="text-sm font-semibold text-theme-primary leading-tight truncate">
-              {user?.username}
-            </p>
-            {user?.is_admin && (
-              <span className="flex-shrink-0 flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                <ShieldCheck size={9} />
-                관리자
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-theme-muted truncate">{user?.email}</p>
+          {isEditing ? (
+            <div className="flex flex-col gap-1.5">
+              <input
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                placeholder="닉네임"
+                className="w-full rounded-lg bg-theme-surface2 px-2.5 py-1.5 text-sm text-theme-primary placeholder-theme-muted outline-none border border-theme-border focus:border-accent"
+              />
+              <input
+                value={editLnAddr}
+                onChange={(e) => setEditLnAddr(e.target.value)}
+                placeholder="라이트닝 주소 (선택)"
+                className="w-full rounded-lg bg-theme-surface2 px-2.5 py-1.5 text-xs text-theme-primary placeholder-theme-muted outline-none border border-theme-border focus:border-accent"
+              />
+              {editError && <p className="text-[10px] text-red-400">{editError}</p>}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-semibold text-theme-primary leading-tight truncate">
+                  {user?.username}
+                </p>
+                {user?.is_admin && (
+                  <span className="flex-shrink-0 flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                    <ShieldCheck size={9} />
+                    관리자
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-theme-muted truncate">
+                {user?.lightning_address || user?.email}
+              </p>
+            </>
+          )}
         </div>
-        <button
-          onClick={() => navigate('/settings')}
-          className="text-theme-muted hover:text-theme-primary transition-colors p-1"
-          aria-label="설정"
-        >
-          <Settings size={16} strokeWidth={1.5} />
-        </button>
-        <button
-          onClick={() => { logout(); window.location.href = '/login' }}
-          className="text-theme-muted hover:text-red-400 transition-colors p-1"
-          aria-label="로그아웃"
-        >
-          <LogOut size={16} strokeWidth={1.5} />
-        </button>
+        {isEditing ? (
+          <>
+            <button
+              onClick={() => updateProfileMutation.mutate({ username: editUsername, lightning_address: editLnAddr })}
+              disabled={updateProfileMutation.isPending}
+              className="text-accent hover:text-accent/80 transition-colors p-1 disabled:opacity-50"
+              aria-label="저장"
+            >
+              <Check size={16} strokeWidth={2} />
+            </button>
+            <button
+              onClick={() => {
+                setIsEditing(false)
+                setEditUsername(user?.username ?? '')
+                setEditLnAddr(user?.lightning_address ?? '')
+                setEditError(null)
+              }}
+              className="text-theme-muted hover:text-red-400 transition-colors p-1"
+              aria-label="취소"
+            >
+              <X size={16} strokeWidth={2} />
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => {
+                setEditUsername(user?.username ?? '')
+                setEditLnAddr(user?.lightning_address ?? '')
+                setIsEditing(true)
+              }}
+              className="text-theme-muted hover:text-theme-primary transition-colors p-1"
+              aria-label="프로필 수정"
+            >
+              <Pencil size={14} strokeWidth={1.5} />
+            </button>
+            <button
+              onClick={() => navigate('/settings')}
+              className="text-theme-muted hover:text-theme-primary transition-colors p-1"
+              aria-label="설정"
+            >
+              <Settings size={16} strokeWidth={1.5} />
+            </button>
+            <button
+              onClick={() => { logout(); window.location.href = '/login' }}
+              className="text-theme-muted hover:text-red-400 transition-colors p-1"
+              aria-label="로그아웃"
+            >
+              <LogOut size={16} strokeWidth={1.5} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* ── 관리자 버튼 ── */}
@@ -231,6 +322,40 @@ export default function ProfilePage() {
             </span>
           </div>
 
+          {/* 이번 주 활동 */}
+          {weeklyPointsData && (
+            <div className="border-b border-theme-border">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-theme-border">
+                <span className="text-xs font-medium text-theme-muted">이번 주 활동</span>
+                <span className="text-xs text-theme-subtle">
+                  {weeklyPointsData.week_number}주차{' '}
+                  {weeklyPointsData.start_date.slice(5).replace('-', '/')}~{weeklyPointsData.end_date.slice(5).replace('-', '/')}
+                </span>
+              </div>
+              {weeklyPointsData.items.length === 0 ? (
+                <div className="py-4 text-center text-xs text-theme-muted">이번 주 활동 없음</div>
+              ) : (
+                <div className="max-h-40 overflow-y-auto">
+                  {weeklyPointsData.items.map((item, idx) => {
+                    const sourceLabel =
+                      item.source === 'upload' ? '영상 업로드' :
+                      item.source === 'bonus' ? '보너스' :
+                      item.source
+                    return (
+                      <div key={idx} className="flex items-center justify-between px-5 py-2.5 border-b border-theme-border last:border-0">
+                        <div>
+                          <p className="text-xs font-medium text-theme-primary">{sourceLabel}</p>
+                          <p className="text-xs text-theme-muted">{item.date.slice(5).replace('-', '/')}</p>
+                        </div>
+                        <span className="text-xs font-semibold text-accent">+{(item.points / 100).toFixed(2)} L</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 클레임 이력 리스트 — 최대 높이 제한 + 스크롤 */}
           <div className="max-h-52 overflow-y-auto">
             {!claimsData ? (
@@ -264,18 +389,17 @@ export default function ProfilePage() {
       )}
 
       {/* ── 스트릭 카드 ── */}
-      <div className="mx-4 mb-4 rounded-xl bg-theme-surface px-4 py-4">
+      <div className="mx-4 mb-4 rounded-xl bg-theme-surface px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4 py-1">
             <div className="flex items-center gap-1.5 text-orange-400">
-              <Flame size={22} strokeWidth={2} />
-              <span className="text-3xl font-bold leading-none">{streak}</span>
+              <Flame size={20} strokeWidth={2} />
+              <span className="text-2xl font-bold leading-none">{streak}</span>
+              <span className="text-sm font-medium text-theme-primary">일 연속</span>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-theme-primary">일 연속</p>
-              {streak === 0 && (
-                <p className="text-xs text-theme-muted">오늘 첫 운동을 시작해보세요!</p>
-              )}
+            <div className="h-4 w-px bg-theme-border" />
+            <div className="text-sm text-theme-muted">
+              이번 달 <span className="font-semibold text-theme-primary">{totalWorkoutDays}일</span> 운동
             </div>
           </div>
           <div className="text-right">
@@ -305,26 +429,6 @@ export default function ProfilePage() {
               </span>
             )}
           </div>
-        </div>
-        <div className="mt-3 h-px bg-theme-border" />
-        <div className="mt-3 flex items-center justify-between">
-          <p className="text-sm text-theme-muted">
-            이번 달 <span className="font-semibold text-theme-primary">{totalWorkoutDays}일</span> 운동
-          </p>
-          <button
-            onClick={() => {
-              const text = `이번 달 ${totalWorkoutDays}일 운동, 연속 ${streak}일 달성`
-              if (typeof navigator !== 'undefined' && 'share' in navigator) {
-                navigator.share({ title: 'Stack Health 운동 리포트', text, url: window.location.origin }).catch(() => undefined)
-              } else {
-                window.navigator.clipboard?.writeText(text).then(() => alert('클립보드에 복사됐어요!')).catch(() => undefined)
-              }
-            }}
-            className="flex items-center gap-1 rounded-lg bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent"
-          >
-            <Share2 size={12} />
-            공유
-          </button>
         </div>
       </div>
 
@@ -380,11 +484,13 @@ export default function ProfilePage() {
                       muted playsInline preload="metadata"
                     />
                     <div className="absolute inset-0 bg-black/30" />
-                    <span className="absolute bottom-1 left-0 right-0 text-center text-[11px] font-bold text-white leading-none">
+                    <span className="absolute inset-x-0 bottom-0 flex items-center justify-center pb-1.5 text-[11px] font-bold text-white leading-none">
                       {cell.day}
                     </span>
                     {posts.length > 1 && (
-                      <div className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-accent" />
+                      <div className="absolute top-1 right-1 min-w-[14px] h-3.5 rounded-full bg-accent flex items-center justify-center px-0.5">
+                        <span className="text-[8px] font-bold text-accent-fg leading-none">{posts.length}</span>
+                      </div>
                     )}
                   </button>
                 )

@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.challenge import Challenge, ChallengeParticipation
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
-from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, EarnedTitleSchema
+from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, ChallengeUpdateRequest, EarnedTitleSchema
 from app.config import settings as app_settings
 from app.services import r2 as r2_service
 
@@ -308,6 +308,28 @@ def get_challenge(
     if not challenge:
         raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
     uid = current_user.id if current_user else None
+    return {"data": {"challenge": _to_schema(challenge, uid, db)}}
+
+
+@router.patch("/{challenge_id}")
+def update_challenge(
+    challenge_id: int,
+    body: ChallengeUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+    if challenge.creator_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="수정 권한이 없습니다")
+    if body.description is not None:
+        challenge.description = body.description
+    if body.categories is not None:
+        challenge.categories = body.categories
+    db.commit()
+    db.refresh(challenge)
+    uid = current_user.id
     return {"data": {"challenge": _to_schema(challenge, uid, db)}}
 
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Trophy, Users, CheckCircle, Lock, Plus } from 'lucide-react'
+import { Search, Dumbbell, Users, CheckCircle, Lock, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
@@ -53,21 +53,21 @@ function ChallengeCard({
 
   return (
     <div
-      className="rounded-2xl bg-theme-surface p-4 cursor-pointer active:opacity-80"
+      className="rounded-2xl bg-theme-surface p-3 cursor-pointer active:opacity-80"
       onClick={() => onNavigate(challenge.id)}
     >
-      <div className="flex items-start gap-3 mb-2">
+      <div className="flex items-start gap-2 mb-1.5">
         {challenge.image_url && (
           <img
             src={challenge.image_url}
             alt=""
-            className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
+            className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
           />
         )}
         <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-theme-primary text-sm leading-snug">{challenge.title}</h3>
-            <p className="text-xs text-theme-muted mt-0.5 line-clamp-2">{challenge.description}</p>
+            <h3 className="font-semibold text-theme-primary text-sm leading-tight">{challenge.title}</h3>
+            <p className="text-xs text-theme-muted mt-0 line-clamp-1">{challenge.description}</p>
           </div>
           {challenge.completed ? (
             <CheckCircle size={20} className="text-accent flex-shrink-0 mt-0.5" />
@@ -78,14 +78,14 @@ function ChallengeCard({
       </div>
 
       {/* 리워드 배지 */}
-      <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5">
-        <Trophy size={11} className="text-accent" />
+      <div className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5">
+        <Dumbbell size={11} className="text-accent" />
         <span className="text-xs font-medium text-accent">{challenge.reward_title}</span>
       </div>
 
       {/* 카테고리 뱃지 */}
       {challenge.categories?.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1">
+        <div className="mb-2 flex flex-wrap gap-1">
           {challenge.categories.map((cat) => {
             const label = CATEGORIES.find((c) => c.value === cat)?.label ?? cat
             return (
@@ -99,7 +99,7 @@ function ChallengeCard({
 
       {/* 진행 바 (참여 중일 때) */}
       {challenge.joined && (
-        <div className="mb-3">
+        <div className="mb-2">
           <div className="flex justify-between text-xs text-theme-muted mb-1">
             <span>{challenge.my_upload_count}/{challenge.condition_value}회 업로드</span>
             <span>{progress}%</span>
@@ -238,7 +238,7 @@ export default function ChallengePage() {
       {/* 챌린지 목록 */}
       {challenges.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center px-6">
-          <Trophy size={40} className="text-theme-surface2" strokeWidth={1} />
+          <Dumbbell size={40} className="text-theme-surface2" strokeWidth={1} />
           <p className="text-sm text-theme-muted">
             {q || selectedCategory ? '검색 결과가 없어요' : '현재 진행 중인 챌린지가 없어요'}
           </p>

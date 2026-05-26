@@ -252,35 +252,26 @@ def test_merge_audio_enqueues_job(mock_get_r2, mock_get_redis, client: TestClien
 
 
 def test_merge_audio_no_redis_url(client: TestClient) -> None:
-    """REDIS_URL 미설정 시 로컬 fallback 처리 → 200 반환."""
+    """REDIS_URL 미설정(enqueue 실패) 시 500 반환."""
     from unittest.mock import MagicMock
-    import app.services.job_queue as jq
 
     token = _register_and_token(client, "ma2@x.com", "mauser2")
 
     with patch("app.routes.videos.r2_service.get_r2_client") as mock_r2, \
-         patch("app.routes.videos.enqueue_merge_job_local", return_value="fallback-job-id") as mock_local:
+         patch("app.routes.videos.enqueue_merge_job", side_effect=Exception("no redis")) as mock_enqueue:
         mock_s3 = MagicMock()
         mock_s3.put_object.return_value = {}
         mock_r2.return_value = mock_s3
 
-        original_url = jq.settings.redis_url
-        jq.settings.redis_url = ""
-        try:
-            res = client.post(
-                "/api/v1/videos/merge-audio",
-                data={"video_r2_key": "videos/test.mp4", "audio_duration_sec": "10"},
-                files={"audio": ("audio.webm", b"fake_audio_data", "audio/webm")},
-                headers=_auth(token),
-            )
-        finally:
-            jq.settings.redis_url = original_url
+        res = client.post(
+            "/api/v1/videos/merge-audio",
+            data={"video_r2_key": "videos/test.mp4", "audio_duration_sec": "10"},
+            files={"audio": ("audio.webm", b"fake_audio_data", "audio/webm")},
+            headers=_auth(token),
+        )
 
-    assert res.status_code == 200
-    data = res.json()["data"]
-    assert data["job_id"] == "fallback-job-id"
-    assert data["status"] == "processing"
-    mock_local.assert_called_once()
+    assert res.status_code == 500
+    mock_enqueue.assert_called_once()
 
 
 @patch("app.services.job_queue.get_redis_client")

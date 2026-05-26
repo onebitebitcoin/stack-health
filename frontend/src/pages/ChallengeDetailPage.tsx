@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Trophy, Users, CheckCircle, Lock, Trash2, CalendarDays } from 'lucide-react'
+import { ArrowLeft, Dumbbell, Users, CheckCircle, Lock, Trash2, CalendarDays, Edit2 } from 'lucide-react'
 import client from '../api/client'
-import type { Challenge } from '../api/types'
+import type { Challenge, ChallengeUpdateRequest } from '../api/types'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 import LoadingScreen from '../components/LoadingScreen'
@@ -18,6 +18,16 @@ const CATEGORY_LABELS: Record<string, string> = {
   beginner: '입문',
 }
 
+const CATEGORIES = [
+  { value: 'strength', label: '근력' },
+  { value: 'cardio', label: '유산소' },
+  { value: 'flexibility', label: '유연성' },
+  { value: 'diet', label: '식단' },
+  { value: 'challenge', label: '도전' },
+  { value: 'social', label: '소셜' },
+  { value: 'beginner', label: '입문' },
+]
+
 function formatDate(dateStr: string) {
   const d = new Date(dateStr)
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
@@ -30,6 +40,9 @@ export default function ChallengeDetailPage() {
   const qc = useQueryClient()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
+  const [editDesc, setEditDesc] = useState('')
+  const [editCategories, setEditCategories] = useState<string[]>([])
 
   const { data: challenge, isLoading, isError } = useQuery<Challenge>({
     queryKey: ['challenge', id],
@@ -58,6 +71,31 @@ export default function ChallengeDetailPage() {
       setActionError(getApiErrorMessage(e, '삭제에 실패했습니다'))
     },
   })
+
+  const updateMutation = useMutation({
+    mutationFn: (body: ChallengeUpdateRequest) =>
+      client.patch(`/challenges/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['challenge', id] })
+      qc.invalidateQueries({ queryKey: ['challenges'] })
+      setIsEditing(false)
+      setActionError('')
+    },
+    onError: (e: unknown) => setActionError(getApiErrorMessage(e, '수정에 실패했습니다')),
+  })
+
+  function startEditing() {
+    if (!challenge) return
+    setEditDesc(challenge.description ?? '')
+    setEditCategories(challenge.categories ?? [])
+    setIsEditing(true)
+  }
+
+  function toggleEditCategory(value: string) {
+    setEditCategories((prev) =>
+      prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value],
+    )
+  }
 
   if (isLoading) return <LoadingScreen />
 
@@ -99,7 +137,7 @@ export default function ChallengeDetailPage() {
       <div className="px-4 flex flex-col gap-4 pb-4">
         {/* 리워드 배지 */}
         <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 self-start">
-          <Trophy size={13} className="text-accent" />
+          <Dumbbell size={13} className="text-accent" />
           <span className="text-sm font-semibold text-accent">{challenge.reward_title}</span>
         </div>
 
@@ -196,15 +234,77 @@ export default function ChallengeDetailPage() {
           </div>
         )}
 
-        {/* 삭제 (생성자/관리자) */}
-        {isCreator && (
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-red-400/30 py-3 text-sm text-red-400 mt-2"
-          >
-            <Trash2 size={15} />
-            챌린지 삭제
-          </button>
+        {/* 수정 폼 (생성자/관리자, 수정 모드) */}
+        {isCreator && isEditing && (
+          <div className="rounded-2xl bg-theme-surface p-4 flex flex-col gap-3 mt-2">
+            <p className="text-sm font-semibold text-theme-primary">챌린지 수정</p>
+            <div>
+              <label className="text-xs text-theme-muted mb-1 block">설명</label>
+              <textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                rows={3}
+                className="w-full rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none resize-none"
+                placeholder="챌린지 설명을 입력하세요"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-theme-muted mb-1.5 block">카테고리</label>
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => toggleEditCategory(cat.value)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      editCategories.includes(cat.value)
+                        ? 'bg-accent text-accent-fg'
+                        : 'bg-theme-surface2 text-theme-muted'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsEditing(false)}
+                className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted"
+              >
+                취소
+              </button>
+              <button
+                onClick={() =>
+                  updateMutation.mutate({ description: editDesc, categories: editCategories })
+                }
+                disabled={updateMutation.isPending}
+                className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+              >
+                {updateMutation.isPending ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 수정/삭제 버튼 (생성자/관리자) */}
+        {isCreator && !isEditing && (
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={startEditing}
+              className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-accent/30 py-3 text-sm text-accent"
+            >
+              <Edit2 size={15} />
+              수정
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-red-400/30 py-3 text-sm text-red-400"
+            >
+              <Trash2 size={15} />
+              삭제
+            </button>
+          </div>
         )}
       </div>
 

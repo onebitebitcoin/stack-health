@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -52,7 +51,7 @@ def _upload_and_claim(client: TestClient, db: Session, user_token: str) -> int:
 
 def test_admin_claims_no_key(client: TestClient) -> None:
     res = client.get("/api/v1/admin/claims")
-    assert res.status_code == 403
+    assert res.status_code == 401
 
 
 def test_admin_claims_wrong_key(client: TestClient) -> None:

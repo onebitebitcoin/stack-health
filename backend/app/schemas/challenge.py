@@ -33,6 +33,11 @@ class ChallengeCreateRequest(BaseModel):
     categories: list[str] = []
 
 
+class ChallengeUpdateRequest(BaseModel):
+    description: str | None = None
+    categories: list[str] | None = None
+
+
 class ChallengeParticipationSchema(BaseModel):
     id: int
     challenge_id: int

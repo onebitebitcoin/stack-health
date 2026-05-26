@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.post import Post
 from app.models.user import User
 from app.models.video import Video
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, get_optional_user
 from app.routes.challenges import increment_challenge_upload
 from app.schemas.video import (
     ConfirmUploadRequest,
@@ -194,6 +194,43 @@ def my_posts(
             )
         )
     return {"data": {"posts": result}}
+
+
+@router.get("/posts/{post_id}")
+def get_post(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+) -> dict:
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+    video = db.query(Video).filter(Video.id == post.video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+    user = db.query(User).filter(User.id == post.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    try:
+        tags = json.loads(post.tags or "[]")
+    except (json.JSONDecodeError, TypeError):
+        tags = []
+    post_schema = PostSchema(
+        id=post.id,
+        video_id=post.video_id,
+        user_id=post.user_id,
+        caption=post.caption,
+        tags=tags,
+        like_count=post.like_count,
+        view_count=post.view_count,
+        comment_count=0,
+        created_at=post.created_at,
+        cdn_url=video.cdn_url,
+        username=user.username,
+        workout_start=post.workout_start,
+        workout_end=post.workout_end,
+    )
+    return {"data": {"post": post_schema}}
 
 
 @router.delete("/posts/{post_id}")

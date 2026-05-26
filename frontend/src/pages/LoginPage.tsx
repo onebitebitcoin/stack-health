@@ -142,13 +142,27 @@ export default function LoginPage() {
     }
   }
 
+  async function copyToClipboard(text: string): Promise<void> {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const el = document.createElement('textarea')
+      el.value = text
+      el.style.position = 'fixed'
+      el.style.left = '-9999px'
+      document.body.appendChild(el)
+      el.focus()
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
+      <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
         <LogoMark aria-label="Stack Health 로고" role="img" size={40} />
       </div>
-      <p className="mb-1 text-xs font-bold tracking-[0.28em] text-accent uppercase">Stack Health</p>
-      <p className="mb-8 text-sm text-theme-muted">Stack Health</p>
 
       {errorParam && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">
@@ -259,7 +273,7 @@ export default function LoginPage() {
                 </p>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(lnChallenge.lnurl).then(() => {
+                    copyToClipboard(lnChallenge.lnurl).then(() => {
                       setLnCopied(true)
                       setTimeout(() => setLnCopied(false), 2000)
                     })

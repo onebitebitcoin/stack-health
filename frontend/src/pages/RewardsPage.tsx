@@ -54,6 +54,14 @@ export default function RewardsPage() {
     cancelled: 'text-theme-subtle',
   }
 
+  if (!user) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-nav-safe bg-theme-page">
+        <p className="text-theme-muted">로그인이 필요합니다</p>
+      </div>
+    )
+  }
+
   if (claimSuccess) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-nav-safe bg-theme-page">
@@ -74,44 +82,52 @@ export default function RewardsPage() {
     <div className="flex flex-col gap-6 overflow-y-auto px-4 pb-nav-safe pt-6 h-[100dvh] bg-theme-page">
       <h1 className="text-xl font-bold text-theme-primary">리워드</h1>
 
-      {summary && (
-        <div className="rounded-2xl bg-theme-surface p-5">
-          <div className="mb-1 text-sm text-theme-muted">{summary.week_label} 이번 주 포인트</div>
-          <div className="flex items-end gap-2">
-            <span className="text-5xl font-black text-theme-primary">{Number(summary.current_week_points).toFixed(1)}</span>
-            <span className="mb-1 text-theme-muted">L</span>
-          </div>
-          <div className="mt-1 flex items-center gap-1 text-accent">
-            <Zap size={16} fill="currentColor" />
-            <span className="font-semibold">{summary.satoshi_amount.toLocaleString()} sats</span>
-          </div>
-          {summary.queued_week_points > 0 && (
-            <div className="mt-2 rounded-xl bg-theme-surface2 px-3 py-2 text-xs text-theme-muted">
-              대기 중 {Number(summary.queued_week_points).toFixed(1)}L · 잠시 후 확정됩니다
+      <div className="rounded-2xl bg-theme-surface p-5">
+        {summary ? (
+          <>
+            <div className="mb-1 text-sm text-theme-muted">{summary.week_label} 이번 주 포인트</div>
+            <div className="flex items-end gap-2">
+              <span className="text-5xl font-black text-theme-primary">{Number(summary.current_week_points).toFixed(1)}</span>
+              <span className="mb-1 text-theme-muted">L</span>
             </div>
-          )}
-          <div className="mt-2 text-sm text-theme-subtle">
-            마감 {dDayLabel(summary.deadline)} · {new Date(summary.deadline).toLocaleDateString('ko-KR')}
-          </div>
+            <div className="mt-1 flex items-center gap-1 text-accent">
+              <Zap size={16} fill="currentColor" />
+              <span className="font-semibold">{summary.satoshi_amount.toLocaleString()} sats</span>
+            </div>
+            {summary.queued_week_points > 0 && (
+              <div className="mt-2 rounded-xl bg-theme-surface2 px-3 py-2 text-xs text-theme-muted">
+                대기 중 {Number(summary.queued_week_points).toFixed(1)}L · 잠시 후 확정됩니다
+              </div>
+            )}
+            <div className="mt-2 text-sm text-theme-subtle">
+              마감 {dDayLabel(summary.deadline)} · {new Date(summary.deadline).toLocaleDateString('ko-KR')}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mb-1 h-4 w-32 rounded bg-theme-surface2 animate-pulse" />
+            <div className="mt-2 h-12 w-24 rounded bg-theme-surface2 animate-pulse" />
+            <div className="mt-2 h-4 w-20 rounded bg-theme-surface2 animate-pulse" />
+          </>
+        )}
 
-          <button
-            onClick={() => setShowSheet(true)}
-            disabled={!summary.claimable}
-            className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-opacity ${
-              summary.claimable
-                ? 'bg-accent text-accent-fg'
-                : 'cursor-not-allowed bg-theme-surface2 text-theme-subtle'
-            }`}
-          >
-            {!summary.claimable && <Lock size={16} />}
-            {summary.already_claimed
-              ? '이미 Claim됨'
-              : summary.satoshi_amount < 1000
-                ? `${1000 - summary.satoshi_amount} sats 더 필요`
-                : 'Claim하기'}
-          </button>
-        </div>
-      )}
+        <button
+          onClick={() => setShowSheet(true)}
+          disabled={!summary?.claimable}
+          className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-opacity ${
+            summary?.claimable
+              ? 'bg-accent text-accent-fg'
+              : 'cursor-not-allowed bg-theme-surface2 text-theme-subtle'
+          }`}
+        >
+          {!summary?.claimable && <Lock size={16} />}
+          {summary?.already_claimed
+            ? '이미 Claim됨'
+            : summary && summary.satoshi_amount < 1000
+              ? `${1000 - summary.satoshi_amount} sats 더 필요`
+              : '보상 받기'}
+        </button>
+      </div>
 
       {claims.length > 0 && (
         <div>

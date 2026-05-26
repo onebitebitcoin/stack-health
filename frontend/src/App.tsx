@@ -4,6 +4,7 @@ import { useAuthStore } from './store/auth'
 import client from './api/client'
 import type { User } from './api/types'
 import BottomNav from './components/BottomNav'
+import { isFlutterWebView } from './lib/platform'
 import FeedPage from './pages/FeedPage'
 import LoginPage from './pages/LoginPage'
 import UploadPage from './pages/UploadPage'
@@ -21,6 +22,7 @@ import ChallengeDashboardPage from './pages/ChallengeDashboardPage'
 import ChallengeDetailPage from './pages/ChallengeDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import LeaderboardPage from './pages/LeaderboardPage'
+import SharedVideoPage from './pages/SharedVideoPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -78,6 +80,7 @@ function Layout() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const isFlutter = isFlutterWebView()
   const isTabSwitch = ROOT_PATHS.has(pathname) && ROOT_PATHS.has(prevPathRef.current)
   const animClass = isTabSwitch ? '' : 'flutter-page-enter'
   useEffect(() => { prevPathRef.current = pathname }, [pathname])
@@ -87,7 +90,8 @@ function Layout() {
       <div key={location.key} className={`absolute inset-0 ${animClass}`}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<FeedPage />} />
+        <Route path="/share/:postId" element={<SharedVideoPage />} />
+        <Route path="/" element={<RequireAuth><FeedPage /></RequireAuth>} />
         <Route
           path="/upload"
           element={
@@ -126,7 +130,7 @@ function Layout() {
         <Route path="/leaderboard" element={<LeaderboardPage />} />
       </Routes>
       </div>
-      {!hideNav && <BottomNav />}
+      {!hideNav && !isFlutter && <BottomNav />}
     </div>
   )
 }

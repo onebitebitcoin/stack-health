@@ -154,6 +154,11 @@ export interface Challenge {
   image_url?: string | null
 }
 
+export interface ChallengeUpdateRequest {
+  description?: string
+  categories?: string[]
+}
+
 export interface ChallengeParticipant {
   user_id: number
   username: string
@@ -272,4 +277,20 @@ export interface LotteryResult {
   participant_count: number
   winner_count: number
   results: { user_id: number; sats_won: number; status: string }[]
+}
+
+export interface WeeklyPointsItem {
+  date: string
+  points: number
+  source: string
+  post_id: number | null
+}
+
+export interface WeeklyPointsHistory {
+  week_label: string
+  week_number: number
+  start_date: string
+  end_date: string
+  total_points: number
+  items: WeeklyPointsItem[]
 }
