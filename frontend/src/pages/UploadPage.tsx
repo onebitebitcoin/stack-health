@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward, Check, ImagePlus } from 'lucide-react'
+import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward, Check, ImagePlus, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
@@ -10,7 +10,8 @@ import type { Challenge } from '../api/types'
 const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as const
 type Tag = (typeof ALLOWED_TAGS)[number]
 
-const STEPS = ['영상 선택', '사진', '태그', '챌린지', '음성 녹음', '설명'] as const
+// 4단계로 단순화: 영상선택 → 태그·챌린지 → 음성녹음 → 설명·사진
+const STEPS = ['영상 선택', '태그·챌린지', '음성 녹음', '설명·사진'] as const
 const MAX_RECORD_SECONDS = 30
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
@@ -22,8 +23,6 @@ function getSupportedAudioMimeType(): string {
   return PREFERRED_AUDIO_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? ''
 }
 
-
-
 async function sha256(file: File | Blob): Promise<string> {
   const buffer = await file.arrayBuffer()
   const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
@@ -31,7 +30,6 @@ async function sha256(file: File | Blob): Promise<string> {
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
 }
-
 
 export default function UploadPage() {
   const navigate = useNavigate()
@@ -50,19 +48,20 @@ export default function UploadPage() {
   const [pointsEarned, setPointsEarned] = useState(0)
   const [error, setError] = useState('')
 
-  // 증거 사진 상태
+  // 증거 사진
   const proofImageRef = useRef<HTMLInputElement>(null)
   const proofFileRef = useRef<File | null>(null)
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null)
   const [proofMerging, setProofMerging] = useState(false)
+  const [proofMergeError, setProofMergeError] = useState('')
 
-  // 음성 녹음 상태
+  // 음성 녹음
   const audioBlobRef = useRef<Blob | null>(null)
   const audioMimeTypeRef = useRef('audio/webm')
   const [serverMerging, setServerMerging] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordedSeconds, setRecordedSeconds] = useState(0)
-  // 녹음 관련 ref (stale closure 방지)
+  const [recordingDone, setRecordingDone] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
@@ -92,22 +91,18 @@ export default function UploadPage() {
 
   async function startRecording() {
     if (typeof MediaRecorder === 'undefined') {
-      setError('이 브라우저에서는 음성 녹음을 지원하지 않습니다. 건너뛰기를 눌러 영상만 업로드하세요.')
+      setError('이 브라우저에서는 음성 녹음을 지원하지 않습니다.')
       return
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 48_000,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48_000 },
       })
       streamRef.current = stream
       audioChunksRef.current = []
       recordedSecondsRef.current = 0
       setRecordedSeconds(0)
+      setRecordingDone(false)
 
       const mimeType = getSupportedAudioMimeType()
       audioMimeTypeRef.current = mimeType || 'audio/webm'
@@ -124,11 +119,10 @@ export default function UploadPage() {
       mr.onstop = async () => {
         streamRef.current?.getTracks().forEach((t) => t.stop())
         streamRef.current = null
-
         const blob = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current })
         audioBlobRef.current = blob
         setRecording(false)
-        setStep(5)
+        setRecordingDone(true)
       }
 
       mr.start()
@@ -151,39 +145,32 @@ export default function UploadPage() {
   }
 
   function stopRecording() {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
     mediaRecorderRef.current?.stop()
   }
 
   function skipRecording() {
     if (recording) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
       mediaRecorderRef.current?.stop()
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = null
       setRecording(false)
     }
     audioBlobRef.current = null
-    setStep(5)
+    setRecordingDone(false)
+    setStep(3)
   }
 
   function handleBack() {
     if (step === 0) return
     if (recording) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = null
       setRecording(false)
       audioBlobRef.current = null
+      setRecordingDone(false)
     }
     setStep((prev) => prev - 1)
   }
@@ -199,104 +186,81 @@ export default function UploadPage() {
   async function handleUpload() {
     if (!file) return
     setError('')
+    setProofMergeError('')
     setUploading(true)
     try {
-      // 1. 영상 서버 경유 R2 업로드 (CORS 우회)
       const hash = await sha256(file)
-
       const uploadForm = new FormData()
       uploadForm.append('file', file, file.name)
       uploadForm.append('file_hash', hash)
 
-      const uploadRes = await client.post<{
-        data: { r2_key: string; cdn_url: string }
-      }>('/videos/upload', uploadForm, {
-        timeout: 180_000,
-        onUploadProgress: (e) => {
-          if (e.total) setProgress(Math.round((e.loaded / e.total) * 40))
-        },
-      })
+      const uploadRes = await client.post<{ data: { r2_key: string; cdn_url: string } }>(
+        '/videos/upload', uploadForm,
+        { timeout: 180_000, onUploadProgress: (e) => { if (e.total) setProgress(Math.round((e.loaded / e.total) * 40)) } },
+      )
       let { r2_key } = uploadRes.data.data
 
-      // 3. 오디오가 녹음됐으면 서버에서 merge
+      // 오디오 merge
       let finalDurationSec: number | null = null
       const audioBlob = audioBlobRef.current
-
       if (audioBlob && audioBlob.size > 0) {
         setServerMerging(true)
         const audioMimeType = audioBlob.type || audioMimeTypeRef.current || 'audio/webm'
         const audioExt = audioMimeType.includes('mp4') ? 'mp4' : 'webm'
-
         const formData = new FormData()
         formData.append('video_r2_key', r2_key)
         formData.append('audio_duration_sec', String(recordedSecondsRef.current))
         formData.append('audio', new File([audioBlob], `audio.${audioExt}`, { type: audioMimeType }))
 
         try {
-          const enqueueRes = await client.post<{
-            data: { job_id: string; status: string }
-          }>('/videos/merge-audio', formData)
+          const enqueueRes = await client.post<{ data: { job_id: string } }>('/videos/merge-audio', formData)
           const jobId = enqueueRes.data.data.job_id
-
           for (let i = 0; i < MERGE_POLL_MAX_ATTEMPTS; i++) {
             await new Promise<void>((resolve) => setTimeout(resolve, MERGE_POLL_INTERVAL_MS))
-            const pollRes = await client.get<{
-              data: { job_id: string; status: string; r2_key: string; cdn_url: string; error: string }
-            }>(`/videos/merge-job/${jobId}`)
+            const pollRes = await client.get<{ data: { status: string; r2_key: string } }>(`/videos/merge-job/${jobId}`)
             const { status, r2_key: mergedKey } = pollRes.data.data
-
-            if (status === 'completed') {
-              r2_key = mergedKey
-              finalDurationSec = recordedSecondsRef.current
-              break
-            } else if (status === 'failed') {
-              break
-            }
+            if (status === 'completed') { r2_key = mergedKey; finalDurationSec = recordedSecondsRef.current; break }
+            else if (status === 'failed') break
           }
-        } catch {
-          // merge 실패 시 원본 영상으로 업로드
-        } finally {
-          setServerMerging(false)
-        }
+        } catch { /* merge 실패 시 원본으로 계속 */ }
+        finally { setServerMerging(false) }
       }
 
-      // 3b. 증거 사진이 있으면 비디오 끝에 3초 슬라이드로 붙임
+      // 증거 사진 merge
       let proofImageUrl: string | null = null
       const proofFile = proofFileRef.current
       if (proofFile) {
         setProofMerging(true)
+        setProofMergeError('')
         try {
           const proofForm = new FormData()
           proofForm.append('file', proofFile, proofFile.name)
-          const proofUploadRes = await client.post<{
-            data: { proof_r2_key: string; proof_cdn_url: string }
-          }>('/videos/upload-proof', proofForm)
+          const proofUploadRes = await client.post<{ data: { proof_r2_key: string; proof_cdn_url: string } }>(
+            '/videos/upload-proof', proofForm, { timeout: 60_000 }
+          )
           const { proof_r2_key, proof_cdn_url } = proofUploadRes.data.data
           proofImageUrl = proof_cdn_url
 
           const mergeProofForm = new FormData()
           mergeProofForm.append('video_r2_key', r2_key)
           mergeProofForm.append('proof_r2_key', proof_r2_key)
-          const mergeProofRes = await client.post<{
-            data: { job_id: string; status: string }
-          }>('/videos/merge-proof', mergeProofForm)
+          const mergeProofRes = await client.post<{ data: { job_id: string } }>('/videos/merge-proof', mergeProofForm)
           const proofJobId = mergeProofRes.data.data.job_id
 
           for (let i = 0; i < MERGE_POLL_MAX_ATTEMPTS; i++) {
             await new Promise<void>((resolve) => setTimeout(resolve, MERGE_POLL_INTERVAL_MS))
-            const pollRes = await client.get<{
-              data: { status: string; r2_key: string; cdn_url: string; proof_image_url: string }
-            }>(`/videos/merge-job/${proofJobId}`)
+            const pollRes = await client.get<{ data: { status: string; r2_key: string } }>(`/videos/merge-job/${proofJobId}`)
             const { status, r2_key: mergedKey } = pollRes.data.data
-            if (status === 'completed') {
-              r2_key = mergedKey
-              break
-            } else if (status === 'failed') {
+            if (status === 'completed') { r2_key = mergedKey; break }
+            else if (status === 'failed') {
+              setProofMergeError('사진 합치기에 실패했습니다. 사진 없이 계속합니다.')
+              proofImageUrl = null
               break
             }
           }
-        } catch {
-          // proof merge 실패 시 원본 영상으로 계속
+        } catch (err) {
+          setProofMergeError(getApiErrorMessage(err, '사진 업로드 실패. 사진 없이 계속합니다.'))
+          proofImageUrl = null
         } finally {
           setProofMerging(false)
         }
@@ -304,7 +268,6 @@ export default function UploadPage() {
 
       setProgress(75)
 
-      // 4. 영상 길이 계산 (merge 결과 우선)
       let duration = finalDurationSec
       if (!duration) {
         const videoEl = document.createElement('video')
@@ -315,7 +278,6 @@ export default function UploadPage() {
         })
       }
 
-      // 5. confirm
       const confirmRes = await client.post<{ data: { points_earned: number } }>('/videos/confirm', {
         r2_key,
         file_hash: hash,
@@ -340,7 +302,6 @@ export default function UploadPage() {
 
   if (done) {
     const shareText = `오늘 운동 완료${caption ? ` — "${caption}"` : ''}`
-
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
         <div className="w-full max-w-sm rounded-2xl bg-theme-surface p-6">
@@ -348,15 +309,12 @@ export default function UploadPage() {
             <Flame size={20} className="text-orange-400" />
             <span className="text-sm font-semibold text-theme-primary">오늘 운동 완료</span>
           </div>
-          {caption && (
-            <p className="text-sm text-theme-muted mb-4">"{caption}"</p>
-          )}
+          {caption && <p className="text-sm text-theme-muted mb-4">"{caption}"</p>}
           <div className="flex items-center justify-between rounded-xl bg-theme-surface2 px-4 py-3">
             <span className="text-xs text-theme-muted">흘린 땀</span>
             <span className="text-lg font-bold text-accent">+{(pointsEarned / 100).toFixed(1)} L</span>
           </div>
         </div>
-
         <div className="flex w-full max-w-sm flex-col gap-3">
           <button
             onClick={() => {
@@ -368,13 +326,9 @@ export default function UploadPage() {
             }}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
-            <Share2 size={18} />
-            공유하기
+            <Share2 size={18} />공유하기
           </button>
-          <button
-            onClick={() => navigate('/')}
-            className="w-full rounded-xl bg-theme-surface py-3 text-sm text-theme-muted"
-          >
+          <button onClick={() => navigate('/')} className="w-full rounded-xl bg-theme-surface py-3 text-sm text-theme-muted">
             피드 보기
           </button>
         </div>
@@ -386,27 +340,23 @@ export default function UploadPage() {
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-nav-safe">
+      {/* 업로드 오버레이 */}
       {uploading && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-theme-page px-6">
           <Upload size={48} className="animate-bounce text-accent" />
           <p className="text-lg font-semibold text-theme-primary">업로드 중...</p>
           <div className="h-2 w-64 rounded-full bg-theme-surface2">
-            <div
-              className="h-2 rounded-full bg-accent transition-all"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="h-2 rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
           </div>
           <p className="text-sm text-theme-muted">{progress}%</p>
         </div>
       )}
-
       {serverMerging && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           <p className="text-sm text-theme-muted">음성과 영상을 합치는 중...</p>
         </div>
       )}
-
       {proofMerging && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -414,14 +364,11 @@ export default function UploadPage() {
         </div>
       )}
 
+      {/* 헤더 + 스텝 바 */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-2 mb-3">
           {step > 0 ? (
-            <button
-              onClick={handleBack}
-              className="flex-shrink-0 p-1 text-theme-muted hover:text-theme-primary transition-colors"
-              aria-label="이전 단계"
-            >
+            <button onClick={handleBack} className="flex-shrink-0 p-1 text-theme-muted hover:text-theme-primary transition-colors" aria-label="이전">
               <ChevronLeft size={20} strokeWidth={1.5} />
             </button>
           ) : (
@@ -436,36 +383,19 @@ export default function UploadPage() {
             const isActive = i === step
             const nodes = [
               <div key={`step-${i}`} className="flex flex-col items-center gap-1.5">
-                <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-                    isCompleted
-                      ? 'bg-accent text-accent-fg'
-                      : isActive
-                        ? 'bg-accent text-accent-fg ring-4 ring-accent/20'
-                        : 'bg-theme-surface2 text-theme-subtle'
-                  }`}
-                >
-                  {isCompleted ? (
-                    <Check size={12} strokeWidth={2.5} />
-                  ) : (
-                    <span className="text-[11px] font-bold">{i + 1}</span>
-                  )}
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                  isCompleted ? 'bg-accent text-accent-fg' : isActive ? 'bg-accent text-accent-fg ring-4 ring-accent/20' : 'bg-theme-surface2 text-theme-subtle'
+                }`}>
+                  {isCompleted ? <Check size={12} strokeWidth={2.5} /> : <span className="text-[11px] font-bold">{i + 1}</span>}
                 </div>
-                <span
-                  className={`text-[9px] leading-tight text-center font-medium ${
-                    isActive ? 'text-accent' : isCompleted ? 'text-theme-muted' : 'text-theme-subtle'
-                  }`}
-                >
+                <span className={`text-[9px] leading-tight text-center font-medium ${isActive ? 'text-accent' : isCompleted ? 'text-theme-muted' : 'text-theme-subtle'}`}>
                   {label}
                 </span>
               </div>,
             ]
             if (i < STEPS.length - 1) {
               nodes.push(
-                <div
-                  key={`line-${i}`}
-                  className={`flex-1 h-0.5 mt-3.5 transition-colors ${isCompleted ? 'bg-accent' : 'bg-theme-surface2'}`}
-                />,
+                <div key={`line-${i}`} className={`flex-1 h-0.5 mt-3.5 transition-colors ${isCompleted ? 'bg-accent' : 'bg-theme-surface2'}`} />,
               )
             }
             return nodes
@@ -473,15 +403,10 @@ export default function UploadPage() {
         </div>
       </div>
 
+      {/* Step 0: 영상 선택 */}
       {step === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="video/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
+          <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileChange} />
           <button
             onClick={() => fileInputRef.current?.click()}
             className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-theme-border p-12 text-theme-muted transition-colors hover:border-accent hover:text-accent"
@@ -493,122 +418,36 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* step 1: 사진 */}
+      {/* Step 1: 태그 + 챌린지 */}
       {step === 1 && (
-        <div className="flex flex-1 flex-col px-6 pt-4">
-          <p className="mb-1 font-semibold text-theme-primary">사진 (선택)</p>
-          <p className="mb-4 text-xs text-theme-muted">운동 인증 사진을 추가하면 영상 끝에 3초간 표시됩니다</p>
-
-          <input
-            ref={proofImageRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (!f) return
-              proofFileRef.current = f
-              setProofPreviewUrl(URL.createObjectURL(f))
-            }}
-          />
-
-          {proofPreviewUrl ? (
-            <div className="relative mb-4">
-              <img
-                src={proofPreviewUrl}
-                alt="사진 미리보기"
-                className="w-full rounded-xl object-cover max-h-64"
-              />
-              <button
-                onClick={() => {
-                  proofFileRef.current = null
-                  setProofPreviewUrl(null)
-                  if (proofImageRef.current) proofImageRef.current.value = ''
-                }}
-                className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
-              >
-                <ChevronLeft size={14} />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => proofImageRef.current?.click()}
-              className="mb-4 flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-theme-border p-10 text-theme-muted transition-colors hover:border-accent hover:text-accent"
-            >
-              <ImagePlus size={40} strokeWidth={1.5} />
-              <span className="text-sm">사진을 선택하세요</span>
-              <span className="text-xs">JPEG / PNG · 최대 10MB</span>
-            </button>
-          )}
-
-          <div className="mt-auto mb-4 flex gap-3">
-            <button
-              onClick={() => { proofFileRef.current = null; setProofPreviewUrl(null); setStep(2) }}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
-            >
-              <SkipForward size={16} />
-              건너뛰기
-            </button>
-            <button
-              onClick={() => setStep(2)}
-              className="flex-[2] flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
-            >
-              다음 <ChevronRight size={18} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* step 2: 태그 */}
-      {step === 2 && (
-        <div className="flex flex-1 flex-col px-6 pt-4">
+        <div className="flex flex-1 flex-col px-6 pt-2 overflow-y-auto">
           {previewUrl && (
-            <video
-              src={previewUrl}
-              className="mb-4 h-48 w-full rounded-xl object-cover"
-              muted
-              autoPlay
-              loop
-              playsInline
-            />
+            <video src={previewUrl} className="mb-4 h-36 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
           )}
-          <p className="mb-3 font-semibold text-theme-primary">운동 종류를 선택하세요</p>
-          <div className="flex flex-wrap gap-2">
+
+          {/* 태그 */}
+          <p className="mb-2 text-sm font-semibold text-theme-primary">운동 종류</p>
+          <div className="flex flex-wrap gap-2 mb-5">
             {ALLOWED_TAGS.map((tag) => (
               <button
                 key={tag}
                 onClick={() => toggleTag(tag)}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  selectedTags.includes(tag)
-                    ? 'bg-accent text-accent-fg'
-                    : 'bg-theme-surface2 text-theme-muted'
+                  selectedTags.includes(tag) ? 'bg-accent text-accent-fg' : 'bg-theme-surface2 text-theme-muted'
                 }`}
               >
                 {tag}
               </button>
             ))}
           </div>
-          <button
-            onClick={() => setStep(3)}
-            className="mt-auto mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
-          >
-            다음 <ChevronRight size={18} />
-          </button>
-        </div>
-      )}
 
-      {/* step 3: 챌린지 */}
-      {step === 3 && (
-        <div className="flex flex-1 flex-col px-6 pt-4">
-          <p className="mb-1 font-semibold text-theme-primary">챌린지 선택 (선택)</p>
-          <p className="mb-4 text-xs text-theme-muted">참여 중인 챌린지에 인증하세요</p>
-          <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
+          {/* 챌린지 */}
+          <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지 선택 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+          <div className="flex flex-col gap-2 mb-4">
             <button
               onClick={() => setSelectedChallengeId(null)}
               className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
-                selectedChallengeId === null
-                  ? 'bg-accent text-accent-fg'
-                  : 'bg-theme-surface text-theme-primary'
+                selectedChallengeId === null ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
               }`}
             >
               <Trophy size={16} strokeWidth={1.5} />
@@ -619,9 +458,7 @@ export default function UploadPage() {
                 key={c.id}
                 onClick={() => setSelectedChallengeId(c.id)}
                 className={`flex items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
-                  selectedChallengeId === c.id
-                    ? 'bg-accent text-accent-fg'
-                    : 'bg-theme-surface text-theme-primary'
+                  selectedChallengeId === c.id ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
                 }`}
               >
                 <Trophy size={16} strokeWidth={1.5} className="mt-0.5 flex-shrink-0" />
@@ -634,98 +471,108 @@ export default function UploadPage() {
               </button>
             ))}
           </div>
+
           <button
-            onClick={() => setStep(4)}
-            className="mt-4 mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
+            onClick={() => setStep(2)}
+            className="mt-auto mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg flex-shrink-0"
           >
             다음 <ChevronRight size={18} />
           </button>
         </div>
       )}
 
-      {/* step 4: 음성 녹음 */}
-      {step === 4 && (
+      {/* Step 2: 음성 녹음 */}
+      {step === 2 && (
         <div className="flex flex-1 flex-col px-6 pt-4 gap-4">
           {previewUrl && (
-            <video
-              src={previewUrl}
-              className="h-48 w-full rounded-xl object-cover"
-              muted
-              autoPlay
-              loop
-              playsInline
-            />
+            <video src={previewUrl} className="h-40 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
           )}
 
           <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-4">
             <div>
-              <p className="font-semibold text-theme-primary">음성 녹음 (선택)</p>
+              <p className="font-semibold text-theme-primary">음성 녹음 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
               <p className="text-xs text-theme-muted mt-1 leading-relaxed">
-                영상에 목소리가 없다면 직접 녹음해보세요. 오늘 운동 경험을 자유롭게 말해보세요.
+                목소리로 오늘 운동을 기록해보세요. 최대 {MAX_RECORD_SECONDS}초.
               </p>
-              <ul className="mt-2 space-y-0.5 text-xs text-theme-subtle">
-                <li>· 무슨 운동을 얼마나 했나요?</li>
-                <li>· 어디서 했나요?</li>
-                <li>· 오늘 잘된 점과 힘들었던 점은?</li>
-                <li>· 저번보다 나아진 게 있나요?</li>
-              </ul>
             </div>
 
             <div className="flex flex-col items-center gap-3">
-              {!recording ? (
-                <button
-                  onClick={startRecording}
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-accent"
-                >
-                  <Mic size={26} strokeWidth={1.5} />
+              {recordingDone ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/20">
+                    <Mic size={26} strokeWidth={1.5} className="text-accent" />
+                  </div>
+                  <span className="text-xs text-accent font-medium">
+                    {String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:{String(recordedSeconds % 60).padStart(2, '0')} 녹음 완료
+                  </span>
+                  <button
+                    onClick={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0) }}
+                    className="flex items-center gap-1 text-xs text-theme-muted"
+                  >
+                    <X size={12} /> 다시 녹음
+                  </button>
+                </div>
+              ) : !recording ? (
+                <button onClick={startRecording} className="flex h-16 w-16 items-center justify-center rounded-full bg-accent">
+                  <Mic size={26} strokeWidth={1.5} className="text-white" />
                 </button>
               ) : (
                 <div className="flex flex-col items-center gap-2">
-                  <button
-                    onClick={stopRecording}
-                    className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600"
-                  >
-                    <MicOff size={26} strokeWidth={1.5} color="white" />
+                  <button onClick={stopRecording} className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
+                    <MicOff size={26} strokeWidth={1.5} className="text-white" />
                   </button>
                   <span className="text-sm font-mono text-red-400">
-                    {String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:
-                    {String(recordedSeconds % 60).padStart(2, '0')}
+                    {String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:{String(recordedSeconds % 60).padStart(2, '0')}
                   </span>
                 </div>
               )}
 
               <div className="w-full h-1.5 rounded-full bg-theme-surface2 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-red-500 transition-all duration-1000"
-                  style={{ width: `${progressPct}%` }}
-                />
+                <div className="h-full rounded-full bg-red-500 transition-all duration-1000" style={{ width: `${progressPct}%` }} />
               </div>
-              {recording && (
-                <p className="text-xs text-theme-muted">{MAX_RECORD_SECONDS - recordedSeconds}초 남음</p>
-              )}
+              {recording && <p className="text-xs text-theme-muted">{MAX_RECORD_SECONDS - recordedSeconds}초 남음</p>}
             </div>
           </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}
 
-          <div className="mt-auto mb-4 flex gap-3">
+          <div className="mt-auto flex gap-3 pb-2">
             <button
               onClick={skipRecording}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
             >
-              <SkipForward size={16} />
-              건너뛰기
+              <SkipForward size={16} />건너뛰기
             </button>
+            {recordingDone && (
+              <button
+                onClick={() => setStep(3)}
+                className="flex-[2] flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
+              >
+                다음 <ChevronRight size={18} />
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* step 5: 설명 */}
-      {step === 5 && (
-        <div className="flex flex-1 flex-col px-6 pt-4">
-          <p className="mb-3 font-semibold text-theme-primary">설명을 추가하세요 (선택)</p>
-          <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-3">
-            <p className="text-xs font-medium text-theme-muted">운동 시간대 (선택)</p>
+      {/* Step 3: 설명 + 사진 */}
+      {step === 3 && (
+        <div className="flex flex-1 flex-col px-6 pt-4 overflow-y-auto">
+          {/* 캡션 */}
+          <p className="mb-2 text-sm font-semibold text-theme-primary">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+          <textarea
+            value={caption}
+            onChange={(e) => setCaption(e.target.value.slice(0, 140))}
+            maxLength={140}
+            placeholder="오늘의 운동을 소개해보세요..."
+            rows={3}
+            className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent mb-1"
+          />
+          <p className="text-right text-xs text-theme-subtle mb-4">{caption.length}/140</p>
+
+          {/* 운동 시간대 */}
+          <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-4">
+            <p className="text-xs font-medium text-theme-muted">운동 시간대 <span className="text-theme-subtle">(선택)</span></p>
             <div className="flex items-center gap-2">
               <input
                 type="time"
@@ -742,20 +589,49 @@ export default function UploadPage() {
               />
             </div>
           </div>
-          <textarea
-            value={caption}
-            onChange={(e) => setCaption(e.target.value.slice(0, 140))}
-            maxLength={140}
-            placeholder="오늘의 운동을 소개해보세요..."
-            rows={4}
-            className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+
+          {/* 증거 사진 */}
+          <p className="mb-2 text-sm font-semibold text-theme-primary">인증 사진 <span className="text-xs font-normal text-theme-subtle">(선택 — 영상 끝에 3초 표시)</span></p>
+          <input
+            ref={proofImageRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (!f) return
+              proofFileRef.current = f
+              setProofPreviewUrl(URL.createObjectURL(f))
+              setProofMergeError('')
+            }}
           />
-          <p className="mt-1 text-right text-xs text-theme-subtle">{caption.length}/140</p>
-          {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+          {proofPreviewUrl ? (
+            <div className="relative mb-4">
+              <img src={proofPreviewUrl} alt="사진 미리보기" className="w-full rounded-xl object-cover max-h-48" />
+              <button
+                onClick={() => { proofFileRef.current = null; setProofPreviewUrl(null); if (proofImageRef.current) proofImageRef.current.value = '' }}
+                className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => proofImageRef.current?.click()}
+              className="mb-4 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-theme-border p-4 text-theme-muted hover:border-accent hover:text-accent transition-colors"
+            >
+              <ImagePlus size={20} strokeWidth={1.5} />
+              <span className="text-sm">사진 추가</span>
+            </button>
+          )}
+
+          {proofMergeError && <p className="mb-2 text-xs text-orange-400">{proofMergeError}</p>}
+          {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+
           <button
             onClick={handleUpload}
             disabled={uploading}
-            className="mt-auto mb-4 w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
+            className="mb-4 w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
           >
             업로드 시작
           </button>

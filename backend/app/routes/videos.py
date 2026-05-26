@@ -19,7 +19,7 @@ from app.schemas.video import (
     PresignedUrlResponse,
 )
 from app.services import r2 as r2_service
-from app.services.job_queue import enqueue_merge_job, enqueue_merge_job_local, enqueue_proof_merge_job_local, get_job_status
+from app.services.job_queue import enqueue_merge_job, enqueue_merge_job_local, enqueue_proof_merge_job_local, enqueue_full_upload_pipeline, get_job_status
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
     POINTS_PER_UPLOAD,
@@ -352,3 +352,130 @@ def merge_proof(
         logger.error("proof merge 실패: %s", e)
         raise HTTPException(status_code=500, detail="영상 처리에 실패했습니다")
     return {"data": {"job_id": job_id, "status": "processing"}}
+
+
+# ---------------------------------------------------------------------------
+# MQ 방식 전체 업로드 파이프라인
+# ---------------------------------------------------------------------------
+
+@router.post("/upload-pipeline")
+async def upload_pipeline(
+    file: UploadFile = File(...),
+    file_hash: str = Form(...),
+    duration_sec: int = Form(...),
+    caption: str | None = Form(None),
+    tags: str = Form("[]"),
+    challenge_id: int | None = Form(None),
+    workout_start: str | None = Form(None),
+    workout_end: str | None = Form(None),
+    audio: UploadFile | None = File(None),
+    audio_duration_sec: int = Form(0),
+    proof_image: UploadFile | None = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """단일 요청으로 영상 + 오디오 + 사진을 받아 MQ 방식으로 백그라운드 처리 후 job_id 반환."""
+    content_type = file.content_type or "video/mp4"
+    if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식: {content_type}")
+
+    if db.query(Video).filter(Video.file_hash == file_hash).first():
+        raise HTTPException(status_code=409, detail="Duplicate video")
+
+    if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
+        raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
+
+    try:
+        tags_list: list[str] = json.loads(tags)
+    except (json.JSONDecodeError, TypeError):
+        tags_list = []
+
+    invalid_tags = [t for t in tags_list if t not in ALLOWED_TAGS]
+    if invalid_tags:
+        raise HTTPException(status_code=400, detail=f"Invalid tags: {invalid_tags}")
+
+    # 1. 영상 R2 업로드 (동기)
+    logger.info("upload_pipeline: user_id=%s", current_user.id)
+    r2_key, _cdn_url = r2_service.upload_fileobj(file.file, content_type, file.filename or "video.mp4")
+
+    # 2. 오디오 R2 업로드 (동기)
+    audio_r2_key: str | None = None
+    audio_content_type = "audio/webm"
+    if audio and audio.size and audio.size > 0:
+        audio_content_type = audio.content_type or "audio/webm"
+        audio_ext = "mp4" if "mp4" in audio_content_type else "webm"
+        audio_r2_key, _ = r2_service.upload_fileobj(
+            audio.file, audio_content_type, f"audio.{audio_ext}"
+        )
+
+    # 3. 증거 사진 R2 업로드 (동기)
+    proof_r2_key: str | None = None
+    proof_cdn_url: str | None = None
+    if proof_image and proof_image.size and proof_image.size > 0:
+        proof_ct = proof_image.content_type or "image/jpeg"
+        if proof_ct not in ALLOWED_IMAGE_CONTENT_TYPES:
+            raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식: {proof_ct}")
+        image_bytes = await proof_image.read()
+        if len(image_bytes) > MAX_IMAGE_SIZE:
+            raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 10MB)")
+        ext = "jpg" if "jpeg" in proof_ct or "jpg" in proof_ct else "png"
+        proof_r2_key = f"proof/{uuid.uuid4()}.{ext}"
+        r2_client = r2_service.get_r2_client()
+        r2_client.put_object(
+            Bucket=app_settings.r2_bucket_name,
+            Key=proof_r2_key,
+            Body=image_bytes,
+            ContentType=proof_ct,
+        )
+        proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
+
+    # 4. 전체 파이프라인 비동기 시작
+    job_id = enqueue_full_upload_pipeline(
+        r2_key=r2_key,
+        file_hash=file_hash,
+        duration_sec=duration_sec,
+        caption=caption,
+        tags=tags_list,
+        challenge_id=challenge_id,
+        workout_start=workout_start,
+        workout_end=workout_end,
+        user_id=current_user.id,
+        audio_r2_key=audio_r2_key,
+        audio_duration_sec=audio_duration_sec,
+        audio_content_type=audio_content_type,
+        proof_r2_key=proof_r2_key,
+        proof_cdn_url=proof_cdn_url,
+        early_adopter_bonus=(current_user.id <= 50),
+    )
+
+    return {"data": {"job_id": job_id, "status": "processing"}}
+
+
+@router.get("/upload-job/{job_id}")
+def get_upload_job_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """upload-pipeline 잡 상태 폴링 엔드포인트."""
+    job = get_job_status(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+
+    status = job.get("status", "unknown")
+    points_earned = 0.0
+    if status == "completed":
+        try:
+            points_earned = float(job.get("points_earned", "0"))
+        except (ValueError, TypeError):
+            points_earned = 0.0
+
+    return {
+        "data": {
+            "job_id": job_id,
+            "status": status,
+            "cdn_url": job.get("cdn_url", ""),
+            "post_id": job.get("post_id", ""),
+            "points_earned": points_earned,
+            "error": job.get("error", ""),
+        }
+    }

@@ -334,3 +334,154 @@ def enqueue_proof_merge_job_local(video_r2_key: str, proof_r2_key: str) -> str:
     t.start()
     logger.info("[proof-merge] job=%s 시작", job_id)
     return job_id
+
+
+# ---------------------------------------------------------------------------
+# Full async upload pipeline (MQ style)
+# ---------------------------------------------------------------------------
+
+def _run_full_upload_pipeline(
+    job_id: str,
+    r2_key: str,
+    file_hash: str,
+    duration_sec: int,
+    caption: str | None,
+    tags: list[str],
+    challenge_id: int | None,
+    workout_start: str | None,
+    workout_end: str | None,
+    user_id: int,
+    audio_r2_key: str | None,
+    audio_duration_sec: int,
+    audio_content_type: str,
+    proof_r2_key: str | None,
+    proof_cdn_url: str | None,
+    early_adopter_bonus: bool,
+) -> None:
+    """Background thread: optional merges → DB confirm → store result."""
+    from app.database import SessionLocal
+    from app.models.post import Post
+    from app.models.video import Video
+    from app.routes.challenges import increment_challenge_upload
+    from app.services.reward import POINTS_PER_UPLOAD, add_points, get_daily_upload_count, DAILY_MAX_UPLOADS
+
+    current_r2_key = r2_key
+    final_proof_url = proof_cdn_url
+
+    try:
+
+        # 1. Audio merge
+        if audio_r2_key:
+            audio_job_id = str(uuid.uuid4())
+            _set_local_job(audio_job_id, {"status": "processing"})
+            _run_local_merge(audio_job_id, current_r2_key, audio_r2_key, audio_duration_sec, audio_content_type)
+            audio_result = _get_local_job(audio_job_id) or {}
+            if audio_result.get("status") == "completed":
+                current_r2_key = audio_result["output_r2_key"]
+                logger.info("[full-pipeline] job=%s audio merged → %s", job_id, current_r2_key)
+            else:
+                logger.warning("[full-pipeline] job=%s audio merge failed, continuing without audio", job_id)
+
+        # 2. Proof image merge
+        if proof_r2_key:
+            proof_job_id = str(uuid.uuid4())
+            _set_local_job(proof_job_id, {"status": "processing"})
+            _run_local_proof_merge(proof_job_id, current_r2_key, proof_r2_key)
+            proof_result = _get_local_job(proof_job_id) or {}
+            if proof_result.get("status") == "completed":
+                current_r2_key = proof_result["output_r2_key"]
+                final_proof_url = proof_result.get("proof_image_url", proof_cdn_url)
+                logger.info("[full-pipeline] job=%s proof merged → %s", job_id, current_r2_key)
+            else:
+                logger.warning("[full-pipeline] job=%s proof merge failed, continuing without proof", job_id)
+
+        # 3. DB confirm
+        cdn_url = f"{settings.r2_public_url.rstrip('/')}/{current_r2_key}"
+
+        db = SessionLocal()
+        try:
+            if get_daily_upload_count(db, user_id) >= DAILY_MAX_UPLOADS:
+                _set_local_job(job_id, {"status": "failed", "error": "하루 업로드 한도 초과"})
+                return
+
+            video = Video(
+                user_id=user_id,
+                r2_key=current_r2_key,
+                cdn_url=cdn_url,
+                file_hash=file_hash,
+                duration_sec=min(30, max(5, duration_sec)),
+            )
+            db.add(video)
+            db.flush()
+
+            import json as _json
+            post = Post(
+                video_id=video.id,
+                user_id=user_id,
+                caption=caption,
+                tags=_json.dumps(tags, ensure_ascii=False),
+                workout_start=workout_start,
+                workout_end=workout_end,
+                proof_image_url=final_proof_url,
+            )
+            db.add(post)
+            db.flush()
+
+            if challenge_id:
+                increment_challenge_upload(db, user_id, challenge_id)
+
+            rp = add_points(db, user_id, POINTS_PER_UPLOAD, "upload", reference_id=video.id, early_adopter_bonus=early_adopter_bonus)
+            points_earned = rp.points if rp else 0.0
+
+            db.commit()
+            db.refresh(post)
+
+            _set_local_job(job_id, {
+                "status": "completed",
+                "post_id": str(post.id),
+                "cdn_url": cdn_url,
+                "points_earned": str(points_earned),
+            })
+            logger.info("[full-pipeline] job=%s 완료, post_id=%s points=%s", job_id, post.id, points_earned)
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.exception("[full-pipeline] job=%s 실패: %s", job_id, e)
+        _set_local_job(job_id, {"status": "failed", "error": str(e)})
+
+
+def enqueue_full_upload_pipeline(
+    r2_key: str,
+    file_hash: str,
+    duration_sec: int,
+    caption: str | None,
+    tags: list[str],
+    challenge_id: int | None,
+    workout_start: str | None,
+    workout_end: str | None,
+    user_id: int,
+    audio_r2_key: str | None = None,
+    audio_duration_sec: int = 0,
+    audio_content_type: str = "audio/webm",
+    proof_r2_key: str | None = None,
+    proof_cdn_url: str | None = None,
+    early_adopter_bonus: bool = False,
+) -> str:
+    """영상 업로드 전체 파이프라인을 백그라운드 스레드에서 처리. job_id 즉시 반환."""
+    job_id = str(uuid.uuid4())
+    _set_local_job(job_id, {"status": "processing"})
+
+    t = threading.Thread(
+        target=_run_full_upload_pipeline,
+        args=(
+            job_id, r2_key, file_hash, duration_sec, caption, tags,
+            challenge_id, workout_start, workout_end, user_id,
+            audio_r2_key, audio_duration_sec, audio_content_type,
+            proof_r2_key, proof_cdn_url, early_adopter_bonus,
+        ),
+        daemon=True,
+    )
+    t.start()
+    logger.info("[full-pipeline] job=%s 시작 user_id=%s", job_id, user_id)
+    return job_id

@@ -344,7 +344,7 @@ export default function ChallengeCreatePage() {
         <button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending || !form.title || !form.reward_title || !form.start_date || !form.end_date}
-          className="rounded-2xl bg-accent py-3 text-sm font-semibold text-accent-fg disabled:opacity-50"
+          className="mt-6 mb-4 rounded-2xl bg-accent py-4 text-sm font-semibold text-accent-fg disabled:opacity-50"
         >
           {mutation.isPending ? '생성 중...' : '챌린지 만들기'}
         </button>

@@ -182,17 +182,13 @@ export default function ChallengePage() {
           <p className="text-xs text-theme-muted mt-0.5">운동하고 타이틀을 획득하세요</p>
         </div>
         {user && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/my-challenges')}
-              className="text-xs text-theme-muted"
-            >
-              내 챌린지
-            </button>
-            <button onClick={() => navigate('/challenges/create')} className="rounded-full bg-accent p-1.5">
-              <Plus size={16} className="text-accent-fg" />
-            </button>
-          </div>
+          <button
+            onClick={() => navigate('/challenges/create')}
+            className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg"
+          >
+            <Plus size={13} />
+            챌린지 추가
+          </button>
         )}
       </div>
 

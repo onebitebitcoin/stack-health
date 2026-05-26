@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Zap, Dumbbell, Shield, Info } from 'lucide-react'
 
 export default function TermsPage() {
   const navigate = useNavigate()
@@ -11,7 +11,54 @@ export default function TermsPage() {
         </button>
         <h1 className="font-bold text-theme-primary">이용약관</h1>
       </div>
-      <div className="px-4 py-6 space-y-6 text-sm text-theme-muted leading-relaxed">
+
+      {/* 서비스 가이드 */}
+      <div className="px-4 pt-5 pb-4 space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-theme-muted">서비스 가이드</p>
+        <div className="rounded-2xl bg-theme-surface p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-accent/15">
+              <Dumbbell size={15} className="text-accent" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-theme-primary">운동하고 비트코인 받자</p>
+              <p className="text-xs text-theme-muted mt-0.5 leading-relaxed">5~30초 운동 영상을 하루 최대 3회 업로드하면 땀(포인트)을 적립합니다.</p>
+            </div>
+          </div>
+          <div className="h-px bg-theme-border" />
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-yellow-500/15">
+              <Zap size={15} className="text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-theme-primary">Lightning 보상</p>
+              <p className="text-xs text-theme-muted mt-0.5 leading-relaxed">매주 적립된 땀은 비트코인(sats)으로 Lightning 주소에 자동 지급됩니다. 설정에서 Lightning 주소를 먼저 등록하세요.</p>
+            </div>
+          </div>
+          <div className="h-px bg-theme-border" />
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/15">
+              <Shield size={15} className="text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-theme-primary">업로드 정책</p>
+              <p className="text-xs text-theme-muted mt-0.5 leading-relaxed">본인이 직접 촬영한 운동 영상만 업로드 가능합니다. 부적절한 콘텐츠는 즉시 삭제되고 계정이 정지됩니다.</p>
+            </div>
+          </div>
+          <div className="h-px bg-theme-border" />
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-theme-surface2">
+              <Info size={15} className="text-theme-muted" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-theme-primary">포인트 정산</p>
+              <p className="text-xs text-theme-muted mt-0.5 leading-relaxed">업로드 후 24시간이 지나야 포인트가 확정됩니다. 확정 전 영상을 삭제하면 포인트가 회수됩니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 pb-6 space-y-6 text-sm text-theme-muted leading-relaxed">
         <section>
           <h2 className="font-semibold text-theme-primary mb-2">제1조 (서비스 개요)</h2>
           <p>운동하고 비트코인 받자(이하 "서비스")는 사용자가 운동 영상을 업로드하고 커뮤니티와 공유하는 플랫폼입니다.</p>

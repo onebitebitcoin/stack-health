@@ -16,7 +16,48 @@
     color: var(--text-primary);
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
   }
+
+  /* 텍스트 입력 필드에서 선택 허용 */
+  input, textarea, [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* 버튼 더블탭 줌 방지 */
+  button, a {
+    touch-action: manipulation;
+  }
+
+  /* iOS 스크롤 모멘텀 */
+  .scroll-momentum {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Flutter 스타일 페이지 전환 */
+@keyframes flutter-page-enter {
+  from {
+    transform: translateX(100%);
+    opacity: 0.92;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes flutter-page-fade-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.flutter-page-enter {
+  animation: flutter-page-enter 230ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  will-change: transform, opacity;
 }
 
 @layer utilities {

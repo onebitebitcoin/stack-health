@@ -1,11 +1,9 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock } from 'lucide-react'
+import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock, Share2 } from 'lucide-react'
 import type { Post } from '../api/types'
 import TagChip from './TagChip'
-import PointBadge from './PointBadge'
 import client from '../api/client'
-import { POINTS_PER_VIEW } from '../lib/constants'
 import { useAuthStore } from '../store/auth'
 
 interface VideoCardProps {
@@ -193,7 +191,22 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
           <span className="text-xs font-semibold text-white drop-shadow">{commentCount}</span>
         </button>
 
-        <PointBadge points={POINTS_PER_VIEW} />
+        {/* 공유 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            const text = post.caption ? `"${post.caption}" — @${post.username}` : `@${post.username}의 운동 영상`
+            if (typeof navigator !== 'undefined' && 'share' in navigator) {
+              navigator.share({ title: '운동 영상 공유', text, url: window.location.origin }).catch(() => undefined)
+            } else {
+              window.navigator.clipboard?.writeText(text).catch(() => undefined)
+            }
+          }}
+          className="flex flex-col items-center gap-1"
+        >
+          <Share2 size={28} strokeWidth={1.5} className="text-white" />
+          <span className="text-xs font-semibold text-white drop-shadow">공유</span>
+        </button>
       </div>
 
       {/* 재생 진행 바 — 네비게이션 바 바로 위 */}

@@ -220,33 +220,35 @@ export default function ProfilePage() {
             </span>
           </div>
 
-          {/* 클레임 이력 리스트 */}
-          {!claimsData ? (
-            <div className="py-6 text-center text-xs text-theme-muted">불러오는 중...</div>
-          ) : claimsData.length === 0 ? (
-            <div className="py-6 text-center text-xs text-theme-muted">클레임 이력이 없습니다</div>
-          ) : (
-            claimsData.map((claim) => (
-              <div key={claim.id} className="flex items-center justify-between px-5 py-3 border-b border-theme-border last:border-0">
-                <div>
-                  <p className="text-xs font-medium text-theme-primary">{claim.week_label}</p>
-                  <p className="text-xs text-theme-muted mt-0.5">
-                    {(claim.points_used / 100).toFixed(2)} L
-                  </p>
+          {/* 클레임 이력 리스트 — 최대 높이 제한 + 스크롤 */}
+          <div className="max-h-52 overflow-y-auto">
+            {!claimsData ? (
+              <div className="py-6 text-center text-xs text-theme-muted">불러오는 중...</div>
+            ) : claimsData.length === 0 ? (
+              <div className="py-6 text-center text-xs text-theme-muted">클레임 이력이 없습니다</div>
+            ) : (
+              claimsData.map((claim) => (
+                <div key={claim.id} className="flex items-center justify-between px-5 py-3 border-b border-theme-border last:border-0">
+                  <div>
+                    <p className="text-xs font-medium text-theme-primary">{claim.week_label}</p>
+                    <p className="text-xs text-theme-muted mt-0.5">
+                      {(claim.points_used / 100).toFixed(2)} L
+                    </p>
+                  </div>
+                  <span className={`text-xs font-semibold ${
+                    claim.status === 'paid' ? 'text-green-400' :
+                    claim.status === 'pending' ? 'text-yellow-400' :
+                    claim.status === 'failed' ? 'text-red-400' :
+                    'text-theme-muted'
+                  }`}>
+                    {claim.status === 'paid' ? '지급완료' :
+                     claim.status === 'pending' ? '대기' :
+                     claim.status === 'failed' ? '실패' : '취소'}
+                  </span>
                 </div>
-                <span className={`text-xs font-semibold ${
-                  claim.status === 'paid' ? 'text-green-400' :
-                  claim.status === 'pending' ? 'text-yellow-400' :
-                  claim.status === 'failed' ? 'text-red-400' :
-                  'text-theme-muted'
-                }`}>
-                  {claim.status === 'paid' ? '지급완료' :
-                   claim.status === 'pending' ? '대기' :
-                   claim.status === 'failed' ? '실패' : '취소'}
-                </span>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       )}
 
@@ -418,10 +420,16 @@ export default function ProfilePage() {
                   playsInline
                   preload="metadata"
                 />
-                <div className="absolute inset-0 bg-black/20" />
-                <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-white/80">
-                  <Play size={10} strokeWidth={2} />
-                  <span className="text-[10px]">{post.view_count}</span>
+                <div className="absolute inset-0 bg-black/30" />
+                <div className="absolute bottom-1.5 left-1 right-1 flex items-center justify-between text-white/90">
+                  <div className="flex items-center gap-1">
+                    <Heart size={9} strokeWidth={2} />
+                    <span className="text-[9px] font-medium">{post.like_count}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Eye size={9} strokeWidth={2} />
+                    <span className="text-[9px] font-medium">{post.view_count}</span>
+                  </div>
                 </div>
                 <button
                   onClick={() => setDeleteConfirmId(post.id)}
