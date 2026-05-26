@@ -14,12 +14,7 @@ from app.models.video import Video
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.video import PostSchema
-from app.services.reward import (
-    POINTS_PER_LIKE_RECEIVED,
-    POINTS_PER_VIEW_RECEIVED,
-    add_points,
-    get_week_label,
-)
+from app.services.reward import get_week_label
 
 KST = timezone(timedelta(hours=9))
 
@@ -144,9 +139,6 @@ def like_post(
     )
     db.add(like_record)
 
-    if post.user_id != current_user.id:
-        add_points(db, post.user_id, POINTS_PER_LIKE_RECEIVED, "like_received", post_id)
-
     post.like_count += 1
     db.commit()
     return {"data": {"liked": True, "like_count": post.like_count}}
@@ -186,9 +178,6 @@ def view_post(
             reference_id=post_id,
         )
         db.add(view_record)
-
-        if post.user_id != current_user.id:
-            add_points(db, post.user_id, POINTS_PER_VIEW_RECEIVED, "view_received", post_id)
 
     db.commit()
     return {"data": {"view_count": post.view_count}}

@@ -7,13 +7,11 @@ from app.models.claim import LightningClaim
 from app.models.reward import RewardPoint
 from app.models.video import Video
 
-POINTS_PER_UPLOAD = 50
-POINTS_PER_LIKE_RECEIVED = 5
-POINTS_PER_VIEW_RECEIVED = 2
-DAILY_MAX_POINTS = 300
+POINTS_PER_UPLOAD = 0.5
+POINTS_PER_COMMENT = 0.1
+DAILY_MAX_POINTS = 5.0
 DAILY_MAX_UPLOADS = 3
-POINTS_TO_SATS_DIVISOR = 100  # 100pt = 1000 sats
-SATS_PER_HUNDRED_POINTS = 1000
+SATS_PER_POINT = 10  # 1pt = 10 sats
 MIN_CLAIM_SATS = 1000
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
@@ -38,12 +36,11 @@ def get_week_claim_deadline(week_label: str) -> datetime:
     return monday + timedelta(weeks=1)
 
 
-def points_to_sats(points: int) -> int:
-    # 100pt = 1000 sats → 1pt = 10 sats (proportional, no floor per 100)
-    return points * SATS_PER_HUNDRED_POINTS // POINTS_TO_SATS_DIVISOR
+def points_to_sats(points: float) -> int:
+    return int(points * SATS_PER_POINT)
 
 
-def get_weekly_points(db: Session, user_id: int, week_label: str) -> int:
+def get_weekly_points(db: Session, user_id: int, week_label: str) -> float:
     result = (
         db.query(func.sum(RewardPoint.points))
         .filter(
@@ -56,7 +53,7 @@ def get_weekly_points(db: Session, user_id: int, week_label: str) -> int:
     return result or 0
 
 
-def get_weekly_queued_points(db: Session, user_id: int, week_label: str) -> int:
+def get_weekly_queued_points(db: Session, user_id: int, week_label: str) -> float:
     result = (
         db.query(func.sum(RewardPoint.points))
         .filter(
@@ -88,7 +85,7 @@ def get_daily_upload_count(db: Session, user_id: int) -> int:
     )
 
 
-def get_daily_total_points(db: Session, user_id: int) -> int:
+def get_daily_total_points(db: Session, user_id: int) -> float:
     today_start = _utc_today_start()
     result = (
         db.query(func.sum(RewardPoint.points))
@@ -149,7 +146,7 @@ def revoke_queued_upload_reward(db: Session, video_id: int) -> int:
 def add_points(
     db: Session,
     user_id: int,
-    points: int,
+    points: float,
     reason: str,
     reference_id: int | None = None,
     early_adopter_bonus: bool = False,

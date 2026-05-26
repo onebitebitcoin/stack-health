@@ -78,7 +78,7 @@ export default function RewardsPage() {
         <div className="rounded-2xl bg-theme-surface p-5">
           <div className="mb-1 text-sm text-theme-muted">{summary.week_label} 이번 주 포인트</div>
           <div className="flex items-end gap-2">
-            <span className="text-5xl font-black text-theme-primary">{summary.current_week_points}</span>
+            <span className="text-5xl font-black text-theme-primary">{Number(summary.current_week_points).toFixed(1)}</span>
             <span className="mb-1 text-theme-muted">pt</span>
           </div>
           <div className="mt-1 flex items-center gap-1 text-accent">
@@ -87,7 +87,7 @@ export default function RewardsPage() {
           </div>
           {summary.queued_week_points > 0 && (
             <div className="mt-2 rounded-xl bg-theme-surface2 px-3 py-2 text-xs text-theme-muted">
-              대기 중 {(summary.queued_week_points / 100).toFixed(1)}L · 잠시 후 확정됩니다
+              대기 중 {Number(summary.queued_week_points).toFixed(1)}pt · 잠시 후 확정됩니다
             </div>
           )}
           <div className="mt-2 text-sm text-theme-subtle">

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -14,8 +14,8 @@ class RewardPoint(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     week_label: Mapped[str] = mapped_column(String, nullable=False)  # e.g. "2026-W21"
-    points: Mapped[int] = mapped_column(Integer, nullable=False)
-    reason: Mapped[str] = mapped_column(String, nullable=False)  # upload | like_received | view_received
+    points: Mapped[float] = mapped_column(Float, nullable=False)
+    reason: Mapped[str] = mapped_column(String, nullable=False)  # upload | comment
     reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String, default="fixed", nullable=False)  # queued | fixed | revoked
     created_at: Mapped[datetime] = mapped_column(
