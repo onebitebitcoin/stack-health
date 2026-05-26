@@ -206,7 +206,7 @@ def _run_local_proof_merge(
             f.write(resp["Body"].read())
 
         # 비디오 해상도 조회
-        probe = subprocess.run(
+        probe_v = subprocess.run(
             [
                 "ffprobe", "-v", "quiet",
                 "-select_streams", "v:0",
@@ -218,22 +218,55 @@ def _run_local_proof_merge(
             text=True,
             timeout=30,
         )
-        dims = probe.stdout.strip().split(",")
+        first_line = probe_v.stdout.strip().splitlines()[0] if probe_v.stdout.strip() else ""
+        dims = first_line.split(",")
         vw = dims[0].strip() if len(dims) >= 2 else "720"
         vh = dims[1].strip() if len(dims) >= 2 else "1280"
 
-        # 이미지 → 3초 클립 (비디오와 같은 해상도)
-        clip_cmd = [
-            "ffmpeg", "-y",
-            "-loop", "1", "-t", "3", "-i", tmp_image,
-            "-vf",
+        # 원본 비디오 오디오 스트림 유무 확인
+        # concat demuxer는 두 세그먼트의 스트림 수가 반드시 동일해야 함
+        probe_a = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet",
+                "-select_streams", "a:0",
+                "-show_entries", "stream=codec_type",
+                "-of", "csv=p=0",
+                tmp_video,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        has_audio = bool(probe_a.stdout.strip())
+
+        vf = (
             f"scale={vw}:{vh}:force_original_aspect_ratio=decrease,"
-            f"pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1",
-            "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
-            "-an",
-            tmp_proof_clip,
-        ]
+            f"pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+        )
+
+        if has_audio:
+            # 원본에 오디오 있음 → proof 클립에 무음 오디오 추가 (스트림 수 맞춤)
+            clip_cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1", "-t", "3", "-i", tmp_image,
+                "-f", "lavfi", "-t", "3", "-i", "anullsrc=r=48000:cl=stereo",
+                "-vf", vf,
+                "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+                "-shortest", "-movflags", "+faststart",
+                tmp_proof_clip,
+            ]
+        else:
+            # 원본에 오디오 없음 → proof 클립도 비디오만
+            clip_cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1", "-t", "3", "-i", tmp_image,
+                "-vf", vf,
+                "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+                "-an", "-movflags", "+faststart",
+                tmp_proof_clip,
+            ]
+
         result = subprocess.run(clip_cmd, capture_output=True, timeout=60)
         if result.returncode != 0:
             raise RuntimeError(f"이미지 클립 생성 실패: {result.stderr.decode()[:500]}")
@@ -248,8 +281,13 @@ def _run_local_proof_merge(
             "-f", "concat", "-safe", "0", "-i", tmp_list,
             "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
-            tmp_output,
         ]
+        if has_audio:
+            concat_cmd += ["-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2"]
+        else:
+            concat_cmd += ["-an"]
+        concat_cmd.append(tmp_output)
+
         result = subprocess.run(concat_cmd, capture_output=True, timeout=120)
         if result.returncode != 0:
             raise RuntimeError(f"concat 실패: {result.stderr.decode()[:500]}")
