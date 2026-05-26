@@ -352,10 +352,19 @@ export default function AdminPage() {
             <div key={u.id} className="rounded-xl bg-theme-surface p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-theme-primary">@{u.username}</p>
                     {u.is_admin && (
                       <span className="text-[10px] bg-accent/20 text-accent px-1.5 py-0.5 rounded-full">admin</span>
+                    )}
+                    {u.auth_provider === 'google' && (
+                      <span className="text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded-full">Google</span>
+                    )}
+                    {u.auth_provider === 'lightning' && (
+                      <span className="text-[10px] bg-yellow-500/15 text-yellow-400 px-1.5 py-0.5 rounded-full">Lightning</span>
+                    )}
+                    {u.auth_provider === 'email' && (
+                      <span className="text-[10px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded-full">Email</span>
                     )}
                   </div>
                   <p className="text-xs text-theme-muted">{u.email ?? '이메일 없음'}</p>

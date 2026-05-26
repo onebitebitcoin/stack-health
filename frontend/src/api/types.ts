@@ -77,6 +77,7 @@ export interface AdminUser {
   username: string
   is_banned: boolean
   is_admin: boolean
+  auth_provider: 'google' | 'lightning' | 'email'
   video_count: number
   total_points: number
   challenge_count: number

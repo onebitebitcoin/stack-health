@@ -229,6 +229,13 @@ def list_users(
             .all()
         )
 
+    def _auth_provider(u: User) -> str:
+        if u.oauth_provider == "google":
+            return "google"
+        if u.oauth_provider == "lnauth":
+            return "lightning"
+        return "email"
+
     result = [
         {
             "id": u.id,
@@ -237,6 +244,7 @@ def list_users(
             "lightning_address": u.lightning_address,
             "is_banned": u.is_banned,
             "is_admin": u.is_admin,
+            "auth_provider": _auth_provider(u),
             "video_count": video_counts.get(u.id, 0),
             "total_points": point_totals.get(u.id, 0),
             "challenge_count": challenge_counts.get(u.id, 0),
