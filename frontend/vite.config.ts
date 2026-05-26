@@ -29,7 +29,7 @@ export default defineConfig({
       manifest: {
         name: 'Stack Health',
         short_name: 'Stack Health',
-        description: '운동하고 비트코인 받자',
+        description: 'Stack Health',
         theme_color: '#0D0D0D',
         background_color: '#0D0D0D',
         display: 'standalone',

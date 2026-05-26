@@ -21,7 +21,7 @@ export default function TermsPage() {
               <Dumbbell size={15} className="text-accent" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-theme-primary">운동하고 비트코인 받자</p>
+              <p className="text-sm font-semibold text-theme-primary">Stack Health</p>
               <p className="text-xs text-theme-muted mt-0.5 leading-relaxed">5~30초 운동 영상을 하루 최대 3회 업로드하면 땀(포인트)을 적립합니다.</p>
             </div>
           </div>
@@ -61,7 +61,7 @@ export default function TermsPage() {
       <div className="px-4 pb-6 space-y-6 text-sm text-theme-muted leading-relaxed">
         <section>
           <h2 className="font-semibold text-theme-primary mb-2">제1조 (서비스 개요)</h2>
-          <p>운동하고 비트코인 받자(이하 "서비스")는 사용자가 운동 영상을 업로드하고 커뮤니티와 공유하는 플랫폼입니다.</p>
+          <p>Stack Health(이하 "서비스")는 사용자가 운동 영상을 업로드하고 커뮤니티와 공유하는 플랫폼입니다.</p>
         </section>
         <section>
           <h2 className="font-semibold text-theme-primary mb-2">제2조 (포인트 및 리워드)</h2>
