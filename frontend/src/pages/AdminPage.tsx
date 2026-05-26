@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X, Bitcoin, Pickaxe, ArrowLeft, Smartphone, Save, ExternalLink, Upload, FileUp, Loader2 } from 'lucide-react'
+import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X, Bitcoin, Pickaxe, ArrowLeft } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { AdminClaim, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse, MiningParticipant, MiningParticipantsResponse, MiningRound, LotteryResult } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
-type TabId = 'users' | 'videos' | 'rewards' | 'app'
+type TabId = 'users' | 'videos' | 'rewards'
 
 interface AdminVideosResponse {
   videos: AdminVideo[]
@@ -268,7 +268,6 @@ export default function AdminPage() {
     { id: 'users', label: '유저', icon: <User size={14} /> },
     { id: 'videos', label: '영상', icon: <Video size={14} /> },
     { id: 'rewards', label: '리워드', icon: <Award size={14} /> },
-    { id: 'app', label: '앱', icon: <Smartphone size={14} /> },
   ]
 
   return (
@@ -604,271 +603,9 @@ export default function AdminPage() {
         </>
       )}
 
-      {activeTab === 'app' && <AppLinksPanel />}
-
       {selectedUserId !== null && (
         <UserDetailPanel userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
       )}
-      </div>
-    </div>
-  )
-}
-
-interface AppLinksData {
-  android_url: string | null
-  ios_url: string | null
-  android_filename: string | null
-  ios_filename: string | null
-}
-
-type UploadState = { status: 'idle' } | { status: 'uploading'; progress: number } | { status: 'done' } | { status: 'error'; message: string }
-
-function AppFileUpload({ platform, onUploaded }: { platform: 'android' | 'ios'; onUploaded: () => void }) {
-  const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' })
-  const accept = platform === 'android' ? '.apk,application/vnd.android.package-archive' : '.ipa,application/octet-stream'
-  const label = platform === 'android' ? 'APK 파일' : 'IPA 파일'
-
-  const handleFile = async (file: File) => {
-    setUploadState({ status: 'uploading', progress: 0 })
-    try {
-      const urlRes = await client.post<{ data: { upload_url: string; cdn_url: string } }>('/admin/app-links/upload-url', {
-        platform,
-        filename: file.name,
-        content_type: file.type || 'application/octet-stream',
-      })
-      const { upload_url, cdn_url } = urlRes.data.data
-
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            setUploadState({ status: 'uploading', progress: Math.round((e.loaded / e.total) * 100) })
-          }
-        }
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`업로드 실패: ${xhr.status}`)))
-        xhr.onerror = () => reject(new Error('네트워크 오류'))
-        xhr.open('PUT', upload_url)
-        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
-        xhr.send(file)
-      })
-
-      await client.post('/admin/app-links/confirm-upload', {
-        platform,
-        cdn_url,
-        filename: file.name,
-      })
-
-      setUploadState({ status: 'done' })
-      onUploaded()
-      setTimeout(() => setUploadState({ status: 'idle' }), 2000)
-    } catch (err: unknown) {
-      setUploadState({ status: 'error', message: err instanceof Error ? err.message : '업로드 실패' })
-    }
-  }
-
-  return (
-    <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-theme-border bg-theme-surface2 px-3 py-3 hover:border-accent transition-colors">
-      <input
-        type="file"
-        accept={accept}
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) handleFile(f)
-          e.target.value = ''
-        }}
-        disabled={uploadState.status === 'uploading'}
-      />
-      {uploadState.status === 'uploading' ? (
-        <>
-          <Loader2 size={14} className="text-accent animate-spin shrink-0" />
-          <span className="text-sm text-accent">{uploadState.progress}% 업로드 중...</span>
-        </>
-      ) : uploadState.status === 'done' ? (
-        <>
-          <CheckCircle size={14} className="text-green-500 shrink-0" />
-          <span className="text-sm text-green-500">업로드 완료</span>
-        </>
-      ) : uploadState.status === 'error' ? (
-        <>
-          <X size={14} className="text-red-500 shrink-0" />
-          <span className="text-sm text-red-500">{uploadState.message}</span>
-        </>
-      ) : (
-        <>
-          <FileUp size={14} className="text-theme-muted shrink-0" />
-          <span className="text-sm text-theme-muted">{label} 업로드</span>
-        </>
-      )}
-    </label>
-  )
-}
-
-function AppLinksPanel() {
-  const qc = useQueryClient()
-  const [androidUrl, setAndroidUrl] = useState('')
-  const [iosUrl, setIosUrl] = useState('')
-  const [saved, setSaved] = useState(false)
-
-  const { data, isLoading } = useQuery<AppLinksData>({
-    queryKey: ['admin-app-links'],
-    queryFn: async () => {
-      const res = await client.get<{ data: AppLinksData }>('/admin/app-links')
-      return res.data.data
-    },
-  })
-
-  useEffect(() => {
-    if (data) {
-      setAndroidUrl(data.android_url ?? '')
-      setIosUrl(data.ios_url ?? '')
-    }
-  }, [data])
-
-  const save = useMutation({
-    mutationFn: () => client.put('/admin/app-links', {
-      android_url: androidUrl.trim() || null,
-      ios_url: iosUrl.trim() || null,
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-app-links'] })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    },
-  })
-
-  const refresh = () => qc.invalidateQueries({ queryKey: ['admin-app-links'] })
-
-  if (isLoading) return <p className="text-center text-theme-muted py-10">불러오는 중...</p>
-
-  const androidFilename = data?.android_filename ?? null
-  const iosFilename = data?.ios_filename ?? null
-
-  return (
-    <div className="space-y-4">
-      {/* 파일 업로드 */}
-      <div className="rounded-xl bg-theme-surface p-4 space-y-4">
-        <p className="text-sm font-semibold text-theme-primary flex items-center gap-2">
-          <Upload size={14} className="text-accent" />
-          앱 파일 직접 업로드
-        </p>
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-theme-muted mb-1.5 block">Android APK</label>
-            {androidFilename && (
-              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-[#3DDC84]/10 border border-[#3DDC84]/30">
-                <FileUp size={12} className="text-[#3DDC84] shrink-0" />
-                <span className="text-xs text-theme-primary truncate">{androidFilename}</span>
-              </div>
-            )}
-            <AppFileUpload platform="android" onUploaded={refresh} />
-          </div>
-          <div>
-            <label className="text-xs text-theme-muted mb-1.5 block">iOS IPA</label>
-            {iosFilename && (
-              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30">
-                <FileUp size={12} className="text-blue-400 shrink-0" />
-                <span className="text-xs text-theme-primary truncate">{iosFilename}</span>
-              </div>
-            )}
-            <AppFileUpload platform="ios" onUploaded={refresh} />
-          </div>
-        </div>
-      </div>
-
-      {/* URL 직접 입력 */}
-      <div className="rounded-xl bg-theme-surface p-4 space-y-4">
-        <p className="text-sm font-semibold text-theme-primary flex items-center gap-2">
-          <Smartphone size={14} className="text-accent" />
-          스토어 URL 입력 (선택)
-        </p>
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-theme-muted mb-1.5 block">Android (Play Store URL)</label>
-            <input
-              type="url"
-              value={androidUrl}
-              onChange={(e) => setAndroidUrl(e.target.value)}
-              placeholder="https://play.google.com/store/apps/..."
-              className="w-full rounded-xl border border-theme-border bg-theme-surface2 px-3 py-3 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-theme-muted mb-1.5 block">iOS (TestFlight / App Store URL)</label>
-            <input
-              type="url"
-              value={iosUrl}
-              onChange={(e) => setIosUrl(e.target.value)}
-              placeholder="https://testflight.apple.com/join/..."
-              className="w-full rounded-xl border border-theme-border bg-theme-surface2 px-3 py-3 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
-            />
-          </div>
-        </div>
-
-        <button
-          onClick={() => save.mutate()}
-          disabled={save.isPending}
-          className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg disabled:opacity-50"
-        >
-          <Save size={14} />
-          {saved ? '저장됨' : save.isPending ? '저장 중...' : '저장'}
-        </button>
-      </div>
-
-      {/* 미리보기 */}
-      <div className="rounded-xl bg-theme-surface p-4 space-y-3">
-        <p className="text-xs font-semibold text-theme-muted">다운로드 버튼 미리보기</p>
-        <div className="space-y-2">
-          {androidUrl ? (
-            <a
-              href={androidUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-xl bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-4 py-3 hover:bg-[#3DDC84]/20 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#3DDC84]/20 flex items-center justify-center">
-                  <Smartphone size={16} className="text-[#3DDC84]" />
-                </div>
-                <div>
-                  <p className="text-xs text-theme-muted">{androidFilename ?? '다운로드'}</p>
-                  <p className="text-sm font-semibold text-theme-primary">Android 앱</p>
-                </div>
-              </div>
-              <ExternalLink size={14} className="text-theme-muted" />
-            </a>
-          ) : (
-            <div className="rounded-xl border border-dashed border-theme-border px-4 py-3 text-center">
-              <p className="text-xs text-theme-subtle">Android 미설정</p>
-            </div>
-          )}
-
-          {iosUrl ? (
-            <a
-              href={iosUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-xl bg-blue-500/10 border border-blue-500/30 px-4 py-3 hover:bg-blue-500/20 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                  <Smartphone size={16} className="text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-theme-muted">{iosFilename ?? '다운로드'}</p>
-                  <p className="text-sm font-semibold text-theme-primary">iPhone 앱</p>
-                </div>
-              </div>
-              <ExternalLink size={14} className="text-theme-muted" />
-            </a>
-          ) : (
-            <div className="rounded-xl border border-dashed border-theme-border px-4 py-3 text-center">
-              <p className="text-xs text-theme-subtle">iOS 미설정</p>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   )

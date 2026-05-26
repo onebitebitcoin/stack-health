@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LogOut, Droplets, ShieldCheck, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, ArrowLeft, Award, Share2, Trash2,
+  Smartphone, Download,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
@@ -39,6 +40,16 @@ export default function ProfilePage() {
   const [videoIdx, setVideoIdx] = useState(0)
   const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+  const [showIosGuide, setShowIosGuide] = useState(false)
+
+  const { data: appLinks } = useQuery<{ android_url: string | null; android_filename: string | null }>({
+    queryKey: ['app-links'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { android_url: string | null; android_filename: string | null } }>('/admin/app-links')
+      return res.data.data
+    },
+    staleTime: 5 * 60_000,
+  })
 
   const { data: myStats, isLoading } = useQuery<MyStats>({
     queryKey: ['my-stats'],
@@ -439,6 +450,73 @@ export default function ProfilePage() {
                   <Trash2 size={13} strokeWidth={2} />
                 </button>
               </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── 앱 다운로드 ── */}
+      <div className="mx-4 mb-6 space-y-2">
+        <p className="text-xs font-semibold text-theme-muted mb-2">앱 다운로드</p>
+
+        {appLinks?.android_url ? (
+          <a
+            href={appLinks.android_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between rounded-xl bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-4 py-3 hover:bg-[#3DDC84]/20 active:scale-[0.98] transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#3DDC84]/20 flex items-center justify-center">
+                <Smartphone size={16} className="text-[#3DDC84]" />
+              </div>
+              <div>
+                <p className="text-xs text-theme-muted">Android</p>
+                <p className="text-sm font-semibold text-theme-primary">APK 다운로드</p>
+              </div>
+            </div>
+            <Download size={16} className="text-[#3DDC84]" />
+          </a>
+        ) : (
+          <div className="flex items-center justify-between rounded-xl bg-theme-surface border border-theme-border px-4 py-3 opacity-50">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-theme-surface2 flex items-center justify-center">
+                <Smartphone size={16} className="text-theme-muted" />
+              </div>
+              <div>
+                <p className="text-xs text-theme-muted">Android</p>
+                <p className="text-sm font-semibold text-theme-muted">준비 중</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={() => setShowIosGuide((v) => !v)}
+          className="w-full flex items-center justify-between rounded-xl bg-blue-500/10 border border-blue-500/30 px-4 py-3 hover:bg-blue-500/20 active:scale-[0.98] transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <Smartphone size={16} className="text-blue-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-xs text-theme-muted">iPhone / iPad</p>
+              <p className="text-sm font-semibold text-theme-primary">홈 화면에 추가 (PWA)</p>
+            </div>
+          </div>
+          <ChevronDown size={16} className={`text-blue-400 transition-transform ${showIosGuide ? 'rotate-180' : ''}`} />
+        </button>
+
+        {showIosGuide && (
+          <div className="rounded-xl bg-theme-surface border border-theme-border px-4 py-3 space-y-2">
+            <p className="text-xs text-theme-muted font-medium">Safari에서 아래 순서로 진행하세요</p>
+            {[
+              '1. Safari로 이 사이트에 접속',
+              '2. 하단 공유 버튼(□↑) 탭',
+              '3. "홈 화면에 추가" 선택',
+              '4. "추가" 탭',
+            ].map((step) => (
+              <p key={step} className="text-xs text-theme-primary">{step}</p>
             ))}
           </div>
         )}

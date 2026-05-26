@@ -599,7 +599,6 @@ def _app_links_data(links: AppLinks | None) -> dict:
 @router.get("/app-links")
 def get_app_links(
     db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
 ) -> dict:
     links = db.query(AppLinks).first()
     return {"data": _app_links_data(links)}
