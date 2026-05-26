@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, Ban, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight } from 'lucide-react'
+import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import client from '../api/client'
 import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse } from '../api/types'
@@ -181,8 +181,8 @@ export default function AdminPage() {
     enabled: isAdmin && activeTab === 'users',
   })
 
-  const toggleBan = useMutation({
-    mutationFn: (id: number) => client.patch(`/admin/users/${id}/ban`),
+  const deleteUser = useMutation({
+    mutationFn: (id: number) => client.delete(`/admin/users/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }).catch(() => undefined),
   })
 
@@ -312,13 +312,6 @@ export default function AdminPage() {
                     <span>{u.total_points} pt</span>
                   </div>
                 </div>
-                <span
-                  className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                    u.is_banned ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
-                  }`}
-                >
-                  {u.is_banned ? '정지됨' : '정상'}
-                </span>
               </div>
               <div className="mt-3 flex gap-2">
                 <button
@@ -329,14 +322,15 @@ export default function AdminPage() {
                   상세
                 </button>
                 <button
-                  onClick={() => toggleBan.mutate(u.id)}
-                  disabled={toggleBan.isPending}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-60 ${
-                    u.is_banned ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-                  }`}
+                  onClick={() => {
+                    if (confirm(`@${u.username} 계정을 삭제하시겠습니까?\n영상, 포인트, 클레임 등 모든 데이터가 삭제됩니다.`))
+                      deleteUser.mutate(u.id)
+                  }}
+                  disabled={deleteUser.isPending}
+                  className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                 >
-                  <Ban size={12} />
-                  {u.is_banned ? '정지 해제' : '정지'}
+                  <Trash2 size={12} />
+                  삭제
                 </button>
               </div>
             </div>

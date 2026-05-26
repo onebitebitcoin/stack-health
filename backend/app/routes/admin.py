@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.admin_log import AdminLog
 from app.models.challenge import ChallengeParticipation
 from app.models.claim import LightningClaim
+from app.models.comment import Comment
 from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.video import Video
@@ -252,6 +253,56 @@ def toggle_ban(
     db.commit()
     db.refresh(user)
     return {"data": {"user_id": user_id, "is_banned": user.is_banned}}
+
+
+@router.delete("/users/{user_id}")
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> dict:
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="자신의 계정은 삭제할 수 없습니다")
+
+    # 영상 R2 키 수집 후 DB 삭제
+    videos = db.query(Video).filter(Video.user_id == user_id).all()
+    r2_keys = [v.r2_key for v in videos]
+
+    video_ids = [v.id for v in videos]
+    if video_ids:
+        db.query(Comment).filter(
+            Comment.post_id.in_(
+                db.query(Post.id).filter(Post.video_id.in_(video_ids))
+            )
+        ).delete(synchronize_session=False)
+        db.query(Post).filter(Post.video_id.in_(video_ids)).delete(synchronize_session=False)
+        db.query(Video).filter(Video.user_id == user_id).delete(synchronize_session=False)
+
+    db.query(Comment).filter(Comment.user_id == user_id).delete(synchronize_session=False)
+    db.query(RewardPoint).filter(RewardPoint.user_id == user_id).delete(synchronize_session=False)
+    db.query(LightningClaim).filter(LightningClaim.user_id == user_id).delete(synchronize_session=False)
+    db.query(ChallengeParticipation).filter(ChallengeParticipation.user_id == user_id).delete(synchronize_session=False)
+
+    log = AdminLog(
+        action="user_delete",
+        target_type="user",
+        target_id=user_id,
+        detail=user.username,
+    )
+    db.add(log)
+    db.delete(user)
+    db.commit()
+
+    for key in r2_keys:
+        try:
+            r2_service.delete_object(key)
+        except Exception:
+            pass
+
+    return {"data": {"user_id": user_id}}
 
 
 @router.get("/users/{user_id}")
