@@ -38,9 +38,13 @@ def run_merge(job: dict) -> dict:
 
     audio_suffix = ".mp4" if audio_content_type == "audio/mp4" else ".webm"
 
-    tmp_video = tempfile.mktemp(suffix=".mp4")
-    tmp_audio = tempfile.mktemp(suffix=audio_suffix)
-    tmp_output = tempfile.mktemp(suffix=".mp4")
+    def _make_tmp(suffix: str) -> str:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+            return f.name
+
+    tmp_video = _make_tmp(".mp4")
+    tmp_audio = _make_tmp(audio_suffix)
+    tmp_output = _make_tmp(".mp4")
 
     try:
         client = _get_r2_client()

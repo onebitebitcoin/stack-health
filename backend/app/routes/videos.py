@@ -19,7 +19,7 @@ from app.schemas.video import (
     PresignedUrlResponse,
 )
 from app.services import r2 as r2_service
-from app.services.job_queue import enqueue_merge_job, enqueue_merge_job_local, enqueue_proof_merge_job_local, enqueue_full_upload_pipeline, get_job_status
+from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_merge_job, enqueue_proof_merge_job, get_job_status
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
     POINTS_PER_UPLOAD,
@@ -266,13 +266,8 @@ async def merge_audio(
     try:
         job_id = enqueue_merge_job(job_payload)
     except Exception as e:
-        # Redis 불가 → Railway 서버에서 직접 ffmpeg 처리 (fallback)
-        logger.warning("Redis 큐 실패 (%s) — 로컬 fallback 처리", type(e).__name__)
-        try:
-            job_id = enqueue_merge_job_local(job_payload)
-        except Exception as fb_err:
-            logger.error("로컬 fallback 실패: %s", fb_err)
-            raise HTTPException(status_code=500, detail="영상 처리에 실패했습니다")
+        logger.error("Redis 큐 실패: %s", e)
+        raise HTTPException(status_code=500, detail="영상 처리 큐 등록에 실패했습니다")
 
     return {"data": {"job_id": job_id, "status": "processing"}}
 
@@ -347,9 +342,9 @@ def merge_proof(
     """증거 이미지를 비디오 끝에 3초 슬라이드로 붙인다."""
     logger.info("merge_proof: user_id=%s video=%s proof=%s", current_user.id, video_r2_key, proof_r2_key)
     try:
-        job_id = enqueue_proof_merge_job_local(video_r2_key, proof_r2_key)
+        job_id = enqueue_proof_merge_job(video_r2_key, proof_r2_key)
     except Exception as e:
-        logger.error("proof merge 실패: %s", e)
+        logger.error("proof merge 큐 등록 실패: %s", e)
         raise HTTPException(status_code=500, detail="영상 처리에 실패했습니다")
     return {"data": {"job_id": job_id, "status": "processing"}}
 

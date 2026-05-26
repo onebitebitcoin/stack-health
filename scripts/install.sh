@@ -58,6 +58,19 @@ pip install --quiet -r requirements.txt
 echo "[Backend] 의존성 설치 완료 (Python $(python3 --version))"
 deactivate
 
+# --- Worker ---
+echo "[Worker] Python 가상환경 셋업..."
+cd "$PROJECT_ROOT/worker"
+if [ ! -d ".venv" ]; then
+  $PYTHON_BIN -m venv .venv
+  echo "  .venv 생성 완료"
+fi
+source .venv/bin/activate
+pip install --quiet --upgrade pip
+pip install --quiet -r requirements.txt
+echo "[Worker] 의존성 설치 완료"
+deactivate
+
 # --- Frontend ---
 echo "[Frontend] npm install..."
 cd "$PROJECT_ROOT/frontend"
