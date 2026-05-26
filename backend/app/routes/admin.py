@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -555,18 +555,36 @@ class AppLinksRequest(BaseModel):
     ios_url: str | None = None
 
 
+class AppUploadUrlRequest(BaseModel):
+    platform: Literal["android", "ios"]
+    filename: str
+    content_type: str
+
+
+class AppUploadConfirmRequest(BaseModel):
+    platform: Literal["android", "ios"]
+    cdn_url: str
+    filename: str
+
+
+def _app_links_data(links: AppLinks | None) -> dict:
+    if not links:
+        return {"android_url": None, "ios_url": None, "android_filename": None, "ios_filename": None}
+    return {
+        "android_url": links.android_url,
+        "ios_url": links.ios_url,
+        "android_filename": links.android_filename,
+        "ios_filename": links.ios_filename,
+    }
+
+
 @router.get("/app-links")
 def get_app_links(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> dict:
     links = db.query(AppLinks).first()
-    return {
-        "data": {
-            "android_url": links.android_url if links else None,
-            "ios_url": links.ios_url if links else None,
-        }
-    }
+    return {"data": _app_links_data(links)}
 
 
 @router.put("/app-links")
@@ -584,12 +602,45 @@ def update_app_links(
     links.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(links)
-    return {
-        "data": {
-            "android_url": links.android_url,
-            "ios_url": links.ios_url,
-        }
-    }
+    return {"data": _app_links_data(links)}
+
+
+@router.post("/app-links/upload-url")
+def get_app_upload_url(
+    body: AppUploadUrlRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> dict:
+    try:
+        upload_url, r2_key = r2_service.generate_apk_presigned_url(
+            body.content_type, body.filename, body.platform
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"업로드 URL 생성 실패: {exc}") from exc
+    cdn_url = r2_service.get_cdn_url(r2_key)
+    return {"data": {"upload_url": upload_url, "r2_key": r2_key, "cdn_url": cdn_url}}
+
+
+@router.post("/app-links/confirm-upload")
+def confirm_app_upload(
+    body: AppUploadConfirmRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> dict:
+    links = db.query(AppLinks).first()
+    if not links:
+        links = AppLinks()
+        db.add(links)
+    if body.platform == "android":
+        links.android_url = body.cdn_url
+        links.android_filename = body.filename
+    else:
+        links.ios_url = body.cdn_url
+        links.ios_filename = body.filename
+    links.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(links)
+    return {"data": _app_links_data(links)}
 
 
 @router.get("/mining/rounds")

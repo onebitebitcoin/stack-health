@@ -14,6 +14,8 @@ class AppLinks(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     android_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     ios_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    android_filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ios_filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X, Bitcoin, Pickaxe, ArrowLeft, Smartphone, Save, ExternalLink } from 'lucide-react'
+import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X, Bitcoin, Pickaxe, ArrowLeft, Smartphone, Save, ExternalLink, Upload, FileUp, Loader2 } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { AdminClaim, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse, MiningParticipant, MiningParticipantsResponse, MiningRound, LotteryResult } from '../api/types'
@@ -614,16 +614,106 @@ export default function AdminPage() {
   )
 }
 
+interface AppLinksData {
+  android_url: string | null
+  ios_url: string | null
+  android_filename: string | null
+  ios_filename: string | null
+}
+
+type UploadState = { status: 'idle' } | { status: 'uploading'; progress: number } | { status: 'done' } | { status: 'error'; message: string }
+
+function AppFileUpload({ platform, onUploaded }: { platform: 'android' | 'ios'; onUploaded: () => void }) {
+  const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' })
+  const accept = platform === 'android' ? '.apk,application/vnd.android.package-archive' : '.ipa,application/octet-stream'
+  const label = platform === 'android' ? 'APK 파일' : 'IPA 파일'
+
+  const handleFile = async (file: File) => {
+    setUploadState({ status: 'uploading', progress: 0 })
+    try {
+      const urlRes = await client.post<{ data: { upload_url: string; cdn_url: string } }>('/admin/app-links/upload-url', {
+        platform,
+        filename: file.name,
+        content_type: file.type || 'application/octet-stream',
+      })
+      const { upload_url, cdn_url } = urlRes.data.data
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            setUploadState({ status: 'uploading', progress: Math.round((e.loaded / e.total) * 100) })
+          }
+        }
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`업로드 실패: ${xhr.status}`)))
+        xhr.onerror = () => reject(new Error('네트워크 오류'))
+        xhr.open('PUT', upload_url)
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+        xhr.send(file)
+      })
+
+      await client.post('/admin/app-links/confirm-upload', {
+        platform,
+        cdn_url,
+        filename: file.name,
+      })
+
+      setUploadState({ status: 'done' })
+      onUploaded()
+      setTimeout(() => setUploadState({ status: 'idle' }), 2000)
+    } catch (err: unknown) {
+      setUploadState({ status: 'error', message: err instanceof Error ? err.message : '업로드 실패' })
+    }
+  }
+
+  return (
+    <label className="flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-theme-border bg-theme-surface2 px-3 py-3 hover:border-accent transition-colors">
+      <input
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) handleFile(f)
+          e.target.value = ''
+        }}
+        disabled={uploadState.status === 'uploading'}
+      />
+      {uploadState.status === 'uploading' ? (
+        <>
+          <Loader2 size={14} className="text-accent animate-spin shrink-0" />
+          <span className="text-sm text-accent">{uploadState.progress}% 업로드 중...</span>
+        </>
+      ) : uploadState.status === 'done' ? (
+        <>
+          <CheckCircle size={14} className="text-green-500 shrink-0" />
+          <span className="text-sm text-green-500">업로드 완료</span>
+        </>
+      ) : uploadState.status === 'error' ? (
+        <>
+          <X size={14} className="text-red-500 shrink-0" />
+          <span className="text-sm text-red-500">{uploadState.message}</span>
+        </>
+      ) : (
+        <>
+          <FileUp size={14} className="text-theme-muted shrink-0" />
+          <span className="text-sm text-theme-muted">{label} 업로드</span>
+        </>
+      )}
+    </label>
+  )
+}
+
 function AppLinksPanel() {
   const qc = useQueryClient()
   const [androidUrl, setAndroidUrl] = useState('')
   const [iosUrl, setIosUrl] = useState('')
   const [saved, setSaved] = useState(false)
 
-  const { data, isLoading } = useQuery<{ android_url: string | null; ios_url: string | null }>({
+  const { data, isLoading } = useQuery<AppLinksData>({
     queryKey: ['admin-app-links'],
     queryFn: async () => {
-      const res = await client.get<{ data: { android_url: string | null; ios_url: string | null } }>('/admin/app-links')
+      const res = await client.get<{ data: AppLinksData }>('/admin/app-links')
       return res.data.data
     },
   })
@@ -647,25 +737,61 @@ function AppLinksPanel() {
     },
   })
 
+  const refresh = () => qc.invalidateQueries({ queryKey: ['admin-app-links'] })
+
   if (isLoading) return <p className="text-center text-theme-muted py-10">불러오는 중...</p>
+
+  const androidFilename = data?.android_filename ?? null
+  const iosFilename = data?.ios_filename ?? null
 
   return (
     <div className="space-y-4">
-      {/* 링크 편집 */}
+      {/* 파일 업로드 */}
       <div className="rounded-xl bg-theme-surface p-4 space-y-4">
         <p className="text-sm font-semibold text-theme-primary flex items-center gap-2">
-          <Smartphone size={14} className="text-accent" />
-          앱 다운로드 링크 관리
+          <Upload size={14} className="text-accent" />
+          앱 파일 직접 업로드
         </p>
 
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-theme-muted mb-1.5 block">Android (APK / Play Store URL)</label>
+            <label className="text-xs text-theme-muted mb-1.5 block">Android APK</label>
+            {androidFilename && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-[#3DDC84]/10 border border-[#3DDC84]/30">
+                <FileUp size={12} className="text-[#3DDC84] shrink-0" />
+                <span className="text-xs text-theme-primary truncate">{androidFilename}</span>
+              </div>
+            )}
+            <AppFileUpload platform="android" onUploaded={refresh} />
+          </div>
+          <div>
+            <label className="text-xs text-theme-muted mb-1.5 block">iOS IPA</label>
+            {iosFilename && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30">
+                <FileUp size={12} className="text-blue-400 shrink-0" />
+                <span className="text-xs text-theme-primary truncate">{iosFilename}</span>
+              </div>
+            )}
+            <AppFileUpload platform="ios" onUploaded={refresh} />
+          </div>
+        </div>
+      </div>
+
+      {/* URL 직접 입력 */}
+      <div className="rounded-xl bg-theme-surface p-4 space-y-4">
+        <p className="text-sm font-semibold text-theme-primary flex items-center gap-2">
+          <Smartphone size={14} className="text-accent" />
+          스토어 URL 입력 (선택)
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-theme-muted mb-1.5 block">Android (Play Store URL)</label>
             <input
               type="url"
               value={androidUrl}
               onChange={(e) => setAndroidUrl(e.target.value)}
-              placeholder="https://play.google.com/store/apps/... 또는 APK URL"
+              placeholder="https://play.google.com/store/apps/..."
               className="w-full rounded-xl border border-theme-border bg-theme-surface2 px-3 py-3 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
             />
           </div>
@@ -675,7 +801,7 @@ function AppLinksPanel() {
               type="url"
               value={iosUrl}
               onChange={(e) => setIosUrl(e.target.value)}
-              placeholder="https://testflight.apple.com/join/... 또는 App Store URL"
+              placeholder="https://testflight.apple.com/join/..."
               className="w-full rounded-xl border border-theme-border bg-theme-surface2 px-3 py-3 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
             />
           </div>
@@ -707,7 +833,7 @@ function AppLinksPanel() {
                   <Smartphone size={16} className="text-[#3DDC84]" />
                 </div>
                 <div>
-                  <p className="text-xs text-theme-muted">다운로드</p>
+                  <p className="text-xs text-theme-muted">{androidFilename ?? '다운로드'}</p>
                   <p className="text-sm font-semibold text-theme-primary">Android 앱</p>
                 </div>
               </div>
@@ -715,7 +841,7 @@ function AppLinksPanel() {
             </a>
           ) : (
             <div className="rounded-xl border border-dashed border-theme-border px-4 py-3 text-center">
-              <p className="text-xs text-theme-subtle">Android URL 미설정</p>
+              <p className="text-xs text-theme-subtle">Android 미설정</p>
             </div>
           )}
 
@@ -731,7 +857,7 @@ function AppLinksPanel() {
                   <Smartphone size={16} className="text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-xs text-theme-muted">다운로드</p>
+                  <p className="text-xs text-theme-muted">{iosFilename ?? '다운로드'}</p>
                   <p className="text-sm font-semibold text-theme-primary">iPhone 앱</p>
                 </div>
               </div>
@@ -739,7 +865,7 @@ function AppLinksPanel() {
             </a>
           ) : (
             <div className="rounded-xl border border-dashed border-theme-border px-4 py-3 text-center">
-              <p className="text-xs text-theme-subtle">iOS URL 미설정</p>
+              <p className="text-xs text-theme-subtle">iOS 미설정</p>
             </div>
           )}
         </div>

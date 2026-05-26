@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 PRESIGNED_URL_EXPIRES = 900  # 15 minutes
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_APK_FILE_SIZE = 500 * 1024 * 1024  # 500MB
 ALLOWED_CONTENT_TYPES = {
     "video/mp4",
     "video/quicktime",
@@ -102,6 +103,27 @@ def upload_fileobj(fileobj: object, content_type: str, filename: str) -> tuple[s
 
 def get_cdn_url(r2_key: str) -> str:
     return f"{settings.r2_public_url.rstrip('/')}/{r2_key}"
+
+
+def generate_apk_presigned_url(content_type: str, filename: str, platform: str) -> tuple[str, str]:
+    """Generate a presigned PUT URL for APK/IPA upload.
+
+    Returns (upload_url, r2_key).
+    """
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else ("apk" if platform == "android" else "ipa")
+    r2_key = f"apps/{platform}/{uuid.uuid4()}.{ext}"
+
+    client = get_r2_client()
+    upload_url = client.generate_presigned_url(
+        "put_object",
+        Params={
+            "Bucket": settings.r2_bucket_name,
+            "Key": r2_key,
+            "ContentType": content_type,
+        },
+        ExpiresIn=3600,  # 1 hour for large files
+    )
+    return upload_url, r2_key
 
 
 def delete_object(r2_key: str) -> None:
