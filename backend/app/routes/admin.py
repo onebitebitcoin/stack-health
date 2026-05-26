@@ -83,10 +83,21 @@ def mark_paid(
 
 @router.get("/videos")
 def list_videos(
+    page: int = 1,
+    limit: int = 20,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> dict:
-    videos = db.query(Video).order_by(Video.created_at.desc()).all()
+    offset = (page - 1) * limit
+    total: int = db.query(func.count(Video.id)).scalar() or 0
+
+    videos = (
+        db.query(Video)
+        .order_by(Video.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     video_user_ids = [v.user_id for v in videos]
     video_users_map = {
         u.id: u
@@ -106,7 +117,7 @@ def list_videos(
         }
         for v in videos
     ]
-    return {"data": {"videos": result}}
+    return {"data": {"videos": result, "total": total, "page": page, "limit": limit}}
 
 
 @router.patch("/videos/{video_id}/reject")

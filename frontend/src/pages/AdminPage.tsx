@@ -8,6 +8,13 @@ import { useAuthStore } from '../store/auth'
 
 type TabId = 'users' | 'videos' | 'rewards'
 
+interface AdminVideosResponse {
+  videos: AdminVideo[]
+  total: number
+  page: number
+  limit: number
+}
+
 const STATUS_COLOR: Record<string, string> = {
   pending: 'text-yellow-400',
   paid: 'text-green-400',
@@ -158,6 +165,7 @@ export default function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab: TabId = (searchParams.get('tab') as TabId) ?? 'users'
   const [weekOffset, setWeekOffset] = useState(0)
+  const [videoPage, setVideoPage] = useState(1)
   const [leaderboardPage, setLeaderboardPage] = useState(1)
   const [leaderboardItems, setLeaderboardItems] = useState<AdminWeeklySummaryItem[]>([])
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
@@ -178,14 +186,19 @@ export default function AdminPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }).catch(() => undefined),
   })
 
-  const { data: videos = [], isLoading: videosLoading, isError: videosError } = useQuery<AdminVideo[]>({
-    queryKey: ['admin-videos'],
+  const { data: videosData, isLoading: videosLoading, isError: videosError } = useQuery<AdminVideosResponse>({
+    queryKey: ['admin-videos', videoPage],
     queryFn: async () => {
-      const res = await client.get<{ data: { videos: AdminVideo[] } }>('/admin/videos')
-      return res.data.data.videos
+      const res = await client.get<{ data: AdminVideosResponse }>('/admin/videos', {
+        params: { page: videoPage, limit: 20 },
+      })
+      return res.data.data
     },
     enabled: isAdmin && activeTab === 'videos',
   })
+  const videos = videosData?.videos ?? []
+  const videoTotal = videosData?.total ?? 0
+  const videoTotalPages = Math.ceil(videoTotal / 20)
 
   const deleteVideo = useMutation({
     mutationFn: (id: number) => client.delete(`/admin/videos/${id}`),
@@ -254,7 +267,7 @@ export default function AdminPage() {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setSearchParams({ tab: tab.id })}
+            onClick={() => { setSearchParams({ tab: tab.id }); setVideoPage(1) }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors ${
               activeTab === tab.id ? 'bg-accent text-accent-fg' : 'text-theme-muted hover:text-theme-primary'
             }`}
@@ -328,48 +341,92 @@ export default function AdminPage() {
       )}
 
       {activeTab === 'videos' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {videosLoading && <p className="text-center text-theme-muted py-10">불러오는 중...</p>}
           {!videosLoading && videosError && <p className="text-center text-red-400 py-10">조회 실패</p>}
           {!videosLoading && !videosError && videos.length === 0 && (
             <p className="text-center text-theme-subtle py-10">영상이 없습니다</p>
           )}
-          {videos.map((v) => (
-            <div key={v.id} className="rounded-xl bg-theme-surface p-4">
-              <div className="flex items-start justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-theme-primary">@{v.username}</p>
-                  <p className="text-xs text-theme-muted mt-1 truncate">{v.r2_key}</p>
-                  <p className="text-xs text-theme-subtle mt-1">
+
+          {videoTotal > 0 && (
+            <p className="text-xs text-theme-muted px-1">총 {videoTotal}개 · {videoPage}/{videoTotalPages} 페이지</p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            {videos.map((v) => (
+              <div key={v.id} className="rounded-xl bg-theme-surface overflow-hidden">
+                <div className="relative aspect-[9/16] bg-black">
+                  <video
+                    src={v.cdn_url}
+                    className="w-full h-full object-cover"
+                    preload="metadata"
+                    muted
+                    playsInline
+                    onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play()}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLVideoElement
+                      el.pause()
+                      el.currentTime = 0
+                    }}
+                  />
+                  <span
+                    className={`absolute top-2 right-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                      v.status === 'active'
+                        ? 'bg-green-500/80 text-white'
+                        : v.status === 'deleted'
+                          ? 'bg-red-500/80 text-white'
+                          : 'bg-zinc-500/80 text-white'
+                    }`}
+                  >
+                    {v.status}
+                  </span>
+                  {v.duration_sec != null && (
+                    <span className="absolute bottom-2 right-2 text-[10px] font-semibold bg-black/70 text-white px-1.5 py-0.5 rounded">
+                      {Math.floor(v.duration_sec / 60)}:{String(v.duration_sec % 60).padStart(2, '0')}
+                    </span>
+                  )}
+                </div>
+                <div className="p-2.5 space-y-1.5">
+                  <p className="text-xs font-semibold text-theme-primary truncate">@{v.username}</p>
+                  <p className="text-[10px] text-theme-subtle">
                     {new Date(v.created_at).toLocaleDateString('ko-KR')}
                   </p>
+                  {v.status !== 'deleted' && (
+                    <button
+                      onClick={() => {
+                        if (confirm('영상을 삭제하시겠습니까?')) deleteVideo.mutate(v.id)
+                      }}
+                      disabled={deleteVideo.isPending}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                    >
+                      <Trash2 size={12} />
+                      삭제
+                    </button>
+                  )}
                 </div>
-                <span
-                  className={`ml-2 shrink-0 text-xs font-semibold px-2 py-1 rounded-full ${
-                    v.status === 'active'
-                      ? 'bg-green-500/20 text-green-400'
-                      : v.status === 'deleted'
-                        ? 'bg-red-500/20 text-red-400'
-                        : 'bg-zinc-500/20 text-zinc-400'
-                  }`}
-                >
-                  {v.status}
-                </span>
               </div>
-              {v.status !== 'deleted' && (
-                <button
-                  onClick={() => {
-                    if (confirm('영상을 삭제하시겠습니까?')) deleteVideo.mutate(v.id)
-                  }}
-                  disabled={deleteVideo.isPending}
-                  className="mt-3 flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  <Trash2 size={14} />
-                  강제 삭제
-                </button>
-              )}
+            ))}
+          </div>
+
+          {videoTotalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => setVideoPage((p) => Math.max(1, p - 1))}
+                disabled={videoPage === 1}
+                className="rounded-lg bg-theme-surface px-4 py-2 text-sm font-semibold text-theme-muted disabled:opacity-40"
+              >
+                이전
+              </button>
+              <span className="text-sm text-theme-muted">{videoPage} / {videoTotalPages}</span>
+              <button
+                onClick={() => setVideoPage((p) => Math.min(videoTotalPages, p + 1))}
+                disabled={videoPage === videoTotalPages}
+                className="rounded-lg bg-theme-surface px-4 py-2 text-sm font-semibold text-theme-muted disabled:opacity-40"
+              >
+                다음
+              </button>
             </div>
-          ))}
+          )}
         </div>
       )}
 
