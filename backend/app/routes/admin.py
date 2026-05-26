@@ -498,7 +498,7 @@ def weekly_summary(
 
 class LotteryRequest(BaseModel):
     week_label: str
-    n_draws: int = 10
+    unit_sats: int = 10
 
 
 class CloseWeekRequest(BaseModel):
@@ -530,7 +530,7 @@ def run_mining_lottery(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> dict:
-    result = mining_service.run_lottery(db, req.week_label, req.n_draws)
+    result = mining_service.run_lottery(db, req.week_label, req.unit_sats)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     db.commit()

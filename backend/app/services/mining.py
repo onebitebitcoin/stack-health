@@ -3,7 +3,6 @@ import logging
 import random
 from datetime import datetime, timezone
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -57,15 +56,14 @@ def get_hash_power_distribution(db: Session, week_label: str) -> list[dict]:
 def run_lottery(
     db: Session,
     week_label: str,
-    n_draws: int = 1000,
+    unit_sats: int = 10,
     do_pay: bool = True,
 ) -> dict:
     """Run probabilistic lottery for the week.
 
-    Performs n_draws weighted random draws from the pool.
-    Each draw allocates pool/n_draws sats to one winner (weighted by points).
-    Higher n_draws = closer to proportional; lower = more random.
-    Default n_draws=10 gives meaningful variance while staying fair long-term.
+    Splits the pool into unit_sats-sized chunks and performs one weighted draw
+    per chunk. Remainder (<unit_sats) goes to the top hash-power participant.
+    Lower unit_sats = more draws = closer to proportional distribution.
     """
     claims = (
         db.query(LightningClaim)
@@ -80,10 +78,11 @@ def run_lottery(
         return {"error": "참여자가 없습니다"}
 
     total_pool = sum(c.satoshi_amount for c in claims)
-    unit = total_pool // n_draws
+    unit = unit_sats
+    n_draws = total_pool // unit
 
-    if unit == 0:
-        return {"error": f"풀이 너무 작습니다 ({total_pool} sats). 추첨 횟수를 줄여주세요."}
+    if n_draws == 0:
+        return {"error": f"풀이 너무 작습니다 ({total_pool} sats, unit={unit_sats} sats). unit_sats를 줄여주세요."}
 
     user_ids = [c.user_id for c in claims]
     weights = [float(c.points_used) for c in claims]

@@ -605,6 +605,18 @@ export default function AdminPage() {
   )
 }
 
+interface SimResultRow {
+  name: string
+  points: number
+  hashPct: number
+  expected: number
+  actual: number
+  diff: number
+  diffPct: number
+}
+
+const SIM_NAME_POOL = ['Alice','Bob','Charlie','Diana','Eve','Frank','Grace','Heidi','Ivan','Judy','Karl','Lisa','Mike','Nina','Oscar','Paul','Quinn','Rose','Sam','Tina']
+
 function MiningPanel() {
   const queryClient = useQueryClient()
   const [weekLabel, setWeekLabel] = useState(() => {
@@ -616,9 +628,88 @@ function MiningPanel() {
     const week = Math.floor(diff / (7 * 86400000)) + 1
     return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
   })
-  const [nDraws, setNDraws] = useState(1000)
+  const [unitSats, setUnitSats] = useState(10)
   const [lotteryResult, setLotteryResult] = useState<LotteryResult | null>(null)
   const [closeResult, setCloseResult] = useState<{ reduced_user_count: number; claimed_user_count: number } | null>(null)
+
+  // ── Simulation state ──────────────────────────────────────────────────────
+  const [simOpen, setSimOpen] = useState(false)
+  const [simPool, setSimPool] = useState(10000)
+  const [simUnitSats, setSimUnitSats] = useState(10)
+  const [simTrials, setSimTrials] = useState(1)
+  const [simUsers, setSimUsers] = useState([
+    { id: 1, name: 'Alice',   points: 150 },
+    { id: 2, name: 'Bob',     points: 80  },
+    { id: 3, name: 'Charlie', points: 200 },
+    { id: 4, name: 'Diana',   points: 120 },
+    { id: 5, name: 'Eve',     points: 300 },
+  ])
+  const [simResult, setSimResult] = useState<SimResultRow[] | null>(null)
+
+  const simNDraws = Math.floor(simPool / simUnitSats)
+  const simRemainder = simPool % simUnitSats
+  const simTotalPts = simUsers.reduce((s, u) => s + Math.max(1, u.points), 0)
+
+  function autoFillPoints() {
+    setSimUsers(prev => prev.map(u => ({ ...u, points: Math.floor(Math.random() * 480) + 20 })))
+    setSimResult(null)
+  }
+
+  function setUserCount(n: number) {
+    const clamped = Math.max(1, Math.min(20, n))
+    setSimUsers(prev => {
+      if (clamped > prev.length) {
+        const next = [...prev]
+        while (next.length < clamped) {
+          const idx = next.length
+          next.push({ id: Date.now() + idx, name: SIM_NAME_POOL[idx] ?? `User${idx + 1}`, points: Math.floor(Math.random() * 200) + 50 })
+        }
+        return next
+      }
+      return prev.slice(0, clamped)
+    })
+    setSimResult(null)
+  }
+
+  function updateSimUser(id: number, field: 'name' | 'points', value: string | number) {
+    setSimUsers(prev => prev.map(u => u.id === id ? { ...u, [field]: field === 'points' ? Math.max(1, Number(value)) : value } : u))
+    setSimResult(null)
+  }
+
+  function runSimulation() {
+    const weights = simUsers.map(u => Math.max(1, u.points))
+    const total = weights.reduce((a, b) => a + b, 0)
+    const nDraws = Math.floor(simPool / simUnitSats)
+    const remainder = simPool % simUnitSats
+    const topIdx = weights.indexOf(Math.max(...weights))
+
+    function pick() {
+      const r = Math.random() * total
+      let cum = 0
+      for (let i = 0; i < weights.length; i++) {
+        cum += weights[i]
+        if (r < cum) return i
+      }
+      return weights.length - 1
+    }
+
+    const cumulative = new Array(simUsers.length).fill(0)
+    for (let t = 0; t < simTrials; t++) {
+      const w = new Array(simUsers.length).fill(0)
+      for (let d = 0; d < nDraws; d++) w[pick()] += simUnitSats
+      w[topIdx] += remainder
+      for (let i = 0; i < simUsers.length; i++) cumulative[i] += w[i]
+    }
+
+    setSimResult(
+      simUsers.map((u, i) => {
+        const actual = cumulative[i] / simTrials
+        const expected = simPool * weights[i] / total
+        const diff = actual - expected
+        return { name: u.name, points: weights[i], hashPct: weights[i] / total * 100, expected, actual, diff, diffPct: expected > 0 ? diff / expected * 100 : 0 }
+      }).sort((a, b) => b.actual - a.actual)
+    )
+  }
 
   const { data: participantsData, isLoading: loadingParts } = useQuery<{ data: MiningParticipantsResponse }>({
     queryKey: ['mining-participants', weekLabel],
@@ -631,7 +722,7 @@ function MiningPanel() {
   })
 
   const lotteryMutation = useMutation({
-    mutationFn: () => client.post('/admin/mining/run-lottery', { week_label: weekLabel, n_draws: nDraws }).then(r => r.data),
+    mutationFn: () => client.post('/admin/mining/run-lottery', { week_label: weekLabel, unit_sats: unitSats }).then(r => r.data),
     onSuccess: (res) => {
       setLotteryResult(res.data)
       queryClient.invalidateQueries({ queryKey: ['mining-participants', weekLabel] })
@@ -674,14 +765,13 @@ function MiningPanel() {
             />
           </div>
           <div className="w-32">
-            <label className="text-xs text-theme-muted mb-1 block">추첨 횟수 (분산↑낮을수록)</label>
+            <label className="text-xs text-theme-muted mb-1 block">단위 sats (낮을수록 정밀)</label>
             <input
               type="number"
-              value={nDraws}
-              onChange={e => setNDraws(Number(e.target.value))}
+              value={unitSats}
+              onChange={e => setUnitSats(Number(e.target.value))}
               className="w-full rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none"
               min={1}
-              max={100}
               step={1}
             />
           </div>
@@ -724,7 +814,7 @@ function MiningPanel() {
 
         {totalPool > 0 && (
           <p className="text-xs text-theme-muted border-t border-theme-border pt-2">
-            추첨 횟수: {nDraws}회 · 회당 {totalPool > 0 ? Math.floor(totalPool / nDraws).toLocaleString() : 0} sats
+            단위: {unitSats} sats · 추첨 횟수: {totalPool > 0 ? Math.floor(totalPool / unitSats).toLocaleString() : 0}회 · 나머지: {totalPool > 0 ? (totalPool % unitSats) : 0} sats
           </p>
         )}
       </div>
@@ -808,6 +898,157 @@ function MiningPanel() {
           ))}
         </div>
       )}
+
+      {/* ── 시뮬레이션 ───────────────────────────────────────────────────── */}
+      <div className="rounded-xl bg-theme-surface overflow-hidden">
+        <button
+          onClick={() => setSimOpen(v => !v)}
+          className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-theme-primary hover:bg-theme-surface2 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <Pickaxe size={14} className="text-accent" />
+            분배 시뮬레이션
+          </span>
+          {simOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        {simOpen && (
+          <div className="px-4 pb-4 space-y-4 border-t border-theme-border">
+            {/* 파라미터 */}
+            <div className="pt-3 grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-theme-muted mb-1 block">보상 풀 (sats)</label>
+                <input
+                  type="number" min={1} step={100}
+                  value={simPool}
+                  onChange={e => { setSimPool(Number(e.target.value)); setSimResult(null) }}
+                  className="w-full rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-theme-muted mb-1 block">단위 sats (N)</label>
+                <input
+                  type="number" min={1} step={1}
+                  value={simUnitSats}
+                  onChange={e => { setSimUnitSats(Number(e.target.value)); setSimResult(null) }}
+                  className="w-full rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-theme-muted mb-1 block">반복 횟수</label>
+                <select
+                  value={simTrials}
+                  onChange={e => { setSimTrials(Number(e.target.value)); setSimResult(null) }}
+                  className="w-full rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none"
+                >
+                  <option value={1}>1회 (단일)</option>
+                  <option value={100}>100회 평균</option>
+                  <option value={1000}>1,000회 평균</option>
+                  <option value={10000}>10,000회 평균</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="text-xs text-theme-muted">
+              추첨 횟수: <span className="text-theme-primary font-semibold">{simNDraws.toLocaleString()}회</span>
+              &nbsp;·&nbsp;나머지: <span className="text-theme-primary font-semibold">{simRemainder} sats</span>
+              &nbsp;·&nbsp;총 포인트: <span className="text-theme-primary font-semibold">{simTotalPts.toLocaleString()}</span>
+            </div>
+
+            {/* 유저 목록 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-theme-muted">유저 수</span>
+                  <button onClick={() => setUserCount(simUsers.length - 1)} className="w-6 h-6 rounded bg-theme-surface2 text-theme-primary text-xs hover:bg-theme-border flex items-center justify-center">-</button>
+                  <span className="text-sm font-semibold text-theme-primary w-5 text-center">{simUsers.length}</span>
+                  <button onClick={() => setUserCount(simUsers.length + 1)} className="w-6 h-6 rounded bg-theme-surface2 text-theme-primary text-xs hover:bg-theme-border flex items-center justify-center">+</button>
+                </div>
+                <button
+                  onClick={autoFillPoints}
+                  className="rounded-lg bg-theme-surface2 px-3 py-1.5 text-xs font-semibold text-theme-primary hover:bg-theme-border transition-colors"
+                >
+                  자동 배정
+                </button>
+              </div>
+
+              {simUsers.map((u) => {
+                const pct = simTotalPts > 0 ? u.points / simTotalPts * 100 : 0
+                return (
+                  <div key={u.id} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={u.name}
+                      onChange={e => updateSimUser(u.id, 'name', e.target.value)}
+                      className="w-20 rounded bg-theme-surface2 px-2 py-1 text-xs text-theme-primary outline-none"
+                    />
+                    <input
+                      type="number" min={1}
+                      value={u.points}
+                      onChange={e => updateSimUser(u.id, 'points', e.target.value)}
+                      className="w-20 rounded bg-theme-surface2 px-2 py-1 text-xs text-theme-primary outline-none"
+                    />
+                    <div className="flex-1 flex items-center gap-1.5">
+                      <div className="flex-1 h-1.5 rounded-full bg-theme-border overflow-hidden">
+                        <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs text-theme-muted w-10 text-right">{pct.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* 실행 버튼 */}
+            <button
+              onClick={runSimulation}
+              disabled={simNDraws === 0}
+              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg disabled:opacity-50 w-full justify-center"
+            >
+              <Bitcoin size={14} />
+              시뮬레이션 실행
+            </button>
+
+            {/* 결과 */}
+            {simResult && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-theme-primary">
+                  결과 {simTrials > 1 ? `(${simTrials.toLocaleString()}회 평균)` : '(1회 실행)'}
+                </p>
+                <div className="rounded-lg bg-theme-surface2 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-theme-border">
+                        <th className="px-3 py-2 text-left text-theme-muted font-medium">이름</th>
+                        <th className="px-2 py-2 text-right text-theme-muted font-medium">해시%</th>
+                        <th className="px-2 py-2 text-right text-theme-muted font-medium">예상</th>
+                        <th className="px-2 py-2 text-right text-theme-muted font-medium">실제</th>
+                        <th className="px-3 py-2 text-right text-theme-muted font-medium">차이</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {simResult.map((row) => (
+                        <tr key={row.name} className="border-b border-theme-border last:border-0">
+                          <td className="px-3 py-2 font-medium text-theme-primary">{row.name}</td>
+                          <td className="px-2 py-2 text-right text-theme-muted">{row.hashPct.toFixed(1)}%</td>
+                          <td className="px-2 py-2 text-right text-theme-muted">{Math.round(row.expected).toLocaleString()}</td>
+                          <td className="px-2 py-2 text-right text-theme-primary font-semibold">{Math.round(row.actual).toLocaleString()}</td>
+                          <td className={`px-3 py-2 text-right font-semibold ${row.diff > 0 ? 'text-green-400' : row.diff < 0 ? 'text-red-400' : 'text-theme-muted'}`}>
+                            {row.diff >= 0 ? '+' : ''}{Math.round(row.diff).toLocaleString()} ({row.diffPct >= 0 ? '+' : ''}{row.diffPct.toFixed(1)}%)
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-theme-muted">
+                  총 분배: {Math.round(simResult.reduce((s, r) => s + r.actual, 0)).toLocaleString()} / {simPool.toLocaleString()} sats
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
