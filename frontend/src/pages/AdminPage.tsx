@@ -166,7 +166,6 @@ export default function AdminPage() {
   const activeTab: TabId = (searchParams.get('tab') as TabId) ?? 'users'
   const [weekOffset, setWeekOffset] = useState(0)
   const [videoPage, setVideoPage] = useState(1)
-  const [includeDeleted, setIncludeDeleted] = useState(false)
   const [leaderboardPage, setLeaderboardPage] = useState(1)
   const [leaderboardItems, setLeaderboardItems] = useState<AdminWeeklySummaryItem[]>([])
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
@@ -188,10 +187,10 @@ export default function AdminPage() {
   })
 
   const { data: videosData, isLoading: videosLoading, isError: videosError } = useQuery<AdminVideosResponse>({
-    queryKey: ['admin-videos', videoPage, includeDeleted],
+    queryKey: ['admin-videos', videoPage],
     queryFn: async () => {
       const res = await client.get<{ data: AdminVideosResponse }>('/admin/videos', {
-        params: { page: videoPage, limit: 20, include_deleted: includeDeleted },
+        params: { page: videoPage, limit: 20 },
       })
       return res.data.data
     },
@@ -343,18 +342,10 @@ export default function AdminPage() {
 
       {activeTab === 'videos' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between px-1">
+          <div className="px-1">
             <p className="text-xs text-theme-muted">
               {videoTotal > 0 ? `총 ${videoTotal}개 · ${videoPage}/${videoTotalPages} 페이지` : ''}
             </p>
-            <button
-              onClick={() => { setIncludeDeleted((v) => !v); setVideoPage(1) }}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
-                includeDeleted ? 'bg-red-500/20 text-red-400' : 'bg-theme-surface2 text-theme-muted'
-              }`}
-            >
-              {includeDeleted ? '삭제 포함' : '삭제 제외'}
-            </button>
           </div>
 
           {videosLoading && <p className="text-center text-theme-muted py-10">불러오는 중...</p>}
@@ -380,17 +371,6 @@ export default function AdminPage() {
                       el.currentTime = 0
                     }}
                   />
-                  <span
-                    className={`absolute top-2 right-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                      v.status === 'active'
-                        ? 'bg-green-500/80 text-white'
-                        : v.status === 'deleted'
-                          ? 'bg-red-500/80 text-white'
-                          : 'bg-zinc-500/80 text-white'
-                    }`}
-                  >
-                    {v.status}
-                  </span>
                   {v.duration_sec != null && (
                     <span className="absolute bottom-2 right-2 text-[10px] font-semibold bg-black/70 text-white px-1.5 py-0.5 rounded">
                       {Math.floor(v.duration_sec / 60)}:{String(v.duration_sec % 60).padStart(2, '0')}
@@ -402,18 +382,16 @@ export default function AdminPage() {
                   <p className="text-[10px] text-theme-subtle">
                     {new Date(v.created_at).toLocaleDateString('ko-KR')}
                   </p>
-                  {v.status !== 'deleted' && (
-                    <button
-                      onClick={() => {
-                        if (confirm('영상을 삭제하시겠습니까?')) deleteVideo.mutate(v.id)
-                      }}
-                      disabled={deleteVideo.isPending}
-                      className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                    >
-                      <Trash2 size={12} />
-                      삭제
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      if (confirm('영상을 삭제하시겠습니까?')) deleteVideo.mutate(v.id)
+                    }}
+                    disabled={deleteVideo.isPending}
+                    className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    <Trash2 size={12} />
+                    삭제
+                  </button>
                 </div>
               </div>
             ))}

@@ -8,10 +8,12 @@ from app.database import get_db
 from app.models.admin_log import AdminLog
 from app.models.challenge import ChallengeParticipation
 from app.models.claim import LightningClaim
+from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.video import Video
 from app.models.user import User
 from app.routes.auth import get_current_user
+from app.services import r2 as r2_service
 from app.schemas.reward import ClaimSchema, ClaimWithUserSchema
 from app.schemas.video import VideoSchema
 from app.services.reward import (
@@ -85,14 +87,11 @@ def mark_paid(
 def list_videos(
     page: int = 1,
     limit: int = 20,
-    include_deleted: bool = False,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> dict:
     offset = (page - 1) * limit
     base_q = db.query(Video)
-    if not include_deleted:
-        base_q = base_q.filter(Video.status != "deleted")
 
     total: int = base_q.count()
 
@@ -151,17 +150,30 @@ def delete_video(
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+
+    r2_key = video.r2_key
     revoke_queued_upload_reward(db, video.id)
-    video.status = "deleted"
+
+    post = db.query(Post).filter(Post.video_id == video_id).first()
+    if post:
+        db.delete(post)
+    db.delete(video)
+
     log = AdminLog(
         action="video_delete",
         target_type="video",
         target_id=video_id,
-        detail=video.r2_key,
+        detail=r2_key,
     )
     db.add(log)
     db.commit()
-    return {"data": {"video_id": video_id, "status": "deleted"}}
+
+    try:
+        r2_service.delete_object(r2_key)
+    except Exception:
+        pass
+
+    return {"data": {"video_id": video_id}}
 
 
 @router.get("/users")
