@@ -166,6 +166,7 @@ export default function AdminPage() {
   const activeTab: TabId = (searchParams.get('tab') as TabId) ?? 'users'
   const [weekOffset, setWeekOffset] = useState(0)
   const [videoPage, setVideoPage] = useState(1)
+  const [includeDeleted, setIncludeDeleted] = useState(false)
   const [leaderboardPage, setLeaderboardPage] = useState(1)
   const [leaderboardItems, setLeaderboardItems] = useState<AdminWeeklySummaryItem[]>([])
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
@@ -187,10 +188,10 @@ export default function AdminPage() {
   })
 
   const { data: videosData, isLoading: videosLoading, isError: videosError } = useQuery<AdminVideosResponse>({
-    queryKey: ['admin-videos', videoPage],
+    queryKey: ['admin-videos', videoPage, includeDeleted],
     queryFn: async () => {
       const res = await client.get<{ data: AdminVideosResponse }>('/admin/videos', {
-        params: { page: videoPage, limit: 20 },
+        params: { page: videoPage, limit: 20, include_deleted: includeDeleted },
       })
       return res.data.data
     },
@@ -342,14 +343,24 @@ export default function AdminPage() {
 
       {activeTab === 'videos' && (
         <div className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs text-theme-muted">
+              {videoTotal > 0 ? `총 ${videoTotal}개 · ${videoPage}/${videoTotalPages} 페이지` : ''}
+            </p>
+            <button
+              onClick={() => { setIncludeDeleted((v) => !v); setVideoPage(1) }}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
+                includeDeleted ? 'bg-red-500/20 text-red-400' : 'bg-theme-surface2 text-theme-muted'
+              }`}
+            >
+              {includeDeleted ? '삭제 포함' : '삭제 제외'}
+            </button>
+          </div>
+
           {videosLoading && <p className="text-center text-theme-muted py-10">불러오는 중...</p>}
           {!videosLoading && videosError && <p className="text-center text-red-400 py-10">조회 실패</p>}
           {!videosLoading && !videosError && videos.length === 0 && (
             <p className="text-center text-theme-subtle py-10">영상이 없습니다</p>
-          )}
-
-          {videoTotal > 0 && (
-            <p className="text-xs text-theme-muted px-1">총 {videoTotal}개 · {videoPage}/{videoTotalPages} 페이지</p>
           )}
 
           <div className="grid grid-cols-2 gap-3">

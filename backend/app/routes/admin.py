@@ -85,14 +85,19 @@ def mark_paid(
 def list_videos(
     page: int = 1,
     limit: int = 20,
+    include_deleted: bool = False,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> dict:
     offset = (page - 1) * limit
-    total: int = db.query(func.count(Video.id)).scalar() or 0
+    base_q = db.query(Video)
+    if not include_deleted:
+        base_q = base_q.filter(Video.status != "deleted")
+
+    total: int = base_q.count()
 
     videos = (
-        db.query(Video)
+        base_q
         .order_by(Video.created_at.desc())
         .offset(offset)
         .limit(limit)
