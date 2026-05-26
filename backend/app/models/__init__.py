@@ -8,5 +8,6 @@ from app.models.admin_log import AdminLog
 from app.models.challenge import Challenge, ChallengeParticipation
 from app.models.lnauth_challenge import LNAuthChallenge
 from app.models.mining import MiningRound
+from app.models.app_links import AppLinks
 
-__all__ = ["User", "Video", "Post", "RewardPoint", "LightningClaim", "Comment", "AdminLog", "Challenge", "ChallengeParticipation", "LNAuthChallenge", "MiningRound"]
+__all__ = ["User", "Video", "Post", "RewardPoint", "LightningClaim", "Comment", "AdminLog", "Challenge", "ChallengeParticipation", "LNAuthChallenge", "MiningRound", "AppLinks"]

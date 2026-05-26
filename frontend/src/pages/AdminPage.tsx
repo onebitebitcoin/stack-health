@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X, Bitcoin, Pickaxe, ArrowLeft } from 'lucide-react'
+import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X, Bitcoin, Pickaxe, ArrowLeft, Smartphone, Save, ExternalLink } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { AdminClaim, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse, MiningParticipant, MiningParticipantsResponse, MiningRound, LotteryResult } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
-type TabId = 'users' | 'videos' | 'rewards'
+type TabId = 'users' | 'videos' | 'rewards' | 'app'
 
 interface AdminVideosResponse {
   videos: AdminVideo[]
@@ -268,6 +268,7 @@ export default function AdminPage() {
     { id: 'users', label: '유저', icon: <User size={14} /> },
     { id: 'videos', label: '영상', icon: <Video size={14} /> },
     { id: 'rewards', label: '리워드', icon: <Award size={14} /> },
+    { id: 'app', label: '앱', icon: <Smartphone size={14} /> },
   ]
 
   return (
@@ -603,9 +604,145 @@ export default function AdminPage() {
         </>
       )}
 
+      {activeTab === 'app' && <AppLinksPanel />}
+
       {selectedUserId !== null && (
         <UserDetailPanel userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
       )}
+      </div>
+    </div>
+  )
+}
+
+function AppLinksPanel() {
+  const qc = useQueryClient()
+  const [androidUrl, setAndroidUrl] = useState('')
+  const [iosUrl, setIosUrl] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  const { data, isLoading } = useQuery<{ android_url: string | null; ios_url: string | null }>({
+    queryKey: ['admin-app-links'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { android_url: string | null; ios_url: string | null } }>('/admin/app-links')
+      return res.data.data
+    },
+  })
+
+  useEffect(() => {
+    if (data) {
+      setAndroidUrl(data.android_url ?? '')
+      setIosUrl(data.ios_url ?? '')
+    }
+  }, [data])
+
+  const save = useMutation({
+    mutationFn: () => client.put('/admin/app-links', {
+      android_url: androidUrl.trim() || null,
+      ios_url: iosUrl.trim() || null,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-app-links'] })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    },
+  })
+
+  if (isLoading) return <p className="text-center text-theme-muted py-10">불러오는 중...</p>
+
+  return (
+    <div className="space-y-4">
+      {/* 링크 편집 */}
+      <div className="rounded-xl bg-theme-surface p-4 space-y-4">
+        <p className="text-sm font-semibold text-theme-primary flex items-center gap-2">
+          <Smartphone size={14} className="text-accent" />
+          앱 다운로드 링크 관리
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-theme-muted mb-1.5 block">Android (APK / Play Store URL)</label>
+            <input
+              type="url"
+              value={androidUrl}
+              onChange={(e) => setAndroidUrl(e.target.value)}
+              placeholder="https://play.google.com/store/apps/... 또는 APK URL"
+              className="w-full rounded-xl border border-theme-border bg-theme-surface2 px-3 py-3 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-theme-muted mb-1.5 block">iOS (TestFlight / App Store URL)</label>
+            <input
+              type="url"
+              value={iosUrl}
+              onChange={(e) => setIosUrl(e.target.value)}
+              placeholder="https://testflight.apple.com/join/... 또는 App Store URL"
+              className="w-full rounded-xl border border-theme-border bg-theme-surface2 px-3 py-3 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={() => save.mutate()}
+          disabled={save.isPending}
+          className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+        >
+          <Save size={14} />
+          {saved ? '저장됨' : save.isPending ? '저장 중...' : '저장'}
+        </button>
+      </div>
+
+      {/* 미리보기 */}
+      <div className="rounded-xl bg-theme-surface p-4 space-y-3">
+        <p className="text-xs font-semibold text-theme-muted">다운로드 버튼 미리보기</p>
+        <div className="space-y-2">
+          {androidUrl ? (
+            <a
+              href={androidUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-xl bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-4 py-3 hover:bg-[#3DDC84]/20 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-[#3DDC84]/20 flex items-center justify-center">
+                  <Smartphone size={16} className="text-[#3DDC84]" />
+                </div>
+                <div>
+                  <p className="text-xs text-theme-muted">다운로드</p>
+                  <p className="text-sm font-semibold text-theme-primary">Android 앱</p>
+                </div>
+              </div>
+              <ExternalLink size={14} className="text-theme-muted" />
+            </a>
+          ) : (
+            <div className="rounded-xl border border-dashed border-theme-border px-4 py-3 text-center">
+              <p className="text-xs text-theme-subtle">Android URL 미설정</p>
+            </div>
+          )}
+
+          {iosUrl ? (
+            <a
+              href={iosUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-xl bg-blue-500/10 border border-blue-500/30 px-4 py-3 hover:bg-blue-500/20 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <Smartphone size={16} className="text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-theme-muted">다운로드</p>
+                  <p className="text-sm font-semibold text-theme-primary">iPhone 앱</p>
+                </div>
+              </div>
+              <ExternalLink size={14} className="text-theme-muted" />
+            </a>
+          ) : (
+            <div className="rounded-xl border border-dashed border-theme-border px-4 py-3 text-center">
+              <p className="text-xs text-theme-subtle">iOS URL 미설정</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

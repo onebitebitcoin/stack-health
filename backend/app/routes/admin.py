@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.admin_log import AdminLog
+from app.models.app_links import AppLinks
 from app.models.challenge import ChallengeParticipation
 from app.models.claim import LightningClaim
 from app.models.comment import Comment
@@ -546,6 +548,48 @@ def close_mining_week(
     result = mining_service.close_week(db, req.week_label)
     db.commit()
     return {"data": result}
+
+
+class AppLinksRequest(BaseModel):
+    android_url: str | None = None
+    ios_url: str | None = None
+
+
+@router.get("/app-links")
+def get_app_links(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> dict:
+    links = db.query(AppLinks).first()
+    return {
+        "data": {
+            "android_url": links.android_url if links else None,
+            "ios_url": links.ios_url if links else None,
+        }
+    }
+
+
+@router.put("/app-links")
+def update_app_links(
+    body: AppLinksRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> dict:
+    links = db.query(AppLinks).first()
+    if not links:
+        links = AppLinks()
+        db.add(links)
+    links.android_url = body.android_url or None
+    links.ios_url = body.ios_url or None
+    links.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(links)
+    return {
+        "data": {
+            "android_url": links.android_url,
+            "ios_url": links.ios_url,
+        }
+    }
 
 
 @router.get("/mining/rounds")
