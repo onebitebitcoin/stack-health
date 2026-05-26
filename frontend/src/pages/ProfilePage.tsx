@@ -1,17 +1,41 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LogOut, Droplets, Heart, Video, ShieldCheck, Settings } from 'lucide-react'
+import {
+  LogOut, Droplets, ShieldCheck, Settings,
+  ChevronLeft, ChevronRight, Flame, Heart, Eye, ArrowLeft, Award, Share2,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
-import type { MyStats, ProfilePost } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost } from '../api/types'
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 
+const DAYS_KO = ['월', '화', '수', '목', '금', '토', '일']
+
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate()
+}
+
+function getFirstDayIndex(year: number, month: number): number {
+  const day = new Date(year, month - 1, 1).getDay()
+  return day === 0 ? 6 : day - 1
+}
+
+function pad2(n: number): string {
+  return n.toString().padStart(2, '0')
+}
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
-
   const navigate = useNavigate()
+
+  const now = new Date()
+  const [year, setYear] = useState(now.getFullYear())
+  const [month, setMonth] = useState(now.getMonth() + 1)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [selectedPosts, setSelectedPosts] = useState<HistoryWorkoutPost[]>([])
+  const [videoIdx, setVideoIdx] = useState(0)
 
   const { data: myStats, isLoading } = useQuery<MyStats>({
     queryKey: ['my-stats'],
@@ -22,28 +46,54 @@ export default function ProfilePage() {
     enabled: !!user,
   })
 
-  const { data: myPosts = [] } = useQuery<ProfilePost[]>({
-    queryKey: ['my-posts', user?.id],
+  const { data: historyData, isLoading: historyLoading } = useQuery<HistoryResponse>({
+    queryKey: ['history', year, month],
     queryFn: async () => {
-      const res = await client.get<{ data: { posts: ProfilePost[] } }>(`/users/${user!.id}/profile`)
-      return res.data.data.posts
+      const res = await client.get('/history', { params: { year, month } })
+      return res.data.data
     },
+    staleTime: 60_000,
     enabled: !!user,
   })
 
-  async function saveLightningAddress(e: FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      const res = await client.patch<{ data: typeof user }>('/auth/me', {
-        lightning_address: lnInput,
-      })
-      if (res.data.data) setUser(res.data.data)
-      setEditingLn(false)
-    } finally {
-      setSaving(false)
-    }
+  function prevMonth() {
+    if (month === 1) { setYear((y) => y - 1); setMonth(12) }
+    else setMonth((m) => m - 1)
+    setSelectedDate(null)
   }
+
+  function nextMonth() {
+    const ty = now.getFullYear(), tm = now.getMonth() + 1
+    if (year > ty || (year === ty && month >= tm)) return
+    if (month === 12) { setYear((y) => y + 1); setMonth(1) }
+    else setMonth((m) => m + 1)
+    setSelectedDate(null)
+  }
+
+  function openDay(dateStr: string, posts: HistoryWorkoutPost[]) {
+    setSelectedDate(dateStr)
+    setSelectedPosts(posts)
+    setVideoIdx(0)
+  }
+
+  function closeModal() {
+    setSelectedDate(null)
+    setSelectedPosts([])
+    setVideoIdx(0)
+  }
+
+  const totalDays = getDaysInMonth(year, month)
+  const firstIdx = getFirstDayIndex(year, month)
+  const workoutDays = historyData?.workout_days ?? {}
+  const streak = historyData?.streak ?? 0
+  const totalWorkoutDays = historyData?.total_days ?? 0
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
+  const todayNum = isCurrentMonth ? now.getDate() : -1
+
+  const cells: Array<{ day: number | null; dateStr: string | null }> = []
+  for (let i = 0; i < firstIdx; i++) cells.push({ day: null, dateStr: null })
+  for (let d = 1; d <= totalDays; d++) cells.push({ day: d, dateStr: `${year}-${pad2(month)}-${pad2(d)}` })
+  while (cells.length % 7 !== 0) cells.push({ day: null, dateStr: null })
 
   if (isLoading) return <LoadingScreen />
 
@@ -85,7 +135,7 @@ export default function ProfilePage() {
         </button>
       </div>
 
-      {/* ── 관리자 모드 버튼 ── */}
+      {/* ── 관리자 버튼 ── */}
       {user?.is_admin && (
         <div className="mx-4 mb-3">
           <button
@@ -99,8 +149,8 @@ export default function ProfilePage() {
       )}
 
       {/* ── 땀 카드 ── */}
-      <div className="mx-4 mb-4 rounded-2xl bg-theme-surface px-6 py-6 flex flex-col items-center gap-1">
-        <Droplets size={28} className="text-blue-400 mb-1" strokeWidth={1.5} />
+      <div className="mx-4 mb-4 rounded-2xl bg-theme-surface px-6 py-5 flex flex-col items-center gap-1">
+        <Droplets size={26} className="text-blue-400 mb-1" strokeWidth={1.5} />
         <span className="text-4xl font-bold font-mono text-theme-primary">
           {((myStats?.total_points ?? 0) / 100).toFixed(1)}
           <span className="text-lg font-medium text-theme-muted ml-1">L</span>
@@ -116,46 +166,201 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* ── 내 영상 그리드 ── */}
+      {/* ── 스트릭 카드 ── */}
+      <div className="mx-4 mb-4 rounded-xl bg-theme-surface px-4 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-orange-400">
+              <Flame size={22} strokeWidth={2} />
+              <span className="text-3xl font-bold leading-none">{streak}</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-theme-primary">일 연속</p>
+              {streak === 0 && (
+                <p className="text-xs text-theme-muted">오늘 첫 운동을 시작해보세요!</p>
+              )}
+            </div>
+          </div>
+          <div className="text-right">
+            {streak >= 100 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-400">
+                <Award size={12} /> 100일 레전드
+              </span>
+            )}
+            {streak >= 30 && streak < 100 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-400">
+                <Award size={12} /> 한달 달성
+              </span>
+            )}
+            {streak >= 14 && streak < 30 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-2.5 py-1 text-xs font-bold text-orange-400">
+                <Award size={12} /> 2주 달성
+              </span>
+            )}
+            {streak >= 7 && streak < 14 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-2.5 py-1 text-xs font-bold text-orange-400">
+                <Award size={12} /> 7일 달성
+              </span>
+            )}
+            {streak >= 3 && streak < 7 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-2.5 py-1 text-xs font-bold text-yellow-400">
+                <Award size={12} /> 3일 달성
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="mt-3 h-px bg-theme-border" />
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-sm text-theme-muted">
+            이번 달 <span className="font-semibold text-theme-primary">{totalWorkoutDays}일</span> 운동
+          </p>
+          <button
+            onClick={() => {
+              const text = `이번 달 ${totalWorkoutDays}일 운동, 연속 ${streak}일 달성`
+              if (typeof navigator !== 'undefined' && 'share' in navigator) {
+                navigator.share({ title: 'Stack Health 운동 리포트', text, url: window.location.origin }).catch(() => undefined)
+              } else {
+                window.navigator.clipboard?.writeText(text).then(() => alert('클립보드에 복사됐어요!')).catch(() => undefined)
+              }
+            }}
+            className="flex items-center gap-1 rounded-lg bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent"
+          >
+            <Share2 size={12} />
+            공유
+          </button>
+        </div>
+      </div>
+
+      {/* ── 캘린더 ── */}
       <div className="mx-4 mb-4">
-        <p className="text-[10px] font-medium uppercase tracking-widest text-theme-muted px-1 mb-2">
-          내 영상 ({myPosts.length})
-        </p>
-        {myPosts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-theme-surface py-8">
-            <Video size={28} className="text-theme-muted" strokeWidth={1.5} />
-            <p className="text-sm text-theme-muted">아직 업로드한 영상이 없어요</p>
-            <Link
-              to="/upload"
-              className="mt-1 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white"
-            >
-              첫 영상 올리기
-            </Link>
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={prevMonth}
+            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-theme-surface transition-colors"
+          >
+            <ChevronLeft size={20} strokeWidth={2} className="text-theme-primary" />
+          </button>
+          <span className="text-base font-semibold text-theme-primary">
+            {year}년 {month}월
+          </span>
+          <button
+            onClick={nextMonth}
+            disabled={isCurrentMonth}
+            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-theme-surface transition-colors disabled:opacity-30"
+          >
+            <ChevronRight size={20} strokeWidth={2} className="text-theme-primary" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-7 mb-1">
+          {DAYS_KO.map((d) => (
+            <div key={d} className="text-center text-xs font-medium text-theme-muted py-1">{d}</div>
+          ))}
+        </div>
+
+        {historyLoading ? (
+          <div className="flex h-48 items-center justify-center text-theme-muted text-sm">
+            불러오는 중...
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-0.5 rounded-xl overflow-hidden">
-            {myPosts.map((post) => (
-              <div key={post.id} className="relative aspect-[9/16] bg-theme-surface2">
-                <video
-                  src={post.cdn_url}
-                  muted
-                  playsInline
-                  preload="metadata"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-1 left-1 flex items-center gap-0.5">
-                  <Heart size={10} className="text-white" fill="white" />
-                  <span className="text-[10px] font-semibold text-white drop-shadow">
-                    {post.like_count}
-                  </span>
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map((cell, idx) => {
+              if (cell.day === null) return <div key={`empty-${idx}`} className="aspect-square" />
+              const posts = cell.dateStr ? (workoutDays[cell.dateStr] ?? []) : []
+              const hasWorkout = posts.length > 0
+              const isToday = cell.day === todayNum
+
+              if (hasWorkout) {
+                return (
+                  <button
+                    key={cell.dateStr}
+                    onClick={() => openDay(cell.dateStr!, posts)}
+                    className={`aspect-square relative overflow-hidden rounded-xl active:scale-95 transition-transform ${isToday ? 'ring-2 ring-accent ring-offset-1 ring-offset-[--bg-page]' : ''}`}
+                  >
+                    <video
+                      src={posts[0].cdn_url}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      muted playsInline preload="metadata"
+                    />
+                    <div className="absolute inset-0 bg-black/30" />
+                    <span className="absolute bottom-1 left-0 right-0 text-center text-[11px] font-bold text-white leading-none">
+                      {cell.day}
+                    </span>
+                    {posts.length > 1 && (
+                      <div className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-accent" />
+                    )}
+                  </button>
+                )
+              }
+
+              return (
+                <div
+                  key={cell.dateStr}
+                  className={`aspect-square flex items-center justify-center rounded-xl text-sm font-medium ${isToday ? 'ring-1 ring-accent text-accent' : 'text-theme-muted'}`}
+                >
+                  {cell.day}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
+      {/* ── 풀스크린 영상 뷰어 ── */}
+      {selectedDate && selectedPosts.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/60 to-transparent">
+            <button
+              onClick={closeModal}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/30"
+            >
+              <ArrowLeft size={20} strokeWidth={2} color="white" />
+            </button>
+            <span className="text-sm font-semibold text-white">
+              {selectedDate.replace(/-/g, '.')}
+            </span>
+            {selectedPosts.length > 1 ? (
+              <span className="text-xs text-white/70">{videoIdx + 1} / {selectedPosts.length}</span>
+            ) : (
+              <div className="w-9" />
+            )}
+          </div>
 
+          <video
+            key={selectedPosts[videoIdx].cdn_url}
+            src={selectedPosts[videoIdx].cdn_url}
+            className="h-full w-full object-contain"
+            autoPlay playsInline controls
+          />
+
+          <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 pt-16 bg-gradient-to-t from-black/70 to-transparent">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="flex items-center gap-1.5 text-white/80">
+                <Heart size={14} strokeWidth={1.5} />
+                <span className="text-sm">{selectedPosts[videoIdx].like_count}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-white/80">
+                <Eye size={14} strokeWidth={1.5} />
+                <span className="text-sm">{selectedPosts[videoIdx].view_count}</span>
+              </div>
+            </div>
+            {selectedPosts[videoIdx].caption && (
+              <p className="text-sm text-white/90 line-clamp-2 mb-3">{selectedPosts[videoIdx].caption}</p>
+            )}
+            {selectedPosts.length > 1 && (
+              <div className="flex gap-1.5">
+                {selectedPosts.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setVideoIdx(i)}
+                    className={`h-1 flex-1 rounded-full transition-all ${i === videoIdx ? 'bg-accent' : 'bg-white/30'}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

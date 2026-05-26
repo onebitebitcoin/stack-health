@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, CalendarDays, Plus, Trophy, User } from 'lucide-react'
+import { Home, Plus, Trophy, User } from 'lucide-react'
 import { useAuthStore } from '../store/auth'
 
 export default function BottomNav() {
@@ -26,12 +26,6 @@ export default function BottomNav() {
         <NavLink to="/" end className={navItem}>
           <Home size={22} strokeWidth={1.5} />
           <span>피드</span>
-        </NavLink>
-
-        {/* 히스토리 */}
-        <NavLink to="/history" className={navItem}>
-          <CalendarDays size={22} strokeWidth={1.5} />
-          <span>기록</span>
         </NavLink>
 
         {/* FAB — 업로드 */}

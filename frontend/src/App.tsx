@@ -13,7 +13,6 @@ import ChallengeCreatePage from './pages/ChallengeCreatePage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/AdminPage'
 import TermsPage from './pages/TermsPage'
-import HistoryPage from './pages/HistoryPage'
 import TeamPage from './pages/TeamPage'
 import UserProfilePage from './pages/UserProfilePage'
 import SetupUsernamePage from './pages/SetupUsernamePage'
@@ -103,14 +102,6 @@ function Layout() {
           element={
             <RequireAuth>
               <ProfilePage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/history"
-          element={
-            <RequireAuth>
-              <HistoryPage />
             </RequireAuth>
           }
         />
