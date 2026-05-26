@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, Trash2, User, Video, Award, Zap, ChevronDown, ChevronRight, Search, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import client from '../api/client'
-import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse } from '../api/types'
+import type { AdminClaim, AdminUser, AdminVideo, AdminWeeklySummaryItem, AdminWeeklySummaryResponse, AdminUsersResponse } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
 type TabId = 'users' | 'videos' | 'rewards'
@@ -169,41 +169,36 @@ export default function AdminPage() {
   const [leaderboardPage, setLeaderboardPage] = useState(1)
   const [leaderboardItems, setLeaderboardItems] = useState<AdminWeeklySummaryItem[]>([])
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
+  const [userPage, setUserPage] = useState(1)
+  const [userSearchInput, setUserSearchInput] = useState('')
   const [userSearch, setUserSearch] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   const isAdmin = user?.is_admin ?? false
 
-  const { data: users = [], isLoading: usersLoading, isError: usersError } = useQuery<AdminUser[]>({
-    queryKey: ['admin-users'],
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setUserSearch(userSearchInput)
+      setUserPage(1)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [userSearchInput])
+
+  const { data: usersData, isLoading: usersLoading, isError: usersError } = useQuery<AdminUsersResponse>({
+    queryKey: ['admin-users', userPage, userSearch],
     queryFn: async () => {
-      const res = await client.get<{ data: { users: AdminUser[] } }>('/admin/users')
-      return res.data.data.users
+      const params = new URLSearchParams({ page: String(userPage), limit: '20' })
+      if (userSearch) params.set('search', userSearch)
+      const res = await client.get<{ data: AdminUsersResponse }>(`/admin/users?${params}`)
+      return res.data.data
     },
     enabled: isAdmin && activeTab === 'users',
   })
-
-  const normalizedUserSearch = userSearch.trim().toLowerCase()
-  const filteredUsers = useMemo(() => {
-    if (!normalizedUserSearch) return users
-    return users.filter((u) => {
-      const haystack = [
-        u.username,
-        u.email ?? '',
-        u.lightning_address ?? '',
-        String(u.id),
-      ].join(' ').toLowerCase()
-      return haystack.includes(normalizedUserSearch)
-    })
-  }, [users, normalizedUserSearch])
-
-  const userAutocompleteOptions = useMemo(
-    () => users.slice(0, 80).map((u) => `@${u.username}${u.email ? ` · ${u.email}` : ''}`),
-    [users],
-  )
+  const users = usersData?.users ?? []
 
   const deleteUser = useMutation({
     mutationFn: (id: number) => client.delete(`/admin/users/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }).catch(() => undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users', userPage, userSearch] }).catch(() => undefined),
   })
 
   const { data: videosData, isLoading: videosLoading, isError: videosError } = useQuery<AdminVideosResponse>({
@@ -288,7 +283,7 @@ export default function AdminPage() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => { setSearchParams({ tab: tab.id }); setVideoPage(1); setUserSearch('') }}
+              onClick={() => { setSearchParams({ tab: tab.id }); setVideoPage(1); setUserSearchInput(''); setUserSearch(''); setUserPage(1) }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors ${
                 activeTab === tab.id ? 'bg-accent text-accent-fg' : 'text-theme-muted hover:text-theme-primary'
               }`}
@@ -308,31 +303,42 @@ export default function AdminPage() {
             <div className="relative">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted" />
               <input
-                list="admin-user-autocomplete"
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value.replace(/^@/, '').split(' · ')[0])}
+                value={userSearchInput}
+                onChange={(e) => setUserSearchInput(e.target.value)}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                 placeholder="닉네임, 이메일, Lightning 주소, ID 검색"
                 className="w-full rounded-xl border border-theme-border bg-theme-surface py-3 pl-9 pr-9 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
               />
-              {userSearch && (
+              {userSearchInput && (
                 <button
                   type="button"
-                  onClick={() => setUserSearch('')}
+                  onClick={() => { setUserSearchInput(''); setUserSearch('') }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-primary"
                   aria-label="검색어 지우기"
                 >
                   <X size={14} />
                 </button>
               )}
-              <datalist id="admin-user-autocomplete">
-                {userAutocompleteOptions.map((option) => (
-                  <option key={option} value={option} />
-                ))}
-              </datalist>
+              {showSuggestions && users.length > 0 && userSearchInput && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border border-theme-border bg-theme-surface shadow-lg overflow-hidden">
+                  {users.slice(0, 5).map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onMouseDown={() => { setUserSearchInput(u.username); setShowSuggestions(false) }}
+                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-theme-surface2 flex items-center gap-2"
+                    >
+                      <span className="font-semibold text-theme-primary">@{u.username}</span>
+                      {u.email && <span className="text-xs text-theme-muted truncate">{u.email}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            {!usersLoading && !usersError && (
+            {!usersLoading && !usersError && usersData && (
               <p className="mt-2 text-xs text-theme-muted">
-                {normalizedUserSearch ? `${filteredUsers.length}명 검색됨 · 전체 ${users.length}명` : `전체 ${users.length}명`}
+                {userSearch ? `${usersData.total}명 검색됨` : `전체 ${usersData.total}명`}
               </p>
             )}
           </div>
@@ -340,12 +346,9 @@ export default function AdminPage() {
           {usersLoading && <p className="text-center text-theme-muted py-10">불러오는 중...</p>}
           {!usersLoading && usersError && <p className="text-center text-red-400 py-10">조회 실패</p>}
           {!usersLoading && !usersError && users.length === 0 && (
-            <p className="text-center text-theme-subtle py-10">유저가 없습니다</p>
+            <p className="text-center text-theme-subtle py-10">{userSearch ? '검색 결과가 없습니다' : '유저가 없습니다'}</p>
           )}
-          {!usersLoading && !usersError && users.length > 0 && filteredUsers.length === 0 && (
-            <p className="text-center text-theme-subtle py-10">검색 결과가 없습니다</p>
-          )}
-          {filteredUsers.map((u) => (
+          {users.map((u) => (
             <div key={u.id} className="rounded-xl bg-theme-surface p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
@@ -391,6 +394,22 @@ export default function AdminPage() {
               </div>
             </div>
           ))}
+
+          {usersData && (
+            <div className="flex items-center justify-between px-2 py-3 text-sm text-theme-muted">
+              <button
+                disabled={userPage === 1}
+                onClick={() => setUserPage(p => p - 1)}
+                className="disabled:opacity-40"
+              >이전</button>
+              <span>페이지 {userPage} / {Math.ceil(usersData.total / 20)}</span>
+              <button
+                disabled={!usersData.has_next}
+                onClick={() => setUserPage(p => p + 1)}
+                className="disabled:opacity-40"
+              >다음</button>
+            </div>
+          )}
         </div>
       )}
 

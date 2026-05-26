@@ -28,11 +28,14 @@ export default function TermsPage() {
         <section>
           <h2 className="font-semibold text-theme-primary mb-2">제4조 (가상자산 보상 안내)</h2>
           <p className="mb-2">서비스에서 지급되는 비트코인(사토시)은 운동 활동에 대한 보상입니다. 이는 투자 권유, 재산 증식 목적의 금융 서비스가 아닙니다.</p>
-          <p>비트코인 보상 수령으로 인해 발생하는 세금 신고 및 납부 의무는 이용자 본인에게 있습니다. 서비스는 세무 조언을 제공하지 않으며 이와 관련한 책임을 지지 않습니다.</p>
+          <p className="mb-2">비트코인 보상 수령으로 인해 발생하는 세금 신고 및 납부 의무는 이용자 본인에게 있습니다. 서비스는 세무 조언을 제공하지 않으며 이와 관련한 책임을 지지 않습니다.</p>
+          <p className="mb-2">서비스의 리워드 지급 기준(포인트 배율, 활동 종류, 지급량 등)은 운영 상황에 따라 변경될 수 있으며, 변경 시 앱 내 공지를 통해 안내합니다.</p>
+          <p className="mb-2">비트코인 보상은 비트코인 네트워크의 채굴 보상 메커니즘에 기반한 인센티브 구조를 참고하여 설계되었습니다. 서비스가 제공하는 보상은 이를 모티프로 한 활동 장려금입니다.</p>
+          <p>서비스는 사용자의 비트코인을 보관, 수탁, 교환하지 않습니다. 모든 비트코인 전송은 사용자가 직접 등록한 Lightning 주소로의 단방향 지급이며, 서비스는 가상자산 교환업(VASP)에 해당하지 않습니다.</p>
         </section>
         <section>
           <h2 className="font-semibold text-theme-primary mb-2">제5조 (면책 사항)</h2>
-          <p>서비스는 Lightning Network 전송 실패, 지연, 네트워크 장애에 대해 책임지지 않습니다. 리워드 지급은 서비스 운영 상황에 따라 변경될 수 있습니다.</p>
+          <p>서비스는 Lightning Network 전송 실패, 지연, 네트워크 장애에 대해 책임지지 않습니다.</p>
         </section>
         <section>
           <h2 className="font-semibold text-theme-primary mb-2">문의</h2>

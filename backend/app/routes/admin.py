@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -179,6 +179,9 @@ def delete_video(
 
 @router.get("/users")
 def list_users(
+    page: int = 1,
+    limit: int = 20,
+    search: str = "",
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> dict:
@@ -186,7 +189,18 @@ def list_users(
     if settled_count:
         db.commit()
 
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    query = db.query(User)
+    if search:
+        query = query.filter(
+            or_(
+                User.username.ilike(f"%{search}%"),
+                User.email.ilike(f"%{search}%"),
+            )
+        )
+
+    total = query.count()
+    offset = (page - 1) * limit
+    users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
     user_ids = [u.id for u in users]
 
     video_counts: dict = {}
@@ -230,7 +244,7 @@ def list_users(
         }
         for u in users
     ]
-    return {"data": {"users": result}}
+    return {"data": {"users": result, "total": total, "page": page, "limit": limit, "has_next": offset + limit < total}}
 
 
 @router.patch("/users/{user_id}/ban")

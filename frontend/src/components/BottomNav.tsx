@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Plus, Trophy, User, Medal } from 'lucide-react'
+import { Home, Plus, Trophy, UserCircle, Medal } from 'lucide-react'
 import { useAuthStore } from '../store/auth'
 
 export default function BottomNav() {
@@ -54,7 +54,7 @@ export default function BottomNav() {
 
         {/* 프로필 */}
         <NavLink to="/profile" className={navItem}>
-          <User size={22} strokeWidth={1.5} />
+          <UserCircle size={22} strokeWidth={1.5} />
           <span>프로필</span>
         </NavLink>
       </div>

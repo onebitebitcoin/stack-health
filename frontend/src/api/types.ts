@@ -84,6 +84,14 @@ export interface AdminUser {
   created_at: string
 }
 
+export interface AdminUsersResponse {
+  users: AdminUser[]
+  total: number
+  page: number
+  limit: number
+  has_next: boolean
+}
+
 export interface Comment {
   id: number
   post_id: number
