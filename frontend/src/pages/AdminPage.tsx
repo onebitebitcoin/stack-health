@@ -255,28 +255,32 @@ export default function AdminPage() {
   ]
 
   return (
-    <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-24 pt-6 h-[100dvh] bg-theme-page">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-theme-primary">Admin</h1>
-          <p className="text-xs text-theme-muted">@{user?.username}</p>
+    <div className="flex flex-col h-[100dvh] bg-theme-page">
+      <div className="flex-none px-4 pt-6 pb-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-theme-primary">Admin</h1>
+            <p className="text-xs text-theme-muted">@{user?.username}</p>
+          </div>
+        </div>
+
+        <div className="flex rounded-xl bg-theme-surface overflow-hidden">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => { setSearchParams({ tab: tab.id }); setVideoPage(1) }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors ${
+                activeTab === tab.id ? 'bg-accent text-accent-fg' : 'text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="sticky top-0 z-10 flex rounded-xl bg-theme-surface overflow-hidden">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => { setSearchParams({ tab: tab.id }); setVideoPage(1) }}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold transition-colors ${
-              activeTab === tab.id ? 'bg-accent text-accent-fg' : 'text-theme-muted hover:text-theme-primary'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-4">
 
       {activeTab === 'users' && (
         <div className="space-y-3">
@@ -513,6 +517,7 @@ export default function AdminPage() {
       {selectedUserId !== null && (
         <UserDetailPanel userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
       )}
+      </div>
     </div>
   )
 }
