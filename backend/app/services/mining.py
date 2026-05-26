@@ -57,7 +57,7 @@ def get_hash_power_distribution(db: Session, week_label: str) -> list[dict]:
 def run_lottery(
     db: Session,
     week_label: str,
-    n_draws: int = 10,
+    n_draws: int = 100,
     do_pay: bool = True,
 ) -> dict:
     """Run probabilistic lottery for the week.
