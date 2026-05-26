@@ -45,10 +45,10 @@ def test_summary_points_after_upload(client: TestClient) -> None:
     _upload(client, token)
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     data = res.json()["data"]
-    # Early adopter upload reward is queued for 24 hours before becoming claimable.
+    # Early adopter (2x) upload: 0.5pt * 2 = 1.0pt, queued for 24h before claimable.
     assert data["current_week_points"] == 0
     assert data["fixed_week_points"] == 0
-    assert data["queued_week_points"] == 100
+    assert data["queued_week_points"] == 1.0
     assert data["satoshi_amount"] == 0
     assert data["claimable"] is False
 
@@ -60,11 +60,12 @@ def test_summary_moves_queued_upload_reward_to_fixed_after_one_day(client: TestC
 
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     data = res.json()["data"]
-    assert data["current_week_points"] == 100
-    assert data["fixed_week_points"] == 100
+    # 0.5pt * 2x early adopter = 1.0pt fixed, 1.0 * 10 sats/pt = 10 sats
+    assert data["current_week_points"] == 1.0
+    assert data["fixed_week_points"] == 1.0
     assert data["queued_week_points"] == 0
-    assert data["satoshi_amount"] == 1000
-    assert data["claimable"] is True
+    assert data["satoshi_amount"] == 10
+    assert data["claimable"] is False  # 10 < 1000 MIN_CLAIM_SATS
 
 
 def test_delete_retrieves_queued_upload_reward(client: TestClient) -> None:
@@ -95,23 +96,23 @@ def test_claim_requires_minimum_sats(client: TestClient) -> None:
     assert res.status_code == 400
 
 
+@patch("app.routes.rewards.MIN_CLAIM_SATS", 10)
 def test_claim_success(client: TestClient, db: Session) -> None:
     token, _ = _reg(client)
-    # Upload once to get 100pt (2x early adopter bonus) = 1000 sats (minimum)
+    # 0.5pt * 2x early adopter = 1.0pt = 10 sats (meets lowered test threshold)
     _upload(client, token, "videos/v1.mp4")
     _age_queued_rewards(db)
-    # 100pt (2x bonus) = 1000 sats
 
-    # Set lightning address first
     client.patch("/api/v1/auth/me", json={"lightning_address": "user@walletofsatoshi.com"}, headers=_auth(token))
 
     res = client.post("/api/v1/rewards/claim", json={}, headers=_auth(token))
     assert res.status_code == 200
     claim = res.json()["data"]["claim"]
     assert claim["status"] == "pending"
-    assert claim["satoshi_amount"] == 1000
+    assert claim["satoshi_amount"] == 10
 
 
+@patch("app.routes.rewards.MIN_CLAIM_SATS", 10)
 def test_claim_duplicate_same_week(client: TestClient, db: Session) -> None:
     token, _ = _reg(client)
     _upload(client, token, "videos/v1.mp4")
@@ -124,6 +125,7 @@ def test_claim_duplicate_same_week(client: TestClient, db: Session) -> None:
     assert res.status_code == 409
 
 
+@patch("app.routes.rewards.MIN_CLAIM_SATS", 10)
 def test_claim_list(client: TestClient, db: Session) -> None:
     token, _ = _reg(client)
     _upload(client, token, "videos/v1.mp4")
@@ -138,11 +140,11 @@ def test_claim_list(client: TestClient, db: Session) -> None:
 
 
 def test_satoshi_calculation(client: TestClient, db: Session) -> None:
-    """Early adopter gets 2x bonus: 50pt * 2 = 100pt = 1000 sats (meets minimum)."""
+    """Early adopter gets 2x bonus: 0.5pt * 2 = 1.0pt = 10 sats."""
     token, _ = _reg(client)
-    _upload(client, token)  # +100pt (2x early adopter bonus)
+    _upload(client, token)
     _age_queued_rewards(db)
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     data = res.json()["data"]
-    assert data["satoshi_amount"] == 1000
-    assert data["claimable"] is True  # 1000 >= 1000 min
+    assert data["satoshi_amount"] == 10
+    assert data["claimable"] is False  # 10 < 1000 MIN_CLAIM_SATS

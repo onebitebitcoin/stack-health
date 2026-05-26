@@ -158,12 +158,9 @@ def test_password_not_stored_plaintext(client: TestClient) -> None:
         "email": "hash@example.com", "username": "hashuser", "password": "mypassword",
     })
 
-    # Directly query DB to verify bcrypt hash
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    engine = create_engine("sqlite:///./test.db", connect_args={"check_same_thread": False})
-    Session = sessionmaker(bind=engine)
-    with Session() as s:
+    # Directly query in-memory DB to verify bcrypt hash
+    from tests.conftest import TestingSession
+    with TestingSession() as s:
         user = s.query(User).filter(User.email == "hash@example.com").first()
         assert user is not None
         assert user.password_hash != "mypassword"

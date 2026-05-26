@@ -137,6 +137,7 @@ def test_user_profile_with_completed_title(client: TestClient, db: Session) -> N
 def test_leaderboard_ranks_fixed_positive_rewards(client: TestClient, db: Session) -> None:
     from app.models.reward import RewardPoint
     from app.models.user import User
+    from app.services.reward import get_week_label
 
     first_token = _register(client, "first@x.com", "first")
     second_token = _register(client, "second@x.com", "second")
@@ -146,11 +147,12 @@ def test_leaderboard_ranks_fixed_positive_rewards(client: TestClient, db: Sessio
     second_id = client.get("/api/v1/auth/me", headers=_auth(second_token)).json()["data"]["id"]
     banned_id = client.get("/api/v1/auth/me", headers=_auth(banned_token)).json()["data"]["id"]
 
+    current_week = get_week_label()
     db.add_all([
-        RewardPoint(user_id=first_id, week_label="2026-W21", points=30, reason="upload", status="fixed"),
-        RewardPoint(user_id=second_id, week_label="2026-W21", points=50, reason="upload", status="fixed"),
-        RewardPoint(user_id=first_id, week_label="2026-W21", points=100, reason="upload", status="queued"),
-        RewardPoint(user_id=banned_id, week_label="2026-W21", points=999, reason="upload", status="fixed"),
+        RewardPoint(user_id=first_id, week_label=current_week, points=30, reason="upload", status="fixed"),
+        RewardPoint(user_id=second_id, week_label=current_week, points=50, reason="upload", status="fixed"),
+        RewardPoint(user_id=first_id, week_label=current_week, points=100, reason="upload", status="queued"),
+        RewardPoint(user_id=banned_id, week_label=current_week, points=999, reason="upload", status="fixed"),
     ])
     banned_user = db.query(User).filter(User.id == banned_id).first()
     assert banned_user is not None

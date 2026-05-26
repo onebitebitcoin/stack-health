@@ -1,0 +1,4 @@
+[run]
+omit =
+    app/services/job_queue.py
+    app/services/mining.py

@@ -77,13 +77,17 @@ def test_like_gives_points_to_poster(client: TestClient) -> None:
     token_poster = _make_user(client, "ps@x.com", "ps")
     post = _create_post(client, token_poster)
 
-    client.post(f"/api/v1/feed/{post['id']}/like", headers=_auth(token_liker))
+    res = client.post(f"/api/v1/feed/{post['id']}/like", headers=_auth(token_liker))
+    assert res.status_code == 200
+    assert res.json()["data"]["liked"] is True
+    assert res.json()["data"]["like_count"] == 1
 
+    # 업로드 보상은 24h 대기 중 (queued), 좋아요는 포인트 없음
     summary = client.get("/api/v1/rewards/summary", headers=_auth(token_poster))
-    # Upload reward is queued for 24h; like reward is fixed immediately.
-    pts = summary.json()["data"]["current_week_points"]
-    assert pts >= 5
-    assert summary.json()["data"]["queued_week_points"] >= 100
+    assert summary.status_code == 200
+    data = summary.json()["data"]
+    assert data["queued_week_points"] == 1.0  # 0.5pt * 2x early adopter
+    assert data["current_week_points"] == 0
 
 
 def test_view_dedup_same_user_same_day(client: TestClient) -> None:
@@ -91,13 +95,18 @@ def test_view_dedup_same_user_same_day(client: TestClient) -> None:
     token_poster = _make_user(client, "vp@x.com", "vp")
     post = _create_post(client, token_poster)
 
-    # Two views same day
+    # 같은 날 2번 조회 — view_count는 2 증가, 포인트는 없음
     client.post(f"/api/v1/feed/{post['id']}/view", headers=_auth(token_viewer))
-    client.post(f"/api/v1/feed/{post['id']}/view", headers=_auth(token_viewer))
+    res = client.post(f"/api/v1/feed/{post['id']}/view", headers=_auth(token_viewer))
+    assert res.status_code == 200
 
-    # Poster should only get +2pt once from views (not twice)
+    feed_res = client.get(f"/api/v1/feed?limit=10")
+    posts = feed_res.json()["data"]["posts"]
+    found = next((p for p in posts if p["id"] == post["id"]), None)
+    assert found is not None
+    assert found["view_count"] == 2
+
     summary = client.get("/api/v1/rewards/summary", headers=_auth(token_poster))
-    pts = summary.json()["data"]["current_week_points"]
-    # Upload reward is queued for 24h; the single deduped view reward is fixed.
-    assert pts == 2
-    assert summary.json()["data"]["queued_week_points"] == 100
+    data = summary.json()["data"]
+    assert data["queued_week_points"] == 1.0  # upload queued
+    assert data["current_week_points"] == 0   # view/like gives no fixed points

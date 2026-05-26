@@ -165,8 +165,8 @@ def test_confirm_success_earns_points(mock_cdn, client: TestClient) -> None:
     }, headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
-    # Early adopter (id <= 50) gets 2x bonus: 50pt * 2 = 100pt
-    assert data["points_earned"] == 100
+    # Early adopter (id <= 50) gets 2x bonus: 0.5pt * 2 = 1.0pt
+    assert data["points_earned"] == 1.0
     assert data["post"]["user_id"] is not None
 
 
@@ -328,3 +328,93 @@ def test_merge_audio_unauthenticated(client: TestClient) -> None:
         files={"audio": ("audio.webm", b"data", "audio/webm")},
     )
     assert res.status_code in (401, 403)
+
+
+# ──────────────────────────────────────────────
+# upload-pipeline 엔드포인트 테스트
+# ──────────────────────────────────────────────
+
+@patch("app.routes.videos.enqueue_full_upload_pipeline", return_value="job-abc-123")
+@patch("app.routes.videos.r2_service.upload_fileobj", return_value=("videos/test.mp4", "https://cdn/test.mp4"))
+def test_upload_pipeline_success(mock_upload, mock_enqueue, client: TestClient) -> None:
+    token = _register_and_token(client, "pipe@x.com", "pipeuser")
+    res = client.post(
+        "/api/v1/videos/upload-pipeline",
+        data={"file_hash": "pipehash1", "duration_sec": "20", "tags": '["홈트"]'},
+        files={"file": ("workout.mp4", b"fake-video-data", "video/mp4")},
+        headers=_auth(token),
+    )
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["job_id"] == "job-abc-123"
+    assert data["status"] == "processing"
+
+
+@patch("app.routes.videos.enqueue_full_upload_pipeline", return_value="job-xyz")
+@patch("app.routes.videos.r2_service.upload_fileobj", return_value=("videos/dupe.mp4", "https://cdn/dupe.mp4"))
+def test_upload_pipeline_duplicate_hash(mock_upload, mock_enqueue, client: TestClient) -> None:
+    token = _register_and_token(client, "dupepipe@x.com", "dupepipe")
+    headers = _auth(token)
+    # 먼저 confirm으로 해시 등록
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/dupe.mp4"):
+        client.post("/api/v1/videos/confirm", json={
+            "r2_key": "videos/dupe.mp4", "file_hash": "dupehash2", "duration_sec": 20,
+        }, headers=headers)
+    # 동일 해시로 pipeline 시도 → 409
+    res = client.post(
+        "/api/v1/videos/upload-pipeline",
+        data={"file_hash": "dupehash2", "duration_sec": "20"},
+        files={"file": ("w.mp4", b"data", "video/mp4")},
+        headers=headers,
+    )
+    assert res.status_code == 409
+
+
+def test_upload_pipeline_invalid_content_type(client: TestClient) -> None:
+    token = _register_and_token(client, "badct@x.com", "badctuser")
+    res = client.post(
+        "/api/v1/videos/upload-pipeline",
+        data={"file_hash": "badhash", "duration_sec": "20"},
+        files={"file": ("doc.pdf", b"data", "application/pdf")},
+        headers=_auth(token),
+    )
+    assert res.status_code == 400
+
+
+def test_upload_pipeline_unauthenticated(client: TestClient) -> None:
+    res = client.post(
+        "/api/v1/videos/upload-pipeline",
+        data={"file_hash": "h", "duration_sec": "20"},
+        files={"file": ("w.mp4", b"data", "video/mp4")},
+    )
+    assert res.status_code in (401, 403)
+
+
+@patch("app.routes.videos.get_job_status", return_value={"status": "processing"})
+def test_get_upload_job_processing(mock_job, client: TestClient) -> None:
+    token = _register_and_token(client, "job1@x.com", "job1user")
+    res = client.get("/api/v1/videos/upload-job/some-job-id", headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["status"] == "processing"
+    assert data["job_id"] == "some-job-id"
+
+
+@patch("app.routes.videos.get_job_status", return_value={
+    "status": "completed", "post_id": "5", "cdn_url": "https://cdn/ok.mp4", "points_earned": "0.5",
+})
+def test_get_upload_job_completed(mock_job, client: TestClient) -> None:
+    token = _register_and_token(client, "job2@x.com", "job2user")
+    res = client.get("/api/v1/videos/upload-job/done-job-id", headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["status"] == "completed"
+    assert data["points_earned"] == 0.5
+    assert data["cdn_url"] == "https://cdn/ok.mp4"
+
+
+@patch("app.routes.videos.get_job_status", return_value=None)
+def test_get_upload_job_not_found(mock_job, client: TestClient) -> None:
+    token = _register_and_token(client, "job3@x.com", "job3user")
+    res = client.get("/api/v1/videos/upload-job/nonexistent", headers=_auth(token))
+    assert res.status_code == 404

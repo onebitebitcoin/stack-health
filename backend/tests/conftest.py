@@ -5,10 +5,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-32-bytes-long-xyz")
 os.environ.setdefault("ADMIN_SECRET_KEY", "test-admin-key")
-os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("R2_ACCOUNT_ID", "test")
 os.environ.setdefault("R2_ACCESS_KEY_ID", "test")
 os.environ.setdefault("R2_SECRET_ACCESS_KEY", "test")
@@ -18,8 +19,12 @@ os.environ.setdefault("R2_PUBLIC_URL", "https://test.r2.dev")
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 
-TEST_DB_URL = "sqlite:///./test.db"
-engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+TEST_DB_URL = "sqlite:///:memory:"
+engine = create_engine(
+    TEST_DB_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

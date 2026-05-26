@@ -84,8 +84,7 @@ def create_challenge(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="챌린지 생성은 관리자만 가능합니다")
+    # 모든 인증된 사용자가 챌린지 생성 가능
     try:
         challenge = Challenge(
             title=body.title,
