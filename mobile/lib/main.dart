@@ -102,7 +102,7 @@ class _WebViewPageState extends State<WebViewPage> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, _) async {
+      onPopInvoked: (didPop) async {
         if (didPop) return;
         if (await _controller.canGoBack()) {
           await _controller.goBack();
