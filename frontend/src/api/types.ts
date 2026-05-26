@@ -200,4 +200,5 @@ export interface ProfilePost {
 export interface MyStats {
   total_posts: number
   total_points: number
+  queued_points: number
 }

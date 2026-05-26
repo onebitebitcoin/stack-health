@@ -18,7 +18,7 @@ MIN_CLAIM_SATS = 1000
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
 REWARD_STATUS_REVOKED = "revoked"
-REWARD_SETTLEMENT_DELAY = timedelta(0)
+REWARD_SETTLEMENT_DELAY = timedelta(days=1)
 
 KST = timezone(timedelta(hours=9))
 

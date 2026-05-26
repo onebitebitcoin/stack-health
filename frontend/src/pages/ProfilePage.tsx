@@ -123,6 +123,14 @@ export default function ProfilePage() {
           <span className="text-lg font-medium text-theme-muted ml-1">L</span>
         </span>
         <span className="text-xs text-theme-muted mt-0.5">내가 흘린 땀</span>
+        {(myStats?.queued_points ?? 0) > 0 && (
+          <div className="mt-2 flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+            <span className="text-xs text-theme-muted">
+              +{((myStats?.queued_points ?? 0) / 100).toFixed(1)}L 확정 대기 중
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── 내 영상 그리드 ── */}

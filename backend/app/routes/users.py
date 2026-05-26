@@ -12,7 +12,7 @@ from app.models.reward import RewardPoint
 from app.models.user import User
 from app.models.video import Video
 from app.routes.auth import get_current_user as get_required_user
-from app.services.reward import REWARD_STATUS_FIXED, settle_queued_rewards
+from app.services.reward import REWARD_STATUS_FIXED, REWARD_STATUS_QUEUED, settle_queued_rewards
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -77,7 +77,18 @@ def get_my_stats(
         or 0
     )
 
-    return {"data": {"total_posts": total_posts, "total_points": int(total_points)}}
+    queued_points = (
+        db.query(sqlfunc.sum(RewardPoint.points))
+        .filter(
+            RewardPoint.user_id == current_user.id,
+            RewardPoint.points > 0,
+            RewardPoint.status == REWARD_STATUS_QUEUED,
+        )
+        .scalar()
+        or 0
+    )
+
+    return {"data": {"total_posts": total_posts, "total_points": int(total_points), "queued_points": int(queued_points)}}
 
 
 @router.get("/{user_id}/profile")
