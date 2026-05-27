@@ -7,17 +7,17 @@ import LoadingScreen from '../components/LoadingScreen'
 import { useAuthStore } from '../store/auth'
 
 export default function SharedVideoPage() {
-  const { postId } = useParams<{ postId: string }>()
+  const { shareToken } = useParams<{ shareToken: string }>()
   const navigate = useNavigate()
   const token = useAuthStore((s) => s.token)
 
   const { data: post, isLoading } = useQuery<Post>({
-    queryKey: ['shared-post', postId],
+    queryKey: ['shared-post', shareToken],
     queryFn: async () => {
-      const res = await client.get<{ data: { post: Post } }>(`/videos/posts/${postId}`)
+      const res = await client.get<{ data: { post: Post } }>(`/videos/posts/share/${shareToken}`)
       return res.data.data.post
     },
-    enabled: !!postId,
+    enabled: !!shareToken,
   })
 
   if (isLoading) return <LoadingScreen />

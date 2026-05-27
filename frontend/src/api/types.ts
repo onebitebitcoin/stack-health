@@ -23,6 +23,7 @@ export interface Post {
   username: string
   workout_start: string | null
   workout_end: string | null
+  share_token: string
 }
 
 export interface FeedResponse {

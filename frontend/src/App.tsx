@@ -86,7 +86,7 @@ function Layout() {
       <div key={location.key} className="absolute inset-0 page-enter">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/share/:postId" element={<SharedVideoPage />} />
+        <Route path="/share/:shareToken" element={<SharedVideoPage />} />
         <Route path="/" element={<RequireAuth><FeedPage /></RequireAuth>} />
         <Route
           path="/upload"

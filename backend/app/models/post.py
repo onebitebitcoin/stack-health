@@ -21,6 +21,7 @@ class Post(Base):
     workout_start: Mapped[str | None] = mapped_column(String(5), nullable=True)  # "HH:MM"
     workout_end: Mapped[str | None] = mapped_column(String(5), nullable=True)    # "HH:MM"
     proof_image_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    share_token: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
     like_count: Mapped[int] = mapped_column(Integer, default=0)
     view_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(

@@ -46,6 +46,7 @@ def _post_to_schema(
         username=post.user.username,
         workout_start=post.workout_start,
         workout_end=post.workout_end,
+        share_token=post.share_token,
     )
 
 

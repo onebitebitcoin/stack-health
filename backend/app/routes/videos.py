@@ -25,6 +25,7 @@ from app.schemas.video import (
     PresignedUrlResponse,
 )
 from app.services import r2 as r2_service
+from app.services.share_token import generate_share_token
 from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_merge_job, enqueue_proof_merge_job, get_job_status
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
@@ -129,6 +130,7 @@ def confirm_upload(
         workout_start=req.workout_start,
         workout_end=req.workout_end,
         proof_image_url=req.proof_image_url,
+        share_token=generate_share_token(current_user.id),
     )
     db.add(post)
     db.flush()
@@ -157,6 +159,7 @@ def confirm_upload(
         username=current_user.username,
         workout_start=post.workout_start,
         workout_end=post.workout_end,
+        share_token=post.share_token,
     )
     return {"data": {"post": post_schema, "points_earned": points_earned}}
 
@@ -225,9 +228,53 @@ def my_posts(
                 username=current_user.username,
                 workout_start=post.workout_start,
                 workout_end=post.workout_end,
+                share_token=post.share_token,
             )
         )
     return {"data": {"posts": result, "has_more": has_more, "week_offset": week_offset}}
+
+
+@router.get("/posts/share/{share_token}")
+def get_post_by_share_token(
+    share_token: str,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+) -> dict:
+    post = db.query(Post).filter(Post.share_token == share_token).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+    video = db.query(Video).filter(Video.id == post.video_id).first()
+    if not video:
+        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+    user = db.query(User).filter(User.id == post.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    try:
+        tags = json.loads(post.tags or "[]")
+    except (json.JSONDecodeError, TypeError):
+        tags = []
+    comment_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
+    is_liked = False
+    if current_user:
+        is_liked = db.query(PostLike).filter(PostLike.post_id == post.id, PostLike.user_id == current_user.id).first() is not None
+    post_schema = PostSchema(
+        id=post.id,
+        video_id=post.video_id,
+        user_id=post.user_id,
+        caption=post.caption,
+        tags=tags,
+        like_count=post.like_count,
+        view_count=post.view_count,
+        comment_count=comment_count,
+        is_liked=is_liked,
+        created_at=post.created_at,
+        cdn_url=video.cdn_url,
+        username=user.username,
+        workout_start=post.workout_start,
+        workout_end=post.workout_end,
+        share_token=post.share_token,
+    )
+    return {"data": {"post": post_schema}}
 
 
 @router.get("/posts/{post_id}")
@@ -264,6 +311,7 @@ def get_post(
         username=user.username,
         workout_start=post.workout_start,
         workout_end=post.workout_end,
+        share_token=post.share_token,
     )
     return {"data": {"post": post_schema}}
 
