@@ -19,7 +19,8 @@ def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _upload(client: TestClient, token: str, key: str = "videos/v.mp4") -> None:
+def _upload(client: TestClient, token: str, user_id: int, filename: str = "v.mp4") -> None:
+    key = f"videos/{user_id}/{filename}"
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
         client.post("/api/v1/videos/confirm", json={"r2_key": key, "duration_sec": 20}, headers=_auth(token))
 
@@ -41,8 +42,8 @@ def test_summary_returns_week_label(client: TestClient) -> None:
 
 
 def test_summary_points_after_upload(client: TestClient) -> None:
-    token, _ = _reg(client)
-    _upload(client, token)
+    token, user = _reg(client)
+    _upload(client, token, user["id"])
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     data = res.json()["data"]
     # 0.5pt queued, not yet settled
@@ -54,8 +55,8 @@ def test_summary_points_after_upload(client: TestClient) -> None:
 
 
 def test_summary_moves_queued_upload_reward_to_fixed_after_one_day(client: TestClient, db: Session) -> None:
-    token, _ = _reg(client, "settle@x.com", "settleuser")
-    _upload(client, token, "videos/settle.mp4")
+    token, user = _reg(client, "settle@x.com", "settleuser")
+    _upload(client, token, user["id"], "settle.mp4")
     _age_queued_rewards(db)
 
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
@@ -69,11 +70,11 @@ def test_summary_moves_queued_upload_reward_to_fixed_after_one_day(client: TestC
 
 
 def test_delete_retrieves_queued_upload_reward(client: TestClient) -> None:
-    token, _ = _reg(client, "revoke@x.com", "revokeuser")
+    token, user = _reg(client, "revoke@x.com", "revokeuser")
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/revoke.mp4"):
         upload_res = client.post(
             "/api/v1/videos/confirm",
-            json={"r2_key": "videos/revoke.mp4", "duration_sec": 20},
+            json={"r2_key": f"videos/{user['id']}/revoke.mp4", "duration_sec": 20},
             headers=_auth(token),
         )
     post_id = upload_res.json()["data"]["post"]["id"]
@@ -97,8 +98,8 @@ def test_claim_requires_lightning_address(client: TestClient) -> None:
 
 
 def test_claim_success(client: TestClient, db: Session) -> None:
-    token, _ = _reg(client)
-    _upload(client, token, "videos/v1.mp4")
+    token, user = _reg(client)
+    _upload(client, token, user["id"])
     _age_queued_rewards(db)
 
     client.patch("/api/v1/auth/me", json={"lightning_address": "user@walletofsatoshi.com"}, headers=_auth(token))
@@ -111,9 +112,9 @@ def test_claim_success(client: TestClient, db: Session) -> None:
 
 
 def test_claim_duplicate_same_week(client: TestClient, db: Session) -> None:
-    token, _ = _reg(client)
-    _upload(client, token, "videos/v1.mp4")
-    _upload(client, token, "videos/v2.mp4")
+    token, user = _reg(client)
+    _upload(client, token, user["id"], "v1.mp4")
+    _upload(client, token, user["id"], "v2.mp4")
     _age_queued_rewards(db)
     client.patch("/api/v1/auth/me", json={"lightning_address": "u@w.com"}, headers=_auth(token))
 
@@ -123,9 +124,9 @@ def test_claim_duplicate_same_week(client: TestClient, db: Session) -> None:
 
 
 def test_claim_list(client: TestClient, db: Session) -> None:
-    token, _ = _reg(client)
-    _upload(client, token, "videos/v1.mp4")
-    _upload(client, token, "videos/v2.mp4")
+    token, user = _reg(client)
+    _upload(client, token, user["id"], "v1.mp4")
+    _upload(client, token, user["id"], "v2.mp4")
     _age_queued_rewards(db)
     client.patch("/api/v1/auth/me", json={"lightning_address": "u@w.com"}, headers=_auth(token))
     client.post("/api/v1/rewards/claim", json={}, headers=_auth(token))
@@ -137,8 +138,8 @@ def test_claim_list(client: TestClient, db: Session) -> None:
 
 def test_satoshi_calculation(client: TestClient, db: Session) -> None:
     """0.5pt upload = 0.5 * 10 sats/pt = 5 sats."""
-    token, _ = _reg(client)
-    _upload(client, token)
+    token, user = _reg(client)
+    _upload(client, token, user["id"])
     _age_queued_rewards(db)
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     data = res.json()["data"]

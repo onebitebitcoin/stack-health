@@ -34,13 +34,15 @@ def get_r2_client():
     )
 
 
-def generate_presigned_url(content_type: str, filename: str) -> tuple[str, str]:
+def generate_presigned_url(content_type: str, filename: str, user_id: int | None = None) -> tuple[str, str]:
     """Generate a presigned PUT URL for R2 upload.
 
     Returns (upload_url, r2_key).
+    user_id is embedded in the key path so confirm_upload can verify ownership.
     """
     ext = filename.rsplit(".", 1)[-1] if "." in filename else "mp4"
-    r2_key = f"videos/{uuid.uuid4()}.{ext}"
+    prefix = f"videos/{user_id}" if user_id is not None else "videos"
+    r2_key = f"{prefix}/{uuid.uuid4()}.{ext}"
 
     client = get_r2_client()
     upload_url = client.generate_presigned_url(
@@ -83,13 +85,15 @@ def ensure_r2_cors() -> None:
         logger.warning("R2 CORS setup skipped: %s", exc)
 
 
-def upload_fileobj(fileobj: object, content_type: str, filename: str) -> tuple[str, str]:
+def upload_fileobj(fileobj: object, content_type: str, filename: str, user_id: int | None = None) -> tuple[str, str]:
     """Upload a file-like object directly to R2 (server-side upload, no CORS).
 
     Returns (r2_key, cdn_url).
+    user_id is embedded in the key path to match presigned-URL key format.
     """
     ext = filename.rsplit(".", 1)[-1] if "." in filename else "mp4"
-    r2_key = f"videos/{uuid.uuid4()}.{ext}"
+    prefix = f"videos/{user_id}" if user_id is not None else "videos"
+    r2_key = f"{prefix}/{uuid.uuid4()}.{ext}"
 
     client = get_r2_client()
     client.upload_fileobj(

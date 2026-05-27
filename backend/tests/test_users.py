@@ -9,19 +9,20 @@ from sqlalchemy.orm import Session
 from app.models.challenge import Challenge
 
 
-def _register(client: TestClient, email: str, username: str) -> str:
+def _register(client: TestClient, email: str, username: str) -> tuple[str, dict]:
     res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
-    return res.json()["data"]["access_token"]
+    data = res.json()["data"]
+    return data["access_token"], data["user"]
 
 
 def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _create_post(client: TestClient, token: str, r2_key: str = "v.mp4") -> dict:
+def _create_post(client: TestClient, token: str, user_id: int, filename: str = "v.mp4") -> dict:
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
         res = client.post("/api/v1/videos/confirm", json={
-            "r2_key": r2_key, "duration_sec": 15,
+            "r2_key": f"videos/{user_id}/{filename}", "duration_sec": 15,
         }, headers=_auth(token))
     return res.json()["data"]["post"]
 
@@ -51,10 +52,8 @@ def test_user_profile_not_found(client: TestClient) -> None:
 
 
 def test_user_profile_basic(client: TestClient) -> None:
-    token = _register(client, "u@x.com", "pubuser")
-    # 회원가입 후 user id 확인
-    me = client.get("/api/v1/auth/me", headers=_auth(token)).json()["data"]
-    user_id = me["id"]
+    token, user = _register(client, "u@x.com", "pubuser")
+    user_id = user["id"]
 
     res = client.get(f"/api/v1/users/{user_id}/profile")
     assert res.status_code == 200
@@ -67,12 +66,11 @@ def test_user_profile_basic(client: TestClient) -> None:
 
 
 def test_user_profile_with_posts(client: TestClient) -> None:
-    token = _register(client, "p@x.com", "poster")
-    me = client.get("/api/v1/auth/me", headers=_auth(token)).json()["data"]
-    user_id = me["id"]
+    token, user = _register(client, "p@x.com", "poster")
+    user_id = user["id"]
 
-    _create_post(client, token, "v1.mp4")
-    _create_post(client, token, "v2.mp4")
+    _create_post(client, token, user_id, "v1.mp4")
+    _create_post(client, token, user_id, "v2.mp4")
 
     res = client.get(f"/api/v1/users/{user_id}/profile")
     data = res.json()["data"]
@@ -82,9 +80,8 @@ def test_user_profile_with_posts(client: TestClient) -> None:
 
 
 def test_user_profile_banned_returns_404(client: TestClient, db: Session) -> None:
-    token = _register(client, "b@x.com", "banned")
-    me = client.get("/api/v1/auth/me", headers=_auth(token)).json()["data"]
-    user_id = me["id"]
+    token, user = _register(client, "b@x.com", "banned")
+    user_id = user["id"]
 
     # 직접 DB에서 ban 처리
     from app.models.user import User
@@ -98,9 +95,8 @@ def test_user_profile_banned_returns_404(client: TestClient, db: Session) -> Non
 
 
 def test_user_profile_with_active_challenge(client: TestClient, db: Session) -> None:
-    token = _register(client, "c@x.com", "challenger")
-    me = client.get("/api/v1/auth/me", headers=_auth(token)).json()["data"]
-    user_id = me["id"]
+    token, user = _register(client, "c@x.com", "challenger")
+    user_id = user["id"]
 
     challenge = _make_challenge(db, condition_value=5)
     client.post(f"/api/v1/challenges/{challenge.id}/join", headers=_auth(token))
@@ -114,9 +110,8 @@ def test_user_profile_with_active_challenge(client: TestClient, db: Session) -> 
 
 
 def test_user_profile_with_completed_title(client: TestClient, db: Session) -> None:
-    token = _register(client, "t@x.com", "titled")
-    me = client.get("/api/v1/auth/me", headers=_auth(token)).json()["data"]
-    user_id = me["id"]
+    token, user = _register(client, "t@x.com", "titled")
+    user_id = user["id"]
 
     challenge = _make_challenge(db, condition_value=1)
     client.post(f"/api/v1/challenges/{challenge.id}/join", headers=_auth(token))
@@ -124,7 +119,7 @@ def test_user_profile_with_completed_title(client: TestClient, db: Session) -> N
     # 업로드로 챌린지 완료
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
         client.post("/api/v1/videos/confirm", json={
-            "r2_key": "v.mp4", "duration_sec": 15, "challenge_id": challenge.id,
+            "r2_key": f"videos/{user_id}/v.mp4", "duration_sec": 15, "challenge_id": challenge.id,
         }, headers=_auth(token))
 
     res = client.get(f"/api/v1/users/{user_id}/profile")
@@ -139,13 +134,13 @@ def test_leaderboard_ranks_fixed_positive_rewards(client: TestClient, db: Sessio
     from app.models.user import User
     from app.services.reward import get_week_label
 
-    first_token = _register(client, "first@x.com", "first")
-    second_token = _register(client, "second@x.com", "second")
-    banned_token = _register(client, "banned_rank@x.com", "bannedrank")
+    first_token, first_user = _register(client, "first@x.com", "first")
+    second_token, second_user = _register(client, "second@x.com", "second")
+    banned_token, banned_user_data = _register(client, "banned_rank@x.com", "bannedrank")
 
-    first_id = client.get("/api/v1/auth/me", headers=_auth(first_token)).json()["data"]["id"]
-    second_id = client.get("/api/v1/auth/me", headers=_auth(second_token)).json()["data"]["id"]
-    banned_id = client.get("/api/v1/auth/me", headers=_auth(banned_token)).json()["data"]["id"]
+    first_id = first_user["id"]
+    second_id = second_user["id"]
+    banned_id = banned_user_data["id"]
 
     current_week = get_week_label()
     db.add_all([

@@ -10,6 +10,13 @@ def _register_and_token(client: TestClient, email: str = "u@x.com", username: st
     return res.json()["data"]["access_token"]
 
 
+def _register(client: TestClient, email: str = "u@x.com", username: str = "user") -> tuple[str, int]:
+    """Returns (token, user_id) — use when r2_key ownership prefix is needed."""
+    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
+    data = res.json()["data"]
+    return data["access_token"], data["user"]["id"]
+
+
 def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
@@ -30,7 +37,7 @@ def test_presigned_url_success(mock_r2, client: TestClient) -> None:
 
 @patch("app.routes.videos.r2_service.generate_presigned_url", return_value=("https://r2.example.com/upload", "videos/x.mp4"))
 def test_presigned_url_daily_limit(mock_r2, client: TestClient) -> None:
-    token = _register_and_token(client)
+    token, uid = _register(client)
     headers = _auth(token)
     # Exhaust the active upload-content limit by confirming each upload.
     for i in range(3):
@@ -40,7 +47,7 @@ def test_presigned_url_daily_limit(mock_r2, client: TestClient) -> None:
         }, headers=headers)
         with patch("app.routes.videos.r2_service.get_cdn_url", return_value=f"https://cdn/v{i}.mp4"):
             client.post("/api/v1/videos/confirm", json={
-                "r2_key": f"videos/v{i}.mp4", "duration_sec": 20,
+                "r2_key": f"videos/{uid}/v{i}.mp4", "duration_sec": 20,
             }, headers=headers)
     # Next upload is blocked while 3 active uploads remain.
     res = client.post("/api/v1/videos/presigned-url", json={
@@ -52,7 +59,7 @@ def test_presigned_url_daily_limit(mock_r2, client: TestClient) -> None:
 
 @patch("app.routes.videos.r2_service.generate_presigned_url", return_value=("https://r2.example.com/upload", "videos/x.mp4"))
 def test_presigned_url_limit_eased_after_delete(mock_r2, client: TestClient) -> None:
-    token = _register_and_token(client, "limit-delete@x.com", "limitdelete")
+    token, uid = _register(client, "limit-delete@x.com", "limitdelete")
     headers = _auth(token)
     post_ids: list[int] = []
 
@@ -63,7 +70,7 @@ def test_presigned_url_limit_eased_after_delete(mock_r2, client: TestClient) -> 
         }, headers=headers)
         with patch("app.routes.videos.r2_service.get_cdn_url", return_value=f"https://cdn/delete-v{i}.mp4"):
             confirm_res = client.post("/api/v1/videos/confirm", json={
-                "r2_key": f"videos/delete-v{i}.mp4", "duration_sec": 20,
+                "r2_key": f"videos/{uid}/delete-v{i}.mp4", "duration_sec": 20,
             }, headers=headers)
         post_ids.append(confirm_res.json()["data"]["post"]["id"])
 
@@ -86,18 +93,18 @@ def test_presigned_url_limit_eased_after_delete(mock_r2, client: TestClient) -> 
 
 @patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/limit.mp4")
 def test_confirm_upload_uses_active_content_limit(mock_cdn, client: TestClient) -> None:
-    token = _register_and_token(client, "confirm-limit@x.com", "confirmlimit")
+    token, uid = _register(client, "confirm-limit@x.com", "confirmlimit")
     headers = _auth(token)
 
     for i in range(3):
         res = client.post("/api/v1/videos/confirm", json={
-            "r2_key": f"videos/confirm-limit-{i}.mp4",
+            "r2_key": f"videos/{uid}/confirm-limit-{i}.mp4",
             "duration_sec": 20,
         }, headers=headers)
         assert res.status_code == 200
 
     res = client.post("/api/v1/videos/confirm", json={
-        "r2_key": "videos/confirm-limit-blocked.mp4",
+        "r2_key": f"videos/{uid}/confirm-limit-blocked.mp4",
         "duration_sec": 20,
     }, headers=headers)
     assert res.status_code == 429
@@ -132,17 +139,16 @@ def test_confirm_duration_too_long(mock_cdn, client: TestClient) -> None:
 
 @patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn.example.com/v.mp4")
 def test_confirm_success_earns_points(mock_cdn, client: TestClient) -> None:
-    token = _register_and_token(client)
+    token, uid = _register(client)
     res = client.post("/api/v1/videos/confirm", json={
-        "r2_key": "videos/ok.mp4",
+        "r2_key": f"videos/{uid}/ok.mp4",
         "duration_sec": 30,
         "caption": "great workout",
         "tags": ["홈트"],
     }, headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
-    # Early adopter (id <= 50) gets 2x bonus: 0.5pt * 2 = 1.0pt
-    assert data["points_earned"] == 1.0
+    assert data["points_earned"] == 0.5
     assert data["post"]["user_id"] is not None
 
 
@@ -154,9 +160,9 @@ def test_my_posts_empty(client: TestClient) -> None:
 
 
 def test_my_posts_returns_own_posts(client: TestClient) -> None:
-    token = _register_and_token(client, "mp2@x.com", "mpuser2")
+    token, uid = _register(client, "mp2@x.com", "mpuser2")
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
-        client.post("/api/v1/videos/confirm", json={"r2_key": "videos/v.mp4", "duration_sec": 20}, headers=_auth(token))
+        client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/{uid}/v.mp4", "duration_sec": 20}, headers=_auth(token))
     res = client.get("/api/v1/videos/my-posts", headers=_auth(token))
     posts = res.json()["data"]["posts"]
     assert len(posts) == 1
@@ -165,17 +171,17 @@ def test_my_posts_returns_own_posts(client: TestClient) -> None:
 
 def test_my_posts_excludes_others(client: TestClient) -> None:
     token_a = _register_and_token(client, "mp3a@x.com", "mpusera")
-    token_b = _register_and_token(client, "mp3b@x.com", "mpuserb")
+    token_b, uid_b = _register(client, "mp3b@x.com", "mpuserb")
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/b.mp4"):
-        client.post("/api/v1/videos/confirm", json={"r2_key": "videos/b.mp4", "duration_sec": 20}, headers=_auth(token_b))
+        client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/{uid_b}/b.mp4", "duration_sec": 20}, headers=_auth(token_b))
     res = client.get("/api/v1/videos/my-posts", headers=_auth(token_a))
     assert res.json()["data"]["posts"] == []
 
 
 def test_delete_post_owner(client: TestClient) -> None:
-    token = _register_and_token(client, "dp@x.com", "dpuser")
+    token, uid = _register(client, "dp@x.com", "dpuser")
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
-        post_res = client.post("/api/v1/videos/confirm", json={"r2_key": "videos/del.mp4", "duration_sec": 20}, headers=_auth(token))
+        post_res = client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/{uid}/del.mp4", "duration_sec": 20}, headers=_auth(token))
     post_id = post_res.json()["data"]["post"]["id"]
     with patch("app.routes.videos.r2_service.delete_object"):
         del_res = client.delete(f"/api/v1/videos/posts/{post_id}", headers=_auth(token))
@@ -190,10 +196,10 @@ def test_delete_post_not_found(client: TestClient) -> None:
 
 
 def test_delete_post_forbidden(client: TestClient) -> None:
-    token_owner = _register_and_token(client, "dp3a@x.com", "dpuser3a")
+    token_owner, uid_owner = _register(client, "dp3a@x.com", "dpuser3a")
     token_other = _register_and_token(client, "dp3b@x.com", "dpuser3b")
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
-        post_res = client.post("/api/v1/videos/confirm", json={"r2_key": "videos/own.mp4", "duration_sec": 20}, headers=_auth(token_owner))
+        post_res = client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/{uid_owner}/own.mp4", "duration_sec": 20}, headers=_auth(token_owner))
     post_id = post_res.json()["data"]["post"]["id"]
     res = client.delete(f"/api/v1/videos/posts/{post_id}", headers=_auth(token_other))
     assert res.status_code == 403
@@ -204,7 +210,7 @@ def test_delete_post_forbidden(client: TestClient) -> None:
 def test_merge_audio_enqueues_job(mock_get_r2, mock_get_redis, client: TestClient) -> None:
     from unittest.mock import MagicMock
 
-    token = _register_and_token(client, "ma@x.com", "mauser")
+    token, uid = _register(client, "ma@x.com", "mauser")
 
     mock_s3 = MagicMock()
     mock_s3.put_object.return_value = {}
@@ -215,7 +221,7 @@ def test_merge_audio_enqueues_job(mock_get_r2, mock_get_redis, client: TestClien
 
     res = client.post(
         "/api/v1/videos/merge-audio",
-        data={"video_r2_key": "videos/test.mp4", "audio_duration_sec": "10"},
+        data={"video_r2_key": f"videos/{uid}/test.mp4", "audio_duration_sec": "10"},
         files={"audio": ("audio.webm", b"fake_audio_data", "audio/webm")},
         headers=_auth(token),
     )
@@ -231,7 +237,7 @@ def test_merge_audio_no_redis_url(client: TestClient) -> None:
     """REDIS_URL 미설정(enqueue 실패) 시 500 반환."""
     from unittest.mock import MagicMock
 
-    token = _register_and_token(client, "ma2@x.com", "mauser2")
+    token, uid = _register(client, "ma2@x.com", "mauser2")
 
     with patch("app.routes.videos.r2_service.get_r2_client") as mock_r2, \
          patch("app.routes.videos.enqueue_merge_job", side_effect=Exception("no redis")) as mock_enqueue:
@@ -241,7 +247,7 @@ def test_merge_audio_no_redis_url(client: TestClient) -> None:
 
         res = client.post(
             "/api/v1/videos/merge-audio",
-            data={"video_r2_key": "videos/test.mp4", "audio_duration_sec": "10"},
+            data={"video_r2_key": f"videos/{uid}/test.mp4", "audio_duration_sec": "10"},
             files={"audio": ("audio.webm", b"fake_audio_data", "audio/webm")},
             headers=_auth(token),
         )

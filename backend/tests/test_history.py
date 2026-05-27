@@ -8,18 +8,19 @@ from fastapi.testclient import TestClient
 KST = timezone(timedelta(hours=9))
 
 
-def _reg(client: TestClient, email: str = "h@x.com", username: str = "huser") -> str:
+def _reg(client: TestClient, email: str = "h@x.com", username: str = "huser") -> tuple[str, dict]:
     res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
-    return res.json()["data"]["access_token"]
+    data = res.json()["data"]
+    return data["access_token"], data["user"]
 
 
 def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _upload(client: TestClient, token: str, key: str = "videos/v.mp4") -> None:
+def _upload(client: TestClient, token: str, user_id: int, filename: str = "v.mp4") -> None:
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
-        client.post("/api/v1/videos/confirm", json={"r2_key": key, "duration_sec": 20}, headers=_auth(token))
+        client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/{user_id}/{filename}", "duration_sec": 20}, headers=_auth(token))
 
 
 def test_history_requires_auth(client: TestClient) -> None:
@@ -28,7 +29,7 @@ def test_history_requires_auth(client: TestClient) -> None:
 
 
 def test_history_empty_month(client: TestClient) -> None:
-    token = _reg(client)
+    token, _ = _reg(client)
     now = datetime.now(KST)
     res = client.get(f"/api/v1/history?year={now.year}&month={now.month}", headers=_auth(token))
     assert res.status_code == 200
@@ -41,8 +42,8 @@ def test_history_empty_month(client: TestClient) -> None:
 
 
 def test_history_after_upload(client: TestClient) -> None:
-    token = _reg(client, "hu2@x.com", "huser2")
-    _upload(client, token)
+    token, user = _reg(client, "hu2@x.com", "huser2")
+    _upload(client, token, user["id"])
     now = datetime.now(KST)
     res = client.get(f"/api/v1/history?year={now.year}&month={now.month}", headers=_auth(token))
     data = res.json()["data"]
@@ -57,9 +58,9 @@ def test_history_after_upload(client: TestClient) -> None:
 
 
 def test_history_multiple_uploads_same_day(client: TestClient) -> None:
-    token = _reg(client, "hu3@x.com", "huser3")
-    _upload(client, token, "videos/v1.mp4")
-    _upload(client, token, "videos/v2.mp4")
+    token, user = _reg(client, "hu3@x.com", "huser3")
+    _upload(client, token, user["id"], "v1.mp4")
+    _upload(client, token, user["id"], "v2.mp4")
     now = datetime.now(KST)
     res = client.get(f"/api/v1/history?year={now.year}&month={now.month}", headers=_auth(token))
     data = res.json()["data"]
@@ -69,7 +70,7 @@ def test_history_multiple_uploads_same_day(client: TestClient) -> None:
 
 
 def test_history_default_current_month(client: TestClient) -> None:
-    token = _reg(client, "hu4@x.com", "huser4")
+    token, _ = _reg(client, "hu4@x.com", "huser4")
     res = client.get("/api/v1/history", headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
@@ -79,9 +80,9 @@ def test_history_default_current_month(client: TestClient) -> None:
 
 
 def test_history_only_shows_own_posts(client: TestClient) -> None:
-    token_a = _reg(client, "ha@x.com", "husera")
-    token_b = _reg(client, "hb@x.com", "huserb")
-    _upload(client, token_b, "videos/other.mp4")
+    token_a, _ = _reg(client, "ha@x.com", "husera")
+    token_b, user_b = _reg(client, "hb@x.com", "huserb")
+    _upload(client, token_b, user_b["id"], "other.mp4")
     now = datetime.now(KST)
     res = client.get(f"/api/v1/history?year={now.year}&month={now.month}", headers=_auth(token_a))
     data = res.json()["data"]

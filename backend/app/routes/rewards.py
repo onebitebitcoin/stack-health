@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.claim import LightningClaim
 from app.models.user import User
-from app.routes.auth import get_current_user
+from app.routes.auth import get_active_user, get_current_user
 from app.schemas.reward import ClaimRequest, ClaimSchema, RewardSummarySchema
 from app.services.reward import (
     get_total_weekly_points_all_users,
@@ -63,7 +63,7 @@ def get_summary(
 @router.post("/claim")
 def create_claim(
     req: ClaimRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
 ) -> dict:
     week_label = get_week_label()

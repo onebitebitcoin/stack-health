@@ -16,7 +16,7 @@ from app.models.post_view import PostView
 from app.models.user import User
 from app.models.video import Video
 from sqlalchemy import func as sqlfunc
-from app.routes.auth import get_current_user, get_optional_user
+from app.routes.auth import get_active_user, get_current_user, get_optional_user
 from app.routes.challenges import increment_challenge_upload
 from app.schemas.video import (
     ConfirmUploadRequest,
@@ -44,7 +44,7 @@ router = APIRouter(prefix="/api/v1/videos", tags=["videos"])
 @router.post("/presigned-url")
 def get_presigned_url(
     req: PresignedUrlRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
 ) -> dict:
     if req.content_type not in r2_service.ALLOWED_CONTENT_TYPES:
@@ -60,14 +60,14 @@ def get_presigned_url(
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
         raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
 
-    upload_url, r2_key = r2_service.generate_presigned_url(req.content_type, req.filename)
+    upload_url, r2_key = r2_service.generate_presigned_url(req.content_type, req.filename, current_user.id)
     return {"data": PresignedUrlResponse(upload_url=upload_url, r2_key=r2_key)}
 
 
 @router.post("/upload")
 async def upload_video(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
 ) -> dict:
     """Server-side upload: receives file from browser, streams to R2.
@@ -82,18 +82,23 @@ async def upload_video(
         raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
 
     logger.info("upload_video: user_id=%s filename=%s content_type=%s", current_user.id, file.filename, content_type)
-    r2_key, cdn_url = r2_service.upload_fileobj(file.file, content_type, file.filename or "video.mp4")
+    r2_key, cdn_url = r2_service.upload_fileobj(file.file, content_type, file.filename or "video.mp4", current_user.id)
     return {"data": {"r2_key": r2_key, "cdn_url": cdn_url}}
 
 
 @router.post("/confirm")
 def confirm_upload(
     req: ConfirmUploadRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
 ) -> dict:
     if req.duration_sec < 5 or req.duration_sec > 30:
         raise HTTPException(status_code=400, detail="Duration must be 5-30 seconds")
+
+    # H-3: Verify r2_key ownership via user-scoped prefix
+    expected_prefix = f"videos/{current_user.id}/"
+    if not req.r2_key.startswith(expected_prefix):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
 
     # Validate tags
     tags = req.tags or []
@@ -301,9 +306,13 @@ async def merge_audio(
     video_r2_key: str = Form(...),
     audio_duration_sec: int = Form(...),
     audio: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
 ) -> dict:
     """오디오+비디오 병합 잡을 외부 워커 큐에 등록한다."""
+    # H-4: Verify video_r2_key ownership via user-scoped prefix
+    if not video_r2_key.startswith(f"videos/{current_user.id}/"):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
+
     if audio_duration_sec <= 0 or audio_duration_sec > 35:
         raise HTTPException(status_code=400, detail="오디오 길이가 올바르지 않습니다")
 
@@ -373,7 +382,7 @@ MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
 @router.post("/upload-proof")
 async def upload_proof_image(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
 ) -> dict:
     """증거 이미지를 R2에 업로드하고 proof_r2_key를 반환한다."""
     content_type = file.content_type or "image/jpeg"
@@ -385,7 +394,7 @@ async def upload_proof_image(
         raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 10MB)")
 
     ext = "jpg" if "jpeg" in content_type or "jpg" in content_type else "png"
-    proof_r2_key = f"proof/{uuid.uuid4()}.{ext}"
+    proof_r2_key = f"proof/{current_user.id}/{uuid.uuid4()}.{ext}"
 
     try:
         r2_client = r2_service.get_r2_client()
@@ -408,9 +417,15 @@ async def upload_proof_image(
 def merge_proof(
     video_r2_key: str = Form(...),
     proof_r2_key: str = Form(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
 ) -> dict:
     """증거 이미지를 비디오 끝에 3초 슬라이드로 붙인다."""
+    # H-4: Verify both keys belong to current user
+    if not video_r2_key.startswith(f"videos/{current_user.id}/"):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
+    if not proof_r2_key.startswith(f"proof/{current_user.id}/"):
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
+
     logger.info("merge_proof: user_id=%s video=%s proof=%s", current_user.id, video_r2_key, proof_r2_key)
     try:
         job_id = enqueue_proof_merge_job(video_r2_key, proof_r2_key)
@@ -436,7 +451,7 @@ async def upload_pipeline(
     audio: UploadFile | None = File(None),
     audio_duration_sec: int = Form(0),
     proof_image: UploadFile | None = File(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
 ) -> dict:
     """단일 요청으로 영상 + 오디오 + 사진을 받아 MQ 방식으로 백그라운드 처리 후 job_id 반환."""
@@ -458,7 +473,7 @@ async def upload_pipeline(
 
     # 1. 영상 R2 업로드 (동기)
     logger.info("upload_pipeline: user_id=%s", current_user.id)
-    r2_key, _cdn_url = r2_service.upload_fileobj(file.file, content_type, file.filename or "video.mp4")
+    r2_key, _cdn_url = r2_service.upload_fileobj(file.file, content_type, file.filename or "video.mp4", current_user.id)
 
     # 2. 오디오 R2 업로드 (동기)
     # UploadFile.size는 multipart Content-Length 헤더 기반이라 모바일에서 None일 수 있음.
@@ -471,7 +486,7 @@ async def upload_pipeline(
         audio_bytes = await audio.read()
         if len(audio_bytes) > 0:
             audio_r2_key, _ = r2_service.upload_fileobj(
-                io.BytesIO(audio_bytes), audio_content_type, f"audio.{audio_ext}"
+                io.BytesIO(audio_bytes), audio_content_type, f"audio.{audio_ext}", current_user.id
             )
 
     # 3. 증거 사진 R2 업로드 (동기)
@@ -486,7 +501,7 @@ async def upload_pipeline(
             raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 10MB)")
         if len(image_bytes) > 0:
             ext = "jpg" if "jpeg" in proof_ct or "jpg" in proof_ct else "png"
-            proof_r2_key = f"proof/{uuid.uuid4()}.{ext}"
+            proof_r2_key = f"proof/{current_user.id}/{uuid.uuid4()}.{ext}"
             r2_client = r2_service.get_r2_client()
             r2_client.put_object(
                 Bucket=app_settings.r2_bucket_name,

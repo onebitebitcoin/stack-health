@@ -1,8 +1,9 @@
 import io
 import random
 import uuid
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -29,14 +30,23 @@ from app.services.auth import (
 from app.services import r2 as r2_service
 from app.services.google_oauth import exchange_code, get_google_auth_url, get_google_user_info
 from app.services.lnauth import encode_lnurl, generate_k1, verify_signature
+from app.services.rate_limit import check_rate_limit
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+LNAUTH_CHALLENGE_TTL = timedelta(minutes=10)
 
 PROFILE_COLORS = [
     "#6366f1", "#8b5cf6", "#ec4899", "#f97316",
     "#14b8a6", "#22c55e", "#3b82f6", "#eab308",
 ]
 AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+AVATAR_CONTENT_TYPE_TO_EXT: dict[str, str] = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
 AVATAR_MAX_SIZE = 5 * 1024 * 1024  # 5MB
 
 
@@ -59,6 +69,13 @@ def get_current_user(
     return user
 
 
+def get_active_user(user: User = Depends(get_current_user)) -> User:
+    """get_current_user + ban check. Use on write/action endpoints."""
+    if user.is_banned:
+        raise HTTPException(status_code=403, detail="계정이 정지되었습니다")
+    return user
+
+
 def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_optional),
     db: Session = Depends(get_db),
@@ -72,7 +89,8 @@ def get_optional_user(
 
 
 @router.post("/register")
-def register(req: RegisterRequest, db: Session = Depends(get_db)) -> dict:
+def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    check_rate_limit(request, "auth:register", max_calls=5, period_seconds=3600)
     if get_user_by_email(db, req.email):
         raise HTTPException(status_code=400, detail="Email already registered")
     if db.query(User).filter(User.username == req.username).first():
@@ -93,7 +111,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/login")
-def login(req: LoginRequest, db: Session = Depends(get_db)) -> dict:
+def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    check_rate_limit(request, "auth:login", max_calls=10, period_seconds=900)
     user = get_user_by_email(db, req.email)
     if user is None or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -155,7 +174,7 @@ async def upload_avatar(
     if len(data) > AVATAR_MAX_SIZE:
         raise HTTPException(status_code=400, detail="파일 크기는 5MB 이하여야 합니다")
 
-    ext = (file.filename or "avatar.jpg").rsplit(".", 1)[-1].lower()
+    ext = AVATAR_CONTENT_TYPE_TO_EXT[content_type]
     r2_key = f"avatars/{uuid.uuid4()}.{ext}"
     client = r2_service.get_r2_client()
     client.upload_fileobj(
@@ -229,9 +248,9 @@ async def google_callback(code: str | None = None, error: str | None = None, db:
         db.commit()
 
     token = create_access_token(user.id)
-    redirect_url = f"{settings.app_base_url}/?google_token={token}"
-    if is_new:
-        redirect_url += "&new_user=1"
+    # Use fragment (#) instead of query string to keep JWT out of server logs and referrer headers
+    new_param = "&new_user=1" if is_new else ""
+    redirect_url = f"{settings.app_base_url}/#google_token={token}{new_param}"
     return RedirectResponse(url=redirect_url)
 
 
@@ -239,6 +258,10 @@ async def google_callback(code: str | None = None, error: str | None = None, db:
 
 @router.get("/lnauth/challenge")
 def lnauth_challenge(db: Session = Depends(get_db)) -> dict:
+    # Cleanup stale challenges (older than 30 minutes)
+    cutoff = datetime.utcnow() - timedelta(minutes=30)
+    db.query(LNAuthChallenge).filter(LNAuthChallenge.created_at < cutoff).delete()
+
     k1 = generate_k1()
     lnurl = encode_lnurl(k1)
     challenge = LNAuthChallenge(k1=k1)
@@ -258,6 +281,10 @@ def lnauth_callback(
     challenge = db.query(LNAuthChallenge).filter(LNAuthChallenge.k1 == k1).first()
     if not challenge:
         raise HTTPException(status_code=400, detail="Invalid k1")
+    if datetime.utcnow() - challenge.created_at > LNAUTH_CHALLENGE_TTL:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(status_code=400, detail="Challenge expired. Please request a new one.")
 
     if sig is None or key is None:
         return {
@@ -299,6 +326,10 @@ def lnauth_callback(
 def lnauth_verify(k1: str, db: Session = Depends(get_db)) -> dict:
     challenge = db.query(LNAuthChallenge).filter(LNAuthChallenge.k1 == k1).first()
     if not challenge or not challenge.verified:
+        return {"data": {"verified": False}}
+    if datetime.utcnow() - challenge.created_at > LNAUTH_CHALLENGE_TTL:
+        db.delete(challenge)
+        db.commit()
         return {"data": {"verified": False}}
 
     user = db.query(User).filter(

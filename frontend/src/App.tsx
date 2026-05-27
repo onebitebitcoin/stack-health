@@ -52,7 +52,9 @@ function Layout() {
   }, [])
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search)
+    // JWT is passed via URL fragment (#) to keep it out of server logs and referrer headers
+    const hash = location.hash.slice(1)
+    const params = new URLSearchParams(hash)
     const googleToken = params.get('google_token')
     if (!googleToken) return
     const isNew = params.get('new_user') === '1'

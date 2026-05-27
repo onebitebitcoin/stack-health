@@ -316,6 +316,9 @@ def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     if admin is not None and user.id == admin.id:
         raise HTTPException(status_code=400, detail="자신의 계정은 삭제할 수 없습니다")
+    # X-Admin-Key (admin=None) cannot delete admin accounts — no self-identity check possible
+    if admin is None and user.is_admin:
+        raise HTTPException(status_code=400, detail="API 키로는 관리자 계정을 삭제할 수 없습니다")
 
     # 영상 R2 키 수집 후 DB 삭제
     videos = db.query(Video).filter(Video.user_id == user_id).all()
