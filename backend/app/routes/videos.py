@@ -11,6 +11,8 @@ from app.config import settings as app_settings
 from app.database import get_db
 from app.models.comment import Comment
 from app.models.post import Post
+from app.models.post_like import PostLike
+from app.models.post_view import PostView
 from app.models.user import User
 from app.models.video import Video
 from sqlalchemy import func as sqlfunc
@@ -274,6 +276,10 @@ def delete_post(
         raise HTTPException(status_code=403, detail="Not allowed")
 
     video = db.query(Video).filter(Video.id == post.video_id).first()
+
+    db.query(PostView).filter(PostView.post_id == post_id).delete()
+    db.query(PostLike).filter(PostLike.post_id == post_id).delete()
+    db.query(Comment).filter(Comment.post_id == post_id).delete()
 
     db.delete(post)
     if video:
