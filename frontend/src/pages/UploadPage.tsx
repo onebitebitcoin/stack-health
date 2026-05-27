@@ -1,33 +1,31 @@
-import { useState, useRef, useEffect, type ChangeEvent } from 'react'
+import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward, Check, ImagePlus, X } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
-import { MERGE_POLL_INTERVAL_MS, MERGE_POLL_MAX_ATTEMPTS } from '../lib/constants'
+import { MERGE_POLL_INTERVAL_MS } from '../lib/constants'
 import type { Challenge } from '../api/types'
 
 const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as const
 type Tag = (typeof ALLOWED_TAGS)[number]
 
-// 4단계로 단순화: 영상선택 → 태그·챌린지 → 음성녹음 → 설명·사진
 const STEPS = ['영상 선택', '태그·챌린지', '음성 녹음', '설명·사진'] as const
 const MAX_RECORD_SECONDS = 30
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
+const PIPELINE_JOB_KEY = 'upload_pipeline_job_id'
 
 function getSupportedAudioMimeType(): string {
-  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
-    return ''
-  }
-  return PREFERRED_AUDIO_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? ''
+  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return ''
+  return PREFERRED_AUDIO_MIME_TYPES.find((m) => MediaRecorder.isTypeSupported(m)) ?? ''
 }
-
 
 export default function UploadPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [step, setStep] = useState(0)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -36,23 +34,25 @@ export default function UploadPage() {
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [workoutStart, setWorkoutStart] = useState('')
   const [workoutEnd, setWorkoutEnd] = useState('')
-  const [progress, setProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [done, setDone] = useState(false)
   const [pointsEarned, setPointsEarned] = useState(0)
   const [error, setError] = useState('')
 
-  // 증거 사진
+  // Pipeline job polling state
+  const [pipelineJobId, setPipelineJobId] = useState<string | null>(null)
+  const [pipelineStatus, setPipelineStatus] = useState<string | null>(null)
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Proof image
   const proofImageRef = useRef<HTMLInputElement>(null)
   const proofFileRef = useRef<File | null>(null)
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null)
-  const [proofMerging, setProofMerging] = useState(false)
-  const [proofMergeError, setProofMergeError] = useState('')
 
-  // 음성 녹음
+  // Audio recording
   const audioBlobRef = useRef<Blob | null>(null)
   const audioMimeTypeRef = useRef('audio/webm')
-  const [serverMerging, setServerMerging] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordedSeconds, setRecordedSeconds] = useState(0)
   const [recordingDone, setRecordingDone] = useState(false)
@@ -62,12 +62,74 @@ export default function UploadPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const recordedSecondsRef = useRef(0)
 
+  // On mount: resume pending job from localStorage
   useEffect(() => {
+    const savedJobId = localStorage.getItem(PIPELINE_JOB_KEY)
+    if (savedJobId) {
+      setPipelineJobId(savedJobId)
+      setPipelineStatus('pending')
+    }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current)
       streamRef.current?.getTracks().forEach((t) => t.stop())
     }
   }, [])
+
+  const handleJobCompleted = useCallback((pts: number) => {
+    if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null }
+    localStorage.removeItem(PIPELINE_JOB_KEY)
+    setPointsEarned(pts)
+    setDone(true)
+    qc.invalidateQueries({ queryKey: ['my-stats'] }).catch(() => undefined)
+    qc.invalidateQueries({ queryKey: ['my-posts'] }).catch(() => undefined)
+    qc.invalidateQueries({ queryKey: ['my-weekly-points'] }).catch(() => undefined)
+    qc.invalidateQueries({ queryKey: ['history'] }).catch(() => undefined)
+    qc.invalidateQueries({ queryKey: ['rewards-summary'] }).catch(() => undefined)
+    qc.invalidateQueries({ queryKey: ['leaderboard-week'] }).catch(() => undefined)
+    qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
+    qc.invalidateQueries({ queryKey: ['my-challenges-upload'] }).catch(() => undefined)
+  }, [qc])
+
+  const pollJob = useCallback(async (jobId: string) => {
+    try {
+      const res = await client.get<{ data: { status: string; points_earned?: number; error?: string } }>(
+        `/videos/upload-job/${jobId}`
+      )
+      const { status, points_earned, error: jobError } = res.data.data
+      setPipelineStatus(status)
+      if (status === 'completed') {
+        handleJobCompleted(points_earned ?? 0)
+      } else if (status === 'failed') {
+        if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null }
+        localStorage.removeItem(PIPELINE_JOB_KEY)
+        setPipelineJobId(null)
+        setPipelineStatus(null)
+        setError(jobError || '처리 중 오류가 발생했습니다')
+      }
+    } catch {
+      // network error — retry on next tick
+    }
+  }, [handleJobCompleted])
+
+  // Start/restart polling when pipelineJobId is set
+  useEffect(() => {
+    if (!pipelineJobId || done) return
+
+    pollJob(pipelineJobId)
+    pollTimerRef.current = setInterval(() => pollJob(pipelineJobId), MERGE_POLL_INTERVAL_MS)
+
+    // Immediate re-poll on tab focus
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') pollJob(pipelineJobId)
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null }
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [pipelineJobId, done, pollJob])
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
@@ -106,15 +168,11 @@ export default function UploadPage() {
       })
       mediaRecorderRef.current = mr
 
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data)
-      }
-
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       mr.onstop = async () => {
         streamRef.current?.getTracks().forEach((t) => t.stop())
         streamRef.current = null
-        const blob = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current })
-        audioBlobRef.current = blob
+        audioBlobRef.current = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current })
         setRecording(false)
         setRecordingDone(true)
       }
@@ -187,125 +245,64 @@ export default function UploadPage() {
   async function handleUpload() {
     if (!file) return
     setError('')
-    setProofMergeError('')
     setUploading(true)
+    setUploadProgress(0)
+
     try {
-      const uploadForm = new FormData()
-      uploadForm.append('file', file, file.name)
-
-      const uploadRes = await client.post<{ data: { r2_key: string; cdn_url: string } }>(
-        '/videos/upload', uploadForm,
-        { timeout: 180_000, onUploadProgress: (e) => { if (e.total) setProgress(Math.round((e.loaded / e.total) * 40)) } },
-      )
-      let { r2_key } = uploadRes.data.data
-
-      // 오디오 merge
-      let finalDurationSec: number | null = null
-      const audioBlob = audioBlobRef.current
-      if (audioBlob && audioBlob.size > 0) {
-        setServerMerging(true)
-        const audioMimeType = audioBlob.type || audioMimeTypeRef.current || 'audio/webm'
-        const audioExt = audioMimeType.includes('mp4') ? 'mp4' : 'webm'
-        const formData = new FormData()
-        formData.append('video_r2_key', r2_key)
-        formData.append('audio_duration_sec', String(recordedSecondsRef.current))
-        formData.append('audio', new File([audioBlob], `audio.${audioExt}`, { type: audioMimeType }))
-
-        try {
-          const enqueueRes = await client.post<{ data: { job_id: string } }>('/videos/merge-audio', formData)
-          const jobId = enqueueRes.data.data.job_id
-          for (let i = 0; i < MERGE_POLL_MAX_ATTEMPTS; i++) {
-            await new Promise<void>((resolve) => setTimeout(resolve, MERGE_POLL_INTERVAL_MS))
-            const pollRes = await client.get<{ data: { status: string; r2_key: string } }>(`/videos/merge-job/${jobId}`)
-            const { status, r2_key: mergedKey } = pollRes.data.data
-            if (status === 'completed') { r2_key = mergedKey; finalDurationSec = recordedSecondsRef.current; break }
-            else if (status === 'failed') break
-          }
-        } catch { /* merge 실패 시 원본으로 계속 */ }
-        finally { setServerMerging(false) }
-      }
-
-      // 증거 사진 merge
-      let proofImageUrl: string | null = null
-      const proofFile = proofFileRef.current
-      if (proofFile) {
-        setProofMerging(true)
-        setProofMergeError('')
-        try {
-          const proofForm = new FormData()
-          proofForm.append('file', proofFile, proofFile.name)
-          const proofUploadRes = await client.post<{ data: { proof_r2_key: string; proof_cdn_url: string } }>(
-            '/videos/upload-proof', proofForm, { timeout: 60_000 }
-          )
-          const { proof_r2_key, proof_cdn_url } = proofUploadRes.data.data
-          proofImageUrl = proof_cdn_url
-
-          const mergeProofForm = new FormData()
-          mergeProofForm.append('video_r2_key', r2_key)
-          mergeProofForm.append('proof_r2_key', proof_r2_key)
-          const mergeProofRes = await client.post<{ data: { job_id: string } }>('/videos/merge-proof', mergeProofForm)
-          const proofJobId = mergeProofRes.data.data.job_id
-
-          for (let i = 0; i < MERGE_POLL_MAX_ATTEMPTS; i++) {
-            await new Promise<void>((resolve) => setTimeout(resolve, MERGE_POLL_INTERVAL_MS))
-            const pollRes = await client.get<{ data: { status: string; r2_key: string } }>(`/videos/merge-job/${proofJobId}`)
-            const { status, r2_key: mergedKey } = pollRes.data.data
-            if (status === 'completed') { r2_key = mergedKey; break }
-            else if (status === 'failed') {
-              setProofMergeError('사진 합치기에 실패했습니다. 사진 없이 계속합니다.')
-              proofImageUrl = null
-              break
-            }
-          }
-        } catch (err) {
-          setProofMergeError(getApiErrorMessage(err, '사진 업로드 실패. 사진 없이 계속합니다.'))
-          proofImageUrl = null
-        } finally {
-          setProofMerging(false)
-        }
-      }
-
-      setProgress(75)
-
-      let duration = finalDurationSec
-      if (!duration) {
+      // Get video duration
+      let duration = 15
+      if (previewUrl) {
         const videoEl = document.createElement('video')
-        videoEl.src = previewUrl!
+        videoEl.src = previewUrl
         duration = await new Promise<number>((resolve) => {
           videoEl.onloadedmetadata = () => resolve(Math.round(videoEl.duration))
-          videoEl.onerror = () => resolve(10)
+          videoEl.onerror = () => resolve(15)
         })
       }
 
-      const confirmRes = await client.post<{ data: { points_earned: number } }>('/videos/confirm', {
-        r2_key,
-        duration_sec: Math.min(30, Math.max(5, duration)),
-        caption: caption || null,
-        tags: selectedTags,
-        challenge_id: selectedChallengeId,
-        workout_start: workoutStart || null,
-        workout_end: workoutEnd || null,
-        proof_image_url: proofImageUrl,
-      })
-      setProgress(100)
-      setPointsEarned(confirmRes.data.data.points_earned)
-      setDone(true)
-      qc.invalidateQueries({ queryKey: ['my-stats'] }).catch(() => undefined)
-      qc.invalidateQueries({ queryKey: ['my-posts'] }).catch(() => undefined)
-      qc.invalidateQueries({ queryKey: ['my-weekly-points'] }).catch(() => undefined)
-      qc.invalidateQueries({ queryKey: ['history'] }).catch(() => undefined)
-      qc.invalidateQueries({ queryKey: ['rewards-summary'] }).catch(() => undefined)
-      qc.invalidateQueries({ queryKey: ['leaderboard-week'] }).catch(() => undefined)
-      qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
-      qc.invalidateQueries({ queryKey: ['my-challenges-upload'] }).catch(() => undefined)
+      // Build single multipart request: video + audio + proof + metadata
+      const form = new FormData()
+      form.append('file', file, file.name)
+      form.append('duration_sec', String(Math.min(30, Math.max(5, duration))))
+      if (caption) form.append('caption', caption)
+      form.append('tags', JSON.stringify(selectedTags))
+      if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
+      if (workoutStart) form.append('workout_start', workoutStart)
+      if (workoutEnd) form.append('workout_end', workoutEnd)
+
+      const audioBlob = audioBlobRef.current
+      if (audioBlob && audioBlob.size > 0) {
+        const audioMimeType = audioBlob.type || audioMimeTypeRef.current || 'audio/webm'
+        const audioExt = audioMimeType.includes('mp4') ? 'mp4' : 'webm'
+        form.append('audio', new File([audioBlob], `audio.${audioExt}`, { type: audioMimeType }))
+        form.append('audio_duration_sec', String(recordedSecondsRef.current))
+      }
+
+      if (proofFileRef.current) {
+        form.append('proof_image', proofFileRef.current, proofFileRef.current.name)
+      }
+
+      const res = await client.post<{ data: { job_id: string } }>(
+        '/videos/upload-pipeline',
+        form,
+        {
+          timeout: 300_000,
+          onUploadProgress: (e) => { if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100)) },
+        },
+      )
+
+      const { job_id } = res.data.data
+      localStorage.setItem(PIPELINE_JOB_KEY, job_id)
+      setPipelineJobId(job_id)
+      setPipelineStatus('pending')
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, '업로드 실패'))
-      setServerMerging(false)
     } finally {
       setUploading(false)
     }
   }
 
+  // ── Done screen ──
   if (done) {
     const shareText = '같이 운동하고 비트코인 모으자'
     return (
@@ -345,33 +342,58 @@ export default function UploadPage() {
     )
   }
 
+  // ── Processing screen (after upload, waiting for worker) ──
+  if (pipelineJobId) {
+    const statusLabel =
+      pipelineStatus === 'processing' ? '영상 처리 중...'
+      : pipelineStatus === 'retrying' ? '다시 시도 중...'
+      : '업로드 대기 중...'
+
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-accent border-t-transparent" />
+        <div className="text-center">
+          <p className="text-base font-semibold text-theme-primary">{statusLabel}</p>
+          <p className="mt-2 text-sm text-theme-muted">
+            다른 앱을 사용하셔도 괜찮아요.<br />돌아오시면 결과를 바로 확인할 수 있어요.
+          </p>
+        </div>
+        {error && (
+          <div className="w-full max-w-sm rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 text-center">
+            {error}
+            <button
+              onClick={() => { setError(''); setPipelineJobId(null); setPipelineStatus(null) }}
+              className="block mx-auto mt-2 text-xs text-theme-muted underline"
+            >
+              처음으로
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Upload overlay ──
+  if (uploading) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
+        <Upload size={48} className="animate-bounce text-accent" />
+        <p className="text-lg font-semibold text-theme-primary">업로드 중...</p>
+        <div className="h-2 w-64 rounded-full bg-theme-surface2">
+          <div className="h-2 rounded-full bg-accent transition-all" style={{ width: `${uploadProgress}%` }} />
+        </div>
+        <p className="text-sm text-theme-muted">{uploadProgress}%</p>
+        <p className="text-xs text-theme-subtle text-center">
+          업로드가 완료되면 앱을 전환해도<br />서버에서 자동으로 처리됩니다.
+        </p>
+      </div>
+    )
+  }
+
   const progressPct = (recordedSeconds / MAX_RECORD_SECONDS) * 100
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-nav-safe">
-      {/* 업로드 오버레이 */}
-      {uploading && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-theme-page px-6">
-          <Upload size={48} className="animate-bounce text-accent" />
-          <p className="text-lg font-semibold text-theme-primary">업로드 중...</p>
-          <div className="h-2 w-64 rounded-full bg-theme-surface2">
-            <div className="h-2 rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
-          </div>
-          <p className="text-sm text-theme-muted">{progress}%</p>
-        </div>
-      )}
-      {serverMerging && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          <p className="text-sm text-theme-muted">음성과 영상을 합치는 중...</p>
-        </div>
-      )}
-      {proofMerging && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-theme-page px-6">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          <p className="text-sm text-theme-muted">사진을 영상에 합치는 중...</p>
-        </div>
-      )}
 
       {/* 헤더 + 스텝 바 */}
       <div className="px-4 pt-4 pb-3">
@@ -433,8 +455,6 @@ export default function UploadPage() {
           {previewUrl && (
             <video src={previewUrl} className="mb-4 h-36 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
           )}
-
-          {/* 태그 */}
           <p className="mb-2 text-sm font-semibold text-theme-primary">운동 종류</p>
           <div className="flex flex-wrap gap-2 mb-5">
             {ALLOWED_TAGS.map((tag) => (
@@ -449,8 +469,6 @@ export default function UploadPage() {
               </button>
             ))}
           </div>
-
-          {/* 챌린지 */}
           <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지 선택 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
           <div className="flex flex-col gap-2 mb-4">
             <button
@@ -480,7 +498,6 @@ export default function UploadPage() {
               </button>
             ))}
           </div>
-
           <button
             onClick={() => setStep(2)}
             className="mt-auto mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg flex-shrink-0"
@@ -496,7 +513,6 @@ export default function UploadPage() {
           {previewUrl && (
             <video src={previewUrl} className="h-40 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
           )}
-
           <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-4">
             <div>
               <p className="font-semibold text-theme-primary">음성 녹음 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
@@ -504,7 +520,6 @@ export default function UploadPage() {
                 목소리로 오늘 운동을 기록해보세요. 최대 {MAX_RECORD_SECONDS}초.
               </p>
             </div>
-
             <div className="flex flex-col items-center gap-3">
               {recordingDone ? (
                 <div className="flex flex-col items-center gap-2">
@@ -535,16 +550,13 @@ export default function UploadPage() {
                   </span>
                 </div>
               )}
-
               <div className="w-full h-1.5 rounded-full bg-theme-surface2 overflow-hidden">
                 <div className="h-full rounded-full bg-red-500 transition-all duration-1000" style={{ width: `${progressPct}%` }} />
               </div>
               {recording && <p className="text-xs text-theme-muted">{MAX_RECORD_SECONDS - recordedSeconds}초 남음</p>}
             </div>
           </div>
-
           {error && <p className="text-sm text-red-400">{error}</p>}
-
           <div className="mt-auto flex gap-3 pb-2">
             <button
               onClick={skipRecording}
@@ -567,7 +579,6 @@ export default function UploadPage() {
       {/* Step 3: 설명 + 사진 */}
       {step === 3 && (
         <div className="flex flex-1 flex-col px-6 pt-4 overflow-y-auto">
-          {/* 캡션 */}
           <p className="mb-2 text-sm font-semibold text-theme-primary">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
           <textarea
             value={caption}
@@ -579,7 +590,6 @@ export default function UploadPage() {
           />
           <p className="text-right text-xs text-theme-subtle mb-4">{caption.length}/140</p>
 
-          {/* 운동 시간대 */}
           <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-4">
             <p className="text-xs font-medium text-theme-muted">운동 시간대 <span className="text-theme-subtle">(선택)</span></p>
             <div className="flex items-center gap-2">
@@ -599,7 +609,6 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* 증거 사진 */}
           <p className="mb-2 text-sm font-semibold text-theme-primary">인증 사진 <span className="text-xs font-normal text-theme-subtle">(선택 — 영상 끝에 3초 표시)</span></p>
           <input
             ref={proofImageRef}
@@ -611,7 +620,6 @@ export default function UploadPage() {
               if (!f) return
               proofFileRef.current = f
               setProofPreviewUrl(URL.createObjectURL(f))
-              setProofMergeError('')
             }}
           />
           {proofPreviewUrl ? (
@@ -634,7 +642,6 @@ export default function UploadPage() {
             </button>
           )}
 
-          {proofMergeError && <p className="mb-2 text-xs text-orange-400">{proofMergeError}</p>}
           {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
 
           <button
