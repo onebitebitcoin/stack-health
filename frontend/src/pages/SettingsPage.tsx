@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut } from 'lucide-react'
+import { Moon, Sun, ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -110,13 +110,18 @@ export default function SettingsPage() {
               <div className={ROW}>
                 <span className={LABEL}>닉네임</span>
                 {!editingUsername ? (
-                  <button
-                    onClick={() => { setEditingUsername(true); setUsernameInput(user?.username ?? '') }}
-                    className="flex items-center gap-1.5 text-sm text-theme-subtle hover:text-theme-primary transition-colors"
-                  >
-                    @{user?.username}
-                    {usernameSaved && <Check size={11} className="text-green-400" />}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-theme-subtle">@{user?.username}</span>
+                    {usernameSaved
+                      ? <Check size={11} className="text-green-400" />
+                      : <button
+                          onClick={() => { setEditingUsername(true); setUsernameInput(user?.username ?? '') }}
+                          className="text-theme-muted hover:text-theme-primary transition-colors"
+                        >
+                          <Pencil size={13} strokeWidth={1.5} />
+                        </button>
+                    }
+                  </div>
                 ) : (
                   <form onSubmit={saveUsername} className="flex items-center gap-2">
                     <input
@@ -152,13 +157,22 @@ export default function SettingsPage() {
               <div className={ROW}>
                 <span className={LABEL}>Lightning 주소</span>
                 {!editingLn ? (
-                  <button
-                    onClick={() => { setEditingLn(true); setLnInput(user?.lightning_address ?? '') }}
-                    className="flex items-center gap-1.5 text-sm text-theme-subtle hover:text-theme-primary transition-colors truncate max-w-[160px]"
-                  >
-                    {lnSaved ? <span className="flex items-center gap-1 text-green-400"><Check size={11} />저장됨</span>
-                      : user?.lightning_address ?? '설정하기'}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {lnSaved
+                      ? <span className="flex items-center gap-1 text-xs text-green-400"><Check size={11} />저장됨</span>
+                      : <span className="text-sm text-theme-subtle truncate max-w-[150px]">
+                          {user?.lightning_address ?? '설정하기'}
+                        </span>
+                    }
+                    {!lnSaved && (
+                      <button
+                        onClick={() => { setEditingLn(true); setLnInput(user?.lightning_address ?? '') }}
+                        className="text-theme-muted hover:text-theme-primary transition-colors flex-shrink-0"
+                      >
+                        <Pencil size={13} strokeWidth={1.5} />
+                      </button>
+                    )}
+                  </div>
                 ) : null}
               </div>
               {editingLn && (
