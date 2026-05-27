@@ -1,8 +1,8 @@
 # SPEC.md — 운동하고 비트코인 받자
 
-> 버전: 0.26.1 (운영 중)
+> 버전: 0.46.6 (운영 중)
 > 런칭 목표: 2026-05-28
-> 최종 업데이트: 2026-05-25
+> 최종 업데이트: 2026-05-27
 >
 > **이 문서는 코드 기준으로 작성됩니다. 코드가 진실 원본이며, 이 문서는 코드를 설명합니다.**
 
@@ -186,8 +186,9 @@ created_at      DATETIME DEFAULT now()
 id              INTEGER PRIMARY KEY
 user_id         INTEGER REFERENCES users(id)
 week_label      TEXT NOT NULL              -- 예: 2026-W21
-points          INTEGER NOT NULL
-reason          TEXT NOT NULL              -- upload | like_received | view_received
+points          FLOAT NOT NULL
+reason          TEXT NOT NULL              -- upload | comment | like_given | view_given
+                                           -- like_given / view_given: 0pt, 좋아요/조회 추적 전용
 reference_id    INTEGER                    -- post_id 또는 video_id
 status          TEXT DEFAULT 'fixed'       -- queued | fixed | revoked
                                            -- queued: 업로드 후 24h 대기 (어뷰징 방지)
@@ -201,7 +202,7 @@ created_at      DATETIME DEFAULT now()
 id              INTEGER PRIMARY KEY
 user_id         INTEGER REFERENCES users(id)
 week_label      TEXT NOT NULL
-points_used     INTEGER NOT NULL
+points_used     FLOAT NOT NULL
 satoshi_amount  INTEGER NOT NULL
 ln_address      TEXT NOT NULL
 status          TEXT DEFAULT 'pending'     -- pending | paid | cancelled
@@ -375,13 +376,12 @@ Response: { "data": { "r2_key": str, "cdn_url": str } }
 R2 업로드 완료 후 DB 저장 + 포인트 적립 큐 등록.
 ```json
 Request:  { "r2_key": str, "duration_sec": int, "caption"?: str, "tags"?: [str], "challenge_id"?: int }
-Response: { "data": { "post": PostSchema, "points_earned": int } }
+Response: { "data": { "post": PostSchema, "points_earned": float } }
 ```
 검증:
 - `duration_sec`: 5초 이상, 30초 이하
 - `tags`: `["홈트", "러닝", "요가", "웨이트", "기타"]` 중 선택 (복수 가능)
-- 포인트 적립: `+50pt` (queued 상태로 생성 → 24h 후 fixed 전환)
-- user.id ≤ 50이면 early adopter 2× 보너스 적용
+- 포인트 적립: `+0.5pt` (queued 상태로 생성 → 24h 후 fixed 전환)
 
 #### POST `/api/v1/videos/merge-audio` 🔒
 영상과 오디오 파일을 ffmpeg로 병합하는 잡을 큐에 등록.
@@ -418,14 +418,13 @@ Response: { "data": { "posts": [PostSchema], "next_cursor": int | null } }
 ```json
 Response: { "data": { "liked": bool, "like_count": int } }
 ```
-- 좋아요 받은 게시자: `+5pt` (fixed, 즉시)
-- 토글 방식
+- 토글 방식 (좋아요 추적 전용, 포인트 미적립)
 
 #### POST `/api/v1/feed/{post_id}/view` 🔒
 ```json
 Response: { "data": { "view_count": int } }
 ```
-- 게시자 `+2pt` (하루 동일 영상 중복 view 제외)
+- 조회수 카운트 (하루 동일 영상 중복 view 제외, 포인트 미적립)
 
 ---
 
@@ -506,14 +505,17 @@ Response: { "data": { "challenge": ChallengeSchema } }
 Response: {
   "data": {
     "week_label": "2026-W21",
-    "current_week_points": 350,
-    "satoshi_amount": 3500,
+    "current_week_points": 3.5,
+    "queued_week_points": 0.5,
+    "satoshi_amount": 0,
     "claimable": true,
     "claim_deadline": "2026-05-25T23:59:59",
     "next_claim_date": "2026-05-26T00:00:00"
   }
 }
 ```
+- `satoshi_amount`: 주간 reward pool 기반으로 동적 산정 (포인트 × 고정 환율 아님)
+- `claimable`: 이번 주 미청구 상태면 true (최소 sats 한도 없음)
 
 #### POST `/api/v1/rewards/claim` 🔒
 ```json
@@ -521,7 +523,6 @@ Request:  { "ln_address"?: str }
 Response: { "data": { "claim": ClaimSchema } }
 ```
 검증:
-- `satoshi_amount` >= 1000
 - 이번 주 이미 claim한 경우 `409 Conflict`
 - `ln_address` 미등록 시 `400`
 
@@ -579,16 +580,18 @@ Response: { "status": "ok", "version": "0.26.1" }
 ### 적립 규칙
 | 행동 | 포인트 | 비고 |
 |------|--------|------|
-| 영상 업로드 | +50pt | queued → 24h 후 fixed |
-| 좋아요 받음 | +5pt | 즉시 fixed |
-| 조회 받음 | +2pt | 하루 동일 영상 중복 제외 |
-| early adopter 보너스 | ×2 | user.id ≤ 50인 사용자만 |
-| **일일 총 상한** | 300pt | 초과분 자동 미적립 |
+| 영상 업로드 | +0.5pt | queued → 24h 후 fixed |
+| 댓글 작성 | +0.1pt | 즉시 fixed |
+| 좋아요 | 0pt | 토글 추적 전용 |
+| 조회 | 0pt | 중복 방지 추적 전용 |
 | **일일 업로드 횟수 상한** | 3회 | 초과 시 429 |
 
+> 일일 총 포인트 상한 없음.
+
 ### 포인트 → Sats 환산
-- **100pt = 1,000 sats** (코드 상수: `POINTS_TO_SATS_DIVISOR = 100`)
-- 최소 claim 단위: **1,000 sats (100pt)**
+- **동적 산정**: `1pt = N sats`는 고정값이 아님
+- 주간 reward pool(sats)을 전체 참여자 포인트 합산으로 나눠 비율 결정
+- 운영자가 주간 pool을 설정하고, admin에서 lottery/distribution 실행
 
 ### 어뷰징 방지: 업로드 포인트 24h 대기
 - 업로드 직후 포인트는 `status=queued`로 생성
@@ -598,9 +601,16 @@ Response: { "status": "ok", "version": "0.26.1" }
 
 ### 주간 claim 사이클
 - 집계 기간: 월요일 00:00 ~ 일요일 23:59 (Asia/Seoul)
-- claim 가능: 주간 종료 후 (월요일 00:00부터)
-- 미claim 포인트: 다음 주로 이월 (런칭 초기 정책)
+- claim 가능: 이번 주 미청구 상태면 언제든지 (최소 sats 한도 없음)
 - 주당 1회만 claim 가능 (`UNIQUE(user_id, week_label)`)
+- 미claim 포인트: 다음 주로 이월 / close_week 실행 시 1/7로 감소
+
+### 주간 정산 (Admin)
+1. 운영자가 주간 reward pool(sats) 결정
+2. `POST /admin/mining/distribute` → lottery 실행
+   - `total_pool = sum(claim.satoshi_amount)` 재분배
+   - 해시파워(포인트 비율) 기반 확률적 추첨 (N=1008 draws)
+3. `POST /admin/mining/close-week` → 미청구자 포인트 1/7 감소
 
 ---
 
@@ -669,8 +679,7 @@ healthcheckTimeout = 30
 - 좋아요, 조회수
 - 댓글
 - 챌린지 시스템 (생성, 참여, 타이틀)
-- 포인트 적립 (업로드/좋아요/조회, 24h queued 어뷰징 방지)
-- early adopter 보너스 (user.id ≤ 50)
+- 포인트 적립 (업로드 0.5pt / 댓글 0.1pt, 24h queued 어뷰징 방지)
 - 운동 히스토리 캘린더 + streak
 - 주간 Lightning claim (자동 Blink / 운영자 수동 송금)
 - 운영자 대시보드 (claim 처리, 영상/사용자 관리, AdminLog)
