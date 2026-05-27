@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Trophy, ImagePlus, Move } from 'lucide-react'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
@@ -20,6 +20,7 @@ const CROP_INSET = 24
 
 export default function ChallengeCreatePage() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const [form, setForm] = useState({
     title: '',
@@ -138,7 +139,11 @@ export default function ChallengeCreatePage() {
       if (imageSrc) await cropAndUpload(challengeId)
       return res
     },
-    onSuccess: () => navigate('/challenges'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['my-challenges'] }).catch(() => undefined)
+      navigate('/challenges')
+    },
     onError: (e: unknown) => {
       setError(getApiErrorMessage(e, '생성에 실패했습니다'))
     },

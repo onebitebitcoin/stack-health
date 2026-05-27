@@ -70,7 +70,11 @@ export default function ChallengeDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => client.delete(`/challenges/${id}`),
-    onSuccess: () => navigate('/challenges', { replace: true }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['my-challenges'] }).catch(() => undefined)
+      navigate('/challenges', { replace: true })
+    },
     onError: (e: unknown) => {
       setShowDeleteConfirm(false)
       setActionError(getApiErrorMessage(e, '삭제에 실패했습니다'))

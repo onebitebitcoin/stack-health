@@ -292,8 +292,12 @@ export default function UploadPage() {
       setDone(true)
       qc.invalidateQueries({ queryKey: ['my-stats'] }).catch(() => undefined)
       qc.invalidateQueries({ queryKey: ['my-posts'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['my-weekly-points'] }).catch(() => undefined)
       qc.invalidateQueries({ queryKey: ['history'] }).catch(() => undefined)
       qc.invalidateQueries({ queryKey: ['rewards-summary'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['leaderboard-week'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['my-challenges-upload'] }).catch(() => undefined)
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, '업로드 실패'))
       setServerMerging(false)
