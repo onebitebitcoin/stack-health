@@ -1,8 +1,9 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -11,25 +12,23 @@ from app.models.video import Video
 from app.models.user import User
 from app.routes.auth import get_current_user as get_required_user
 
-KST = timezone(timedelta(hours=9))
-
 router = APIRouter(prefix="/api/v1/history", tags=["history"])
 
 
-def _to_kst_date(dt: datetime) -> str:
-    """Convert naive UTC datetime to KST date string YYYY-MM-DD."""
+def _to_local_date(dt: datetime, tz: ZoneInfo) -> str:
+    """Convert naive UTC datetime to local date string YYYY-MM-DD."""
     utc_dt = dt.replace(tzinfo=timezone.utc)
-    kst_dt = utc_dt.astimezone(KST)
-    return kst_dt.strftime("%Y-%m-%d")
+    local_dt = utc_dt.astimezone(tz)
+    return local_dt.strftime("%Y-%m-%d")
 
 
-def _compute_streak(workout_dates: set[str], today_kst: str) -> int:
-    """Count consecutive days ending at today or yesterday (KST).
+def _compute_streak(workout_dates: set[str], today_local: str) -> int:
+    """Count consecutive days ending at today or yesterday (local time).
     If today has no workout yet, start from yesterday so the streak
     doesn't drop to 0 just because the day hasn't been completed yet.
     """
-    today = datetime.strptime(today_kst, "%Y-%m-%d").date()
-    start = today if today_kst in workout_dates else today - timedelta(days=1)
+    today = datetime.strptime(today_local, "%Y-%m-%d").date()
+    start = today if today_local in workout_dates else today - timedelta(days=1)
     streak = 0
     current = start
     while True:
@@ -45,29 +44,31 @@ def _compute_streak(workout_dates: set[str], today_kst: str) -> int:
 def get_history(
     year: Optional[int] = None,
     month: Optional[int] = None,
+    timezone_name: Optional[str] = Query(None, alias="timezone"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ) -> dict:
-    now_kst = datetime.now(KST)
+    try:
+        tz = ZoneInfo(timezone_name) if timezone_name else ZoneInfo("UTC")
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo("UTC")
+
+    now_local = datetime.now(tz)
 
     if year is None:
-        year = now_kst.year
+        year = now_local.year
     if month is None:
-        month = now_kst.month
+        month = now_local.month
 
-    # Query all posts by this user for the given month (KST)
-    # We need a window slightly wider than the month to handle UTC→KST boundary
-    # Fetch from start of month-1 day to end of month+1 day in UTC and filter in Python
     from calendar import monthrange
 
     last_day = monthrange(year, month)[1]
 
-    # UTC window: KST midnight of (year, month, 1) → KST end of (year, month, last_day)
-    month_start_kst = datetime(year, month, 1, 0, 0, 0, tzinfo=KST)
-    month_end_kst = datetime(year, month, last_day, 23, 59, 59, tzinfo=KST)
+    month_start_local = datetime(year, month, 1, 0, 0, 0, tzinfo=tz)
+    month_end_local = datetime(year, month, last_day, 23, 59, 59, tzinfo=tz)
 
-    month_start_utc = month_start_kst.astimezone(timezone.utc).replace(tzinfo=None)
-    month_end_utc = month_end_kst.astimezone(timezone.utc).replace(tzinfo=None)
+    month_start_utc = month_start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    month_end_utc = month_end_local.astimezone(timezone.utc).replace(tzinfo=None)
 
     posts = (
         db.query(Post)
@@ -84,8 +85,7 @@ def get_history(
 
     workout_days: dict[str, list[dict]] = defaultdict(list)
     for post in posts:
-        date_str = _to_kst_date(post.created_at)
-        # Double-check the KST date is actually within the requested month
+        date_str = _to_local_date(post.created_at, tz)
         pd = datetime.strptime(date_str, "%Y-%m-%d")
         if pd.year == year and pd.month == month:
             workout_days[date_str].append(
@@ -98,7 +98,6 @@ def get_history(
                 }
             )
 
-    # For streak: query ALL user posts (any time) to compute streak correctly
     all_posts = (
         db.query(Post)
         .join(Post.video)
@@ -108,10 +107,10 @@ def get_history(
         )
         .all()
     )
-    all_workout_dates = {_to_kst_date(p.created_at) for p in all_posts}
+    all_workout_dates = {_to_local_date(p.created_at, tz) for p in all_posts}
 
-    today_kst_str = now_kst.strftime("%Y-%m-%d")
-    streak = _compute_streak(all_workout_dates, today_kst_str)
+    today_local_str = now_local.strftime("%Y-%m-%d")
+    streak = _compute_streak(all_workout_dates, today_local_str)
 
     return {
         "data": {

@@ -149,10 +149,12 @@ export default function ProfilePage() {
     },
   })
 
+  const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
   const { data: historyData, isLoading: historyLoading } = useQuery<HistoryResponse>({
-    queryKey: ['history', year, month],
+    queryKey: ['history', year, month, clientTimezone],
     queryFn: async () => {
-      const res = await client.get('/history', { params: { year, month } })
+      const res = await client.get('/history', { params: { year, month, timezone: clientTimezone } })
       return res.data.data
     },
     enabled: !!user,
