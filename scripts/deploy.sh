@@ -4,8 +4,8 @@ set -e
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
 
-echo "[deploy] git pull origin main..."
-git pull origin main
+echo "[deploy] git pull --rebase origin main..."
+git pull --rebase origin main
 
 echo "[deploy] backend 의존성 설치..."
 backend/.venv/bin/pip install --quiet -r backend/requirements.txt
