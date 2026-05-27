@@ -198,9 +198,16 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
             const shareUrl = `${window.location.origin}/share/${post.id}`
             const shareTitle = 'Stack Health 운동 영상'
             if (typeof navigator !== 'undefined' && 'share' in navigator) {
-              navigator.share({ title: shareTitle, url: shareUrl }).catch(() => undefined)
+              navigator.share({ title: shareTitle, url: shareUrl }).catch((err) => {
+                if (err instanceof DOMException && err.name === 'AbortError') return
+                window.navigator.clipboard?.writeText(shareUrl)
+                  .then(() => alert('링크가 복사됐어요!'))
+                  .catch(() => alert(`공유 링크: ${shareUrl}`))
+              })
             } else {
-              window.navigator.clipboard?.writeText(shareUrl).catch(() => undefined)
+              window.navigator.clipboard?.writeText(shareUrl)
+                .then(() => alert('링크가 복사됐어요!'))
+                .catch(() => alert(`공유 링크: ${shareUrl}`))
             }
           }}
           className="flex flex-col items-center gap-1"
