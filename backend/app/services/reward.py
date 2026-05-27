@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -14,9 +15,15 @@ SATS_PER_POINT = 10  # TBD
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
 REWARD_STATUS_REVOKED = "revoked"
-REWARD_SETTLEMENT_DELAY = timedelta(days=1)
 
 KST = timezone(timedelta(hours=9))
+
+
+def _parse_tz(tz_str: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(tz_str)
+    except (ZoneInfoNotFoundError, Exception):
+        return ZoneInfo("Asia/Seoul")
 
 
 def get_week_label(dt: datetime | None = None) -> str:
@@ -83,30 +90,29 @@ def get_daily_upload_count(db: Session, user_id: int) -> int:
     )
 
 
-def settle_queued_rewards(db: Session, user_id: int | None = None, now: datetime | None = None) -> int:
-    """Move upload rewards from queued to fixed once content survived 24 hours."""
-    settled_at = now or datetime.now(KST)
-    if settled_at.tzinfo is None:
-        settled_at_kst = settled_at.replace(tzinfo=KST)
-    else:
-        settled_at_kst = settled_at.astimezone(KST)
-    cutoff = settled_at_kst.replace(tzinfo=None) - REWARD_SETTLEMENT_DELAY
-    settlement_week_label = get_week_label(settled_at_kst)
+def settle_queued_rewards(db: Session, user_id: int | None = None, client_tz_str: str = "Asia/Seoul") -> int:
+    """Move upload rewards from queued to fixed when a new calendar day has begun in the client's timezone."""
+    client_tz = _parse_tz(client_tz_str)
+    now_client = datetime.now(client_tz)
+    today_client = now_client.date()
+    settlement_week_label = get_week_label(now_client)
 
-    query = db.query(RewardPoint).filter(
-        RewardPoint.status == REWARD_STATUS_QUEUED,
-        RewardPoint.created_at <= cutoff,
-    )
+    query = db.query(RewardPoint).filter(RewardPoint.status == REWARD_STATUS_QUEUED)
     if user_id is not None:
         query = query.filter(RewardPoint.user_id == user_id)
 
     rewards = query.all()
+    settled = []
     for reward in rewards:
-        reward.status = REWARD_STATUS_FIXED
-        reward.week_label = settlement_week_label
-    if rewards:
+        # created_at is stored as KST naive → treat as KST → convert to client TZ
+        created_client = reward.created_at.replace(tzinfo=KST).astimezone(client_tz)
+        if created_client.date() < today_client:
+            reward.status = REWARD_STATUS_FIXED
+            reward.week_label = settlement_week_label
+            settled.append(reward)
+    if settled:
         db.flush()
-    return len(rewards)
+    return len(settled)
 
 
 def revoke_queued_upload_reward(db: Session, video_id: int) -> int:

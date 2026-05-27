@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from app.services.reward import (
     KST,
     REWARD_STATUS_FIXED,
     REWARD_STATUS_QUEUED,
+    _parse_tz,
     get_week_label,
     get_weekly_points,
     get_weekly_queued_points,
@@ -60,8 +61,9 @@ class ActiveChallengeSchema(BaseModel):
 def get_my_stats(
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
+    x_client_timezone: str = Header(default="Asia/Seoul"),
 ) -> dict:
-    settled_count = settle_queued_rewards(db, current_user.id)
+    settled_count = settle_queued_rewards(db, current_user.id, x_client_timezone)
     if settled_count:
         db.commit()
 
@@ -97,7 +99,8 @@ def get_my_stats(
         or 0
     )
 
-    week_label = get_week_label()
+    client_tz = _parse_tz(x_client_timezone)
+    week_label = get_week_label(datetime.now(client_tz))
     week_points = get_weekly_points(db, current_user.id, week_label)
     week_queued = get_weekly_queued_points(db, current_user.id, week_label)
     week_sats = points_to_sats(week_points)
@@ -118,11 +121,12 @@ def get_my_stats(
 def get_my_weekly_points(
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
+    x_client_timezone: str = Header(default="Asia/Seoul"),
 ) -> dict:
-    week_label = get_week_label()
+    client_tz = _parse_tz(x_client_timezone)
+    week_label = get_week_label(datetime.now(client_tz))
     year, week = int(week_label[:4]), int(week_label[6:])
-    # Monday of current ISO week (KST)
-    monday = datetime.fromisocalendar(year, week, 1).replace(tzinfo=KST)
+    monday = datetime.fromisocalendar(year, week, 1).replace(tzinfo=client_tz)
     sunday = monday + timedelta(days=6)
     start_date = monday.date().isoformat()
     end_date = sunday.date().isoformat()
