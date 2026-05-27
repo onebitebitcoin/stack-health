@@ -6,7 +6,7 @@ import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 import type { User } from '../api/types'
 import LogoMark from '../components/LogoMark'
-import UserAvatar, { getProfileColor } from '../components/UserAvatar'
+import { getProfileColor } from '../components/UserAvatar'
 
 const PROFILE_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f97316',
@@ -28,7 +28,7 @@ export default function SetupUsernamePage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [uploadedAvatarUrl, setUploadedAvatarUrl] = useState<string | null>(null)
+  const [, setUploadedAvatarUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [selectedColor] = useState(() => PROFILE_COLORS[Math.floor(Math.random() * PROFILE_COLORS.length)])
   const fileInputRef = useRef<HTMLInputElement>(null)
