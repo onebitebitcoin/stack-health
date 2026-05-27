@@ -11,6 +11,7 @@ echo "[deploy] backend 의존성 설치..."
 backend/.venv/bin/pip install --quiet -r backend/requirements.txt
 
 echo "[deploy] frontend 빌드..."
+set -a; source "$APP_DIR/.env"; set +a
 cd frontend && npm ci --silent && npm run build
 cd "$APP_DIR"
 

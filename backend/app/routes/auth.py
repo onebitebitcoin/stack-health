@@ -135,7 +135,9 @@ def google_login() -> RedirectResponse:
 
 
 @router.get("/google/callback")
-async def google_callback(code: str, db: Session = Depends(get_db)) -> RedirectResponse:
+async def google_callback(code: str | None = None, error: str | None = None, db: Session = Depends(get_db)) -> RedirectResponse:
+    if error or not code:
+        return RedirectResponse(url=f"{settings.app_base_url}/?error=google_auth_failed")
     try:
         tokens = await exchange_code(code)
         user_info = await get_google_user_info(tokens["access_token"])

@@ -52,7 +52,7 @@ function Layout() {
   }, [])
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
+    const params = new URLSearchParams(location.search)
     const googleToken = params.get('google_token')
     if (!googleToken) return
     const isNew = params.get('new_user') === '1'
