@@ -6,6 +6,7 @@ import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { MERGE_POLL_INTERVAL_MS } from '../lib/constants'
 import type { Challenge } from '../api/types'
+import { isAxiosError } from 'axios'
 
 const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as const
 type Tag = (typeof ALLOWED_TAGS)[number]
@@ -14,7 +15,32 @@ const STEPS = ['영상 선택', '태그·챌린지', '음성 녹음', '설명·�
 const MAX_RECORD_SECONDS = 30
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
-const PIPELINE_JOB_KEY = 'upload_pipeline_job_id'
+const PIPELINE_JOB_KEY = 'upload_pipeline_job'
+const PIPELINE_JOB_MAX_AGE_MS = 23 * 60 * 60 * 1000 // 23h (Redis TTL is 24h)
+
+function saveJob(jobId: string) {
+  localStorage.setItem(PIPELINE_JOB_KEY, JSON.stringify({ jobId, savedAt: Date.now() }))
+}
+
+function loadJob(): string | null {
+  try {
+    const raw = localStorage.getItem(PIPELINE_JOB_KEY)
+    if (!raw) return null
+    const { jobId, savedAt } = JSON.parse(raw) as { jobId: string; savedAt: number }
+    if (!jobId || Date.now() - savedAt > PIPELINE_JOB_MAX_AGE_MS) {
+      localStorage.removeItem(PIPELINE_JOB_KEY)
+      return null
+    }
+    return jobId
+  } catch {
+    localStorage.removeItem(PIPELINE_JOB_KEY)
+    return null
+  }
+}
+
+function clearJob() {
+  localStorage.removeItem(PIPELINE_JOB_KEY)
+}
 
 function getSupportedAudioMimeType(): string {
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return ''
@@ -62,9 +88,9 @@ export default function UploadPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const recordedSecondsRef = useRef(0)
 
-  // On mount: resume pending job from localStorage
+  // On mount: resume pending job from localStorage (checks TTL)
   useEffect(() => {
-    const savedJobId = localStorage.getItem(PIPELINE_JOB_KEY)
+    const savedJobId = loadJob()
     if (savedJobId) {
       setPipelineJobId(savedJobId)
       setPipelineStatus('pending')
@@ -76,9 +102,13 @@ export default function UploadPage() {
     }
   }, [])
 
-  const handleJobCompleted = useCallback((pts: number) => {
+  const stopPolling = useCallback(() => {
     if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null }
-    localStorage.removeItem(PIPELINE_JOB_KEY)
+  }, [])
+
+  const handleJobCompleted = useCallback((pts: number) => {
+    stopPolling()
+    clearJob()
     setPointsEarned(pts)
     setDone(true)
     qc.invalidateQueries({ queryKey: ['my-stats'] }).catch(() => undefined)
@@ -89,7 +119,15 @@ export default function UploadPage() {
     qc.invalidateQueries({ queryKey: ['leaderboard-week'] }).catch(() => undefined)
     qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
     qc.invalidateQueries({ queryKey: ['my-challenges-upload'] }).catch(() => undefined)
-  }, [qc])
+  }, [stopPolling, qc])
+
+  const abortJob = useCallback((msg: string) => {
+    stopPolling()
+    clearJob()
+    setPipelineJobId(null)
+    setPipelineStatus(null)
+    setError(msg)
+  }, [stopPolling])
 
   const pollJob = useCallback(async (jobId: string) => {
     try {
@@ -101,16 +139,17 @@ export default function UploadPage() {
       if (status === 'completed') {
         handleJobCompleted(points_earned ?? 0)
       } else if (status === 'failed') {
-        if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null }
-        localStorage.removeItem(PIPELINE_JOB_KEY)
-        setPipelineJobId(null)
-        setPipelineStatus(null)
-        setError(jobError || '처리 중 오류가 발생했습니다')
+        abortJob(jobError || '처리 중 오류가 발생했습니다')
       }
-    } catch {
-      // network error — retry on next tick
+      // pending / processing / retrying → keep polling
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 404) {
+        // Job expired or unknown — stop polling, clear storage
+        abortJob('업로드 결과를 확인할 수 없습니다. 피드에서 영상을 확인해주세요.')
+      }
+      // Other network errors → retry silently on next interval
     }
-  }, [handleJobCompleted])
+  }, [handleJobCompleted, abortJob])
 
   // Start/restart polling when pipelineJobId is set
   useEffect(() => {
@@ -292,7 +331,7 @@ export default function UploadPage() {
       )
 
       const { job_id } = res.data.data
-      localStorage.setItem(PIPELINE_JOB_KEY, job_id)
+      saveJob(job_id)
       setPipelineJobId(job_id)
       setPipelineStatus('pending')
     } catch (err: unknown) {
@@ -362,7 +401,7 @@ export default function UploadPage() {
           <div className="w-full max-w-sm rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 text-center">
             {error}
             <button
-              onClick={() => { setError(''); setPipelineJobId(null); setPipelineStatus(null) }}
+              onClick={() => { clearJob(); setError(''); setPipelineJobId(null); setPipelineStatus(null) }}
               className="block mx-auto mt-2 text-xs text-theme-muted underline"
             >
               처음으로
