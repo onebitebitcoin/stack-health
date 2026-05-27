@@ -233,7 +233,7 @@ export default function HistoryPage() {
                     />
                     {/* 날짜 오버레이 */}
                     <div className="absolute inset-0 bg-black/30" />
-                    <span className="absolute bottom-1 left-0 right-0 text-center text-[11px] font-bold text-white leading-none">
+                    <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white leading-none">
                       {cell.day}
                     </span>
                     {/* 복수 영상 인디케이터 */}
