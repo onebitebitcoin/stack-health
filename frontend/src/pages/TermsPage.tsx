@@ -12,33 +12,26 @@ export default function TermsPage() {
         <h1 className="font-bold text-theme-primary">이용약관</h1>
       </div>
 
-      {/* 서비스 가이드 */}
-      <div className="px-4 pt-5 pb-4 space-y-3">
+      <div className="px-4 pt-5 pb-6 space-y-6 text-sm text-theme-muted leading-relaxed">
         <p className="text-xs font-semibold uppercase tracking-widest text-theme-muted">서비스 가이드</p>
-        <div className="rounded-2xl bg-theme-surface p-4 space-y-4">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-theme-primary">Stack Health</p>
-            <p className="text-xs text-theme-muted leading-relaxed">5~30초 운동 영상을 하루 최대 3회 업로드하면 땀(포인트)을 적립합니다.</p>
-          </div>
-          <div className="h-px bg-theme-border" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-theme-primary">Lightning 보상</p>
-            <p className="text-xs text-theme-muted leading-relaxed">매주 적립된 땀은 비트코인(sats)으로 Lightning 주소에 자동 지급됩니다. 설정에서 Lightning 주소를 먼저 등록하세요.</p>
-          </div>
-          <div className="h-px bg-theme-border" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-theme-primary">업로드 정책</p>
-            <p className="text-xs text-theme-muted leading-relaxed">본인이 직접 촬영한 운동 영상만 업로드 가능합니다. 부적절한 콘텐츠는 즉시 삭제되고 계정이 정지됩니다.</p>
-          </div>
-          <div className="h-px bg-theme-border" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-theme-primary">포인트 정산</p>
-            <p className="text-xs text-theme-muted leading-relaxed">업로드 후 24시간이 지나야 포인트가 확정됩니다. 확정 전 영상을 삭제하면 포인트가 회수됩니다.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 pb-6 space-y-6 text-sm text-theme-muted leading-relaxed">
+        <section>
+          <h2 className="font-semibold text-theme-primary mb-2">Stack Health</h2>
+          <p>5~30초 운동 영상을 하루 최대 3회 업로드하면 땀(포인트)을 적립합니다.</p>
+        </section>
+        <section>
+          <h2 className="font-semibold text-theme-primary mb-2">Lightning 보상</h2>
+          <p>매주 적립된 땀은 비트코인(sats)으로 Lightning 주소에 자동 지급됩니다. 설정에서 Lightning 주소를 먼저 등록하세요.</p>
+        </section>
+        <section>
+          <h2 className="font-semibold text-theme-primary mb-2">업로드 정책</h2>
+          <p>본인이 직접 촬영한 운동 영상만 업로드 가능합니다. 부적절한 콘텐츠는 즉시 삭제되고 계정이 정지됩니다.</p>
+        </section>
+        <section>
+          <h2 className="font-semibold text-theme-primary mb-2">포인트 정산</h2>
+          <p>업로드 후 24시간이 지나야 포인트가 확정됩니다. 확정 전 영상을 삭제하면 포인트가 회수됩니다.</p>
+        </section>
+        <div className="h-px bg-theme-border" />
+        <p className="text-xs font-semibold uppercase tracking-widest text-theme-muted">이용약관</p>
         <section>
           <h2 className="font-semibold text-theme-primary mb-2">제1조 (서비스 개요)</h2>
           <p>Stack Health(이하 "서비스")는 사용자가 운동 영상을 업로드하고 커뮤니티와 공유하는 플랫폼입니다.</p>
