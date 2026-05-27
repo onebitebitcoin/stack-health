@@ -213,7 +213,7 @@ export default function ProfilePage() {
 
       {/* ── 주간 이력 collapse ── */}
       {showWeeklyHistory && (
-        <div className="mx-4 mb-4 rounded-b-2xl bg-theme-surface overflow-hidden border-t border-theme-border">
+        <div className="mx-4 mb-4 rounded-b-2xl bg-theme-surface overflow-hidden border-t border-theme-border flex-shrink-0">
           {/* 누적 합계 */}
           <div className="flex items-center justify-between px-5 py-3 border-b border-theme-border">
             <span className="text-xs font-medium text-theme-muted">누적 총 땀</span>
