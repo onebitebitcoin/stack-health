@@ -14,6 +14,8 @@ from app.models.claim import LightningClaim
 from app.models.comment import Comment
 from app.models.mining import MiningRound
 from app.models.post import Post
+from app.models.post_like import PostLike
+from app.models.post_view import PostView
 from app.models.reward import RewardPoint
 from app.models.video import Video
 from app.models.user import User
@@ -180,6 +182,9 @@ def delete_video(
 
     post = db.query(Post).filter(Post.video_id == video_id).first()
     if post:
+        db.query(PostView).filter(PostView.post_id == post.id).delete()
+        db.query(PostLike).filter(PostLike.post_id == post.id).delete()
+        db.query(Comment).filter(Comment.post_id == post.id).delete()
         db.delete(post)
     db.delete(video)
 
