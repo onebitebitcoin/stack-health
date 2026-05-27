@@ -121,7 +121,7 @@ def revoke_queued_upload_reward(db: Session, video_id: int) -> int:
         .all()
     )
     for reward in rewards:
-        reward.status = REWARD_STATUS_REVOKED
+        db.delete(reward)
     if rewards:
         db.flush()
     return len(rewards)

@@ -9,12 +9,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.comment import Comment
 from app.models.post import Post
-from app.models.reward import RewardPoint
+from app.models.post_like import PostLike
+from app.models.post_view import PostView
 from app.models.video import Video
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.video import PostSchema
-from app.services.reward import get_week_label
 
 KST = timezone(timedelta(hours=9))
 
@@ -86,15 +86,14 @@ def get_feed(
         )
         if viewer_id:
             liked_rows = (
-                db.query(RewardPoint.reference_id)
+                db.query(PostLike.post_id)
                 .filter(
-                    RewardPoint.user_id == viewer_id,
-                    RewardPoint.reason == "like_given",
-                    RewardPoint.reference_id.in_(post_ids),
+                    PostLike.user_id == viewer_id,
+                    PostLike.post_id.in_(post_ids),
                 )
                 .all()
             )
-            liked_post_ids = {r.reference_id for r in liked_rows}
+            liked_post_ids = {r.post_id for r in liked_rows}
 
     return {
         "data": {
@@ -115,12 +114,8 @@ def like_post(
         raise HTTPException(status_code=404, detail="Post not found")
 
     existing_like = (
-        db.query(RewardPoint)
-        .filter(
-            RewardPoint.user_id == current_user.id,
-            RewardPoint.reason == "like_given",
-            RewardPoint.reference_id == post_id,
-        )
+        db.query(PostLike)
+        .filter(PostLike.user_id == current_user.id, PostLike.post_id == post_id)
         .first()
     )
 
@@ -130,13 +125,7 @@ def like_post(
         db.commit()
         return {"data": {"liked": False, "like_count": post.like_count}}
 
-    like_record = RewardPoint(
-        user_id=current_user.id,
-        week_label=get_week_label(),
-        points=0,
-        reason="like_given",
-        reference_id=post_id,
-    )
+    like_record = PostLike(user_id=current_user.id, post_id=post_id)
     db.add(like_record)
 
     post.like_count += 1
@@ -157,12 +146,11 @@ def view_post(
     now_utc = datetime.now(timezone.utc)
     today_start = datetime(now_utc.year, now_utc.month, now_utc.day)
     already_viewed = (
-        db.query(RewardPoint)
+        db.query(PostView)
         .filter(
-            RewardPoint.user_id == current_user.id,
-            RewardPoint.reason == "view_given",
-            RewardPoint.reference_id == post_id,
-            RewardPoint.created_at >= today_start,
+            PostView.user_id == current_user.id,
+            PostView.post_id == post_id,
+            PostView.created_at >= today_start,
         )
         .first()
     )
@@ -170,14 +158,7 @@ def view_post(
     post.view_count += 1
 
     if not already_viewed:
-        view_record = RewardPoint(
-            user_id=current_user.id,
-            week_label=get_week_label(),
-            points=0,
-            reason="view_given",
-            reference_id=post_id,
-        )
-        db.add(view_record)
+        db.add(PostView(user_id=current_user.id, post_id=post_id))
 
     db.commit()
     return {"data": {"view_count": post.view_count}}
