@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useAuthStore } from './store/auth'
 import client from './api/client'
 import type { User } from './api/types'
@@ -31,13 +31,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 const HIDE_NAV = ['/login', '/admin', '/terms', '/team', '/setup-username']
 
-const ROOT_PATHS = new Set(['/', '/challenges', '/rewards', '/profile'])
-
 function Layout() {
   const location = useLocation()
   const { pathname } = location
   const hideNav = HIDE_NAV.includes(pathname)
-  const prevPathRef = useRef(pathname)
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
   const { token, setUser } = useAuthStore()
@@ -81,13 +78,10 @@ function Layout() {
   }, [])
 
   const isFlutter = isFlutterWebView()
-  const isTabSwitch = ROOT_PATHS.has(pathname) && ROOT_PATHS.has(prevPathRef.current)
-  const animClass = isTabSwitch ? '' : 'flutter-page-enter'
-  useEffect(() => { prevPathRef.current = pathname }, [pathname])
 
   return (
     <div className="relative h-full">
-      <div key={location.key} className={`absolute inset-0 ${animClass}`}>
+      <div key={location.key} className="absolute inset-0 page-enter">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/share/:postId" element={<SharedVideoPage />} />
