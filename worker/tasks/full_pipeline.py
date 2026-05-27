@@ -175,6 +175,52 @@ def _proof_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
                 os.unlink(tmp)
 
 
+def _compress_video(r2, video_key: str) -> str | None:
+    """Re-encode video to reduce file size. Returns new r2_key or None on failure."""
+    tmp_input = tmp_output = None
+    try:
+        tmp_input = _make_tmp(".mp4")
+        tmp_output = _make_tmp(".mp4")
+
+        resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=video_key)
+        with open(tmp_input, "wb") as f:
+            f.write(resp["Body"].read())
+
+        probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-select_streams", "a:0",
+             "-show_entries", "stream=codec_type", "-of", "csv=p=0", tmp_input],
+            capture_output=True, text=True, timeout=30,
+        )
+        has_audio = bool(probe.stdout.strip())
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", tmp_input,
+            "-vcodec", "libx264",
+            "-crf", "26",
+            "-preset", "fast",
+            "-pix_fmt", "yuv420p",
+        ]
+        cmd += ["-c:a", "aac", "-b:a", "96k"] if has_audio else ["-an"]
+        cmd += ["-movflags", "+faststart", tmp_output]
+
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
+        if result.returncode != 0:
+            raise RuntimeError(f"ffmpeg compress: {result.stderr.decode()[:500]}")
+
+        compressed_key = f"videos/c-{uuid.uuid4()}.mp4"
+        with open(tmp_output, "rb") as f:
+            r2.put_object(Bucket=R2_BUCKET_NAME, Key=compressed_key, Body=f, ContentType="video/mp4")
+        return compressed_key
+    except Exception as e:
+        logger.warning("Video compression failed (using original): %s", e)
+        return None
+    finally:
+        for tmp in [tmp_input, tmp_output]:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
+
+
 def run_full_pipeline(job: dict) -> dict:
     """Full upload pipeline: optional merges → DB commit."""
     from app.models.post import Post
@@ -203,6 +249,16 @@ def run_full_pipeline(job: dict) -> dict:
         if result:
             current_key, final_proof_url = result
             logger.info("[full-pipeline] job=%s proof merged → %s", job_id, current_key)
+
+    pre_compress_key = current_key
+    compressed_key = _compress_video(r2, current_key)
+    if compressed_key:
+        try:
+            r2.delete_object(Bucket=R2_BUCKET_NAME, Key=pre_compress_key)
+        except Exception:
+            pass
+        current_key = compressed_key
+        logger.info("[full-pipeline] job=%s compressed → %s", job_id, current_key)
 
     db = SessionLocal()
     try:
