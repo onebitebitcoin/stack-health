@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.challenge import ChallengeParticipation
+from app.models.comment import Comment
 from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.user import User
@@ -40,6 +41,7 @@ class PublicPostSchema(BaseModel):
     cdn_url: str
     like_count: int
     view_count: int
+    comment_count: int
     caption: str | None
     created_at: datetime
 
@@ -254,12 +256,22 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
         .limit(50)
         .all()
     )
+    post_ids = [p.id for p in posts_raw]
+    comment_counts: dict[int, int] = {}
+    if post_ids:
+        comment_counts = dict(
+            db.query(Comment.post_id, sqlfunc.count(Comment.id))
+            .filter(Comment.post_id.in_(post_ids))
+            .group_by(Comment.post_id)
+            .all()
+        )
     posts = [
         PublicPostSchema(
             id=p.id,
             cdn_url=p.video.cdn_url,
             like_count=p.like_count,
             view_count=p.view_count,
+            comment_count=comment_counts.get(p.id, 0),
             caption=p.caption,
             created_at=p.created_at,
         )

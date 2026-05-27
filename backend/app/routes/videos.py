@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
 from app.database import get_db
+from app.models.comment import Comment
 from app.models.post import Post
 from app.models.user import User
 from app.models.video import Video
+from sqlalchemy import func as sqlfunc
 from app.routes.auth import get_current_user, get_optional_user
 from app.routes.challenges import increment_challenge_upload
 from app.schemas.video import (
@@ -183,6 +185,16 @@ def my_posts(
         .count() > 0
     )
 
+    post_ids = [p.id for p in posts]
+    comment_counts: dict[int, int] = {}
+    if post_ids:
+        comment_counts = dict(
+            db.query(Comment.post_id, sqlfunc.count(Comment.id))
+            .filter(Comment.post_id.in_(post_ids))
+            .group_by(Comment.post_id)
+            .all()
+        )
+
     result = []
     for post in posts:
         tags_raw = post.tags or "[]"
@@ -199,7 +211,7 @@ def my_posts(
                 tags=tags,
                 like_count=post.like_count,
                 view_count=post.view_count,
-                comment_count=0,
+                comment_count=comment_counts.get(post.id, 0),
                 created_at=post.created_at,
                 cdn_url=post.video.cdn_url,
                 username=current_user.username,
@@ -229,6 +241,7 @@ def get_post(
         tags = json.loads(post.tags or "[]")
     except (json.JSONDecodeError, TypeError):
         tags = []
+    comment_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
     post_schema = PostSchema(
         id=post.id,
         video_id=post.video_id,
@@ -237,7 +250,7 @@ def get_post(
         tags=tags,
         like_count=post.like_count,
         view_count=post.view_count,
-        comment_count=0,
+        comment_count=comment_count,
         created_at=post.created_at,
         cdn_url=video.cdn_url,
         username=user.username,

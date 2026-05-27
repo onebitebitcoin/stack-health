@@ -3,7 +3,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import type { InfiniteData } from '@tanstack/react-query'
 import {
   LogOut, Droplets, ShieldCheck, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, ArrowLeft, Award, Trash2,
+  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, MessageCircle, ArrowLeft, Award, Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
@@ -69,7 +69,7 @@ export default function ProfilePage() {
     enabled: !!user && showWeeklyHistory,
   })
 
-  type MyPost = { id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number }
+  type MyPost = { id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number; comment_count: number }
   type MyPostsPage = { posts: MyPost[]; has_more: boolean; week_offset: number }
 
   const {
@@ -489,6 +489,10 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-1">
                     <Heart size={9} strokeWidth={2} />
                     <span className="text-[9px] font-medium">{post.like_count}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <MessageCircle size={9} strokeWidth={2} />
+                    <span className="text-[9px] font-medium">{post.comment_count}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Eye size={9} strokeWidth={2} />

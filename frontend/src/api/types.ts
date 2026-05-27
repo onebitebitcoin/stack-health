@@ -180,6 +180,7 @@ export interface PublicPost {
   cdn_url: string
   like_count: number
   view_count: number
+  comment_count: number
   caption: string | null
   created_at: string
 }

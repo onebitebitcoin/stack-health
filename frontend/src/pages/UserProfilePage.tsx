@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Trophy, ArrowLeft, Dumbbell } from 'lucide-react'
+import { Trophy, ArrowLeft, Dumbbell, Heart, Eye, MessageCircle } from 'lucide-react'
 import client from '../api/client'
 import type { UserProfile } from '../api/types'
 import LoadingScreen from '../components/LoadingScreen'
@@ -94,12 +94,20 @@ export default function UserProfilePage() {
                   playsInline
                   preload="metadata"
                 />
-                <div className="absolute bottom-1 left-1">
-                  <span className="text-[10px] text-white drop-shadow">
-                    {post.view_count > 999
-                      ? `${Math.floor(post.view_count / 1000)}k`
-                      : post.view_count}
-                  </span>
+                <div className="absolute inset-0 bg-black/30" />
+                <div className="absolute bottom-1.5 left-1 right-1 flex items-center justify-between text-white/90">
+                  <div className="flex items-center gap-1">
+                    <Heart size={9} strokeWidth={2} />
+                    <span className="text-[9px] font-medium">{post.like_count}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <MessageCircle size={9} strokeWidth={2} />
+                    <span className="text-[9px] font-medium">{post.comment_count}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Eye size={9} strokeWidth={2} />
+                    <span className="text-[9px] font-medium">{post.view_count}</span>
+                  </div>
                 </div>
               </div>
             ))}
