@@ -140,45 +140,14 @@ export default function SettingsPage() {
             </div>
 
             {/* 이메일 */}
-            <div className={ROW}>
-              <span className={LABEL}>이메일</span>
-              <span className="text-sm text-theme-subtle truncate max-w-[180px]">{user?.email}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 화면 */}
-        <div>
-          <p className={SECTION}>화면</p>
-          <div className={GROUP}>
-            <div className={ROW}>
-              <span className={LABEL}>테마</span>
-              <div className="flex items-center gap-1 rounded-lg bg-theme-surface2 p-0.5">
-                <button
-                  onClick={() => handleThemeChange(true)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    isDark ? 'bg-theme-page text-theme-primary shadow-sm' : 'text-theme-muted'
-                  }`}
-                >
-                  <Moon size={11} strokeWidth={1.5} />다크
-                </button>
-                <button
-                  onClick={() => handleThemeChange(false)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    !isDark ? 'bg-theme-page text-theme-primary shadow-sm' : 'text-theme-muted'
-                  }`}
-                >
-                  <Sun size={11} strokeWidth={1.5} />라이트
-                </button>
+            <div className={`${DIVIDER}`}>
+              <div className={ROW}>
+                <span className={LABEL}>이메일</span>
+                <span className="text-sm text-theme-subtle truncate max-w-[180px]">{user?.email}</span>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* 결제 */}
-        <div>
-          <p className={SECTION}>결제</p>
-          <div className={GROUP}>
+            {/* Lightning 주소 */}
             <div className={editingLn ? DIVIDER : ''}>
               <div className={ROW}>
                 <div className="flex items-center gap-2">
@@ -215,6 +184,34 @@ export default function SettingsPage() {
                   </div>
                 </form>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* 화면 */}
+        <div>
+          <p className={SECTION}>화면</p>
+          <div className={GROUP}>
+            <div className={ROW}>
+              <span className={LABEL}>테마</span>
+              <div className="flex items-center gap-1 rounded-lg bg-theme-surface2 p-0.5">
+                <button
+                  onClick={() => handleThemeChange(true)}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isDark ? 'bg-theme-page text-theme-primary shadow-sm' : 'text-theme-muted'
+                  }`}
+                >
+                  <Moon size={11} strokeWidth={1.5} />다크
+                </button>
+                <button
+                  onClick={() => handleThemeChange(false)}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    !isDark ? 'bg-theme-page text-theme-primary shadow-sm' : 'text-theme-muted'
+                  }`}
+                >
+                  <Sun size={11} strokeWidth={1.5} />라이트
+                </button>
+              </div>
             </div>
           </div>
         </div>
