@@ -323,11 +323,10 @@ def delete_user(
 
     video_ids = [v.id for v in videos]
     if video_ids:
-        db.query(Comment).filter(
-            Comment.post_id.in_(
-                db.query(Post.id).filter(Post.video_id.in_(video_ids))
-            )
-        ).delete(synchronize_session=False)
+        post_id_subq = db.query(Post.id).filter(Post.video_id.in_(video_ids))
+        db.query(PostView).filter(PostView.post_id.in_(post_id_subq)).delete(synchronize_session=False)
+        db.query(PostLike).filter(PostLike.post_id.in_(post_id_subq)).delete(synchronize_session=False)
+        db.query(Comment).filter(Comment.post_id.in_(post_id_subq)).delete(synchronize_session=False)
         db.query(Post).filter(Post.video_id.in_(video_ids)).delete(synchronize_session=False)
         db.query(Video).filter(Video.user_id == user_id).delete(synchronize_session=False)
 
