@@ -85,13 +85,13 @@ def get_daily_upload_count(db: Session, user_id: int) -> int:
 
 def settle_queued_rewards(db: Session, user_id: int | None = None, now: datetime | None = None) -> int:
     """Move upload rewards from queued to fixed once content survived 24 hours."""
-    settled_at = now or datetime.now(timezone.utc)
+    settled_at = now or datetime.now(KST)
     if settled_at.tzinfo is None:
-        settled_at_utc = settled_at.replace(tzinfo=timezone.utc)
+        settled_at_kst = settled_at.replace(tzinfo=KST)
     else:
-        settled_at_utc = settled_at.astimezone(timezone.utc)
-    cutoff = settled_at_utc.replace(tzinfo=None) - REWARD_SETTLEMENT_DELAY
-    settlement_week_label = get_week_label(settled_at_utc.astimezone(KST))
+        settled_at_kst = settled_at.astimezone(KST)
+    cutoff = settled_at_kst.replace(tzinfo=None) - REWARD_SETTLEMENT_DELAY
+    settlement_week_label = get_week_label(settled_at_kst)
 
     query = db.query(RewardPoint).filter(
         RewardPoint.status == REWARD_STATUS_QUEUED,
