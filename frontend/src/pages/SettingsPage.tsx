@@ -37,7 +37,6 @@ export default function SettingsPage() {
       const res = await client.get<{ data: { android_url: string | null; android_filename: string | null } }>('/admin/app-links')
       return res.data.data
     },
-    staleTime: 5 * 60_000,
   })
 
   const DARK_THEMES: Theme[] = ['volt', 'sapphire', 'indigo']

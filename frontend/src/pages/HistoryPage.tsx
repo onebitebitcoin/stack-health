@@ -34,7 +34,6 @@ export default function HistoryPage() {
       const res = await client.get('/history', { params: { year, month } })
       return res.data.data
     },
-    staleTime: 60_000,
   })
 
   function prevMonth() {

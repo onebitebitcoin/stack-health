@@ -121,7 +121,6 @@ export default function ProfilePage() {
       const res = await client.get('/history', { params: { year, month } })
       return res.data.data
     },
-    staleTime: 60_000,
     enabled: !!user,
   })
 

@@ -83,7 +83,6 @@ export default function LeaderboardPage() {
       )
       return res.data as unknown as LeaderboardResponse
     },
-    staleTime: 60_000,
   })
 
   const entries = data?.data ?? []
