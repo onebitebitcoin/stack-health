@@ -309,8 +309,11 @@ export default function UploadPage() {
           {caption && <p className="text-sm text-theme-muted mb-4">"{caption}"</p>}
           <div className="flex items-center justify-between rounded-xl bg-theme-surface2 px-4 py-3">
             <span className="text-xs text-theme-muted">흘린 땀</span>
-            <span className="text-lg font-bold text-accent">+{(pointsEarned / 100).toFixed(1)} L</span>
+            <span className="text-lg font-bold text-accent">+{pointsEarned.toFixed(1)} L</span>
           </div>
+          <p className="text-xs text-theme-subtle mt-3 leading-relaxed">
+            업로드 후 24시간이 지나면 땀이 확정돼요. 그 전에 영상을 삭제하면 취소됩니다.
+          </p>
         </div>
         <div className="flex w-full max-w-sm flex-col gap-3">
           <button
