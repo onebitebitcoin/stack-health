@@ -619,6 +619,46 @@ export default function AdminPage() {
       {selectedUserId !== null && (
         <UserDetailPanel userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
       )}
+
+      {/* 영상 삭제 확인 모달 */}
+      {deleteVideoConfirmId !== null && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteVideoConfirmId(null)}>
+          <div className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-bold text-theme-primary mb-1">영상 삭제</p>
+            <p className="text-sm text-theme-muted mb-5">삭제하면 복구할 수 없습니다.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteVideoConfirmId(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">취소</button>
+              <button
+                onClick={() => { deleteVideo.mutate(deleteVideoConfirmId); setDeleteVideoConfirmId(null) }}
+                disabled={deleteVideo.isPending}
+                className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {deleteVideo.isPending ? '삭제 중...' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 유저 삭제 확인 모달 */}
+      {deleteUserConfirm !== null && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteUserConfirm(null)}>
+          <div className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-bold text-theme-primary mb-1">@{deleteUserConfirm.username} 계정 삭제</p>
+            <p className="text-sm text-theme-muted mb-5">영상, 포인트, 클레임 등 모든 데이터가 삭제됩니다.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteUserConfirm(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">취소</button>
+              <button
+                onClick={() => { deleteUser.mutate(deleteUserConfirm.id); setDeleteUserConfirm(null) }}
+                disabled={deleteUser.isPending}
+                className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {deleteUser.isPending ? '삭제 중...' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   )
@@ -1078,45 +1118,6 @@ function MiningPanel() {
         )}
       </div>
 
-      {/* 영상 삭제 확인 모달 */}
-      {deleteVideoConfirmId !== null && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteVideoConfirmId(null)}>
-          <div className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-bold text-theme-primary mb-1">영상 삭제</p>
-            <p className="text-sm text-theme-muted mb-5">삭제하면 복구할 수 없습니다.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteVideoConfirmId(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">취소</button>
-              <button
-                onClick={() => { deleteVideo.mutate(deleteVideoConfirmId); setDeleteVideoConfirmId(null) }}
-                disabled={deleteVideo.isPending}
-                className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {deleteVideo.isPending ? '삭제 중...' : '삭제'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 유저 삭제 확인 모달 */}
-      {deleteUserConfirm !== null && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteUserConfirm(null)}>
-          <div className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-bold text-theme-primary mb-1">@{deleteUserConfirm.username} 계정 삭제</p>
-            <p className="text-sm text-theme-muted mb-5">영상, 포인트, 클레임 등 모든 데이터가 삭제됩니다.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteUserConfirm(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">취소</button>
-              <button
-                onClick={() => { deleteUser.mutate(deleteUserConfirm.id); setDeleteUserConfirm(null) }}
-                disabled={deleteUser.isPending}
-                className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {deleteUser.isPending ? '삭제 중...' : '삭제'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
