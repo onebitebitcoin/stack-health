@@ -24,9 +24,14 @@ def _to_kst_date(dt: datetime) -> str:
 
 
 def _compute_streak(workout_dates: set[str], today_kst: str) -> int:
-    """Count consecutive days ending at today (KST)."""
+    """Count consecutive days ending at today or yesterday (KST).
+    If today has no workout yet, start from yesterday so the streak
+    doesn't drop to 0 just because the day hasn't been completed yet.
+    """
+    today = datetime.strptime(today_kst, "%Y-%m-%d").date()
+    start = today if today_kst in workout_dates else today - timedelta(days=1)
     streak = 0
-    current = datetime.strptime(today_kst, "%Y-%m-%d").date()
+    current = start
     while True:
         date_str = current.strftime("%Y-%m-%d")
         if date_str not in workout_dates:
