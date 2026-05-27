@@ -381,22 +381,20 @@ export default function UploadPage() {
     )
   }
 
-  // ── Processing screen (after upload, waiting for worker) ──
-  if (pipelineJobId) {
-    const statusLabel =
-      pipelineStatus === 'processing' ? '영상 처리 중...'
-      : pipelineStatus === 'retrying' ? '다시 시도 중...'
-      : '업로드 대기 중...'
-
+  // ── Upload / Processing screen ──
+  if (uploading || pipelineJobId) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-theme-page px-6">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-accent border-t-transparent" />
-        <div className="text-center">
-          <p className="text-base font-semibold text-theme-primary">{statusLabel}</p>
-          <p className="mt-2 text-sm text-theme-muted">
-            다른 앱을 사용하셔도 괜찮아요.<br />돌아오시면 결과를 바로 확인할 수 있어요.
-          </p>
-        </div>
+        <p className="text-base font-semibold text-theme-primary">업로드 중...</p>
+        {uploading && (
+          <div className="w-64 flex flex-col items-center gap-1.5">
+            <div className="h-1.5 w-full rounded-full bg-theme-surface2">
+              <div className="h-1.5 rounded-full bg-accent transition-all" style={{ width: `${uploadProgress}%` }} />
+            </div>
+            <span className="text-xs text-theme-muted">{uploadProgress}%</span>
+          </div>
+        )}
         {error && (
           <div className="w-full max-w-sm rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 text-center">
             {error}
@@ -408,23 +406,6 @@ export default function UploadPage() {
             </button>
           </div>
         )}
-      </div>
-    )
-  }
-
-  // ── Upload overlay ──
-  if (uploading) {
-    return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
-        <Upload size={48} className="animate-bounce text-accent" />
-        <p className="text-lg font-semibold text-theme-primary">업로드 중...</p>
-        <div className="h-2 w-64 rounded-full bg-theme-surface2">
-          <div className="h-2 rounded-full bg-accent transition-all" style={{ width: `${uploadProgress}%` }} />
-        </div>
-        <p className="text-sm text-theme-muted">{uploadProgress}%</p>
-        <p className="text-xs text-theme-subtle text-center">
-          업로드가 완료되면 앱을 전환해도<br />서버에서 자동으로 처리됩니다.
-        </p>
       </div>
     )
   }
