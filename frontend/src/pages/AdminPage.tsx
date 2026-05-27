@@ -199,7 +199,11 @@ export default function AdminPage() {
 
   const deleteUser = useMutation({
     mutationFn: (id: number) => client.delete(`/admin/users/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users', userPage, userSearch] }).catch(() => undefined),
+    onSuccess: (_, id) => {
+      qc.setQueryData<AdminUsersResponse>(['admin-users', userPage, userSearch], (old) =>
+        old ? { ...old, users: old.users.filter((u) => u.id !== id) } : old
+      )
+    },
   })
 
   const { data: videosData, isLoading: videosLoading, isError: videosError } = useQuery<AdminVideosResponse>({
@@ -218,7 +222,11 @@ export default function AdminPage() {
 
   const deleteVideo = useMutation({
     mutationFn: (id: number) => client.delete(`/admin/videos/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-videos'] }).catch(() => undefined),
+    onSuccess: (_, id) => {
+      qc.setQueryData<AdminVideosResponse>(['admin-videos', videoPage], (old) =>
+        old ? { ...old, videos: old.videos.filter((v) => v.id !== id), total: old.total - 1 } : old
+      )
+    },
   })
 
   const { data: claims = [] } = useQuery<AdminClaim[]>({
@@ -232,7 +240,11 @@ export default function AdminPage() {
 
   const markPaid = useMutation({
     mutationFn: (id: number) => client.patch(`/admin/claims/${id}/mark-paid`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-claims'] }).catch(() => undefined),
+    onSuccess: (_, id) => {
+      qc.setQueryData<AdminClaim[]>(['admin-claims'], (old) =>
+        old?.map((c) => c.id === id ? { ...c, status: 'paid' as const } : c)
+      )
+    },
   })
 
   const { data: leaderboardData } = useQuery<AdminWeeklySummaryResponse>({

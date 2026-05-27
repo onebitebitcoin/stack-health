@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Dumbbell, Users, CheckCircle, Lock, Plus } from 'lucide-react'
+import { Search, Dumbbell, Users, CheckCircle, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
@@ -66,7 +66,7 @@ function ChallengeCard({
           {challenge.completed ? (
             <CheckCircle size={15} className="text-accent flex-shrink-0" />
           ) : challenge.joined ? (
-            <Lock size={13} className="text-theme-subtle flex-shrink-0" />
+            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-semibold text-accent flex-shrink-0">참여중</span>
           ) : null}
         </div>
       </div>
@@ -108,7 +108,7 @@ function ChallengeCard({
         {challenge.completed ? (
           <span className="text-[10px] font-semibold text-accent">완료</span>
         ) : challenge.joined ? (
-          <span className="text-[10px] text-theme-subtle">참여 중</span>
+          <span className="text-[10px] font-semibold text-accent">참여중</span>
         ) : (
           <button
             onClick={handleJoin}
@@ -149,8 +149,11 @@ export default function ChallengePage() {
     mutationFn: (id: number) => client.post(`/challenges/${id}/join`),
     onMutate: (id) => setJoiningId(id),
     onSettled: () => setJoiningId(null),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
+    onSuccess: (_, id) => {
+      qc.setQueriesData<Challenge[]>(
+        { queryKey: ['challenges'] },
+        (old) => old?.map((c) => c.id === id ? { ...c, joined: true, participant_count: c.participant_count + 1 } : c)
+      )
     },
   })
 

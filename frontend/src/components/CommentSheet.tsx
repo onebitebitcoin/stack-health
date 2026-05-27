@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Send, Trash2 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/react-query'
 import client from '../api/client'
-import type { Comment } from '../api/types'
+import type { Comment, FeedResponse } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
 interface CommentSheetProps {
@@ -51,6 +52,24 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
     enabled: open,
   })
 
+  function updateFeedCommentCount(delta: number) {
+    qc.setQueriesData<InfiniteData<FeedResponse>>(
+      { queryKey: ['feed'] },
+      (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            posts: page.posts.map((p) =>
+              p.id === postId ? { ...p, comment_count: p.comment_count + delta } : p
+            ),
+          })),
+        }
+      }
+    )
+  }
+
   const addComment = useMutation({
     mutationFn: async (text: string) => {
       await client.post(`/feed/${postId}/comments`, { content: text })
@@ -58,6 +77,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
     onSuccess: () => {
       setContent('')
       qc.invalidateQueries({ queryKey: ['comments', postId] }).catch(() => undefined)
+      updateFeedCommentCount(1)
     },
   })
 
@@ -67,6 +87,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['comments', postId] }).catch(() => undefined)
+      updateFeedCommentCount(-1)
     },
   })
 

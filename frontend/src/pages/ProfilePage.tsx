@@ -79,8 +79,11 @@ export default function ProfilePage() {
 
   const deleteMutation = useMutation({
     mutationFn: (postId: number) => client.delete(`/videos/posts/${postId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-posts'] })
+    onSuccess: (_, postId) => {
+      queryClient.setQueryData<{ id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number }[]>(
+        ['my-posts'],
+        (old) => old?.filter((p) => p.id !== postId) ?? []
+      )
       queryClient.invalidateQueries({ queryKey: ['history'] })
       queryClient.invalidateQueries({ queryKey: ['my-stats'] })
       setDeleteConfirmId(null)

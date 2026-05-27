@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Dumbbell, Users, CheckCircle, Lock, Trash2, CalendarDays, Edit2 } from 'lucide-react'
+import { ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays, Edit2 } from 'lucide-react'
 import client from '../api/client'
 import type { Challenge, ChallengeUpdateRequest } from '../api/types'
 import { getApiErrorMessage } from '../api/errors'
@@ -56,8 +56,13 @@ export default function ChallengeDetailPage() {
   const joinMutation = useMutation({
     mutationFn: () => client.post(`/challenges/${id}/join`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['challenge', id] })
-      qc.invalidateQueries({ queryKey: ['challenges'] })
+      qc.setQueryData<Challenge>(['challenge', id], (old) =>
+        old ? { ...old, joined: true, participant_count: old.participant_count + 1 } : old
+      )
+      qc.setQueriesData<Challenge[]>(
+        { queryKey: ['challenges'] },
+        (old) => old?.map((c) => c.id === Number(id) ? { ...c, joined: true, participant_count: c.participant_count + 1 } : c)
+      )
       setActionError('')
     },
     onError: (e: unknown) => setActionError(getApiErrorMessage(e, '참여에 실패했습니다')),
@@ -75,9 +80,14 @@ export default function ChallengeDetailPage() {
   const updateMutation = useMutation({
     mutationFn: (body: ChallengeUpdateRequest) =>
       client.patch(`/challenges/${id}`, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['challenge', id] })
-      qc.invalidateQueries({ queryKey: ['challenges'] })
+    onSuccess: (_, body) => {
+      qc.setQueryData<Challenge>(['challenge', id], (old) =>
+        old ? { ...old, ...body } : old
+      )
+      qc.setQueriesData<Challenge[]>(
+        { queryKey: ['challenges'] },
+        (old) => old?.map((c) => c.id === Number(id) ? { ...c, ...body } : c)
+      )
       setIsEditing(false)
       setActionError('')
     },
@@ -221,9 +231,9 @@ export default function ChallengeDetailPage() {
         )}
 
         {challenge.joined && !challenge.completed && (
-          <div className="flex items-center justify-center gap-1.5 py-2">
-            <Lock size={14} className="text-theme-subtle" />
-            <span className="text-sm text-theme-subtle">참여 중인 챌린지</span>
+          <div className="flex items-center justify-center gap-1.5 rounded-2xl bg-accent/10 py-3">
+            <Dumbbell size={15} className="text-accent" />
+            <span className="text-sm font-semibold text-accent">참여 중인 챌린지</span>
           </div>
         )}
 
