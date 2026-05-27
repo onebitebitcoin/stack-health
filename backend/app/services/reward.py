@@ -9,7 +9,7 @@ from app.models.reward import RewardPoint
 from app.models.video import Video
 
 POINTS_PER_UPLOAD = 0.5
-POINTS_PER_COMMENT = 0.1
+POINTS_PER_COMMENT = 0.01
 DAILY_MAX_UPLOADS = 3
 SATS_PER_POINT = 10  # TBD
 REWARD_STATUS_QUEUED = "queued"
