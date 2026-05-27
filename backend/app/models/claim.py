@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -15,7 +15,7 @@ class LightningClaim(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     week_label: Mapped[str] = mapped_column(String, nullable=False)
-    points_used: Mapped[int] = mapped_column(Integer, nullable=False)
+    points_used: Mapped[float] = mapped_column(Float, nullable=False)
     satoshi_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     ln_address: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, default="pending")  # pending | paid | cancelled

@@ -9,10 +9,8 @@ from app.models.video import Video
 
 POINTS_PER_UPLOAD = 0.5
 POINTS_PER_COMMENT = 0.1
-DAILY_MAX_POINTS = 5.0
 DAILY_MAX_UPLOADS = 3
-SATS_PER_POINT = 10  # 1pt = 10 sats
-MIN_CLAIM_SATS = 1000
+SATS_PER_POINT = 10  # TBD
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
 REWARD_STATUS_REVOKED = "revoked"
@@ -85,20 +83,6 @@ def get_daily_upload_count(db: Session, user_id: int) -> int:
     )
 
 
-def get_daily_total_points(db: Session, user_id: int) -> float:
-    today_start = _utc_today_start()
-    result = (
-        db.query(func.sum(RewardPoint.points))
-        .filter(
-            RewardPoint.user_id == user_id,
-            RewardPoint.created_at >= today_start,
-            RewardPoint.status != REWARD_STATUS_REVOKED,
-        )
-        .scalar()
-    )
-    return result or 0
-
-
 def settle_queued_rewards(db: Session, user_id: int | None = None, now: datetime | None = None) -> int:
     """Move upload rewards from queued to fixed once content survived 24 hours."""
     settled_at = now or datetime.now(timezone.utc)
@@ -149,19 +133,12 @@ def add_points(
     points: float,
     reason: str,
     reference_id: int | None = None,
-) -> RewardPoint | None:
-    """Add points respecting daily cap. Returns None if daily cap reached."""
-    current_daily = get_daily_total_points(db, user_id)
-    if current_daily >= DAILY_MAX_POINTS:
-        return None
-
-    actual_points = min(points, DAILY_MAX_POINTS - current_daily)
+) -> RewardPoint:
     week_label = get_week_label()
-
     rp = RewardPoint(
         user_id=user_id,
         week_label=week_label,
-        points=actual_points,
+        points=points,
         reason=reason,
         reference_id=reference_id,
         status=REWARD_STATUS_QUEUED if reason == "upload" else REWARD_STATUS_FIXED,

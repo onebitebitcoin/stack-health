@@ -9,7 +9,6 @@ from app.models.user import User
 from app.routes.auth import get_current_user
 from app.schemas.reward import ClaimRequest, ClaimSchema, RewardSummarySchema
 from app.services.reward import (
-    MIN_CLAIM_SATS,
     get_total_weekly_points_all_users,
     get_week_label,
     get_week_claim_deadline,
@@ -41,7 +40,7 @@ def get_summary(
     contribution_pct = round(fixed_pts / total_pts * 100, 1) if total_pts > 0 else 0.0
     sats = points_to_sats(fixed_pts)
     claimed = has_claimed_this_week(db, current_user.id, week_label)
-    claimable = sats >= MIN_CLAIM_SATS and not claimed
+    claimable = not claimed
     deadline = get_week_claim_deadline(week_label)
 
     return {
@@ -77,12 +76,6 @@ def create_claim(
 
     pts = get_weekly_points(db, current_user.id, week_label)
     sats = points_to_sats(pts)
-
-    if sats < MIN_CLAIM_SATS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Minimum {MIN_CLAIM_SATS} sats required (you have {sats})",
-        )
 
     ln_address = req.ln_address or current_user.lightning_address
     if not ln_address:
