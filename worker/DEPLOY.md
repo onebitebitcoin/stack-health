@@ -10,12 +10,12 @@
 [브라우저]
     │ POST /api/v1/videos/merge-audio (영상+오디오)
     ▼
-[Railway - FastAPI 백엔드]
+[FastAPI 백엔드]
     │ 1) audio를 R2에 업로드
     │ 2) Redis LPUSH queue:merge-jobs {job_id, ...}
     │    └─ Redis 불가 시 → 백엔드에서 직접 ffmpeg 처리 (fallback)
     │       ⚠️ fallback은 in-memory (_local_jobs dict)로 상태 저장
-    │       ⚠️ Railway 재배포/멀티 인스턴스 시 fallback 잡 상태 소실됨
+    │       ⚠️ 재배포/멀티 인스턴스 시 fallback 잡 상태 소실됨
     │       ⚠️ 프로덕션에서는 반드시 Redis 연결 유지 권장
     │ 3) job_id 즉시 반환
     ▼
@@ -67,7 +67,7 @@ worker/
 | `R2_PUBLIC_URL` | ✅ | R2 공개 URL | `https://pub-xxx.r2.dev` |
 | `LOG_LEVEL` | ❌ | 로그 레벨 (기본: INFO) | `DEBUG` |
 
-Railway 백엔드에도 동일한 `REDIS_URL`을 설정해야 함.
+백엔드에도 동일한 `REDIS_URL`을 설정해야 함.
 
 ---
 
@@ -118,9 +118,9 @@ journalctl -u stackhealth-worker -f
 
 ---
 
-## Railway 백엔드 환경변수 추가
+## 백엔드 환경변수 추가
 
-배포 완료 후 Railway 대시보드 → Variables에 추가:
+배포 완료 후 백엔드 환경변수에 추가:
 
 ```
 REDIS_URL=redis://:비밀번호@server.stackhealth.life:6379/0
@@ -136,7 +136,7 @@ ssh root@server.stackhealth.life cat /etc/stackhealth-redis-password
 ## Fallback 동작
 
 `REDIS_URL` 미설정 또는 Redis 연결 불가 시:
-- Railway 백엔드가 직접 ffmpeg 처리 (CPU 부하 있음)
+- 백엔드가 직접 ffmpeg 처리 (CPU 부하 있음)
 - 프론트엔드는 동일하게 job_id로 폴링
 - 로그에 `[fallback]` 키워드로 확인 가능
 
@@ -227,7 +227,7 @@ cat /opt/stackhealth-worker/.env
 
 Cloudflare 대시보드 → R2 → Manage API Tokens에서 토큰 권한 확인 (Object Read & Write 필요).
 
-### Redis 외부 접속 불가 (Railway → Ubuntu Redis)
+### Redis 외부 접속 불가
 
 1. Redis 설정 확인:
    ```bash
@@ -281,7 +281,7 @@ journalctl -u stackhealth-worker -f
 ## 보안 체크리스트
 
 - [ ] Redis 비밀번호 설정 확인 (`requirepass`)
-- [ ] ufw로 6379 포트를 Railway IP만 허용 (알고 있는 경우)
+- [ ] ufw로 6379 포트를 백엔드 서버 IP만 허용
 - [ ] `.env` 파일 권한 600 확인: `ls -la /opt/stackhealth-worker/.env`
 - [ ] Redis 비밀번호 파일 권한 600 확인: `ls -la /etc/stackhealth-redis-password`
 - [ ] R2 크레덴셜이 git에 포함되지 않음 확인
@@ -293,10 +293,9 @@ journalctl -u stackhealth-worker -f
 Ubuntu Redis 대신 [Upstash](https://upstash.com) 무료 플랜 사용 가능:
 - 무료: 10,000 commands/day (소규모 서비스에 충분)
 - TLS 기본 지원 (보안 설정 불필요)
-- Railway와 Ubuntu 워커 모두 Upstash URL 사용
 
 설정 방법:
 1. https://console.upstash.com 에서 Redis 생성
 2. "Redis URL" 복사 (rediss:// 로 시작하는 TLS URL)
-3. `.env`와 Railway Variables에 동일한 URL 설정
+3. `.env`와 백엔드 환경변수에 동일한 URL 설정
 4. deploy.sh 실행 시 Redis 설치/설정 과정 건너뜀

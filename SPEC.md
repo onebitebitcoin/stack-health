@@ -32,10 +32,10 @@
 | Frontend | React 18 + Vite + TailwindCSS + shadcn/ui |
 | Backend | Python 3.11 + FastAPI + SQLAlchemy 2.0 + Alembic |
 | DB (개발) | SQLite |
-| DB (프로덕션) | PostgreSQL (Railway 제공) |
+| DB (프로덕션) | PostgreSQL |
 | 영상 저장 | Cloudflare R2 (presigned URL 직접 업로드) |
 | 영상 서빙 | Cloudflare CDN (R2 퍼블릭 도메인) |
-| 배포 | Railway (단일 서비스: FastAPI가 React 빌드 파일도 서빙) |
+| 배포 | Docker + 자체 서버 (FastAPI가 React 빌드 파일도 서빙) |
 | Lightning 지급 | 운영자 수동 송금 (기본) / Blink API 자동결제 (옵션) |
 | 인증 | JWT (python-jose) + Google OAuth (옵션) + LNAuth (옵션) |
 | 아이콘 | lucide-react |
@@ -393,7 +393,7 @@ Response: { "data": { "job_id": str, "status": "pending" } }
 ```
 - Redis 가용 시: 워커 큐에 잡 등록
 - Redis 불가 시: 백엔드에서 직접 ffmpeg 처리 (fallback)
-- **주의**: fallback은 in-memory로 상태 관리 → Railway 재배포 시 잡 상태 소실 가능
+- **주의**: fallback은 in-memory로 상태 관리 → 재배포 시 잡 상태 소실 가능
 
 #### GET `/api/v1/videos/merge-job/{job_id}` 🔒
 병합 잡 상태 조회.
@@ -648,16 +648,11 @@ Response: { "status": "ok", "version": "0.26.1" }
 
 ## 9. 배포 설정
 
-### Railway
-```toml
-# railway.toml
-[build]
-builder = "dockerfile"
-
-[deploy]
-startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
-healthcheckPath = "/health"
-healthcheckTimeout = 30
+### Backend (Docker)
+```dockerfile
+# Dockerfile 기반 빌드
+# CMD: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+# healthcheck: /health
 ```
 
 ### Worker (별도 Ubuntu 서버)

@@ -34,7 +34,7 @@
 | Frontend | React + Vite + TailwindCSS + TanStack Query + Zustand | `cd frontend && npm run build` |
 | Backend | Python + FastAPI + SQLAlchemy + Alembic | `cd backend && .venv/bin/pytest -q` |
 | DB | SQLite(dev) / PostgreSQL(prod) | Alembic migrations under `backend/alembic/` |
-| 배포 | Docker + Railway | `Dockerfile`, `railway.toml` |
+| 배포 | Docker + 자체 서버 | `Dockerfile` |
 
 ## 코드베이스 구조
 
@@ -86,7 +86,7 @@
 | `frontend` | React + Vite + TailwindCSS + Zustand + TanStack Query 구현 | UI/UX 작업 |
 | `backend` | FastAPI + SQLAlchemy + Pydantic 구현 | API/서비스 레이어 |
 | `dba` | SQLAlchemy 모델, Alembic 마이그레이션, 쿼리 최적화 | DB 스키마 변경 |
-| `devops` | Docker 빌드, Railway 배포, 환경변수 관리 | 배포/인프라 |
+| `devops` | Docker 빌드, 서버 배포, 환경변수 관리 | 배포/인프라 |
 | `designer` | UX 흐름, 컴포넌트 스펙, 디자인 시스템 | `/discuss` 토론 |
 | `developer` | 기술 타당성, 구현 난이도, 스택 적합성 | `/discuss` 토론 |
 | `planner` | 사업 우선순위, 로드맵 정합성, 범위 관리 | `/discuss` 토론 |
