@@ -59,7 +59,7 @@ export default function ProfilePage() {
     enabled: !!user && showWeeklyHistory,
   })
 
-  const { data: weeklyPointsData } = useQuery<WeeklyPointsHistory>({
+  const { data: weeklyPointsData, isLoading: weeklyPointsLoading } = useQuery<WeeklyPointsHistory>({
     queryKey: ['my-weekly-points'],
     queryFn: async () => {
       const res = await client.get<{ data: WeeklyPointsHistory }>('/users/me/weekly-points')
@@ -224,46 +224,48 @@ export default function ProfilePage() {
           </div>
 
           {/* 이번 주 활동 */}
-          {weeklyPointsData && (
-            <div className="border-b border-theme-border">
-              <div className="flex items-center justify-between px-5 py-3 border-b border-theme-border">
-                <span className="text-xs font-medium text-theme-muted">이번 주 활동</span>
+          <div className="border-b border-theme-border">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-theme-border">
+              <span className="text-xs font-medium text-theme-muted">이번 주 활동</span>
+              {weeklyPointsData && (
                 <span className="text-xs text-theme-subtle">
                   {weeklyPointsData.week_number}주차{' '}
                   {weeklyPointsData.start_date.slice(5).replace('-', '/')}~{weeklyPointsData.end_date.slice(5).replace('-', '/')}
                 </span>
-              </div>
-              {weeklyPointsData.items.length === 0 ? (
-                <div className="py-4 text-center text-xs text-theme-muted">이번 주 활동 없음</div>
-              ) : (
-                <div className="max-h-40 overflow-y-auto">
-                  {weeklyPointsData.items.map((item, idx) => {
-                    const sourceLabel =
-                      item.source === 'upload' ? '영상 업로드' :
-                      item.source === 'comment' ? '댓글' :
-                      item.source === 'bonus' ? '보너스' :
-                      item.source
-                    return (
-                      <div key={idx} className="flex items-center justify-between px-5 py-2.5 border-b border-theme-border last:border-0">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-xs font-medium text-theme-primary">{sourceLabel}</p>
-                            {item.queued && (
-                              <span className="text-[10px] text-yellow-400">대기 중</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-theme-muted">{item.date.slice(5).replace('-', '/')}</p>
-                        </div>
-                        <span className={`text-xs font-semibold ${item.queued ? 'text-yellow-400' : 'text-accent'}`}>
-                          +{item.points.toFixed(2)} L
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
               )}
             </div>
-          )}
+            {weeklyPointsLoading ? (
+              <div className="py-4 text-center text-xs text-theme-muted">불러오는 중...</div>
+            ) : !weeklyPointsData || weeklyPointsData.items.length === 0 ? (
+              <div className="py-4 text-center text-xs text-theme-muted">이번 주 활동 없음</div>
+            ) : (
+              <div className="max-h-40 overflow-y-auto">
+                {weeklyPointsData.items.map((item, idx) => {
+                  const sourceLabel =
+                    item.source === 'upload' ? '영상 업로드' :
+                    item.source === 'comment' ? '댓글' :
+                    item.source === 'bonus' ? '보너스' :
+                    item.source
+                  return (
+                    <div key={idx} className="flex items-center justify-between px-5 py-2.5 border-b border-theme-border last:border-0">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-medium text-theme-primary">{sourceLabel}</p>
+                          {item.queued && (
+                            <span className="text-[10px] text-yellow-400">대기 중</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-theme-muted">{item.date.slice(5).replace('-', '/')}</p>
+                      </div>
+                      <span className={`text-xs font-semibold ${item.queued ? 'text-yellow-400' : 'text-accent'}`}>
+                        +{item.points.toFixed(2)} L
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
           {/* 클레임 이력 리스트 — 최대 높이 제한 + 스크롤 */}
           <div className="max-h-52 overflow-y-auto">
