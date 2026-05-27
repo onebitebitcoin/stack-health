@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import {
-  LogOut, Droplets, ShieldCheck, Settings,
+  Droplets, ShieldCheck, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, MessageCircle, ArrowLeft, Award, Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -28,7 +28,6 @@ function pad2(n: number): string {
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
 
   const now = new Date()
@@ -193,12 +192,6 @@ export default function ProfilePage() {
           className="flex-shrink-0 p-1.5 text-theme-muted hover:text-theme-primary transition-colors"
         >
           <Settings size={16} strokeWidth={1.5} />
-        </button>
-        <button
-          onClick={() => { logout(); window.location.href = '/login' }}
-          className="flex-shrink-0 p-1.5 text-theme-muted hover:text-red-400 transition-colors"
-        >
-          <LogOut size={16} strokeWidth={1.5} />
         </button>
       </div>
 

@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronLeft, Zap, Check, X, Smartphone, Download, ChevronRight, ChevronDown } from 'lucide-react'
+import { Moon, Sun, ChevronLeft, Zap, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -16,6 +16,7 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
+  const logout = useAuthStore((s) => s.logout)
   const { theme, setTheme } = useThemeStore()
 
   const [editingLn, setEditingLn] = useState(false)
@@ -285,6 +286,15 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* 로그아웃 */}
+        <button
+          onClick={() => { logout(); window.location.href = '/login' }}
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3.5 text-sm font-semibold text-red-400 hover:bg-red-500/20 active:opacity-70 transition-colors"
+        >
+          <LogOut size={15} strokeWidth={2} />
+          로그아웃
+        </button>
 
       </div>
     </div>
