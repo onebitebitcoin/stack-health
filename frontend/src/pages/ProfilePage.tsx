@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/react-query'
 import {
   LogOut, Droplets, ShieldCheck, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, ArrowLeft, Award, Trash2,
@@ -68,21 +69,45 @@ export default function ProfilePage() {
     enabled: !!user && showWeeklyHistory,
   })
 
-  const { data: myPostsData, isLoading: myPostsLoading } = useQuery<{ id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number }[]>({
+  type MyPost = { id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number }
+  type MyPostsPage = { posts: MyPost[]; has_more: boolean; week_offset: number }
+
+  const {
+    data: myPostsData,
+    isLoading: myPostsLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery<MyPostsPage>({
     queryKey: ['my-posts'],
-    queryFn: async () => {
-      const res = await client.get<{ data: { posts: { id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number }[] } }>('/videos/my-posts')
-      return res.data.data.posts
+    queryFn: async ({ pageParam }) => {
+      const res = await client.get<{ data: MyPostsPage }>('/videos/my-posts', {
+        params: { week_offset: pageParam as number },
+      })
+      return res.data.data
     },
+    initialPageParam: 0,
+    getNextPageParam: (last) => last.has_more ? last.week_offset + 1 : undefined,
     enabled: !!user,
   })
+
+  const myPosts = myPostsData?.pages.flatMap((p) => p.posts) ?? []
 
   const deleteMutation = useMutation({
     mutationFn: (postId: number) => client.delete(`/videos/posts/${postId}`),
     onSuccess: (_, postId) => {
-      queryClient.setQueryData<{ id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number }[]>(
+      queryClient.setQueryData<InfiniteData<MyPostsPage>>(
         ['my-posts'],
-        (old) => old?.filter((p) => p.id !== postId) ?? []
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              posts: page.posts.filter((p) => p.id !== postId),
+            })),
+          }
+        }
       )
       queryClient.invalidateQueries({ queryKey: ['history'] })
       queryClient.invalidateQueries({ queryKey: ['my-stats'] })
@@ -426,11 +451,11 @@ export default function ProfilePage() {
       </div>
 
       {/* ── 내 영상 목록 ── */}
-      <div className="mx-4 mb-6">
-        <div className="flex items-center justify-between mb-3">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3 px-4">
           <p className="text-sm font-semibold text-theme-primary">내 영상</p>
-          {myPostsData && myPostsData.length > 0 && (
-            <span className="text-xs text-theme-muted">{myPostsData.length}개</span>
+          {myPosts.length > 0 && (
+            <span className="text-xs text-theme-muted">{myPosts.length}개</span>
           )}
         </div>
 
@@ -438,14 +463,21 @@ export default function ProfilePage() {
           <div className="flex h-24 items-center justify-center text-sm text-theme-muted">
             불러오는 중...
           </div>
-        ) : !myPostsData || myPostsData.length === 0 ? (
-          <div className="flex h-24 items-center justify-center rounded-xl bg-theme-surface text-sm text-theme-muted">
+        ) : myPosts.length === 0 ? (
+          <div className="mx-4 flex h-24 items-center justify-center rounded-xl bg-theme-surface text-sm text-theme-muted">
             업로드한 영상이 없습니다
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-1.5">
-            {myPostsData.map((post) => (
-              <div key={post.id} className="relative aspect-[9/16] overflow-hidden rounded-xl bg-theme-surface2 group">
+          <div
+            className="flex gap-2 overflow-x-auto px-4 pb-1"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            {myPosts.map((post) => (
+              <div
+                key={post.id}
+                className="relative flex-shrink-0 overflow-hidden rounded-xl bg-theme-surface2 group"
+                style={{ width: '28vw', aspectRatio: '9/16' }}
+              >
                 <video
                   src={post.cdn_url}
                   className="absolute inset-0 h-full w-full object-cover"
@@ -473,6 +505,19 @@ export default function ProfilePage() {
                 </button>
               </div>
             ))}
+            {hasNextPage && (
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="flex-shrink-0 flex flex-col items-center justify-center gap-1.5 rounded-xl bg-theme-surface text-theme-muted disabled:opacity-50"
+                style={{ width: '20vw', aspectRatio: '9/16' }}
+              >
+                <ChevronRight size={20} />
+                <span className="text-[10px] font-medium">
+                  {isFetchingNextPage ? '...' : '더보기'}
+                </span>
+              </button>
+            )}
           </div>
         )}
       </div>

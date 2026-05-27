@@ -1,8 +1,9 @@
 import json
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
@@ -152,16 +153,36 @@ def confirm_upload(
 
 @router.get("/my-posts")
 def my_posts(
+    week_offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    posts = (
+    KST = timezone(timedelta(hours=9))
+    now_kst = datetime.now(KST)
+    monday_kst = now_kst.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=now_kst.weekday())
+    week_start_kst = monday_kst - timedelta(weeks=week_offset)
+    week_end_kst = week_start_kst + timedelta(weeks=1)
+    week_start_utc = week_start_kst.astimezone(timezone.utc).replace(tzinfo=None)
+    week_end_utc = week_end_kst.astimezone(timezone.utc).replace(tzinfo=None)
+
+    base_filter = (
         db.query(Post)
         .join(Post.video)
         .filter(Post.user_id == current_user.id, Video.status == "active")
+    )
+    posts = (
+        base_filter
+        .filter(Post.created_at >= week_start_utc, Post.created_at < week_end_utc)
         .order_by(Post.created_at.desc())
         .all()
     )
+    has_more = (
+        base_filter
+        .filter(Post.created_at < week_start_utc)
+        .limit(1)
+        .count() > 0
+    )
+
     result = []
     for post in posts:
         tags_raw = post.tags or "[]"
@@ -186,7 +207,7 @@ def my_posts(
                 workout_end=post.workout_end,
             )
         )
-    return {"data": {"posts": result}}
+    return {"data": {"posts": result, "has_more": has_more, "week_offset": week_offset}}
 
 
 @router.get("/posts/{post_id}")
