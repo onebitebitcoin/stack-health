@@ -91,13 +91,11 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
 def _proof_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
     """Proof image concat. Returns (merged_r2_key, proof_cdn_url) or None on failure."""
     img_suffix = ".jpg" if proof_key.lower().endswith((".jpg", ".jpeg")) else ".png"
-    tmp_video = tmp_image = tmp_proof_clip = tmp_output = tmp_list = None
+    tmp_video = tmp_image = tmp_output = None
     try:
         tmp_video = _make_tmp(".mp4")
         tmp_image = _make_tmp(img_suffix)
-        tmp_proof_clip = _make_tmp(".mp4")
         tmp_output = _make_tmp(".mp4")
-        tmp_list = _make_tmp(".txt")
 
         resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=video_key)
         with open(tmp_video, "wb") as f:
@@ -124,51 +122,44 @@ def _proof_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
         )
         has_audio = bool(probe_a.stdout.strip())
 
-        vf = (
+        scale_vf = (
             f"scale={vw}:{vh}:force_original_aspect_ratio=decrease,"
-            f"pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+            f"pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=yuv420p"
         )
 
+        # Single-pass: video + looped image → concat
+        # aevalsrc with explicit d=3 avoids infinite-stream hang
         if has_audio:
-            clip_cmd = [
-                "ffmpeg", "-y",
-                "-loop", "1", "-t", "3", "-i", tmp_image,
-                "-f", "lavfi", "-t", "3", "-i", "anullsrc=r=48000:cl=stereo",
-                "-vf", vf,
-                "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
-                "-shortest", "-movflags", "+faststart", tmp_proof_clip,
-            ]
+            concat_filter = (
+                f"[1:v]{scale_vf},trim=duration=3,setpts=PTS-STARTPTS[img];"
+                f"aevalsrc=0:c=stereo:s=48000:d=3[sa];"
+                f"[0:v][0:a][img][sa]concat=n=2:v=1:a=1[outv][outa]"
+            )
+            map_args = ["-map", "[outv]", "-map", "[outa]"]
+            audio_args = ["-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2"]
         else:
-            clip_cmd = [
-                "ffmpeg", "-y",
-                "-loop", "1", "-t", "3", "-i", tmp_image,
-                "-vf", vf,
-                "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
-                "-an", "-movflags", "+faststart", tmp_proof_clip,
-            ]
-        result = subprocess.run(clip_cmd, capture_output=True, timeout=60)
-        if result.returncode != 0:
-            raise RuntimeError(f"proof clip: {result.stderr.decode()[:500]}")
-
-        with open(tmp_list, "w") as f:
-            f.write(f"file '{tmp_video}'\n")
-            f.write(f"file '{tmp_proof_clip}'\n")
+            concat_filter = (
+                f"[1:v]{scale_vf},trim=duration=3,setpts=PTS-STARTPTS[img];"
+                f"[0:v][img]concat=n=2:v=1:a=0[outv]"
+            )
+            map_args = ["-map", "[outv]"]
+            audio_args = ["-an"]
 
         concat_cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", tmp_list,
+            "ffmpeg", "-y",
+            "-i", tmp_video,
+            "-loop", "1", "-i", tmp_image,
+            "-filter_complex", concat_filter,
+            *map_args,
             "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+            *audio_args,
             "-movflags", "+faststart",
+            tmp_output,
         ]
-        if has_audio:
-            concat_cmd += ["-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2"]
-        else:
-            concat_cmd += ["-an"]
-        concat_cmd.append(tmp_output)
 
         result = subprocess.run(concat_cmd, capture_output=True, timeout=120)
         if result.returncode != 0:
-            raise RuntimeError(f"concat: {result.stderr.decode()[:500]}")
+            raise RuntimeError(f"concat: {result.stderr.decode()[-800:]}")
 
         merged_key = f"videos/proof-merged-{uuid.uuid4()}.mp4"
         with open(tmp_output, "rb") as f:
@@ -179,7 +170,7 @@ def _proof_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
         logger.warning("Proof merge failed: %s", e)
         return None
     finally:
-        for tmp in [tmp_video, tmp_image, tmp_proof_clip, tmp_output, tmp_list]:
+        for tmp in [tmp_video, tmp_image, tmp_output]:
             if tmp and os.path.exists(tmp):
                 os.unlink(tmp)
 
