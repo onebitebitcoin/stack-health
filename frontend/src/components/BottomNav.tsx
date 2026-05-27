@@ -20,7 +20,7 @@ export default function BottomNav() {
     }`
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-theme-border bg-theme-surface pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-theme-border bg-theme-surface pb-safe" style={{ transform: 'translateZ(0)' }}>
       <div className="flex h-16 items-center justify-around">
         {/* 피드 */}
         <NavLink to="/" end className={navItem}>
