@@ -196,9 +196,10 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
           onClick={(e) => {
             e.stopPropagation()
             const shareUrl = `${window.location.origin}/share/${post.id}`
-            const shareTitle = 'Stack Health 운동 영상'
+            const shareTitle = 'Stack Health'
+            const shareText = '같이 운동하고 비트코인 모으자'
             if (typeof navigator !== 'undefined' && 'share' in navigator) {
-              navigator.share({ title: shareTitle, url: shareUrl }).catch((err) => {
+              navigator.share({ title: shareTitle, text: shareText, url: shareUrl }).catch((err) => {
                 if (err instanceof DOMException && err.name === 'AbortError') return
                 window.navigator.clipboard?.writeText(shareUrl)
                   .then(() => alert('링크가 복사됐어요!'))

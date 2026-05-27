@@ -307,7 +307,7 @@ export default function UploadPage() {
   }
 
   if (done) {
-    const shareText = `오늘 운동 완료${caption ? ` — "${caption}"` : ''}`
+    const shareText = '같이 운동하고 비트코인 모으자'
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
         <div className="w-full max-w-sm rounded-2xl bg-theme-surface p-6">
