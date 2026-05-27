@@ -8,7 +8,7 @@ import { useThemeStore, type Theme } from '../store/theme'
 
 const ROW = 'flex items-center justify-between px-4 py-3.5'
 const LABEL = 'text-sm text-theme-primary'
-const DIVIDER = 'border-b border-theme-border/40'
+const DIVIDER = ''
 const GROUP = 'rounded-xl bg-theme-surface overflow-hidden'
 const SECTION = 'text-[10px] font-medium uppercase tracking-widest text-theme-muted px-1 mb-2'
 
@@ -92,7 +92,7 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col h-[100dvh] bg-theme-page pb-nav-safe">
       {/* 헤더 */}
-      <div className="flex items-center gap-3 px-4 pt-5 pb-4 border-b border-theme-surface">
+      <div className="flex items-center gap-3 px-4 pt-5 pb-4">
         <button onClick={() => navigate(-1)} className="p-1 text-theme-muted hover:text-theme-primary transition-colors">
           <ChevronLeft size={20} strokeWidth={1.5} />
         </button>
@@ -287,7 +287,7 @@ export default function SettingsPage() {
         {/* 로그아웃 */}
         <button
           onClick={() => { logout(); window.location.href = '/login' }}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3.5 text-sm font-semibold text-red-400 hover:bg-red-500/20 active:opacity-70 transition-colors"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-500/10 px-4 py-3.5 text-sm font-semibold text-red-400 hover:bg-red-500/20 active:opacity-70 transition-colors"
         >
           <LogOut size={15} strokeWidth={2} />
           로그아웃
