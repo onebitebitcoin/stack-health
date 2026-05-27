@@ -169,80 +169,66 @@ export default function ProfilePage() {
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
 
       {/* ── 헤더 ── */}
-      <div className="px-4 pt-5 pb-4">
-        {/* 아바타 + 액션 버튼 */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-base font-bold text-theme-primary">
-            {user?.username?.[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => navigate('/settings')}
-              className="p-2 text-theme-muted hover:text-theme-primary transition-colors"
-              aria-label="설정"
-            >
-              <Settings size={16} strokeWidth={1.5} />
-            </button>
-            <button
-              onClick={() => { logout(); window.location.href = '/login' }}
-              className="p-2 text-theme-muted hover:text-red-400 transition-colors"
-              aria-label="로그아웃"
-            >
-              <LogOut size={16} strokeWidth={1.5} />
-            </button>
-          </div>
+      <div className="flex items-center gap-3 px-4 pt-5 pb-4">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-sm font-bold text-theme-primary">
+          {user?.username?.[0]?.toUpperCase() ?? '?'}
         </div>
 
-        {/* 닉네임 */}
-        <div className="mb-1.5">
-          {editingUsername ? (
-            <div className="flex items-center gap-2">
-              <input
-                value={editUsername}
-                onChange={(e) => setEditUsername(e.target.value)}
-                autoFocus
-                maxLength={30}
-                className="flex-1 rounded-lg bg-theme-surface2 px-3 py-1.5 text-sm font-semibold text-theme-primary outline-none border border-accent"
-              />
-              <button
-                onClick={() => updateProfileMutation.mutate(editUsername)}
-                disabled={updateProfileMutation.isPending}
-                className="p-1 text-accent disabled:opacity-50"
-                aria-label="저장"
-              >
-                <Check size={16} strokeWidth={2} />
-              </button>
-              <button
-                onClick={() => { setEditingUsername(false); setEditUsername(user?.username ?? ''); setEditError(null) }}
-                className="p-1 text-theme-muted"
-                aria-label="취소"
-              >
-                <X size={16} strokeWidth={2} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-base font-semibold text-theme-primary">{user?.username}</span>
+        {editingUsername ? (
+          <>
+            <input
+              value={editUsername}
+              onChange={(e) => setEditUsername(e.target.value)}
+              autoFocus
+              maxLength={30}
+              className="flex-1 min-w-0 rounded-lg bg-theme-surface2 px-3 py-1.5 text-sm font-semibold text-theme-primary outline-none border border-accent"
+            />
+            <button
+              onClick={() => updateProfileMutation.mutate(editUsername)}
+              disabled={updateProfileMutation.isPending}
+              className="flex-shrink-0 p-1 text-accent disabled:opacity-50"
+            >
+              <Check size={16} strokeWidth={2} />
+            </button>
+            <button
+              onClick={() => { setEditingUsername(false); setEditUsername(user?.username ?? ''); setEditError(null) }}
+              className="flex-shrink-0 p-1 text-theme-muted"
+            >
+              <X size={16} strokeWidth={2} />
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex-1 flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-semibold text-theme-primary truncate">{user?.username}</span>
               {user?.is_admin && (
-                <span className="flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                <span className="flex-shrink-0 flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
                   <ShieldCheck size={9} />관리자
                 </span>
               )}
               <button
                 onClick={() => { setEditUsername(user?.username ?? ''); setEditingUsername(true) }}
-                className="p-1 text-theme-muted hover:text-theme-primary transition-colors"
-                aria-label="닉네임 수정"
+                className="flex-shrink-0 p-1 text-theme-muted hover:text-theme-primary transition-colors"
               >
-                <Pencil size={13} strokeWidth={1.5} />
+                <Pencil size={12} strokeWidth={1.5} />
               </button>
             </div>
-          )}
-          {editError && <p className="text-[10px] text-red-400 mt-1">{editError}</p>}
-        </div>
-
-        {/* 이메일 (읽기 전용) */}
-        <p className="text-sm text-theme-muted">{user?.email}</p>
+            <button
+              onClick={() => navigate('/settings')}
+              className="flex-shrink-0 p-1.5 text-theme-muted hover:text-theme-primary transition-colors"
+            >
+              <Settings size={16} strokeWidth={1.5} />
+            </button>
+            <button
+              onClick={() => { logout(); window.location.href = '/login' }}
+              className="flex-shrink-0 p-1.5 text-theme-muted hover:text-red-400 transition-colors"
+            >
+              <LogOut size={16} strokeWidth={1.5} />
+            </button>
+          </>
+        )}
       </div>
+      {editError && <p className="text-[10px] text-red-400 px-4 -mt-2 mb-2">{editError}</p>}
 
       {/* ── 관리자 버튼 ── */}
       {user?.is_admin && (
