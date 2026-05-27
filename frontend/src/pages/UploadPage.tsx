@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward, Check, ImagePlus, X } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { MERGE_POLL_INTERVAL_MS, MERGE_POLL_MAX_ATTEMPTS } from '../lib/constants'
@@ -26,6 +26,7 @@ function getSupportedAudioMimeType(): string {
 
 export default function UploadPage() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [step, setStep] = useState(0)
   const [file, setFile] = useState<File | null>(null)
@@ -289,6 +290,10 @@ export default function UploadPage() {
       setProgress(100)
       setPointsEarned(confirmRes.data.data.points_earned)
       setDone(true)
+      qc.invalidateQueries({ queryKey: ['my-stats'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['my-posts'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['history'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['rewards-summary'] }).catch(() => undefined)
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, '업로드 실패'))
       setServerMerging(false)
