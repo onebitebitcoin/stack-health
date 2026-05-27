@@ -53,88 +53,71 @@ function ChallengeCard({
 
   return (
     <div
-      className="rounded-2xl bg-theme-surface p-3 cursor-pointer active:opacity-80"
+      className="rounded-xl bg-theme-surface px-3 py-2.5 cursor-pointer active:opacity-80"
       onClick={() => onNavigate(challenge.id)}
     >
-      <div className="flex items-start gap-2 mb-1.5">
+      {/* 제목 행 */}
+      <div className="flex items-center gap-2 mb-1">
         {challenge.image_url && (
-          <img
-            src={challenge.image_url}
-            alt=""
-            className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-          />
+          <img src={challenge.image_url} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
         )}
-        <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-theme-primary text-sm leading-tight">{challenge.title}</h3>
-            <p className="text-xs text-theme-muted mt-0 line-clamp-1">{challenge.description}</p>
-          </div>
+        <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+          <h3 className="font-semibold text-theme-primary text-sm leading-tight truncate">{challenge.title}</h3>
           {challenge.completed ? (
-            <CheckCircle size={20} className="text-accent flex-shrink-0 mt-0.5" />
+            <CheckCircle size={15} className="text-accent flex-shrink-0" />
           ) : challenge.joined ? (
-            <Lock size={16} className="text-theme-subtle flex-shrink-0 mt-1" />
+            <Lock size={13} className="text-theme-subtle flex-shrink-0" />
           ) : null}
         </div>
       </div>
 
-      {/* 리워드 배지 */}
-      <div className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5">
-        <Dumbbell size={11} className="text-accent" />
-        <span className="text-xs font-medium text-accent">{challenge.reward_title}</span>
+      {/* 배지 행 — 리워드 + 카테고리 한 줄 */}
+      <div className="flex flex-wrap items-center gap-1 mb-2">
+        <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
+          <Dumbbell size={9} className="text-accent" />{challenge.reward_title}
+        </span>
+        {challenge.categories?.map((cat) => {
+          const label = CATEGORIES.find((c) => c.value === cat)?.label ?? cat
+          return (
+            <span key={cat} className="rounded-full bg-theme-surface2 px-2 py-0.5 text-[10px] text-theme-muted">{label}</span>
+          )
+        })}
       </div>
 
-      {/* 카테고리 뱃지 */}
-      {challenge.categories?.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1">
-          {challenge.categories.map((cat) => {
-            const label = CATEGORIES.find((c) => c.value === cat)?.label ?? cat
-            return (
-              <span key={cat} className="rounded-full bg-theme-surface2 px-2 py-0.5 text-[10px] text-theme-muted">
-                {label}
-              </span>
-            )
-          })}
-        </div>
-      )}
-
-      {/* 진행 바 (참여 중일 때) */}
+      {/* 진행 바 */}
       {challenge.joined && (
         <div className="mb-2">
-          <div className="flex justify-between text-xs text-theme-muted mb-1">
-            <span>{challenge.my_upload_count}/{challenge.condition_value}회 업로드</span>
+          <div className="flex justify-between text-[10px] text-theme-muted mb-0.5">
+            <span>{challenge.my_upload_count}/{challenge.condition_value}회</span>
             <span>{progress}%</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-theme-surface2">
-            <div
-              className="h-1.5 rounded-full bg-accent transition-all"
-              style={{ width: `${progress}%` }}
-            />
+          <div className="h-1 w-full rounded-full bg-theme-surface2">
+            <div className="h-1 rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
           </div>
         </div>
       )}
 
+      {/* 하단 행 */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 text-xs text-theme-subtle">
-          <Users size={12} />
-          <span>{challenge.participant_count}명 참여</span>
-          <span className="mx-1">·</span>
+        <div className="flex items-center gap-1 text-[10px] text-theme-subtle">
+          <Users size={11} />
+          <span>{challenge.participant_count}명</span>
+          <span>·</span>
           <span>~{formatMonthDay(challenge.end_date)}</span>
         </div>
-
         {challenge.completed ? (
-          <span className="text-xs font-semibold text-accent">완료</span>
+          <span className="text-[10px] font-semibold text-accent">완료</span>
         ) : challenge.joined ? (
-          <span className="text-xs text-theme-subtle">참여 중</span>
+          <span className="text-[10px] text-theme-subtle">참여 중</span>
         ) : (
           <button
             onClick={handleJoin}
             disabled={joining}
-            className="rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg disabled:opacity-60"
+            className="rounded-lg bg-accent px-2.5 py-1 text-[10px] font-semibold text-accent-fg disabled:opacity-60"
           >
             참여하기
           </button>
         )}
-
       </div>
     </div>
   )
