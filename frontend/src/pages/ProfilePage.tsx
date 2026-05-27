@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LogOut, Droplets, ShieldCheck, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, ArrowLeft, Award, Trash2,
-  Pencil, Check, X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
@@ -42,25 +41,6 @@ export default function ProfilePage() {
   const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
-  const [editingUsername, setEditingUsername] = useState(false)
-  const [editUsername, setEditUsername] = useState(user?.username ?? '')
-  const [editError, setEditError] = useState<string | null>(null)
-
-  const updateProfileMutation = useMutation({
-    mutationFn: async (username: string) => {
-      const res = await client.patch<{ data: typeof user }>('/auth/me', { username })
-      return res.data.data
-    },
-    onSuccess: (updatedUser) => {
-      if (updatedUser) setUser(updatedUser)
-      setEditingUsername(false)
-      setEditError(null)
-    },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setEditError(msg ?? '저장에 실패했습니다')
-    },
-  })
 
   const { data: myStats, isLoading } = useQuery<MyStats>({
     queryKey: ['my-stats'],
@@ -174,61 +154,27 @@ export default function ProfilePage() {
           {user?.username?.[0]?.toUpperCase() ?? '?'}
         </div>
 
-        {editingUsername ? (
-          <>
-            <input
-              value={editUsername}
-              onChange={(e) => setEditUsername(e.target.value)}
-              autoFocus
-              maxLength={30}
-              className="flex-1 min-w-0 rounded-lg bg-theme-surface2 px-3 py-1.5 text-sm font-semibold text-theme-primary outline-none border border-accent"
-            />
-            <button
-              onClick={() => updateProfileMutation.mutate(editUsername)}
-              disabled={updateProfileMutation.isPending}
-              className="flex-shrink-0 p-1 text-accent disabled:opacity-50"
-            >
-              <Check size={16} strokeWidth={2} />
-            </button>
-            <button
-              onClick={() => { setEditingUsername(false); setEditUsername(user?.username ?? ''); setEditError(null) }}
-              className="flex-shrink-0 p-1 text-theme-muted"
-            >
-              <X size={16} strokeWidth={2} />
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="flex-1 flex items-center gap-1.5 min-w-0">
-              <span className="text-sm font-semibold text-theme-primary truncate">{user?.username}</span>
-              {user?.is_admin && (
-                <span className="flex-shrink-0 flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                  <ShieldCheck size={9} />관리자
-                </span>
-              )}
-              <button
-                onClick={() => { setEditUsername(user?.username ?? ''); setEditingUsername(true) }}
-                className="flex-shrink-0 p-1 text-theme-muted hover:text-theme-primary transition-colors"
-              >
-                <Pencil size={12} strokeWidth={1.5} />
-              </button>
-            </div>
-            <button
-              onClick={() => navigate('/settings')}
-              className="flex-shrink-0 p-1.5 text-theme-muted hover:text-theme-primary transition-colors"
-            >
-              <Settings size={16} strokeWidth={1.5} />
-            </button>
-            <button
-              onClick={() => { logout(); window.location.href = '/login' }}
-              className="flex-shrink-0 p-1.5 text-theme-muted hover:text-red-400 transition-colors"
-            >
-              <LogOut size={16} strokeWidth={1.5} />
-            </button>
-          </>
-        )}
+        <div className="flex-1 flex items-center gap-1.5 min-w-0">
+          <span className="text-sm font-semibold text-theme-primary truncate">{user?.username}</span>
+          {user?.is_admin && (
+            <span className="flex-shrink-0 flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+              <ShieldCheck size={9} />관리자
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => navigate('/settings')}
+          className="flex-shrink-0 p-1.5 text-theme-muted hover:text-theme-primary transition-colors"
+        >
+          <Settings size={16} strokeWidth={1.5} />
+        </button>
+        <button
+          onClick={() => { logout(); window.location.href = '/login' }}
+          className="flex-shrink-0 p-1.5 text-theme-muted hover:text-red-400 transition-colors"
+        >
+          <LogOut size={16} strokeWidth={1.5} />
+        </button>
       </div>
-      {editError && <p className="text-[10px] text-red-400 px-4 -mt-2 mb-2">{editError}</p>}
 
       {/* ── 관리자 버튼 ── */}
       {user?.is_admin && (
