@@ -104,8 +104,7 @@ def settle_queued_rewards(db: Session, user_id: int | None = None, client_tz_str
     rewards = query.all()
     settled = []
     for reward in rewards:
-        # created_at is stored as KST naive → treat as KST → convert to client TZ
-        created_client = reward.created_at.replace(tzinfo=KST).astimezone(client_tz)
+        created_client = reward.created_at.replace(tzinfo=timezone.utc).astimezone(client_tz)
         if created_client.date() < today_client:
             reward.status = REWARD_STATUS_FIXED
             reward.week_label = settlement_week_label

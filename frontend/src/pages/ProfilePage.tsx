@@ -59,7 +59,7 @@ export default function ProfilePage() {
     enabled: !!user && showWeeklyHistory,
   })
 
-  const { data: weeklyPointsData, isLoading: weeklyPointsLoading } = useQuery<WeeklyPointsHistory>({
+  const { data: weeklyPointsData, isLoading: weeklyPointsLoading, isError: weeklyPointsError } = useQuery<WeeklyPointsHistory>({
     queryKey: ['my-weekly-points'],
     queryFn: async () => {
       const res = await client.get<{ data: WeeklyPointsHistory }>('/users/me/weekly-points')
@@ -236,6 +236,8 @@ export default function ProfilePage() {
             </div>
             {weeklyPointsLoading ? (
               <div className="py-4 text-center text-xs text-theme-muted">불러오는 중...</div>
+            ) : weeklyPointsError ? (
+              <div className="py-4 text-center text-xs text-red-400">불러오기 실패</div>
             ) : !weeklyPointsData || weeklyPointsData.items.length === 0 ? (
               <div className="py-4 text-center text-xs text-theme-muted">이번 주 활동 없음</div>
             ) : (

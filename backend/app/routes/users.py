@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func as sqlfunc
+from sqlalchemy import and_, func as sqlfunc, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -131,13 +131,16 @@ def get_my_weekly_points(
     start_date = monday.date().isoformat()
     end_date = sunday.date().isoformat()
 
-    # Fetch current week's reward points (fixed + queued, exclude revoked and 0pt tracking records)
+    # Fetch current week's reward points.
+    # FIXED: filter by current week_label; QUEUED: include all (week_label may be stale if /me/stats failed to settle)
     records = (
         db.query(RewardPoint)
         .filter(
             RewardPoint.user_id == current_user.id,
-            RewardPoint.week_label == week_label,
-            RewardPoint.status.in_([REWARD_STATUS_FIXED, REWARD_STATUS_QUEUED]),
+            or_(
+                and_(RewardPoint.week_label == week_label, RewardPoint.status == REWARD_STATUS_FIXED),
+                RewardPoint.status == REWARD_STATUS_QUEUED,
+            ),
             RewardPoint.points > 0,
         )
         .order_by(RewardPoint.created_at.desc())
