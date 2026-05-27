@@ -249,7 +249,6 @@ def run_full_pipeline(job: dict) -> dict:
         rp = add_points(
             db, user_id, POINTS_PER_UPLOAD, "upload",
             reference_id=video.id,
-            early_adopter_bonus=bool(job.get("early_adopter_bonus", False)),
         )
         points_earned = rp.points if rp else 0.0
 

@@ -88,7 +88,6 @@ def enqueue_full_upload_pipeline(
     audio_content_type: str = "audio/webm",
     proof_r2_key: str | None = None,
     proof_cdn_url: str | None = None,
-    early_adopter_bonus: bool = False,
 ) -> str:
     """영상 업로드 전체 파이프라인을 Redis 큐에 등록. job_id 즉시 반환."""
     job_id = str(uuid.uuid4())
@@ -112,7 +111,6 @@ def enqueue_full_upload_pipeline(
         "audio_content_type": audio_content_type,
         "proof_r2_key": proof_r2_key,
         "proof_cdn_url": proof_cdn_url,
-        "early_adopter_bonus": early_adopter_bonus,
     }
 
     r = get_redis_client()

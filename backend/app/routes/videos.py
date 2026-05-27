@@ -466,7 +466,6 @@ async def upload_pipeline(
         audio_content_type=audio_content_type,
         proof_r2_key=proof_r2_key,
         proof_cdn_url=proof_cdn_url,
-        early_adopter_bonus=(current_user.id <= 50),
     )
 
     return {"data": {"job_id": job_id, "status": "processing"}}
