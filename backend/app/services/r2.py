@@ -64,6 +64,8 @@ def ensure_r2_cors() -> None:
     preflight before the PUT; without this policy R2 returns 403 and the browser raises
     ERR_NETWORK before any HTTP response is visible.
     """
+    if settings.r2_account_id == "test":
+        return
     try:
         client = get_r2_client()
         client.put_bucket_cors(
