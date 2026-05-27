@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   LogOut, Droplets, ShieldCheck, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, ArrowLeft, Award, Trash2,
-  Smartphone, Download, Pencil, Check, X,
+  Pencil, Check, X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
@@ -41,36 +41,25 @@ export default function ProfilePage() {
   const [videoIdx, setVideoIdx] = useState(0)
   const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
-  const [showIosGuide, setShowIosGuide] = useState(false)
 
-  const [isEditing, setIsEditing] = useState(false)
+  const [editingUsername, setEditingUsername] = useState(false)
   const [editUsername, setEditUsername] = useState(user?.username ?? '')
-  const [editLnAddr, setEditLnAddr] = useState(user?.lightning_address ?? '')
   const [editError, setEditError] = useState<string | null>(null)
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { username?: string; lightning_address?: string }) => {
-      const res = await client.patch<{ data: typeof user }>('/auth/me', data)
+    mutationFn: async (username: string) => {
+      const res = await client.patch<{ data: typeof user }>('/auth/me', { username })
       return res.data.data
     },
     onSuccess: (updatedUser) => {
       if (updatedUser) setUser(updatedUser)
-      setIsEditing(false)
+      setEditingUsername(false)
       setEditError(null)
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setEditError(msg ?? '저장에 실패했습니다')
     },
-  })
-
-  const { data: appLinks } = useQuery<{ android_url: string | null; android_filename: string | null }>({
-    queryKey: ['app-links'],
-    queryFn: async () => {
-      const res = await client.get<{ data: { android_url: string | null; android_filename: string | null } }>('/admin/app-links')
-      return res.data.data
-    },
-    staleTime: 5 * 60_000,
   })
 
   const { data: myStats, isLoading } = useQuery<MyStats>({
@@ -180,98 +169,79 @@ export default function ProfilePage() {
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
 
       {/* ── 헤더 ── */}
-      <div className="flex items-center gap-3 px-4 pt-5 pb-3">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-sm font-bold text-theme-primary">
-          {user?.username?.[0]?.toUpperCase() ?? '?'}
-        </div>
-        <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <div className="flex flex-col gap-1.5">
-              <input
-                value={editUsername}
-                onChange={(e) => setEditUsername(e.target.value)}
-                placeholder="닉네임"
-                className="w-full rounded-lg bg-theme-surface2 px-2.5 py-1.5 text-sm text-theme-primary placeholder-theme-muted outline-none border border-theme-border focus:border-accent"
-              />
-              <input
-                value={editLnAddr}
-                onChange={(e) => setEditLnAddr(e.target.value)}
-                placeholder="라이트닝 주소 (선택)"
-                className="w-full rounded-lg bg-theme-surface2 px-2.5 py-1.5 text-xs text-theme-primary placeholder-theme-muted outline-none border border-theme-border focus:border-accent"
-              />
-              {editError && <p className="text-[10px] text-red-400">{editError}</p>}
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-1.5">
-                <p className="text-sm font-semibold text-theme-primary leading-tight truncate">
-                  {user?.username}
-                </p>
-                {user?.is_admin && (
-                  <span className="flex-shrink-0 flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-                    <ShieldCheck size={9} />
-                    관리자
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-theme-muted truncate">
-                {user?.lightning_address || user?.email}
-              </p>
-            </>
-          )}
-        </div>
-        {isEditing ? (
-          <>
-            <button
-              onClick={() => updateProfileMutation.mutate({ username: editUsername, lightning_address: editLnAddr })}
-              disabled={updateProfileMutation.isPending}
-              className="text-accent hover:text-accent/80 transition-colors p-1 disabled:opacity-50"
-              aria-label="저장"
-            >
-              <Check size={16} strokeWidth={2} />
-            </button>
-            <button
-              onClick={() => {
-                setIsEditing(false)
-                setEditUsername(user?.username ?? '')
-                setEditLnAddr(user?.lightning_address ?? '')
-                setEditError(null)
-              }}
-              className="text-theme-muted hover:text-red-400 transition-colors p-1"
-              aria-label="취소"
-            >
-              <X size={16} strokeWidth={2} />
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={() => {
-                setEditUsername(user?.username ?? '')
-                setEditLnAddr(user?.lightning_address ?? '')
-                setIsEditing(true)
-              }}
-              className="text-theme-muted hover:text-theme-primary transition-colors p-1"
-              aria-label="프로필 수정"
-            >
-              <Pencil size={14} strokeWidth={1.5} />
-            </button>
+      <div className="px-4 pt-5 pb-4">
+        {/* 아바타 + 액션 버튼 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-base font-bold text-theme-primary">
+            {user?.username?.[0]?.toUpperCase() ?? '?'}
+          </div>
+          <div className="flex items-center gap-1">
             <button
               onClick={() => navigate('/settings')}
-              className="text-theme-muted hover:text-theme-primary transition-colors p-1"
+              className="p-2 text-theme-muted hover:text-theme-primary transition-colors"
               aria-label="설정"
             >
               <Settings size={16} strokeWidth={1.5} />
             </button>
             <button
               onClick={() => { logout(); window.location.href = '/login' }}
-              className="text-theme-muted hover:text-red-400 transition-colors p-1"
+              className="p-2 text-theme-muted hover:text-red-400 transition-colors"
               aria-label="로그아웃"
             >
               <LogOut size={16} strokeWidth={1.5} />
             </button>
-          </>
-        )}
+          </div>
+        </div>
+
+        {/* 닉네임 */}
+        <div className="mb-1.5">
+          {editingUsername ? (
+            <div className="flex items-center gap-2">
+              <input
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                autoFocus
+                maxLength={30}
+                className="flex-1 rounded-lg bg-theme-surface2 px-3 py-1.5 text-sm font-semibold text-theme-primary outline-none border border-accent"
+              />
+              <button
+                onClick={() => updateProfileMutation.mutate(editUsername)}
+                disabled={updateProfileMutation.isPending}
+                className="p-1 text-accent disabled:opacity-50"
+                aria-label="저장"
+              >
+                <Check size={16} strokeWidth={2} />
+              </button>
+              <button
+                onClick={() => { setEditingUsername(false); setEditUsername(user?.username ?? ''); setEditError(null) }}
+                className="p-1 text-theme-muted"
+                aria-label="취소"
+              >
+                <X size={16} strokeWidth={2} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-base font-semibold text-theme-primary">{user?.username}</span>
+              {user?.is_admin && (
+                <span className="flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                  <ShieldCheck size={9} />관리자
+                </span>
+              )}
+              <button
+                onClick={() => { setEditUsername(user?.username ?? ''); setEditingUsername(true) }}
+                className="p-1 text-theme-muted hover:text-theme-primary transition-colors"
+                aria-label="닉네임 수정"
+              >
+                <Pencil size={13} strokeWidth={1.5} />
+              </button>
+            </div>
+          )}
+          {editError && <p className="text-[10px] text-red-400 mt-1">{editError}</p>}
+        </div>
+
+        {/* 이메일 (읽기 전용) */}
+        <p className="text-sm text-theme-muted">{user?.email}</p>
       </div>
 
       {/* ── 관리자 버튼 ── */}
@@ -556,73 +526,6 @@ export default function ProfilePage() {
                   <Trash2 size={13} strokeWidth={2} />
                 </button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── 앱 다운로드 ── */}
-      <div className="mx-4 mb-6 space-y-2">
-        <p className="text-xs font-semibold text-theme-muted mb-2">앱 다운로드</p>
-
-        {appLinks?.android_url ? (
-          <a
-            href={appLinks.android_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-between rounded-xl bg-[#3DDC84]/10 border border-[#3DDC84]/30 px-4 py-3 hover:bg-[#3DDC84]/20 active:scale-[0.98] transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#3DDC84]/20 flex items-center justify-center">
-                <Smartphone size={16} className="text-[#3DDC84]" />
-              </div>
-              <div>
-                <p className="text-xs text-theme-muted">Android</p>
-                <p className="text-sm font-semibold text-theme-primary">APK 다운로드</p>
-              </div>
-            </div>
-            <Download size={16} className="text-[#3DDC84]" />
-          </a>
-        ) : (
-          <div className="flex items-center justify-between rounded-xl bg-theme-surface border border-theme-border px-4 py-3 opacity-50">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-theme-surface2 flex items-center justify-center">
-                <Smartphone size={16} className="text-theme-muted" />
-              </div>
-              <div>
-                <p className="text-xs text-theme-muted">Android</p>
-                <p className="text-sm font-semibold text-theme-muted">준비 중</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <button
-          onClick={() => setShowIosGuide((v) => !v)}
-          className="w-full flex items-center justify-between rounded-xl bg-blue-500/10 border border-blue-500/30 px-4 py-3 hover:bg-blue-500/20 active:scale-[0.98] transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-              <Smartphone size={16} className="text-blue-400" />
-            </div>
-            <div className="text-left">
-              <p className="text-xs text-theme-muted">iPhone / iPad</p>
-              <p className="text-sm font-semibold text-theme-primary">홈 화면에 추가 (PWA)</p>
-            </div>
-          </div>
-          <ChevronDown size={16} className={`text-blue-400 transition-transform ${showIosGuide ? 'rotate-180' : ''}`} />
-        </button>
-
-        {showIosGuide && (
-          <div className="rounded-xl bg-theme-surface border border-theme-border px-4 py-3 space-y-2">
-            <p className="text-xs text-theme-muted font-medium">Safari에서 아래 순서로 진행하세요</p>
-            {[
-              '1. Safari로 이 사이트에 접속',
-              '2. 하단 공유 버튼(□↑) 탭',
-              '3. "홈 화면에 추가" 선택',
-              '4. "추가" 탭',
-            ].map((step) => (
-              <p key={step} className="text-xs text-theme-primary">{step}</p>
             ))}
           </div>
         )}

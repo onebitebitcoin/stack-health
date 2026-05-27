@@ -1,6 +1,7 @@
-import { Moon, Sun, ChevronLeft, Zap, Check, User, X } from 'lucide-react'
+import { Moon, Sun, ChevronLeft, Zap, Check, User, X, Smartphone, Download, ChevronDown } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { useThemeStore, type Theme } from '../store/theme'
@@ -21,6 +22,17 @@ export default function SettingsPage() {
   const [usernameError, setUsernameError] = useState('')
   const [savingUsername, setSavingUsername] = useState(false)
   const [usernameSaved, setUsernameSaved] = useState(false)
+
+  const [showIosGuide, setShowIosGuide] = useState(false)
+
+  const { data: appLinks } = useQuery<{ android_url: string | null; android_filename: string | null }>({
+    queryKey: ['app-links'],
+    queryFn: async () => {
+      const res = await client.get<{ data: { android_url: string | null; android_filename: string | null } }>('/admin/app-links')
+      return res.data.data
+    },
+    staleTime: 5 * 60_000,
+  })
 
   const DARK_THEMES: Theme[] = ['volt', 'sapphire', 'indigo']
   const isDark = DARK_THEMES.includes(theme)
@@ -204,6 +216,67 @@ export default function SettingsPage() {
                 </div>
                 <p className="text-[10px] text-theme-subtle mt-1 px-1">비트코인 보상 수령에 사용됩니다</p>
               </form>
+            )}
+          </div>
+        </div>
+
+        {/* 앱 다운로드 */}
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-widest text-theme-muted px-1 mb-2">앱 다운로드</p>
+          <div className="rounded-xl bg-theme-surface overflow-hidden space-y-0">
+            {appLinks?.android_url ? (
+              <a
+                href={appLinks.android_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between px-4 py-3 border-b border-theme-border/50 hover:bg-theme-surface2 active:scale-[0.98] transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <Smartphone size={14} className="text-[#3DDC84]" />
+                  <div>
+                    <p className="text-xs text-theme-muted">Android</p>
+                    <p className="text-sm text-theme-primary">APK 다운로드</p>
+                  </div>
+                </div>
+                <Download size={14} className="text-[#3DDC84]" />
+              </a>
+            ) : (
+              <div className="flex items-center justify-between px-4 py-3 border-b border-theme-border/50 opacity-40">
+                <div className="flex items-center gap-3">
+                  <Smartphone size={14} className="text-theme-muted" />
+                  <div>
+                    <p className="text-xs text-theme-muted">Android</p>
+                    <p className="text-sm text-theme-muted">준비 중</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowIosGuide((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-theme-surface2 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Smartphone size={14} className="text-blue-400" />
+                <div className="text-left">
+                  <p className="text-xs text-theme-muted">iPhone / iPad</p>
+                  <p className="text-sm text-theme-primary">홈 화면에 추가 (PWA)</p>
+                </div>
+              </div>
+              <ChevronDown size={14} className={`text-theme-muted transition-transform ${showIosGuide ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showIosGuide && (
+              <div className="px-4 pb-3 pt-1 border-t border-theme-border/50 space-y-1.5">
+                {[
+                  '1. Safari로 이 사이트에 접속',
+                  '2. 하단 공유 버튼(□↑) 탭',
+                  '3. "홈 화면에 추가" 선택',
+                  '4. "추가" 탭',
+                ].map((step) => (
+                  <p key={step} className="text-xs text-theme-primary">{step}</p>
+                ))}
+              </div>
             )}
           </div>
         </div>
