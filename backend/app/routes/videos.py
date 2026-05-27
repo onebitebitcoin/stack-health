@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import uuid
@@ -454,35 +455,40 @@ async def upload_pipeline(
     r2_key, _cdn_url = r2_service.upload_fileobj(file.file, content_type, file.filename or "video.mp4")
 
     # 2. 오디오 R2 업로드 (동기)
+    # UploadFile.size는 multipart Content-Length 헤더 기반이라 모바일에서 None일 수 있음.
+    # bytes를 직접 읽어서 크기를 확인한다.
     audio_r2_key: str | None = None
     audio_content_type = "audio/webm"
-    if audio and audio.size and audio.size > 0:
+    if audio is not None:
         audio_content_type = audio.content_type or "audio/webm"
         audio_ext = "mp4" if "mp4" in audio_content_type else "webm"
-        audio_r2_key, _ = r2_service.upload_fileobj(
-            audio.file, audio_content_type, f"audio.{audio_ext}"
-        )
+        audio_bytes = await audio.read()
+        if len(audio_bytes) > 0:
+            audio_r2_key, _ = r2_service.upload_fileobj(
+                io.BytesIO(audio_bytes), audio_content_type, f"audio.{audio_ext}"
+            )
 
     # 3. 증거 사진 R2 업로드 (동기)
     proof_r2_key: str | None = None
     proof_cdn_url: str | None = None
-    if proof_image and proof_image.size and proof_image.size > 0:
+    if proof_image is not None:
         proof_ct = proof_image.content_type or "image/jpeg"
         if proof_ct not in ALLOWED_IMAGE_CONTENT_TYPES:
             raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식: {proof_ct}")
         image_bytes = await proof_image.read()
         if len(image_bytes) > MAX_IMAGE_SIZE:
             raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 10MB)")
-        ext = "jpg" if "jpeg" in proof_ct or "jpg" in proof_ct else "png"
-        proof_r2_key = f"proof/{uuid.uuid4()}.{ext}"
-        r2_client = r2_service.get_r2_client()
-        r2_client.put_object(
-            Bucket=app_settings.r2_bucket_name,
-            Key=proof_r2_key,
-            Body=image_bytes,
-            ContentType=proof_ct,
-        )
-        proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
+        if len(image_bytes) > 0:
+            ext = "jpg" if "jpeg" in proof_ct or "jpg" in proof_ct else "png"
+            proof_r2_key = f"proof/{uuid.uuid4()}.{ext}"
+            r2_client = r2_service.get_r2_client()
+            r2_client.put_object(
+                Bucket=app_settings.r2_bucket_name,
+                Key=proof_r2_key,
+                Body=image_bytes,
+                ContentType=proof_ct,
+            )
+            proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
 
     # 4. 전체 파이프라인 비동기 시작
     job_id = enqueue_full_upload_pipeline(
