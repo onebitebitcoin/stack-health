@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import {
@@ -40,6 +40,39 @@ export default function ProfilePage() {
   const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
+  const videoItemRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  useEffect(() => {
+    videoRefs.current = videoRefs.current.slice(0, selectedPosts.length)
+    videoItemRefs.current = videoItemRefs.current.slice(0, selectedPosts.length)
+    if (!selectedDate || selectedPosts.length === 0) return
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const idx = videoItemRefs.current.indexOf(entry.target as HTMLDivElement)
+          if (idx === -1) continue
+          const video = videoRefs.current[idx]
+          if (entry.isIntersecting) {
+            setVideoIdx(idx)
+            video?.play().catch(() => {})
+          } else {
+            video?.pause()
+          }
+        }
+      },
+      { root: container, threshold: 0.5 },
+    )
+
+    videoItemRefs.current.forEach((el) => { if (el) observer.observe(el) })
+    videoRefs.current[0]?.play().catch(() => {})
+
+    return () => observer.disconnect()
+  }, [selectedDate, selectedPosts])
 
   const { data: myStats, isLoading } = useQuery<MyStats>({
     queryKey: ['my-stats'],
@@ -551,11 +584,12 @@ export default function ProfilePage() {
 
       {/* ── 풀스크린 영상 뷰어 ── */}
       {selectedDate && selectedPosts.length > 0 && (
-        <div className="fixed inset-0 z-[70] bg-black flex flex-col">
-          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/60 to-transparent">
+        <div className="fixed inset-0 z-[70] bg-black">
+          {/* 헤더 오버레이 */}
+          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
             <button
               onClick={closeModal}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/30"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/30 pointer-events-auto"
             >
               <ArrowLeft size={20} strokeWidth={2} color="white" />
             </button>
@@ -569,38 +603,43 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <video
-            key={selectedPosts[videoIdx].cdn_url}
-            src={selectedPosts[videoIdx].cdn_url}
-            className="h-full w-full object-contain"
-            autoPlay playsInline controls
-          />
-
-          <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 pt-16 bg-gradient-to-t from-black/70 to-transparent">
-            <div className="flex items-center gap-4 mb-2">
-              <div className="flex items-center gap-1.5 text-white/80">
-                <Heart size={14} strokeWidth={1.5} />
-                <span className="text-sm">{selectedPosts[videoIdx].like_count}</span>
+          {/* 세로 스크롤 스냅 */}
+          <div
+            ref={scrollContainerRef}
+            className="h-full w-full overflow-y-scroll"
+            style={{ scrollSnapType: 'y mandatory', scrollbarWidth: 'none' }}
+          >
+            {selectedPosts.map((post, i) => (
+              <div
+                key={post.cdn_url}
+                ref={(el) => { videoItemRefs.current[i] = el }}
+                className="relative h-full w-full flex-shrink-0"
+                style={{ scrollSnapAlign: 'start' }}
+              >
+                <video
+                  ref={(el) => { videoRefs.current[i] = el }}
+                  src={post.cdn_url}
+                  className="h-full w-full object-contain"
+                  playsInline
+                  loop
+                />
+                <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 pt-16 bg-gradient-to-t from-black/70 to-transparent">
+                  <div className="flex items-center gap-4 mb-2">
+                    <div className="flex items-center gap-1.5 text-white/80">
+                      <Heart size={14} strokeWidth={1.5} />
+                      <span className="text-sm">{post.like_count}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-white/80">
+                      <Eye size={14} strokeWidth={1.5} />
+                      <span className="text-sm">{post.view_count}</span>
+                    </div>
+                  </div>
+                  {post.caption && (
+                    <p className="text-sm text-white/90 line-clamp-2">{post.caption}</p>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 text-white/80">
-                <Eye size={14} strokeWidth={1.5} />
-                <span className="text-sm">{selectedPosts[videoIdx].view_count}</span>
-              </div>
-            </div>
-            {selectedPosts[videoIdx].caption && (
-              <p className="text-sm text-white/90 line-clamp-2 mb-3">{selectedPosts[videoIdx].caption}</p>
-            )}
-            {selectedPosts.length > 1 && (
-              <div className="flex gap-1.5">
-                {selectedPosts.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setVideoIdx(i)}
-                    className={`h-1 flex-1 rounded-full transition-all ${i === videoIdx ? 'bg-accent' : 'bg-white/30'}`}
-                  />
-                ))}
-              </div>
-            )}
+            ))}
           </div>
         </div>
       )}
