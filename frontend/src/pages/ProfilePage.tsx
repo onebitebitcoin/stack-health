@@ -27,7 +27,6 @@ function pad2(n: number): string {
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user)
-  const setUser = useAuthStore((s) => s.setUser)
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
 
