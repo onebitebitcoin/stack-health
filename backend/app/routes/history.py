@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -15,10 +15,13 @@ from app.routes.auth import get_current_user as get_required_user
 router = APIRouter(prefix="/api/v1/history", tags=["history"])
 
 
+_DB_TZ = ZoneInfo("Asia/Seoul")  # PostgreSQL session timezone — stored values are KST
+
+
 def _to_local_date(dt: datetime, tz: ZoneInfo) -> str:
-    """Convert naive UTC datetime to local date string YYYY-MM-DD."""
-    utc_dt = dt.replace(tzinfo=timezone.utc)
-    local_dt = utc_dt.astimezone(tz)
+    """Convert naive KST datetime (as stored by PostgreSQL) to local date string YYYY-MM-DD."""
+    kst_dt = dt.replace(tzinfo=_DB_TZ)
+    local_dt = kst_dt.astimezone(tz)
     return local_dt.strftime("%Y-%m-%d")
 
 
@@ -64,11 +67,12 @@ def get_history(
 
     last_day = monthrange(year, month)[1]
 
-    month_start_local = datetime(year, month, 1, 0, 0, 0, tzinfo=tz)
-    month_end_local = datetime(year, month, last_day, 23, 59, 59, tzinfo=tz)
+    # Convert user's month boundaries to DB storage timezone (KST) for querying
+    month_start_user = datetime(year, month, 1, 0, 0, 0, tzinfo=tz)
+    month_end_user = datetime(year, month, last_day, 23, 59, 59, tzinfo=tz)
 
-    month_start_utc = month_start_local.astimezone(timezone.utc).replace(tzinfo=None)
-    month_end_utc = month_end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    month_start_utc = month_start_user.astimezone(_DB_TZ).replace(tzinfo=None)
+    month_end_utc = month_end_user.astimezone(_DB_TZ).replace(tzinfo=None)
 
     posts = (
         db.query(Post)
