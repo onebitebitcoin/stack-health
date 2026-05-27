@@ -208,16 +208,22 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* 약관 */}
+        {/* 약관 + 버전 */}
         <div>
           <p className="text-[10px] font-medium uppercase tracking-widest text-theme-muted px-1 mb-2">정보</p>
-          <button
-            onClick={() => navigate('/terms')}
-            className="w-full flex items-center justify-between rounded-xl bg-theme-surface px-4 py-3 text-sm text-theme-primary"
-          >
-            이용약관
-            <ChevronLeft size={14} className="rotate-180 text-theme-muted" />
-          </button>
+          <div className="rounded-xl bg-theme-surface overflow-hidden">
+            <button
+              onClick={() => navigate('/terms')}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm text-theme-primary border-b border-theme-border/50"
+            >
+              이용약관
+              <ChevronLeft size={14} className="rotate-180 text-theme-muted" />
+            </button>
+            <div className="px-4 py-3 flex items-center justify-between">
+              <span className="text-xs text-theme-muted">버전</span>
+              <span className="text-xs text-theme-subtle font-mono">v{__APP_VERSION__}</span>
+            </div>
+          </div>
         </div>
 
       </div>
