@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronLeft, Zap, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut } from 'lucide-react'
+import { Moon, Sun, ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -150,10 +150,7 @@ export default function SettingsPage() {
             {/* Lightning 주소 */}
             <div className={editingLn ? DIVIDER : ''}>
               <div className={ROW}>
-                <div className="flex items-center gap-2">
-                  <Zap size={13} className="text-accent" />
-                  <span className={LABEL}>Lightning 주소</span>
-                </div>
+                <span className={LABEL}>Lightning 주소</span>
                 {!editingLn ? (
                   <button
                     onClick={() => { setEditingLn(true); setLnInput(user?.lightning_address ?? '') }}
