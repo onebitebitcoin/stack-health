@@ -385,7 +385,7 @@ export default function UploadPage() {
   if (uploading || pipelineJobId) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-theme-page px-6">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-accent border-t-transparent" />
+        <Upload size={48} strokeWidth={1.5} className="animate-bounce text-accent" />
         <p className="text-base font-semibold text-theme-primary">업로드 중...</p>
         {uploading && (
           <div className="w-64 flex flex-col items-center gap-1.5">
