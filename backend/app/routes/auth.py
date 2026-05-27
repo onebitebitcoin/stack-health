@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import io
+import random
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -22,10 +26,22 @@ from app.services.auth import (
     hash_password,
     verify_password,
 )
+from app.services import r2 as r2_service
 from app.services.google_oauth import exchange_code, get_google_auth_url, get_google_user_info
 from app.services.lnauth import encode_lnurl, generate_k1, verify_signature
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+PROFILE_COLORS = [
+    "#6366f1", "#8b5cf6", "#ec4899", "#f97316",
+    "#14b8a6", "#22c55e", "#3b82f6", "#eab308",
+]
+AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+AVATAR_MAX_SIZE = 5 * 1024 * 1024  # 5MB
+
+
+def _random_profile_color() -> str:
+    return random.choice(PROFILE_COLORS)
 bearer = HTTPBearer()
 bearer_optional = HTTPBearer(auto_error=False)
 
@@ -66,6 +82,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)) -> dict:
         email=req.email,
         username=req.username,
         password_hash=hash_password(req.password),
+        app_settings={"profile_color": _random_profile_color()},
     )
     db.add(user)
     db.commit()
@@ -124,6 +141,36 @@ def update_me(
     return {"data": UserSchema.model_validate(current_user)}
 
 
+@router.post("/avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    content_type = file.content_type or ""
+    if content_type not in AVATAR_ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다 (jpeg/png/webp/gif)")
+
+    data = await file.read()
+    if len(data) > AVATAR_MAX_SIZE:
+        raise HTTPException(status_code=400, detail="파일 크기는 5MB 이하여야 합니다")
+
+    ext = (file.filename or "avatar.jpg").rsplit(".", 1)[-1].lower()
+    r2_key = f"avatars/{uuid.uuid4()}.{ext}"
+    client = r2_service.get_r2_client()
+    client.upload_fileobj(
+        io.BytesIO(data),
+        settings.r2_bucket_name,
+        r2_key,
+        ExtraArgs={"ContentType": content_type},
+    )
+    avatar_url = r2_service.get_cdn_url(r2_key)
+    current_user.avatar_url = avatar_url
+    db.commit()
+    db.refresh(current_user)
+    return {"data": UserSchema.model_validate(current_user)}
+
+
 # ── Google OAuth ──────────────────────────────────────────────────────
 
 @router.get("/google")
@@ -168,7 +215,7 @@ async def google_callback(code: str | None = None, error: str | None = None, db:
             oauth_provider="google",
             oauth_sub=google_sub,
             avatar_url=avatar,
-            app_settings={"needs_username": True},
+            app_settings={"needs_username": True, "profile_color": _random_profile_color()},
         )
         db.add(user)
         db.commit()
@@ -237,7 +284,7 @@ def lnauth_callback(
             password_hash=None,
             oauth_provider="lnauth",
             oauth_sub=key,
-            app_settings={"needs_username": True},
+            app_settings={"needs_username": True, "profile_color": _random_profile_color()},
         )
         db.add(user)
 

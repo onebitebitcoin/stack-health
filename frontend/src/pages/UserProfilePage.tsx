@@ -5,6 +5,7 @@ import { Trophy, ArrowLeft, Dumbbell, Heart, Eye, MessageCircle } from 'lucide-r
 import client from '../api/client'
 import type { UserProfile } from '../api/types'
 import LoadingScreen from '../components/LoadingScreen'
+import UserAvatar from '../components/UserAvatar'
 
 type Tab = 'videos' | 'challenges' | 'titles'
 
@@ -47,9 +48,11 @@ export default function UserProfilePage() {
         <button onClick={() => navigate(-1)} className="text-theme-muted flex-shrink-0">
           <ArrowLeft size={20} />
         </button>
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-sm font-bold text-theme-primary">
-          {user.username[0]?.toUpperCase() ?? '?'}
-        </div>
+        <UserAvatar
+          username={user.username}
+          avatarUrl={user.avatar_url}
+          size={40}
+        />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-theme-primary leading-tight">@{user.username}</p>
           <p className="text-xs text-theme-muted">{post_count}개 업로드</p>

@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/auth'
 import type { MyStats, HistoryResponse, HistoryWorkoutPost, Claim, WeeklyPointsHistory } from '../api/types'
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
+import UserAvatar from '../components/UserAvatar'
 
 const DAYS_KO = ['월', '화', '수', '목', '금', '토', '일']
 
@@ -209,9 +210,12 @@ export default function ProfilePage() {
 
       {/* ── 헤더 ── */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-4">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-theme-surface2 text-sm font-bold text-theme-primary">
-          {user?.username?.[0]?.toUpperCase() ?? '?'}
-        </div>
+        <UserAvatar
+          username={user?.username ?? '?'}
+          avatarUrl={user?.avatar_url}
+          profileColor={user?.app_settings?.profile_color as string | null}
+          size={36}
+        />
 
         <div className="flex-1 flex items-center gap-1.5 min-w-0">
           <span className="text-sm font-semibold text-theme-primary truncate">{user?.username}</span>
