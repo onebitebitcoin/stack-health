@@ -284,6 +284,7 @@ export interface WeeklyPointsItem {
   points: number
   source: string
   post_id: number | null
+  queued: boolean
 }
 
 export interface WeeklyPointsHistory {

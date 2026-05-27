@@ -197,13 +197,13 @@ export default function ProfilePage() {
         <span className="text-xs text-theme-muted">이번 주 흘린 땀</span>
         <Droplets size={30} className="text-blue-400" strokeWidth={1.5} />
         <span className="text-5xl font-bold font-mono text-theme-primary">
-          {(weekPoints / 100).toFixed(2)}
+          {weekPoints.toFixed(2)}
           <span className="text-xl font-medium text-theme-muted ml-1">L</span>
         </span>
         {weekQueuedPoints > 0 && (
           <div className="flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-            <span className="text-xs text-theme-muted">+{(weekQueuedPoints / 100).toFixed(2)}L 대기 중</span>
+            <span className="text-xs text-theme-muted">+{weekQueuedPoints.toFixed(2)}L 대기 중</span>
           </div>
         )}
         <div className="flex items-center gap-1 text-xs text-theme-muted mt-1">
@@ -219,7 +219,7 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between px-5 py-3 border-b border-theme-border">
             <span className="text-xs font-medium text-theme-muted">누적 총 땀</span>
             <span className="text-sm font-semibold text-theme-primary">
-              {(displayedSweatPoints / 100).toFixed(1)}
+              {displayedSweatPoints.toFixed(1)}
               <span className="text-xs font-normal text-theme-muted ml-0.5">L</span>
             </span>
           </div>
@@ -241,15 +241,23 @@ export default function ProfilePage() {
                   {weeklyPointsData.items.map((item, idx) => {
                     const sourceLabel =
                       item.source === 'upload' ? '영상 업로드' :
+                      item.source === 'comment' ? '댓글' :
                       item.source === 'bonus' ? '보너스' :
                       item.source
                     return (
                       <div key={idx} className="flex items-center justify-between px-5 py-2.5 border-b border-theme-border last:border-0">
                         <div>
-                          <p className="text-xs font-medium text-theme-primary">{sourceLabel}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-medium text-theme-primary">{sourceLabel}</p>
+                            {item.queued && (
+                              <span className="text-[10px] text-yellow-400">대기 중</span>
+                            )}
+                          </div>
                           <p className="text-xs text-theme-muted">{item.date.slice(5).replace('-', '/')}</p>
                         </div>
-                        <span className="text-xs font-semibold text-accent">+{(item.points / 100).toFixed(2)} L</span>
+                        <span className={`text-xs font-semibold ${item.queued ? 'text-yellow-400' : 'text-accent'}`}>
+                          +{item.points.toFixed(2)} L
+                        </span>
                       </div>
                     )
                   })}
@@ -270,7 +278,7 @@ export default function ProfilePage() {
                   <div>
                     <p className="text-xs font-medium text-theme-primary">{claim.week_label}</p>
                     <p className="text-xs text-theme-muted mt-0.5">
-                      {(claim.points_used / 100).toFixed(2)} L
+                      {claim.points_used.toFixed(2)} L
                     </p>
                   </div>
                   <span className={`text-xs font-semibold ${

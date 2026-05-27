@@ -105,8 +105,8 @@ def get_my_stats(
     return {
         "data": {
             "total_posts": total_posts,
-            "total_points": int(total_points),
-            "queued_points": int(queued_points),
+            "total_points": round(float(total_points), 2),
+            "queued_points": round(float(queued_points), 2),
             "week_points": round(float(week_points), 2),
             "week_queued_points": round(float(week_queued), 2),
             "week_sats": week_sats,
@@ -127,19 +127,20 @@ def get_my_weekly_points(
     start_date = monday.date().isoformat()
     end_date = sunday.date().isoformat()
 
-    # Fetch current week's reward points (fixed only)
+    # Fetch current week's reward points (fixed + queued, exclude revoked and 0pt tracking records)
     records = (
         db.query(RewardPoint)
         .filter(
             RewardPoint.user_id == current_user.id,
             RewardPoint.week_label == week_label,
-            RewardPoint.status == REWARD_STATUS_FIXED,
+            RewardPoint.status.in_([REWARD_STATUS_FIXED, REWARD_STATUS_QUEUED]),
+            RewardPoint.points > 0,
         )
-        .order_by(RewardPoint.created_at.asc())
+        .order_by(RewardPoint.created_at.desc())
         .all()
     )
 
-    total_points = sum(r.points for r in records)
+    total_points = sum(r.points for r in records if r.status == REWARD_STATUS_FIXED)
 
     # Convert created_at (stored as naive UTC) to KST date string
     def to_kst_date(dt: datetime) -> str:
@@ -153,6 +154,7 @@ def get_my_weekly_points(
             "points": round(float(r.points), 2),
             "source": r.reason,
             "post_id": r.reference_id,
+            "queued": r.status == REWARD_STATUS_QUEUED,
         }
         for r in records
     ]
