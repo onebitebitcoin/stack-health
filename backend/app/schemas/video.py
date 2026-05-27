@@ -19,7 +19,6 @@ class PresignedUrlRequest(BaseModel):
     filename: str
     content_type: str
     file_size: int
-    file_hash: str
 
 
 class PresignedUrlResponse(BaseModel):
@@ -29,7 +28,6 @@ class PresignedUrlResponse(BaseModel):
 
 class ConfirmUploadRequest(BaseModel):
     r2_key: str
-    file_hash: str = ""  # SHA256 hash, passed through from presigned-url step
     duration_sec: int
     caption: str | None = None
     tags: list[str] | None = None

@@ -21,32 +21,11 @@ def test_presigned_url_success(mock_r2, client: TestClient) -> None:
         "filename": "workout.mp4",
         "content_type": "video/mp4",
         "file_size": 1024 * 1024,
-        "file_hash": "abc123",
     }, headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
     assert "upload_url" in data
     assert data["r2_key"] == "videos/test.mp4"
-
-
-@patch("app.routes.videos.r2_service.generate_presigned_url", return_value=("https://r2.example.com/upload", "videos/test.mp4"))
-def test_presigned_url_duplicate_hash(mock_r2, client: TestClient) -> None:
-    token = _register_and_token(client)
-    headers = _auth(token)
-    payload = {
-        "filename": "w.mp4", "content_type": "video/mp4",
-        "file_size": 1024, "file_hash": "duphash",
-    }
-    # First request succeeds (presigned URL issued)
-    client.post("/api/v1/videos/presigned-url", json=payload, headers=headers)
-    # Confirm to register the hash in DB
-    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn.example.com/videos/test.mp4"):
-        client.post("/api/v1/videos/confirm", json={
-            "r2_key": "videos/test.mp4", "file_hash": "duphash", "duration_sec": 30,
-        }, headers=headers)
-    # Second presigned-url with same hash → 409
-    res = client.post("/api/v1/videos/presigned-url", json=payload, headers=headers)
-    assert res.status_code == 409
 
 
 @patch("app.routes.videos.r2_service.generate_presigned_url", return_value=("https://r2.example.com/upload", "videos/x.mp4"))
@@ -57,7 +36,7 @@ def test_presigned_url_daily_limit(mock_r2, client: TestClient) -> None:
     for i in range(3):
         client.post("/api/v1/videos/presigned-url", json={
             "filename": f"w{i}.mp4", "content_type": "video/mp4",
-            "file_size": 100, "file_hash": f"hash{i}",
+            "file_size": 100,
         }, headers=headers)
         with patch("app.routes.videos.r2_service.get_cdn_url", return_value=f"https://cdn/v{i}.mp4"):
             client.post("/api/v1/videos/confirm", json={
@@ -66,7 +45,7 @@ def test_presigned_url_daily_limit(mock_r2, client: TestClient) -> None:
     # Next upload is blocked while 3 active uploads remain.
     res = client.post("/api/v1/videos/presigned-url", json={
         "filename": "w3.mp4", "content_type": "video/mp4",
-        "file_size": 100, "file_hash": "hash3",
+        "file_size": 100,
     }, headers=headers)
     assert res.status_code == 429
 
@@ -80,7 +59,7 @@ def test_presigned_url_limit_eased_after_delete(mock_r2, client: TestClient) -> 
     for i in range(3):
         client.post("/api/v1/videos/presigned-url", json={
             "filename": f"w{i}.mp4", "content_type": "video/mp4",
-            "file_size": 100, "file_hash": f"delete-hash-{i}",
+            "file_size": 100,
         }, headers=headers)
         with patch("app.routes.videos.r2_service.get_cdn_url", return_value=f"https://cdn/delete-v{i}.mp4"):
             confirm_res = client.post("/api/v1/videos/confirm", json={
@@ -90,7 +69,7 @@ def test_presigned_url_limit_eased_after_delete(mock_r2, client: TestClient) -> 
 
     blocked_res = client.post("/api/v1/videos/presigned-url", json={
         "filename": "blocked.mp4", "content_type": "video/mp4",
-        "file_size": 100, "file_hash": "delete-hash-blocked",
+        "file_size": 100,
     }, headers=headers)
     assert blocked_res.status_code == 429
 
@@ -100,7 +79,7 @@ def test_presigned_url_limit_eased_after_delete(mock_r2, client: TestClient) -> 
 
     eased_res = client.post("/api/v1/videos/presigned-url", json={
         "filename": "eased.mp4", "content_type": "video/mp4",
-        "file_size": 100, "file_hash": "delete-hash-eased",
+        "file_size": 100,
     }, headers=headers)
     assert eased_res.status_code == 200
 
@@ -113,14 +92,12 @@ def test_confirm_upload_uses_active_content_limit(mock_cdn, client: TestClient) 
     for i in range(3):
         res = client.post("/api/v1/videos/confirm", json={
             "r2_key": f"videos/confirm-limit-{i}.mp4",
-            "file_hash": f"confirm-limit-hash-{i}",
             "duration_sec": 20,
         }, headers=headers)
         assert res.status_code == 200
 
     res = client.post("/api/v1/videos/confirm", json={
         "r2_key": "videos/confirm-limit-blocked.mp4",
-        "file_hash": "confirm-limit-hash-blocked",
         "duration_sec": 20,
     }, headers=headers)
     assert res.status_code == 429
@@ -131,7 +108,6 @@ def test_presigned_url_file_too_large(client: TestClient) -> None:
     res = client.post("/api/v1/videos/presigned-url", json={
         "filename": "big.mp4", "content_type": "video/mp4",
         "file_size": 51 * 1024 * 1024,
-        "file_hash": "bighash",
     }, headers=_auth(token))
     assert res.status_code == 400
 
@@ -331,7 +307,7 @@ def test_upload_pipeline_success(mock_upload, mock_enqueue, client: TestClient) 
     token = _register_and_token(client, "pipe@x.com", "pipeuser")
     res = client.post(
         "/api/v1/videos/upload-pipeline",
-        data={"file_hash": "pipehash1", "duration_sec": "20", "tags": '["홈트"]'},
+        data={"duration_sec": "20", "tags": '["홈트"]'},
         files={"file": ("workout.mp4", b"fake-video-data", "video/mp4")},
         headers=_auth(token),
     )
@@ -341,31 +317,11 @@ def test_upload_pipeline_success(mock_upload, mock_enqueue, client: TestClient) 
     assert data["status"] == "processing"
 
 
-@patch("app.routes.videos.enqueue_full_upload_pipeline", return_value="job-xyz")
-@patch("app.routes.videos.r2_service.upload_fileobj", return_value=("videos/dupe.mp4", "https://cdn/dupe.mp4"))
-def test_upload_pipeline_duplicate_hash(mock_upload, mock_enqueue, client: TestClient) -> None:
-    token = _register_and_token(client, "dupepipe@x.com", "dupepipe")
-    headers = _auth(token)
-    # 먼저 confirm으로 해시 등록
-    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/dupe.mp4"):
-        client.post("/api/v1/videos/confirm", json={
-            "r2_key": "videos/dupe.mp4", "file_hash": "dupehash2", "duration_sec": 20,
-        }, headers=headers)
-    # 동일 해시로 pipeline 시도 → 409
-    res = client.post(
-        "/api/v1/videos/upload-pipeline",
-        data={"file_hash": "dupehash2", "duration_sec": "20"},
-        files={"file": ("w.mp4", b"data", "video/mp4")},
-        headers=headers,
-    )
-    assert res.status_code == 409
-
-
 def test_upload_pipeline_invalid_content_type(client: TestClient) -> None:
     token = _register_and_token(client, "badct@x.com", "badctuser")
     res = client.post(
         "/api/v1/videos/upload-pipeline",
-        data={"file_hash": "badhash", "duration_sec": "20"},
+        data={"duration_sec": "20"},
         files={"file": ("doc.pdf", b"data", "application/pdf")},
         headers=_auth(token),
     )
@@ -375,7 +331,7 @@ def test_upload_pipeline_invalid_content_type(client: TestClient) -> None:
 def test_upload_pipeline_unauthenticated(client: TestClient) -> None:
     res = client.post(
         "/api/v1/videos/upload-pipeline",
-        data={"file_hash": "h", "duration_sec": "20"},
+        data={"duration_sec": "20"},
         files={"file": ("w.mp4", b"data", "video/mp4")},
     )
     assert res.status_code in (401, 403)

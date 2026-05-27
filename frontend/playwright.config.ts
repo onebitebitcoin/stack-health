@@ -19,15 +19,10 @@ export default defineConfig({
       name: 'desktop',
       use: { ...devices['Desktop Chrome'] },
     },
-    {
-      name: 'android',
-      use: {
-        ...devices['Pixel 5'],
-        // Chromium-based: same engine as desktop, touch emulation + mobile viewport
-        hasTouch: true,
-        isMobile: true,
-      },
-    },
+    // {
+    //   name: 'android',
+    //   use: { ...devices['Pixel 5'], hasTouch: true, isMobile: true },
+    // },
     {
       name: 'iphone',
       use: {

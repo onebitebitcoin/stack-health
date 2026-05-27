@@ -51,9 +51,6 @@ def get_presigned_url(
     if req.file_size > r2_service.MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="파일이 너무 큽니다 (최대 50MB)")
 
-    if db.query(Video).filter(Video.file_hash == req.file_hash).first():
-        raise HTTPException(status_code=409, detail="Duplicate video")
-
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
         raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
 
@@ -64,7 +61,6 @@ def get_presigned_url(
 @router.post("/upload")
 async def upload_video(
     file: UploadFile = File(...),
-    file_hash: str = Form(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -75,9 +71,6 @@ async def upload_video(
     content_type = file.content_type or "video/mp4"
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식입니다: {content_type}")
-
-    if db.query(Video).filter(Video.file_hash == file_hash).first():
-        raise HTTPException(status_code=409, detail="Duplicate video")
 
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
         raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
@@ -111,7 +104,7 @@ def confirm_upload(
         user_id=current_user.id,
         r2_key=req.r2_key,
         cdn_url=cdn_url,
-        file_hash=req.file_hash or req.r2_key,
+        file_hash=req.r2_key,
         duration_sec=req.duration_sec,
     )
     db.add(video)
@@ -393,7 +386,6 @@ def merge_proof(
 @router.post("/upload-pipeline")
 async def upload_pipeline(
     file: UploadFile = File(...),
-    file_hash: str = Form(...),
     duration_sec: int = Form(...),
     caption: str | None = Form(None),
     tags: str = Form("[]"),
@@ -410,9 +402,6 @@ async def upload_pipeline(
     content_type = file.content_type or "video/mp4"
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식: {content_type}")
-
-    if db.query(Video).filter(Video.file_hash == file_hash).first():
-        raise HTTPException(status_code=409, detail="Duplicate video")
 
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
         raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
@@ -464,7 +453,7 @@ async def upload_pipeline(
     # 4. 전체 파이프라인 비동기 시작
     job_id = enqueue_full_upload_pipeline(
         r2_key=r2_key,
-        file_hash=file_hash,
+        file_hash=r2_key,
         duration_sec=duration_sec,
         caption=caption,
         tags=tags_list,

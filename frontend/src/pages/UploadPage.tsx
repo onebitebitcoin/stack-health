@@ -23,13 +23,6 @@ function getSupportedAudioMimeType(): string {
   return PREFERRED_AUDIO_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? ''
 }
 
-async function sha256(file: File | Blob): Promise<string> {
-  const buffer = await file.arrayBuffer()
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
 
 export default function UploadPage() {
   const navigate = useNavigate()
@@ -139,8 +132,14 @@ export default function UploadPage() {
           return next
         })
       }, 1000)
-    } catch {
-      setError('마이크 접근 권한이 필요합니다.')
+    } catch (err) {
+      if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
+        setError('마이크 접근이 거부되었습니다. 브라우저 주소창 옆 자물쇠 아이콘을 눌러 마이크를 허용해주세요.')
+      } else if (err instanceof DOMException && err.name === 'NotFoundError') {
+        setError('마이크를 찾을 수 없습니다. 장치를 확인해주세요.')
+      } else {
+        setError('마이크 접근 권한이 필요합니다.')
+      }
     }
   }
 
@@ -159,6 +158,7 @@ export default function UploadPage() {
     }
     audioBlobRef.current = null
     setRecordingDone(false)
+    setError('')
     setStep(3)
   }
 
@@ -189,10 +189,8 @@ export default function UploadPage() {
     setProofMergeError('')
     setUploading(true)
     try {
-      const hash = await sha256(file)
       const uploadForm = new FormData()
       uploadForm.append('file', file, file.name)
-      uploadForm.append('file_hash', hash)
 
       const uploadRes = await client.post<{ data: { r2_key: string; cdn_url: string } }>(
         '/videos/upload', uploadForm,
@@ -280,7 +278,6 @@ export default function UploadPage() {
 
       const confirmRes = await client.post<{ data: { points_earned: number } }>('/videos/confirm', {
         r2_key,
-        file_hash: hash,
         duration_sec: Math.min(30, Math.max(5, duration)),
         caption: caption || null,
         tags: selectedTags,
