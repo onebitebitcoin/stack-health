@@ -160,10 +160,10 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
+      <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
         <LogoMark aria-label="Stack Health 로고" role="img" size={40} />
       </div>
-      <p className="mb-1 text-xs font-bold tracking-[0.28em] text-accent uppercase">Stack Health</p>
+      <p className="mb-1 text-2xl font-bold text-accent">Stack Health</p>
       <p className="mb-8 text-sm text-theme-muted">운동하고 비트코인 모으자</p>
 
       {errorParam && (
