@@ -38,6 +38,7 @@ export default function ProfilePage() {
   const [selectedPosts, setSelectedPosts] = useState<HistoryWorkoutPost[]>([])
   const [videoIdx, setVideoIdx] = useState(0)
   const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
+  const [showWeeklyActivity, setShowWeeklyActivity] = useState(true)
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -243,7 +244,7 @@ export default function ProfilePage() {
 
       {/* ── 땀 카드 ── */}
       <button
-        onClick={() => setShowWeeklyHistory((v) => !v)}
+        onClick={() => { setShowWeeklyHistory((v) => !v); setShowWeeklyActivity(true) }}
         className={`mx-4 flex flex-col items-center gap-2 w-[calc(100%-2rem)] bg-theme-surface px-6 py-6 active:scale-[0.98] transition-transform ${showWeeklyHistory ? 'rounded-t-2xl mb-0' : 'rounded-2xl mb-4'}`}
       >
         <span className="text-xs text-theme-muted">이번 주 흘린 땀</span>
@@ -278,16 +279,22 @@ export default function ProfilePage() {
 
           {/* 이번 주 활동 */}
           <div className="border-b border-theme-border">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-theme-border">
+            <button
+              onClick={() => setShowWeeklyActivity((v) => !v)}
+              className="w-full flex items-center justify-between px-5 py-3 border-b border-theme-border"
+            >
               <span className="text-xs font-medium text-theme-muted">이번 주 활동</span>
-              {weeklyPointsData && (
-                <span className="text-xs text-theme-subtle">
-                  {weeklyPointsData.week_number}주차{' '}
-                  {weeklyPointsData.start_date.slice(5).replace('-', '/')}~{weeklyPointsData.end_date.slice(5).replace('-', '/')}
-                </span>
-              )}
-            </div>
-            {weeklyPointsLoading ? (
+              <div className="flex items-center gap-2">
+                {weeklyPointsData && (
+                  <span className="text-xs text-theme-subtle">
+                    {weeklyPointsData.week_number}주차{' '}
+                    {weeklyPointsData.start_date.slice(5).replace('-', '/')}~{weeklyPointsData.end_date.slice(5).replace('-', '/')}
+                  </span>
+                )}
+                <ChevronDown size={13} className={`text-theme-muted transition-transform ${showWeeklyActivity ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+            {showWeeklyActivity && (weeklyPointsLoading ? (
               <div className="py-4 text-center text-xs text-theme-muted">불러오는 중...</div>
             ) : weeklyPointsError ? (
               <div className="py-4 text-center text-xs text-red-400">불러오기 실패</div>
@@ -319,7 +326,7 @@ export default function ProfilePage() {
                   )
                 })}
               </div>
-            )}
+            ))}
           </div>
 
           {/* 클레임 이력 리스트 — 최대 높이 제한 + 스크롤 */}
@@ -351,6 +358,15 @@ export default function ProfilePage() {
               ))
             )}
           </div>
+
+          {/* 접기 버튼 */}
+          <button
+            onClick={() => setShowWeeklyHistory(false)}
+            className="w-full flex items-center justify-center gap-1 py-3 text-xs text-theme-muted active:opacity-60"
+          >
+            <ChevronDown size={13} className="rotate-180" />
+            접기
+          </button>
         </div>
       )}
 
