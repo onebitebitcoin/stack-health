@@ -40,7 +40,6 @@ def run_image_merge(job: dict) -> dict:
     tmp_video = _make_tmp(".mp4")
     tmp_image = _make_tmp(img_suffix)
     tmp_image_clip = _make_tmp(".mp4")
-    tmp_concat_list = _make_tmp(".txt")
     tmp_output = _make_tmp(".mp4")
 
     try:
@@ -130,21 +129,35 @@ def run_image_merge(job: dict) -> dict:
         if result.returncode != 0:
             raise RuntimeError(f"이미지 클립 생성 실패: {result.stderr.decode()[-800:]}")
 
-        # Step 2: concat demuxer로 stream copy (원본 영상 재인코딩 없음)
-        with open(tmp_concat_list, "w") as f:
-            f.write(f"file '{tmp_video}'\n")
-            f.write(f"file '{tmp_image_clip}'\n")
+        # Step 2: filter_complex concat + h.264 인코딩 (코덱 불일치로 인한 검은 화면 방지)
+        if has_audio:
+            fc = "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]"
+            concat_cmd = [
+                "ffmpeg", "-y",
+                "-i", tmp_video,
+                "-i", tmp_image_clip,
+                "-filter_complex", fc,
+                "-map", "[outv]", "-map", "[outa]",
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+                "-movflags", "+faststart",
+                tmp_output,
+            ]
+        else:
+            fc = "[0:v][1:v]concat=n=2:v=1:a=0[outv]"
+            concat_cmd = [
+                "ffmpeg", "-y",
+                "-i", tmp_video,
+                "-i", tmp_image_clip,
+                "-filter_complex", fc,
+                "-map", "[outv]",
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
+                "-an",
+                "-movflags", "+faststart",
+                tmp_output,
+            ]
 
-        concat_cmd = [
-            "ffmpeg", "-y",
-            "-f", "concat", "-safe", "0",
-            "-i", tmp_concat_list,
-            "-c", "copy",
-            "-movflags", "+faststart",
-            tmp_output,
-        ]
-
-        result = subprocess.run(concat_cmd, capture_output=True, timeout=30)
+        result = subprocess.run(concat_cmd, capture_output=True, timeout=300)
         if result.returncode != 0:
             raise RuntimeError(f"concat 실패: {result.stderr.decode()[-800:]}")
 
@@ -159,6 +172,6 @@ def run_image_merge(job: dict) -> dict:
         }
 
     finally:
-        for tmp in [tmp_video, tmp_image, tmp_image_clip, tmp_concat_list, tmp_output]:
+        for tmp in [tmp_video, tmp_image, tmp_image_clip, tmp_output]:
             if tmp and os.path.exists(tmp):
                 os.unlink(tmp)
