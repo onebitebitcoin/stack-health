@@ -54,10 +54,10 @@ def run_image_merge(job: dict) -> dict:
         with open(tmp_image, "wb") as f:
             f.write(resp["Body"].read())
 
-        # 해상도 + fps 조회
+        # 해상도 + fps 조회 (avg_frame_rate 사용 — r_frame_rate는 타임베이스라 90000/1 같은 값 반환)
         probe_v = subprocess.run(
             ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
-             "-show_entries", "stream=width,height,r_frame_rate",
+             "-show_entries", "stream=width,height,avg_frame_rate",
              "-of", "csv=p=0", tmp_video],
             capture_output=True, text=True, timeout=30,
         )
@@ -65,7 +65,13 @@ def run_image_merge(job: dict) -> dict:
         dims = first_line.split(",")
         vw = int(dims[0].strip()) if len(dims) >= 2 else 720
         vh = int(dims[1].strip()) if len(dims) >= 2 else 1280
-        fps = dims[2].strip() if len(dims) >= 3 else "30/1"
+        try:
+            fps_raw = dims[2].strip() if len(dims) >= 3 else "30/1"
+            num, den = (int(x) for x in fps_raw.split("/"))
+            fps_val = num / den if den else 30
+            fps = f"{min(int(fps_val), 60)}/1"
+        except Exception:
+            fps = "30/1"
 
         # rotate 태그로 display 해상도 보정
         probe_rot = subprocess.run(
