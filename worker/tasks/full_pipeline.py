@@ -1,8 +1,10 @@
 import json
 import logging
 import os
+import secrets
 import subprocess
 import tempfile
+import time
 import uuid
 
 import boto3
@@ -20,6 +22,19 @@ from config import (
 )
 
 logger = logging.getLogger(__name__)
+
+_BASE62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _generate_share_token(user_id: int) -> str:
+    ts_sec = int(time.time())
+    rand = secrets.randbits(16)
+    n = (ts_sec << 26) | ((user_id & 0x3FF) << 16) | rand
+    chars: list[str] = []
+    while n:
+        chars.append(_BASE62[n % 62])
+        n //= 62
+    return "".join(reversed(chars))
 
 _connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 _engine = create_engine(DATABASE_URL, connect_args=_connect_args)
@@ -175,8 +190,8 @@ def _proof_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
                 os.unlink(tmp)
 
 
-def _compress_video(r2, video_key: str) -> str | None:
-    """Re-encode video to reduce file size. Returns new r2_key or None on failure."""
+def _compress_video(r2, video_key: str) -> tuple[str, int, int] | None:
+    """Re-encode video to reduce file size. Returns (new_r2_key, pre_bytes, post_bytes) or None."""
     tmp_input = tmp_output = None
     try:
         tmp_input = _make_tmp(".mp4")
@@ -185,6 +200,8 @@ def _compress_video(r2, video_key: str) -> str | None:
         resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=video_key)
         with open(tmp_input, "wb") as f:
             f.write(resp["Body"].read())
+
+        pre_bytes = os.path.getsize(tmp_input)
 
         probe = subprocess.run(
             ["ffprobe", "-v", "quiet", "-select_streams", "a:0",
@@ -208,10 +225,11 @@ def _compress_video(r2, video_key: str) -> str | None:
         if result.returncode != 0:
             raise RuntimeError(f"ffmpeg compress: {result.stderr.decode()[:500]}")
 
+        post_bytes = os.path.getsize(tmp_output)
         compressed_key = f"videos/c-{uuid.uuid4()}.mp4"
         with open(tmp_output, "rb") as f:
             r2.put_object(Bucket=R2_BUCKET_NAME, Key=compressed_key, Body=f, ContentType="video/mp4")
-        return compressed_key
+        return compressed_key, pre_bytes, post_bytes
     except Exception as e:
         logger.warning("Video compression failed (using original): %s", e)
         return None
@@ -224,10 +242,12 @@ def _compress_video(r2, video_key: str) -> str | None:
 def run_full_pipeline(job: dict) -> dict:
     """Full upload pipeline: optional merges → DB commit."""
     from app.models.post import Post
+    from app.models.user import User
     from app.models.video import Video
     from app.routes.challenges import increment_challenge_upload
     from app.services.reward import DAILY_MAX_UPLOADS, POINTS_PER_UPLOAD, add_points, get_daily_upload_count
 
+    start_time = time.time()
     r2 = _get_r2_client()
     current_key: str = job["r2_key"]
     final_proof_url: str | None = job.get("proof_cdn_url")
@@ -251,14 +271,17 @@ def run_full_pipeline(job: dict) -> dict:
             logger.info("[full-pipeline] job=%s proof merged → %s", job_id, current_key)
 
     pre_compress_key = current_key
-    compressed_key = _compress_video(r2, current_key)
-    if compressed_key:
+    pre_size_bytes: int = 0
+    post_size_bytes: int = 0
+    compress_result = _compress_video(r2, current_key)
+    if compress_result:
+        compressed_key, pre_size_bytes, post_size_bytes = compress_result
         try:
             r2.delete_object(Bucket=R2_BUCKET_NAME, Key=pre_compress_key)
         except Exception:
             pass
         current_key = compressed_key
-        logger.info("[full-pipeline] job=%s compressed → %s", job_id, current_key)
+        logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
 
     db = SessionLocal()
     try:
@@ -285,6 +308,7 @@ def run_full_pipeline(job: dict) -> dict:
             workout_start=job.get("workout_start"),
             workout_end=job.get("workout_end"),
             proof_image_url=final_proof_url,
+            share_token=_generate_share_token(user_id),
         )
         db.add(post)
         db.flush()
@@ -299,8 +323,22 @@ def run_full_pipeline(job: dict) -> dict:
         )
         points_earned = rp.points if rp else 0.0
 
+        user = db.query(User).filter(User.id == user_id).first()
+        username = user.username if user else str(user_id)
+        email = user.email if user else ""
+
         db.commit()
-        logger.info("[full-pipeline] job=%s 완료, post_id=%s points=%s", job_id, post.id, points_earned)
-        return {"post_id": str(post.id), "cdn_url": cdn_url, "points_earned": str(points_earned)}
+        elapsed_sec = time.time() - start_time
+        logger.info("[full-pipeline] job=%s 완료, post_id=%s points=%s elapsed=%.1fs", job_id, post.id, points_earned, elapsed_sec)
+        return {
+            "post_id": str(post.id),
+            "cdn_url": cdn_url,
+            "points_earned": str(points_earned),
+            "username": username,
+            "email": email or "",
+            "elapsed_sec": round(elapsed_sec, 1),
+            "pre_size_bytes": pre_size_bytes,
+            "post_size_bytes": post_size_bytes,
+        }
     finally:
         db.close()

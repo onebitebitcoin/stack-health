@@ -5,6 +5,7 @@ import time
 
 from config import LOG_LEVEL, MAX_FFMPEG_CONCURRENT, MAX_JOB_RETRIES, QUEUE_NAME
 from queue_client import dequeue_job, get_redis_client, set_job_status
+from notify import notify_video_failure, notify_video_success
 from tasks.full_pipeline import run_full_pipeline
 from tasks.merge import run_merge
 from tasks.proof_merge import run_proof_merge
@@ -60,6 +61,8 @@ def _process_job(r, job: dict) -> None:
 
         set_job_status(r, job_id, status="completed", **result)
         logger.info("Job %s completed", job_id)
+        if job_type == "full-pipeline":
+            notify_video_success(job, result)
     except Exception as e:
         logger.exception("Job %s failed (attempt %d): %s", job_id, retry_count + 1, e)
         if retry_count < MAX_JOB_RETRIES:
@@ -67,8 +70,12 @@ def _process_job(r, job: dict) -> None:
             r.rpush(QUEUE_NAME, json.dumps(job))  # 큐 tail에 넣어 fresh job 기아 방지
             set_job_status(r, job_id, status="retrying", retry_count=str(job["retry_count"]))
             logger.info("Job %s 재큐잉 (retry %d/%d)", job_id, job["retry_count"], MAX_JOB_RETRIES)
+            if job_type == "full-pipeline":
+                notify_video_failure(job, e, retry_count + 1, MAX_JOB_RETRIES)
         else:
             set_job_status(r, job_id, status="failed", error=str(e))
+            if job_type == "full-pipeline":
+                notify_video_failure(job, e, retry_count + 1, MAX_JOB_RETRIES)
     finally:
         _release_ffmpeg_slot(r)
 
