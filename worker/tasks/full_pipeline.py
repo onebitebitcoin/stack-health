@@ -177,7 +177,7 @@ def _proof_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
                 "-loop", "1", "-t", "3", "-i", tmp_image,
                 "-filter_complex", fc,
                 "-map", "[outv]", "-map", "[outa]",
-                "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
                 "-movflags", "+faststart",
                 tmp_output,
@@ -194,13 +194,13 @@ def _proof_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
                 "-loop", "1", "-t", "3", "-i", tmp_image,
                 "-filter_complex", fc,
                 "-map", "[outv]",
-                "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p",
+                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
                 "-an",
                 "-movflags", "+faststart",
                 tmp_output,
             ]
 
-        result = subprocess.run(cmd, capture_output=True, timeout=180)
+        result = subprocess.run(cmd, capture_output=True, timeout=600)
         if result.returncode != 0:
             raise RuntimeError(f"proof merge 실패: {result.stderr.decode()[-800:]}")
 
