@@ -68,6 +68,19 @@ def run_proof_merge(job: dict) -> dict:
         )
         has_audio = bool(probe_a.stdout.strip())
 
+        probe_rot = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
+             "-show_entries", "stream_tags=rotate",
+             "-of", "default=noprint_wrappers=1:nokey=1", tmp_video],
+            capture_output=True, text=True, timeout=30,
+        )
+        try:
+            rotation = abs(int(probe_rot.stdout.strip()))
+        except ValueError:
+            rotation = 0
+        if rotation in (90, 270):
+            vw, vh = vh, vw
+
         vf = (
             f"scale={vw}:{vh}:force_original_aspect_ratio=decrease,"
             f"pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
