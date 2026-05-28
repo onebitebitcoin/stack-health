@@ -35,48 +35,56 @@ def test_presigned_url_success(mock_r2, client: TestClient) -> None:
     assert data["r2_key"] == "videos/test.mp4"
 
 
-@patch("app.routes.videos.r2_service.generate_presigned_url", return_value=("https://r2.example.com/upload", "videos/x.mp4"))
-def test_presigned_url_daily_limit(mock_r2, client: TestClient) -> None:
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4")
+def test_workout_upload_daily_limit(mock_cdn, client: TestClient) -> None:
+    """운동 태그 업로드는 하루 3개 한도 적용."""
     token, uid = _register(client)
     headers = _auth(token)
-    # Exhaust the active upload-content limit by confirming each upload.
     for i in range(3):
-        client.post("/api/v1/videos/presigned-url", json={
-            "filename": f"w{i}.mp4", "content_type": "video/mp4",
-            "file_size": 100,
+        res = client.post("/api/v1/videos/confirm", json={
+            "r2_key": f"videos/{uid}/v{i}.mp4", "duration_sec": 20,
+            "tags": ["홈트"],
         }, headers=headers)
-        with patch("app.routes.videos.r2_service.get_cdn_url", return_value=f"https://cdn/v{i}.mp4"):
-            client.post("/api/v1/videos/confirm", json={
-                "r2_key": f"videos/{uid}/v{i}.mp4", "duration_sec": 20,
-            }, headers=headers)
-    # Next upload is blocked while 3 active uploads remain.
-    res = client.post("/api/v1/videos/presigned-url", json={
-        "filename": "w3.mp4", "content_type": "video/mp4",
-        "file_size": 100,
+        assert res.status_code == 200
+    # 4th workout upload blocked
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/v3.mp4", "duration_sec": 20,
+        "tags": ["홈트"],
     }, headers=headers)
     assert res.status_code == 429
 
 
-@patch("app.routes.videos.r2_service.generate_presigned_url", return_value=("https://r2.example.com/upload", "videos/x.mp4"))
-def test_presigned_url_limit_eased_after_delete(mock_r2, client: TestClient) -> None:
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4")
+def test_non_workout_upload_no_limit(mock_cdn, client: TestClient) -> None:
+    """비운동 태그(일상/식단/기타)는 하루 한도 없음."""
+    token, uid = _register(client, "nolimit@x.com", "nolimituser")
+    headers = _auth(token)
+    for i in range(4):
+        res = client.post("/api/v1/videos/confirm", json={
+            "r2_key": f"videos/{uid}/v{i}.mp4", "duration_sec": 20,
+            "tags": ["일상"],
+        }, headers=headers)
+        assert res.status_code == 200
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/delete-v.mp4")
+def test_workout_limit_eased_after_delete(mock_cdn, client: TestClient) -> None:
+    """운동 업로드 삭제 후 한도가 풀린다."""
     token, uid = _register(client, "limit-delete@x.com", "limitdelete")
     headers = _auth(token)
     post_ids: list[int] = []
 
     for i in range(3):
-        client.post("/api/v1/videos/presigned-url", json={
-            "filename": f"w{i}.mp4", "content_type": "video/mp4",
-            "file_size": 100,
+        confirm_res = client.post("/api/v1/videos/confirm", json={
+            "r2_key": f"videos/{uid}/delete-v{i}.mp4", "duration_sec": 20,
+            "tags": ["러닝"],
         }, headers=headers)
-        with patch("app.routes.videos.r2_service.get_cdn_url", return_value=f"https://cdn/delete-v{i}.mp4"):
-            confirm_res = client.post("/api/v1/videos/confirm", json={
-                "r2_key": f"videos/{uid}/delete-v{i}.mp4", "duration_sec": 20,
-            }, headers=headers)
+        assert confirm_res.status_code == 200
         post_ids.append(confirm_res.json()["data"]["post"]["id"])
 
-    blocked_res = client.post("/api/v1/videos/presigned-url", json={
-        "filename": "blocked.mp4", "content_type": "video/mp4",
-        "file_size": 100,
+    blocked_res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/blocked.mp4", "duration_sec": 20,
+        "tags": ["러닝"],
     }, headers=headers)
     assert blocked_res.status_code == 429
 
@@ -84,15 +92,16 @@ def test_presigned_url_limit_eased_after_delete(mock_r2, client: TestClient) -> 
         delete_res = client.delete(f"/api/v1/videos/posts/{post_ids[0]}", headers=headers)
     assert delete_res.status_code == 200
 
-    eased_res = client.post("/api/v1/videos/presigned-url", json={
-        "filename": "eased.mp4", "content_type": "video/mp4",
-        "file_size": 100,
+    eased_res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/eased.mp4", "duration_sec": 20,
+        "tags": ["러닝"],
     }, headers=headers)
     assert eased_res.status_code == 200
 
 
 @patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/limit.mp4")
 def test_confirm_upload_uses_active_content_limit(mock_cdn, client: TestClient) -> None:
+    """confirm 엔드포인트의 운동 업로드 한도 검사."""
     token, uid = _register(client, "confirm-limit@x.com", "confirmlimit")
     headers = _auth(token)
 
@@ -100,14 +109,42 @@ def test_confirm_upload_uses_active_content_limit(mock_cdn, client: TestClient) 
         res = client.post("/api/v1/videos/confirm", json={
             "r2_key": f"videos/{uid}/confirm-limit-{i}.mp4",
             "duration_sec": 20,
+            "tags": ["웨이트"],
         }, headers=headers)
         assert res.status_code == 200
 
     res = client.post("/api/v1/videos/confirm", json={
         "r2_key": f"videos/{uid}/confirm-limit-blocked.mp4",
         "duration_sec": 20,
+        "tags": ["웨이트"],
     }, headers=headers)
     assert res.status_code == 429
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/dl.mp4")
+def test_daily_limit_endpoint(mock_cdn, client: TestClient) -> None:
+    """GET /videos/daily-limit: 운동 업로드 횟수/한도 반환."""
+    token, uid = _register(client, "dailylimit@x.com", "dailylimituser")
+    headers = _auth(token)
+
+    res = client.get("/api/v1/videos/daily-limit", headers=headers)
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["count"] == 0
+    assert data["limit"] == 3
+    assert data["reached"] is False
+
+    # 운동 업로드 2개 후
+    for i in range(2):
+        client.post("/api/v1/videos/confirm", json={
+            "r2_key": f"videos/{uid}/dl-{i}.mp4", "duration_sec": 20,
+            "tags": ["요가"],
+        }, headers=headers)
+
+    res = client.get("/api/v1/videos/daily-limit", headers=headers)
+    data = res.json()["data"]
+    assert data["count"] == 2
+    assert data["reached"] is False
 
 
 def test_presigned_url_file_too_large(client: TestClient) -> None:
@@ -371,3 +408,287 @@ def test_get_upload_job_not_found(mock_job, client: TestClient) -> None:
     token = _register_and_token(client, "job3@x.com", "job3user")
     res = client.get("/api/v1/videos/upload-job/nonexistent", headers=_auth(token))
     assert res.status_code == 404
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/share.mp4")
+def test_get_post_by_share_token(mock_cdn, client: TestClient) -> None:
+    """공유 토큰으로 게시물 조회."""
+    token, uid = _register(client, "share@x.com", "shareuser")
+    headers = _auth(token)
+    confirm_res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/share.mp4", "duration_sec": 20,
+    }, headers=headers)
+    assert confirm_res.status_code == 200
+    share_token = confirm_res.json()["data"]["post"]["share_token"]
+
+    res = client.get(f"/api/v1/videos/posts/share/{share_token}")
+    assert res.status_code == 200
+    data = res.json()["data"]["post"]
+    assert data["share_token"] == share_token
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/share.mp4")
+def test_get_post_by_share_token_not_found(mock_cdn, client: TestClient) -> None:
+    token = _register_and_token(client, "share2@x.com", "share2user")
+    res = client.get("/api/v1/videos/posts/share/nonexistenttoken")
+    assert res.status_code == 404
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/gp.mp4")
+def test_get_post_by_id(mock_cdn, client: TestClient) -> None:
+    """게시물 ID로 단건 조회."""
+    token, uid = _register(client, "getpost@x.com", "getpostuser")
+    headers = _auth(token)
+    confirm_res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/gp.mp4", "duration_sec": 20,
+    }, headers=headers)
+    post_id = confirm_res.json()["data"]["post"]["id"]
+
+    res = client.get(f"/api/v1/videos/posts/{post_id}")
+    assert res.status_code == 200
+    assert res.json()["data"]["post"]["id"] == post_id
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/gp2.mp4")
+def test_get_post_by_id_not_found(mock_cdn, client: TestClient) -> None:
+    token = _register_and_token(client, "getpost2@x.com", "getpost2user")
+    res = client.get("/api/v1/videos/posts/999999")
+    assert res.status_code == 404
+
+
+@patch("app.routes.videos.r2_service.get_r2_client")
+def test_upload_proof_image_success(mock_r2_client, client: TestClient) -> None:
+    """증거 이미지 업로드 성공."""
+    mock_r2_client.return_value.put_object.return_value = {}
+    token = _register_and_token(client, "proof@x.com", "proofuser")
+    headers = _auth(token)
+    image_bytes = b"\xff\xd8\xff\xe0" + b"\x00" * 100  # minimal JPEG-like bytes
+
+    res = client.post(
+        "/api/v1/videos/upload-proof",
+        files={"file": ("proof.jpg", image_bytes, "image/jpeg")},
+        headers=headers,
+    )
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert "proof_r2_key" in data
+    assert "proof_cdn_url" in data
+
+
+@patch("app.routes.videos.r2_service.get_r2_client")
+def test_upload_proof_image_invalid_type(mock_r2_client, client: TestClient) -> None:
+    """지원하지 않는 이미지 형식은 400."""
+    token = _register_and_token(client, "proof2@x.com", "proof2user")
+    headers = _auth(token)
+    res = client.post(
+        "/api/v1/videos/upload-proof",
+        files={"file": ("proof.gif", b"GIF89a", "image/gif")},
+        headers=headers,
+    )
+    assert res.status_code == 400
+
+
+@patch("app.routes.videos.enqueue_proof_merge_job", return_value="proof-job-123")
+def test_merge_proof_success(mock_enqueue, client: TestClient) -> None:
+    """merge-proof 잡 등록 성공."""
+    token, uid = _register(client, "mergeproof@x.com", "mergeproofuser")
+    headers = _auth(token)
+    res = client.post(
+        "/api/v1/videos/merge-proof",
+        data={
+            "video_r2_key": f"videos/{uid}/video.mp4",
+            "proof_r2_key": f"proof/{uid}/image.jpg",
+        },
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert res.json()["data"]["job_id"] == "proof-job-123"
+
+
+def test_merge_proof_forbidden(client: TestClient) -> None:
+    """다른 사용자의 r2_key 접근 거부."""
+    token, uid = _register(client, "mergeproof2@x.com", "mergeproof2user")
+    headers = _auth(token)
+    res = client.post(
+        "/api/v1/videos/merge-proof",
+        data={
+            "video_r2_key": "videos/99999/video.mp4",  # different user
+            "proof_r2_key": f"proof/{uid}/image.jpg",
+        },
+        headers=headers,
+    )
+    assert res.status_code == 403
+
+
+@patch("app.routes.videos.enqueue_full_upload_pipeline")
+@patch("app.routes.videos.r2_service.get_r2_client")
+@patch("app.routes.videos.r2_service.upload_fileobj", return_value=("videos/bg-test.mp4", "https://cdn/bg.mp4"))
+def test_r2_upload_and_enqueue_video_only(mock_upload, mock_r2_client, mock_enqueue) -> None:
+    """_r2_upload_and_enqueue: 비디오만 있는 경우."""
+    from app.routes.videos import _r2_upload_and_enqueue
+    mock_r2_client.return_value.put_object.return_value = {}
+    mock_enqueue.return_value = None
+
+    _r2_upload_and_enqueue(
+        job_id="test-job-1",
+        video_bytes=b"\x00\x01\x02",
+        video_content_type="video/mp4",
+        video_filename="test.mp4",
+        audio_bytes=None,
+        audio_content_type="audio/webm",
+        proof_bytes=None,
+        proof_content_type=None,
+        user_id=1,
+        duration_sec=15,
+        caption="Test",
+        tags_list=["홈트"],
+        challenge_id=None,
+        workout_start=None,
+        workout_end=None,
+        audio_duration_sec=0,
+    )
+    mock_upload.assert_called_once()
+    mock_enqueue.assert_called_once()
+
+
+@patch("app.routes.videos.fail_job")
+@patch("app.routes.videos.r2_service.upload_fileobj", side_effect=RuntimeError("R2 down"))
+def test_r2_upload_and_enqueue_failure(mock_upload, mock_fail) -> None:
+    """_r2_upload_and_enqueue: 업로드 실패 시 fail_job 호출."""
+    from app.routes.videos import _r2_upload_and_enqueue
+
+    _r2_upload_and_enqueue(
+        job_id="fail-job-1",
+        video_bytes=b"\x00",
+        video_content_type="video/mp4",
+        video_filename="fail.mp4",
+        audio_bytes=None,
+        audio_content_type="audio/webm",
+        proof_bytes=None,
+        proof_content_type=None,
+        user_id=2,
+        duration_sec=10,
+        caption=None,
+        tags_list=[],
+        challenge_id=None,
+        workout_start=None,
+        workout_end=None,
+        audio_duration_sec=0,
+    )
+    mock_fail.assert_called_once_with("fail-job-1", "R2 down")
+
+
+@patch("app.routes.videos.enqueue_full_upload_pipeline")
+@patch("app.routes.videos.r2_service.get_r2_client")
+@patch("app.routes.videos.r2_service.upload_fileobj", return_value=("videos/bg2.mp4", "https://cdn/bg2.mp4"))
+def test_r2_upload_and_enqueue_with_audio_and_proof(mock_upload, mock_r2_client, mock_enqueue) -> None:
+    """_r2_upload_and_enqueue: 오디오+사진 포함."""
+    from app.routes.videos import _r2_upload_and_enqueue
+    mock_r2_client.return_value.put_object.return_value = {}
+    mock_enqueue.return_value = None
+
+    _r2_upload_and_enqueue(
+        job_id="test-job-2",
+        video_bytes=b"\x00\x01",
+        video_content_type="video/mp4",
+        video_filename="v.mp4",
+        audio_bytes=b"\x10\x20",
+        audio_content_type="audio/webm",
+        proof_bytes=b"\xff\xd8\xff",
+        proof_content_type="image/jpeg",
+        user_id=3,
+        duration_sec=20,
+        caption=None,
+        tags_list=[],
+        challenge_id=None,
+        workout_start=None,
+        workout_end=None,
+        audio_duration_sec=10,
+    )
+    assert mock_upload.call_count == 2  # video + audio
+    mock_r2_client.return_value.put_object.assert_called_once()  # proof image
+    mock_enqueue.assert_called_once()
+
+
+@patch("app.routes.videos.r2_service.upload_fileobj", return_value=("videos/direct.mp4", "https://cdn/direct.mp4"))
+def test_upload_video_endpoint(mock_upload, client: TestClient) -> None:
+    """POST /videos/upload (서버사이드 업로드)."""
+    token, uid = _register(client, "upload@x.com", "uploaduser")
+    headers = _auth(token)
+    res = client.post(
+        "/api/v1/videos/upload",
+        files={"file": ("video.mp4", b"\x00\x01\x02", "video/mp4")},
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert res.json()["data"]["r2_key"] == "videos/direct.mp4"
+
+
+@patch("app.routes.videos.reserve_job_id", return_value="limit-job-456")
+@patch("app.routes.videos.get_daily_workout_upload_count", return_value=3)
+def test_upload_pipeline_workout_limit(mock_count, mock_reserve, client: TestClient) -> None:
+    """upload_pipeline: 운동 태그 한도 초과 시 429."""
+    import json
+    token = _register_and_token(client, "pipelimit@x.com", "pipelimituser")
+    headers = _auth(token)
+    res = client.post(
+        "/api/v1/videos/upload-pipeline",
+        data={"duration_sec": "15", "tags": json.dumps(["홈트"])},
+        files={"file": ("v.mp4", b"\x00", "video/mp4")},
+        headers=headers,
+    )
+    assert res.status_code == 429
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/x.mp4")
+def test_confirm_upload_forbidden_r2key(mock_cdn, client: TestClient) -> None:
+    """r2_key가 본인 prefix가 아닐 때 403."""
+    token = _register_and_token(client, "forbidden@x.com", "forbiddenuser")
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": "videos/99999/other.mp4", "duration_sec": 20,
+    }, headers=_auth(token))
+    assert res.status_code == 403
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/x.mp4")
+def test_confirm_upload_invalid_tag(mock_cdn, client: TestClient) -> None:
+    """허용되지 않는 태그 사용 시 400."""
+    token, uid = _register(client, "invalidtag@x.com", "invalidtaguser")
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/t.mp4", "duration_sec": 20,
+        "tags": ["불법태그"],
+    }, headers=_auth(token))
+    assert res.status_code == 400
+
+
+def test_merge_audio_forbidden(client: TestClient) -> None:
+    """merge_audio: 다른 사용자의 r2_key 거부."""
+    token, uid = _register(client, "maforbid@x.com", "maforbiduser")
+    res = client.post(
+        "/api/v1/videos/merge-audio",
+        data={"video_r2_key": "videos/99999/foreign.mp4", "audio_duration_sec": 10},
+        files={"audio": ("a.webm", b"\x00", "audio/webm")},
+        headers=_auth(token),
+    )
+    assert res.status_code == 403
+
+
+def test_merge_audio_bad_duration(client: TestClient) -> None:
+    """merge_audio: 오디오 길이 범위 벗어나면 400."""
+    token, uid = _register(client, "mabaddur@x.com", "mabadduruser")
+    res = client.post(
+        "/api/v1/videos/merge-audio",
+        data={"video_r2_key": f"videos/{uid}/v.mp4", "audio_duration_sec": -1},
+        files={"audio": ("a.webm", b"\x00", "audio/webm")},
+        headers=_auth(token),
+    )
+    assert res.status_code == 400
+
+
+@patch("app.routes.videos.get_job_status", return_value={"status": "completed", "points_earned": "invalid", "cdn_url": "", "post_id": ""})
+def test_get_upload_job_bad_points(mock_job, client: TestClient) -> None:
+    """points_earned 파싱 실패 시 0.0으로 fallback."""
+    token = _register_and_token(client, "badpts@x.com", "badptsuser")
+    res = client.get("/api/v1/videos/upload-job/some-job", headers=_auth(token))
+    assert res.status_code == 200
+    assert res.json()["data"]["points_earned"] == 0.0

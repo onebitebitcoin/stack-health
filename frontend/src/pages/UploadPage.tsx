@@ -8,7 +8,8 @@ import { MERGE_POLL_INTERVAL_MS } from '../lib/constants'
 import type { Challenge } from '../api/types'
 import { isAxiosError } from 'axios'
 
-const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '기타'] as const
+const WORKOUT_TAGS = ['홈트', '러닝', '요가', '웨이트'] as const
+const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '일상', '식단', '기타'] as const
 type Tag = (typeof ALLOWED_TAGS)[number]
 
 const STEPS = ['영상 선택', '태그·챌린지', '음성 녹음', '설명·사진'] as const
@@ -65,6 +66,7 @@ export default function UploadPage() {
   const [done, setDone] = useState(false)
   const [pointsEarned, setPointsEarned] = useState(0)
   const [error, setError] = useState('')
+  const [limitError, setLimitError] = useState('')
 
   // Pipeline job polling state
   const [pipelineJobId, setPipelineJobId] = useState<string | null>(null)
@@ -490,7 +492,7 @@ export default function UploadPage() {
           {previewUrl && (
             <video src={previewUrl} className="mb-4 h-36 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
           )}
-          <p className="mb-2 text-sm font-semibold text-theme-primary">운동 종류</p>
+          <p className="mb-2 text-sm font-semibold text-theme-primary">카테고리</p>
           <div className="flex flex-wrap gap-2 mb-5">
             {ALLOWED_TAGS.map((tag) => (
               <button
@@ -533,8 +535,26 @@ export default function UploadPage() {
               </button>
             ))}
           </div>
+          {limitError && (
+            <p className="mb-2 text-sm text-red-400 flex-shrink-0">{limitError}</p>
+          )}
           <button
-            onClick={() => setStep(2)}
+            onClick={async () => {
+              setLimitError('')
+              const hasWorkout = selectedTags.some((t) => (WORKOUT_TAGS as readonly string[]).includes(t))
+              if (hasWorkout) {
+                try {
+                  const res = await client.get<{ data: { reached: boolean } }>('/videos/daily-limit')
+                  if (res.data.data.reached) {
+                    setLimitError('오늘 운동 영상 업로드 한도(3개)에 도달했습니다.')
+                    return
+                  }
+                } catch {
+                  // 네트워크 오류 시 통과 (서버에서 재검사)
+                }
+              }
+              setStep(2)
+            }}
             className="mt-auto mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg flex-shrink-0"
           >
             다음 <ChevronRight size={18} />

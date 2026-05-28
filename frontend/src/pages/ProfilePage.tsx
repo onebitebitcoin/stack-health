@@ -28,7 +28,7 @@ export default function ProfilePage() {
   const [selectedPosts, setSelectedPosts] = useState<HistoryWorkoutPost[]>([])
   const [videoIdx, setVideoIdx] = useState(0)
   const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
-  const [showWeeklyActivity, setShowWeeklyActivity] = useState(true)
+
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -275,22 +275,16 @@ export default function ProfilePage() {
 
           {/* 이번 주 활동 */}
           <div className="border-b border-theme-border">
-            <button
-              onClick={() => setShowWeeklyActivity((v) => !v)}
-              className="w-full flex items-center justify-between px-5 py-3 border-b border-theme-border"
-            >
+            <div className="w-full flex items-center justify-between px-5 py-3 border-b border-theme-border">
               <span className="text-xs font-medium text-theme-muted">이번 주 활동</span>
-              <div className="flex items-center gap-2">
-                {weeklyPointsData && (
-                  <span className="text-xs text-theme-subtle">
-                    {weeklyPointsData.week_number}주차{' '}
-                    {weeklyPointsData.start_date.slice(5).replace('-', '/')}~{weeklyPointsData.end_date.slice(5).replace('-', '/')}
-                  </span>
-                )}
-                <ChevronDown size={13} className={`text-theme-muted transition-transform ${showWeeklyActivity ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
-            {showWeeklyActivity && (weeklyPointsLoading ? (
+              {weeklyPointsData && (
+                <span className="text-xs text-theme-subtle">
+                  {weeklyPointsData.week_number}주차{' '}
+                  {weeklyPointsData.start_date.slice(5).replace('-', '/')}~{weeklyPointsData.end_date.slice(5).replace('-', '/')}
+                </span>
+              )}
+            </div>
+            {(weeklyPointsLoading ? (
               <div className="py-4 text-center text-xs text-theme-muted">불러오는 중...</div>
             ) : weeklyPointsError ? (
               <div className="py-4 text-center text-xs text-red-400">불러오기 실패</div>
