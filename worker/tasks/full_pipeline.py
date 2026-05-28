@@ -167,7 +167,7 @@ def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tupl
                     "-loop", "1", "-t", "3", "-i", tmp_image,
                     "-filter_complex", fc,
                     "-map", "[outv]", "-map", "[outa]",
-                    "-c:v", "libx264", "-crf", "28", "-preset", "fast", "-pix_fmt", "yuv420p",
+                    "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
                     "-c:a", "aac", "-b:a", "96k",
                     "-movflags", "+faststart", tmp_output,
                 ]
@@ -183,7 +183,7 @@ def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tupl
                     "-loop", "1", "-t", "3", "-i", tmp_image,
                     "-filter_complex", fc,
                     "-map", "[outv]",
-                    "-c:v", "libx264", "-crf", "28", "-preset", "fast", "-pix_fmt", "yuv420p",
+                    "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
                     "-an",
                     "-movflags", "+faststart", tmp_output,
                 ]
