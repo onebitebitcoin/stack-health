@@ -302,9 +302,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         else:
             logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
     elif proof_r2_key:
-        e = RuntimeError("compress+image_merge 실패")
-        logger.warning("Proof merge failed during compress: %s", e)
-        notify_video_failure(job, e, attempt=1, max_retries=0, pipeline_step="image_merge")
+        logger.warning("[full-pipeline] job=%s image_merge 실패 — 원본 영상으로 진행", job_id)
 
     if status_callback: status_callback("db_save")
     db = SessionLocal()

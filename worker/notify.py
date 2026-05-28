@@ -44,10 +44,12 @@ def notify_video_success(job: dict, result: dict) -> None:
     codec = meta.get("codec", "")
     meta_line = f"{duration}초  {width}x{height}  {fps}fps  {codec}" if width else "-"
     merge_type = result.get("merge_type", "video")
+    has_proof = bool(job.get("proof_r2_key"))
+    image_warn = "  ⚠️ 이미지 머지 실패" if has_proof and merge_type == "video" else ""
     _send(
         f"✅ <b>영상 업로드 성공</b>\n"
         f"• 유저: {username} ({email})\n"
-        f"• 유형: {merge_type}\n"
+        f"• 유형: {merge_type}{image_warn}\n"
         f"• 영상: {meta_line}\n"
         f"• 처리 시간: {elapsed}초\n"
         f"• 압축: {_fmt_mb(pre)} → {_fmt_mb(post)} ({ratio})\n"
