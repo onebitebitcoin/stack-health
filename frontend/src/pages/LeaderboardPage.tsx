@@ -1,59 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Droplets, Users, Search, X, Dumbbell } from 'lucide-react'
+import { Droplets, Users, Search, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
 import client from '../api/client'
 import type { LeaderboardEntry, LeaderboardResponse } from '../api/types'
 import LoadingScreen from '../components/LoadingScreen'
-
-const RANK_MEDAL: Record<number, { bg: string; icon: string }> = {
-  1: { bg: 'bg-amber-400/20', icon: 'text-amber-400' },
-  2: { bg: 'bg-slate-400/20', icon: 'text-slate-400' },
-  3: { bg: 'bg-amber-700/20', icon: 'text-amber-700' },
-}
-
-function RankAvatar({ rank, initial }: { rank: number; initial: string }) {
-  const medal = RANK_MEDAL[rank]
-  if (medal) {
-    return (
-      <div className={`h-8 w-8 rounded-full ${medal.bg} flex items-center justify-center flex-shrink-0`}>
-        <Dumbbell size={16} className={medal.icon} strokeWidth={2} />
-      </div>
-    )
-  }
-  return (
-    <div className="h-8 w-8 rounded-full bg-theme-surface2 flex items-center justify-center text-sm font-bold text-theme-primary flex-shrink-0">
-      {initial}
-    </div>
-  )
-}
-
-function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1)
-    return (
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-white flex-shrink-0">
-        1
-      </span>
-    )
-  if (rank === 2)
-    return (
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-sm font-bold text-white flex-shrink-0">
-        2
-      </span>
-    )
-  if (rank === 3)
-    return (
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-sm font-bold text-white flex-shrink-0">
-        3
-      </span>
-    )
-  return (
-    <span className="flex h-7 w-7 items-center justify-center text-sm font-medium text-theme-subtle flex-shrink-0">
-      {rank}
-    </span>
-  )
-}
+import UserAvatar from '../components/UserAvatar'
 
 export default function LeaderboardPage() {
   const navigate = useNavigate()
@@ -149,9 +102,7 @@ export default function LeaderboardPage() {
                   }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-theme-primary hover:bg-theme-surface2 text-left"
                 >
-                  <div className="h-7 w-7 rounded-full bg-theme-surface2 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    {entry.username[0]?.toUpperCase()}
-                  </div>
+                  <UserAvatar username={entry.username} avatarUrl={entry.avatar_url} size={28} />
                   <span>{entry.username}</span>
                   <span className="ml-auto text-xs text-theme-muted flex items-center gap-0.5">
                     <Droplets size={10} className="text-blue-400" />
@@ -179,8 +130,7 @@ export default function LeaderboardPage() {
                 onClick={() => navigate(`/users/${entry.user_id}`)}
                 className={`w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-theme-surface2 ${isMe ? 'bg-accent/5' : ''}`}
               >
-                <RankBadge rank={entry.rank} />
-                <RankAvatar rank={entry.rank} initial={entry.username[0]?.toUpperCase() ?? '?'} />
+                <UserAvatar username={entry.username} avatarUrl={entry.avatar_url} size={32} />
                 <span className={`flex-1 text-sm text-left truncate ${isMe ? 'font-semibold text-accent' : 'text-theme-primary'}`}>
                   {entry.username}
                   {isMe && <span className="ml-1 text-xs font-normal text-accent/70">(나)</span>}
