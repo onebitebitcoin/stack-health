@@ -283,6 +283,7 @@ export interface LotteryResult {
 
 export interface WeeklyPointsItem {
   date: string
+  settles_at: string | null
   points: number
   source: string
   post_id: number | null

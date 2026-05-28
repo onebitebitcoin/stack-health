@@ -155,9 +155,17 @@ def get_my_weekly_points(
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(client_tz).date().isoformat()
 
+    def to_utc_iso(dt: datetime) -> str:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).isoformat()
+
+    SETTLEMENT_WINDOW = timedelta(hours=24)
+
     items = [
         {
             "date": to_client_date(r.created_at),
+            "settles_at": to_utc_iso(r.created_at + SETTLEMENT_WINDOW) if r.status == REWARD_STATUS_QUEUED else None,
             "points": round(float(r.points), 2),
             "source": r.reason,
             "post_id": r.reference_id,

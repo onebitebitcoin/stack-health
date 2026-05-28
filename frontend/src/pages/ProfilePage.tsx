@@ -101,6 +101,7 @@ export default function ProfilePage() {
       return res.data.data
     },
     enabled: !!user && showWeeklyHistory,
+    refetchInterval: 60_000,
   })
 
   type MyPost = { id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number; comment_count: number }
@@ -306,33 +307,60 @@ export default function ProfilePage() {
               <div className="py-4 text-center text-xs text-red-400">불러오기 실패</div>
             ) : !weeklyPointsData || weeklyPointsData.items.length === 0 ? (
               <div className="py-4 text-center text-xs text-theme-muted">이번 주 활동 없음</div>
-            ) : (
-              <div className="max-h-40 overflow-y-auto">
-                {weeklyPointsData.items.map((item, idx) => {
-                  const sourceLabel =
-                    item.source === 'upload' ? '영상 업로드' :
-                    item.source === 'comment' ? '댓글' :
-                    item.source === 'bonus' ? '보너스' :
-                    item.source
-                  return (
-                    <div key={idx} className="flex items-center justify-between px-5 py-2.5 border-b border-theme-border last:border-0">
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-medium text-theme-primary">{sourceLabel}</p>
-                          {item.queued && (
-                            <span className="text-[10px] text-yellow-400">대기 중</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-theme-muted">{item.date.slice(5).replace('-', '/')}</p>
+            ) : (() => {
+              const pending = weeklyPointsData.items.filter(i => i.queued)
+              const fixed = weeklyPointsData.items.filter(i => !i.queued)
+
+              function sourceLabel(s: string) {
+                return s === 'upload' ? '영상 업로드' : s === 'comment' ? '댓글' : s === 'bonus' ? '보너스' : s
+              }
+
+              function hrsLeft(settlesAt: string) {
+                return Math.max(0, Math.ceil((new Date(settlesAt).getTime() - Date.now()) / (60 * 60 * 1000)))
+              }
+
+              return (
+                <div className="max-h-48 overflow-y-auto">
+                  {pending.length > 0 && (
+                    <>
+                      <div className="px-5 pt-3 pb-1">
+                        <span className="text-[10px] font-semibold text-yellow-400 uppercase tracking-wide">대기 중</span>
                       </div>
-                      <span className={`text-xs font-semibold ${item.queued ? 'text-yellow-400' : 'text-accent'}`}>
-                        +{item.points.toFixed(2)} L
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
+                      {pending.map((item, idx) => {
+                        const hrs = hrsLeft(item.settles_at!)
+                        return (
+                          <div key={`p-${idx}`} className="flex items-center justify-between px-5 py-2.5 border-b border-theme-border last:border-0">
+                            <div>
+                              <p className="text-xs font-medium text-theme-primary">{sourceLabel(item.source)}</p>
+                              <p className="text-[10px] text-yellow-400 mt-0.5">
+                                {hrs > 0 ? `${hrs}시간 후 확정` : '곧 확정'}
+                              </p>
+                            </div>
+                            <span className="text-xs font-semibold text-yellow-400">+{item.points.toFixed(2)} L</span>
+                          </div>
+                        )
+                      })}
+                    </>
+                  )}
+                  {fixed.length > 0 && (
+                    <>
+                      <div className="px-5 pt-3 pb-1">
+                        <span className="text-[10px] font-semibold text-accent uppercase tracking-wide">확정</span>
+                      </div>
+                      {fixed.map((item, idx) => (
+                        <div key={`f-${idx}`} className="flex items-center justify-between px-5 py-2.5 border-b border-theme-border last:border-0">
+                          <div>
+                            <p className="text-xs font-medium text-theme-primary">{sourceLabel(item.source)}</p>
+                            <p className="text-xs text-theme-muted">{item.date.slice(5).replace('-', '/')}</p>
+                          </div>
+                          <span className="text-xs font-semibold text-accent">+{item.points.toFixed(2)} L</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )
+            })())}
           </div>
 
           {/* 클레임 이력 리스트 — 최대 높이 제한 + 스크롤 */}

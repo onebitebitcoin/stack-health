@@ -188,24 +188,24 @@ export default function HistoryPage() {
 
       {/* Calendar grid */}
       <div className="px-4">
-        {/* Day headers */}
-        <div className="grid grid-cols-7 mb-1">
-          {DAYS_KO.map((d) => (
-            <div
-              key={d}
-              className="text-center text-xs font-medium text-theme-muted py-1"
-            >
-              {d}
-            </div>
-          ))}
-        </div>
-
         {isLoading ? (
           <div className="flex h-48 items-center justify-center text-theme-muted text-sm">
             불러오는 중...
           </div>
         ) : (
-          <div className="grid grid-cols-7 gap-1">
+          <>
+            {/* Day headers */}
+            <div className="grid grid-cols-7 mb-1">
+              {DAYS_KO.map((d) => (
+                <div
+                  key={d}
+                  className="text-center text-xs font-medium text-theme-muted py-1"
+                >
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
             {cells.map((cell, idx) => {
               if (cell.day === null) {
                 return <div key={`empty-${idx}`} className="aspect-square" />
@@ -258,7 +258,8 @@ export default function HistoryPage() {
                 </div>
               )
             })}
-          </div>
+            </div>
+          </>
         )}
       </div>
 
