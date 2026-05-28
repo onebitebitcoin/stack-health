@@ -64,7 +64,7 @@ def get_my_stats(
     db: Session = Depends(get_db),
     x_client_timezone: str = Header(default="Asia/Seoul"),
 ) -> dict:
-    settled_count = settle_queued_rewards(db, current_user.id, x_client_timezone)
+    settled_count = settle_queued_rewards(db, current_user.id)
     if settled_count:
         db.commit()
 

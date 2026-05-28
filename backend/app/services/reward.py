@@ -90,29 +90,25 @@ def get_daily_upload_count(db: Session, user_id: int) -> int:
     )
 
 
-def settle_queued_rewards(db: Session, user_id: int | None = None, client_tz_str: str = "Asia/Seoul") -> int:
-    """Move upload rewards from queued to fixed when a new calendar day has begun in the client's timezone."""
-    client_tz = _parse_tz(client_tz_str)
-    now_client = datetime.now(client_tz)
-    today_client = now_client.date()
-    settlement_week_label = get_week_label(now_client)
+def settle_queued_rewards(db: Session, user_id: int | None = None) -> int:
+    """Move upload rewards from queued to fixed after 24 hours (UTC). Not timezone-dependent."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    settlement_week_label = get_week_label(datetime.now(KST))
 
-    query = db.query(RewardPoint).filter(RewardPoint.status == REWARD_STATUS_QUEUED)
+    query = db.query(RewardPoint).filter(
+        RewardPoint.status == REWARD_STATUS_QUEUED,
+        RewardPoint.created_at <= cutoff,
+    )
     if user_id is not None:
         query = query.filter(RewardPoint.user_id == user_id)
 
     rewards = query.all()
-    settled = []
     for reward in rewards:
-        dt = reward.created_at if reward.created_at.tzinfo else reward.created_at.replace(tzinfo=timezone.utc)
-        created_client = dt.astimezone(client_tz)
-        if created_client.date() < today_client:
-            reward.status = REWARD_STATUS_FIXED
-            reward.week_label = settlement_week_label
-            settled.append(reward)
-    if settled:
+        reward.status = REWARD_STATUS_FIXED
+        reward.week_label = settlement_week_label
+    if rewards:
         db.flush()
-    return len(settled)
+    return len(rewards)
 
 
 def revoke_queued_upload_reward(db: Session, video_id: int) -> int:
