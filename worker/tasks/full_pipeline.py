@@ -139,14 +139,20 @@ def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tupl
 
             probe_v = subprocess.run(
                 ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
-                 "-show_entries", "stream=width,height",
+                 "-show_entries", "stream=width,height,avg_frame_rate",
                  "-of", "csv=p=0", tmp_input],
                 capture_output=True, text=True, timeout=30,
             )
-            first_line = probe_v.stdout.strip().splitlines()[0] if probe_v.stdout.strip() else "720,1280"
+            first_line = probe_v.stdout.strip().splitlines()[0] if probe_v.stdout.strip() else "720,1280,30/1"
             dims = first_line.split(",")
             vw = int(dims[0]) - int(dims[0]) % 2
             vh = int(dims[1]) - int(dims[1]) % 2
+            try:
+                fps_raw = dims[2].strip() if len(dims) >= 3 else "30/1"
+                num, den = (int(x) for x in fps_raw.split("/"))
+                img_fps = str(min(int(num / den) if den else 30, 60))
+            except Exception:
+                img_fps = "30"
 
             vid_vf = f"scale={vw}:{vh},setsar=1,format=yuv420p"
             img_vf = (
@@ -164,7 +170,7 @@ def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tupl
                 cmd = [
                     "ffmpeg", "-y",
                     "-i", tmp_input,
-                    "-loop", "1", "-t", "3", "-i", tmp_image,
+                    "-loop", "1", "-t", "3", "-r", img_fps, "-i", tmp_image,
                     "-filter_complex", fc,
                     "-map", "[outv]", "-map", "[outa]",
                     "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
@@ -180,7 +186,7 @@ def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tupl
                 cmd = [
                     "ffmpeg", "-y",
                     "-i", tmp_input,
-                    "-loop", "1", "-t", "3", "-i", tmp_image,
+                    "-loop", "1", "-t", "3", "-r", img_fps, "-i", tmp_image,
                     "-filter_complex", fc,
                     "-map", "[outv]",
                     "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
@@ -302,7 +308,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         else:
             logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
     elif proof_r2_key:
-        logger.warning("[full-pipeline] job=%s image_merge 실패 — 원본 영상으로 진행", job_id)
+        raise RuntimeError("증거 사진 이미지 머지 실패 — 업로드 취소")
 
     if status_callback: status_callback("db_save")
     db = SessionLocal()
