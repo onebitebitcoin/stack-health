@@ -202,9 +202,27 @@ export default function UploadPage() {
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
-    setFile(f)
-    setPreviewUrl(URL.createObjectURL(f))
-    setStep(1)
+    const url = URL.createObjectURL(f)
+    const videoEl = document.createElement('video')
+    videoEl.preload = 'metadata'
+    videoEl.src = url
+    videoEl.onloadedmetadata = () => {
+      if (videoEl.duration > 30) {
+        URL.revokeObjectURL(url)
+        e.target.value = ''
+        setError(`영상 길이가 ${Math.round(videoEl.duration)}초입니다. 30초 이하 영상만 업로드할 수 있습니다.`)
+        return
+      }
+      setError('')
+      setFile(f)
+      setPreviewUrl(url)
+      setStep(1)
+    }
+    videoEl.onerror = () => {
+      setFile(f)
+      setPreviewUrl(url)
+      setStep(1)
+    }
   }
 
   function toggleTag(tag: Tag) {
