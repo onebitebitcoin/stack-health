@@ -131,7 +131,7 @@ def run_image_merge(job: dict) -> dict:
 
         # Step 2: filter_complex concat + h.264 인코딩 (코덱 불일치로 인한 검은 화면 방지)
         if has_audio:
-            fc = "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]"
+            fc = "[0:v]fps={fps}[v0];[1:v]fps={fps}[v1];[v0][0:a][v1][1:a]concat=n=2:v=1:a=1[outv][outa]".format(fps=fps)
             concat_cmd = [
                 "ffmpeg", "-y",
                 "-i", tmp_video,
@@ -144,7 +144,7 @@ def run_image_merge(job: dict) -> dict:
                 tmp_output,
             ]
         else:
-            fc = "[0:v][1:v]concat=n=2:v=1:a=0[outv]"
+            fc = "[0:v]fps={fps}[v0];[1:v]fps={fps}[v1];[v0][v1]concat=n=2:v=1:a=0[outv]".format(fps=fps)
             concat_cmd = [
                 "ffmpeg", "-y",
                 "-i", tmp_video,
