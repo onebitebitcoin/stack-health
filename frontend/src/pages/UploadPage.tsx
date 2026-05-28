@@ -68,7 +68,7 @@ export default function UploadPage() {
 
   // Pipeline job polling state
   const [pipelineJobId, setPipelineJobId] = useState<string | null>(null)
-  const [_pipelineStatus, setPipelineStatus] = useState<string | null>(null)
+  const [, setPipelineStatus] = useState<string | null>(null)
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Proof image

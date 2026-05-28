@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -16,14 +16,17 @@ class Challenge(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     reward_title: Mapped[str] = mapped_column(String(80), nullable=False)
     condition_value: Mapped[int] = mapped_column(Integer, nullable=False)  # uploads required
-    start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    end_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     categories: Mapped[list] = mapped_column(JSON, default=list, nullable=False, server_default="[]")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     creator_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
     )
 
     participations: Mapped[list["ChallengeParticipation"]] = relationship(
@@ -40,9 +43,12 @@ class ChallengeParticipation(Base):
         Integer, ForeignKey("challenges.id"), nullable=False
     )
     upload_count: Mapped[int] = mapped_column(Integer, default=0)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     joined_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
     )
 
     user: Mapped["User"] = relationship("User", back_populates="challenge_participations")  # noqa: F821

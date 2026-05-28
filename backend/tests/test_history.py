@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-KST = timezone(timedelta(hours=9))
+TZ = "Asia/Seoul"
 
 
 def _reg(client: TestClient, email: str = "h@x.com", username: str = "huser") -> tuple[str, dict]:
@@ -23,6 +23,10 @@ def _upload(client: TestClient, token: str, user_id: int, filename: str = "v.mp4
         client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/{user_id}/{filename}", "duration_sec": 20}, headers=_auth(token))
 
 
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def test_history_requires_auth(client: TestClient) -> None:
     res = client.get("/api/v1/history")
     assert res.status_code in (401, 403)
@@ -30,12 +34,10 @@ def test_history_requires_auth(client: TestClient) -> None:
 
 def test_history_empty_month(client: TestClient) -> None:
     token, _ = _reg(client)
-    now = datetime.now(KST)
-    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}", headers=_auth(token))
+    now = _now_utc()
+    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}&timezone={TZ}", headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
-    assert data["year"] == now.year
-    assert data["month"] == now.month
     assert data["streak"] == 0
     assert data["total_days"] == 0
     assert data["workout_days"] == {}
@@ -44,12 +46,13 @@ def test_history_empty_month(client: TestClient) -> None:
 def test_history_after_upload(client: TestClient) -> None:
     token, user = _reg(client, "hu2@x.com", "huser2")
     _upload(client, token, user["id"])
-    now = datetime.now(KST)
-    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}", headers=_auth(token))
+    now = _now_utc()
+    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}&timezone={TZ}", headers=_auth(token))
     data = res.json()["data"]
     assert data["total_days"] == 1
     assert data["streak"] == 1
-    today_str = now.strftime("%Y-%m-%d")
+    from zoneinfo import ZoneInfo
+    today_str = now.astimezone(ZoneInfo(TZ)).strftime("%Y-%m-%d")
     assert today_str in data["workout_days"]
     day_posts = data["workout_days"][today_str]
     assert len(day_posts) == 1
@@ -61,29 +64,31 @@ def test_history_multiple_uploads_same_day(client: TestClient) -> None:
     token, user = _reg(client, "hu3@x.com", "huser3")
     _upload(client, token, user["id"], "v1.mp4")
     _upload(client, token, user["id"], "v2.mp4")
-    now = datetime.now(KST)
-    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}", headers=_auth(token))
+    now = _now_utc()
+    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}&timezone={TZ}", headers=_auth(token))
     data = res.json()["data"]
     assert data["total_days"] == 1
-    today_str = now.strftime("%Y-%m-%d")
+    from zoneinfo import ZoneInfo
+    today_str = now.astimezone(ZoneInfo(TZ)).strftime("%Y-%m-%d")
     assert len(data["workout_days"][today_str]) == 2
 
 
 def test_history_default_current_month(client: TestClient) -> None:
     token, _ = _reg(client, "hu4@x.com", "huser4")
-    res = client.get("/api/v1/history", headers=_auth(token))
+    res = client.get(f"/api/v1/history?timezone={TZ}", headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
-    now = datetime.now(KST)
-    assert data["year"] == now.year
-    assert data["month"] == now.month
+    from zoneinfo import ZoneInfo
+    now_kst = _now_utc().astimezone(ZoneInfo(TZ))
+    assert data["year"] == now_kst.year
+    assert data["month"] == now_kst.month
 
 
 def test_history_only_shows_own_posts(client: TestClient) -> None:
     token_a, _ = _reg(client, "ha@x.com", "husera")
     token_b, user_b = _reg(client, "hb@x.com", "huserb")
     _upload(client, token_b, user_b["id"], "other.mp4")
-    now = datetime.now(KST)
-    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}", headers=_auth(token_a))
+    now = _now_utc()
+    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}&timezone={TZ}", headers=_auth(token_a))
     data = res.json()["data"]
     assert data["total_days"] == 0

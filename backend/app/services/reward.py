@@ -72,9 +72,9 @@ def get_weekly_queued_points(db: Session, user_id: int, week_label: str) -> floa
 
 
 def _utc_today_start() -> datetime:
-    """KST midnight expressed as naive UTC — daily limits reset at KST 00:00."""
+    """KST midnight as UTC — daily limits reset at KST 00:00."""
     kst_midnight = datetime.now(KST).replace(hour=0, minute=0, second=0, microsecond=0)
-    return kst_midnight.astimezone(timezone.utc).replace(tzinfo=None)
+    return kst_midnight.astimezone(timezone.utc)
 
 
 def get_daily_upload_count(db: Session, user_id: int) -> int:
@@ -104,7 +104,8 @@ def settle_queued_rewards(db: Session, user_id: int | None = None, client_tz_str
     rewards = query.all()
     settled = []
     for reward in rewards:
-        created_client = reward.created_at.replace(tzinfo=timezone.utc).astimezone(client_tz)
+        dt = reward.created_at if reward.created_at.tzinfo else reward.created_at.replace(tzinfo=timezone.utc)
+        created_client = dt.astimezone(client_tz)
         if created_client.date() < today_client:
             reward.status = REWARD_STATUS_FIXED
             reward.week_label = settlement_week_label

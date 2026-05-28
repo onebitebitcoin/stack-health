@@ -175,8 +175,8 @@ def my_posts(
     monday_kst = now_kst.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=now_kst.weekday())
     week_start_kst = monday_kst - timedelta(weeks=week_offset)
     week_end_kst = week_start_kst + timedelta(weeks=1)
-    week_start_utc = week_start_kst.astimezone(timezone.utc).replace(tzinfo=None)
-    week_end_utc = week_end_kst.astimezone(timezone.utc).replace(tzinfo=None)
+    week_start_utc = week_start_kst.astimezone(timezone.utc)
+    week_end_utc = week_end_kst.astimezone(timezone.utc)
 
     base_filter = (
         db.query(Post)

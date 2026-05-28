@@ -28,10 +28,12 @@ export default function HistoryPage() {
   const [selectedPosts, setSelectedPosts] = useState<HistoryWorkoutPost[]>([])
   const [videoIdx, setVideoIdx] = useState(0)
 
+  const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
   const { data, isLoading } = useQuery<HistoryResponse>({
-    queryKey: ['history', year, month],
+    queryKey: ['history', year, month, clientTimezone],
     queryFn: async () => {
-      const res = await client.get('/history', { params: { year, month } })
+      const res = await client.get('/history', { params: { year, month, timezone: clientTimezone } })
       return res.data.data
     },
   })

@@ -1,8 +1,8 @@
 # SPEC.md — 운동하고 비트코인 받자
 
-> 버전: 0.46.6 (운영 중)
+> 버전: 0.52.0 (운영 중)
 > 런칭 목표: 2026-05-28
-> 최종 업데이트: 2026-05-27
+> 최종 업데이트: 2026-05-28
 >
 > **이 문서는 코드 기준으로 작성됩니다. 코드가 진실 원본이며, 이 문서는 코드를 설명합니다.**
 
@@ -25,7 +25,43 @@
 
 ---
 
-## 2. 기술 스택
+## 2. 타임존 정책
+
+> **이 규칙을 어기면 히스토리 캘린더, 스트릭, 포인트 정산이 날짜 경계에서 어긋납니다.**
+
+### 원칙
+
+| 레이어 | 규칙 |
+|--------|------|
+| **DB** | 모든 datetime 컬럼은 `TIMESTAMPTZ` (UTC). naive datetime 저장 금지 |
+| **Backend Python** | `datetime.now(timezone.utc)` 사용. `datetime.now()` (naive) 사용 금지 |
+| **Backend API 응답** | 모든 datetime 필드는 ISO 8601 UTC 오프셋 포함 (`2026-05-28T15:30:00+00:00`) |
+| **Frontend** | `new Date(isoString)` — 브라우저가 UTC 파싱 → 클라이언트 timezone 자동 표시 |
+| **Timezone-aware API** | timezone이 필요한 엔드포인트는 `?timezone=` 쿼리 파라미터 또는 `X-Client-Timezone` 헤더로 클라이언트 timezone을 명시적으로 수신 |
+
+### 금지 사항
+
+- `DateTime` (timezone=False) SQLAlchemy 컬럼 신규 추가 금지
+- `KST = timezone(timedelta(hours=9))` 하드코딩 및 DB 비교에 사용 금지
+- `datetime.now()` 또는 `datetime.utcnow()` (naive) 사용 금지 → `datetime.now(timezone.utc)` 사용
+- `.replace(tzinfo=None)` 으로 timezone 정보를 제거한 뒤 DB에 저장 금지
+- `_DB_TZ = ZoneInfo("Asia/Seoul")` 류의 "DB가 KST 저장" 가정 금지
+
+### KST 비즈니스 로직 예외
+
+아래는 기술적 가정이 아닌 **제품 정책**으로 KST를 사용합니다:
+
+| 항목 | 설명 |
+|------|------|
+| 주간 라벨 (`2026-W21`) | KST 기준 월요일 00:00 시작 — 한국 사용자 주간 정산 기준 |
+| 일일 업로드 제한 | KST 자정 기준 리셋 |
+| claim 마감일 | KST 월요일 00:00 |
+
+이 로직은 `reward.py`에만 집중되어 있으며, DB 저장 로직과 분리됩니다.
+
+---
+
+## 4. 기술 스택
 
 | 영역 | 기술 |
 |------|------|
@@ -81,7 +117,7 @@ REDIS_URL=redis://localhost:6379/0
 
 ---
 
-## 3. 프로젝트 구조
+## 5. 프로젝트 구조
 
 ```
 stack_health/
@@ -141,7 +177,7 @@ stack_health/
 
 ---
 
-## 4. 데이터베이스 스키마
+## 6. 데이터베이스 스키마
 
 ### users
 ```sql
@@ -154,7 +190,7 @@ oauth_sub       TEXT                       -- Google sub 또는 null
 lightning_address TEXT                     -- 예: user@walletofsatoshi.com
 avatar_url      TEXT
 is_admin        BOOLEAN DEFAULT FALSE
-created_at      DATETIME DEFAULT now()
+created_at      TIMESTAMPTZ DEFAULT now()   -- UTC
 ```
 
 ### videos
@@ -166,7 +202,7 @@ cdn_url         TEXT NOT NULL
 file_hash       TEXT NOT NULL              -- SHA256, 중복 업로드 차단
 duration_sec    INTEGER
 status          TEXT DEFAULT 'active'      -- active | rejected | deleted
-created_at      DATETIME DEFAULT now()
+created_at      TIMESTAMPTZ DEFAULT now()   -- UTC
 ```
 
 ### posts
@@ -178,7 +214,7 @@ caption         TEXT                       -- 140자 이내
 tags            TEXT                       -- JSON 배열: ["홈트", "러닝"]
 like_count      INTEGER DEFAULT 0
 view_count      INTEGER DEFAULT 0
-created_at      DATETIME DEFAULT now()
+created_at      TIMESTAMPTZ DEFAULT now()   -- UTC
 ```
 
 ### reward_points
@@ -194,7 +230,7 @@ status          TEXT DEFAULT 'fixed'       -- queued | fixed | revoked
                                            -- queued: 업로드 후 24h 대기 (어뷰징 방지)
                                            -- fixed: 24h 경과 후 확정
                                            -- revoked: 영상 삭제로 취소됨
-created_at      DATETIME DEFAULT now()
+created_at      TIMESTAMPTZ DEFAULT now()   -- UTC
 ```
 
 ### lightning_claims
@@ -207,8 +243,8 @@ satoshi_amount  INTEGER NOT NULL
 ln_address      TEXT NOT NULL
 status          TEXT DEFAULT 'pending'     -- pending | paid | cancelled
 payment_memo    TEXT
-created_at      DATETIME DEFAULT now()
-updated_at      DATETIME DEFAULT now()
+created_at      TIMESTAMPTZ DEFAULT now()   -- UTC
+updated_at      TIMESTAMPTZ DEFAULT now()   -- UTC
 UNIQUE(user_id, week_label)               -- 주당 1회 클레임 강제
 ```
 
@@ -218,7 +254,7 @@ id              INTEGER PRIMARY KEY
 post_id         INTEGER REFERENCES posts(id)
 user_id         INTEGER REFERENCES users(id)
 content         TEXT NOT NULL              -- 최대 500자
-created_at      DATETIME DEFAULT now()
+created_at      TIMESTAMPTZ DEFAULT now()   -- UTC
 ```
 
 ### challenges
@@ -233,7 +269,7 @@ end_date        DATETIME NOT NULL
 categories      JSON DEFAULT []            -- 운동 카테고리 목록
 is_active       BOOLEAN DEFAULT TRUE
 creator_id      INTEGER REFERENCES users(id) -- null이면 시스템 챌린지
-created_at      DATETIME DEFAULT now()
+created_at      TIMESTAMPTZ DEFAULT now()   -- UTC
 ```
 
 ### challenge_participations
@@ -243,7 +279,7 @@ user_id         INTEGER REFERENCES users(id)
 challenge_id    INTEGER REFERENCES challenges(id)
 upload_count    INTEGER DEFAULT 0
 completed_at    DATETIME                   -- null이면 미완료
-joined_at       DATETIME DEFAULT now()
+joined_at       TIMESTAMPTZ DEFAULT now()   -- UTC
 ```
 
 ### lnauth_challenges
@@ -251,7 +287,7 @@ joined_at       DATETIME DEFAULT now()
 k1              TEXT PRIMARY KEY           -- 64자 hex challenge
 pubkey          TEXT                       -- 서명한 공개키 (verify 후 저장)
 verified        BOOLEAN DEFAULT FALSE
-created_at      DATETIME DEFAULT now()
+created_at      TIMESTAMPTZ DEFAULT now()   -- UTC
 ```
 
 ### admin_logs
@@ -261,12 +297,12 @@ action          TEXT NOT NULL              -- 'ban_user' | 'reject_video' | 'del
 target_type     TEXT NOT NULL              -- 'user' | 'video' | 'post'
 target_id       INTEGER NOT NULL
 detail          TEXT
-created_at      DATETIME DEFAULT now()
+created_at      TIMESTAMPTZ DEFAULT now()   -- UTC
 ```
 
 ---
 
-## 5. API 명세
+## 7. API 명세
 
 ### 공통
 - Base URL: `/api/v1`
@@ -575,7 +611,7 @@ Response: { "status": "ok", "version": "0.26.1" }
 
 ---
 
-## 6. 포인트 시스템
+## 8. 포인트 시스템
 
 ### 적립 규칙
 | 행동 | 포인트 | 비고 |
@@ -614,7 +650,7 @@ Response: { "status": "ok", "version": "0.26.1" }
 
 ---
 
-## 7. 영상 업로드 규칙
+## 9. 영상 업로드 규칙
 
 | 항목 | 제한 |
 |------|------|
@@ -628,7 +664,7 @@ Response: { "status": "ok", "version": "0.26.1" }
 
 ---
 
-## 8. 화면 목록 (Frontend Routes)
+## 10. 화면 목록 (Frontend Routes)
 
 | 경로 | 화면 | 인증 |
 |------|------|------|
@@ -646,7 +682,7 @@ Response: { "status": "ok", "version": "0.26.1" }
 
 ---
 
-## 9. 배포 설정
+## 11. 배포 설정
 
 ### Backend (Docker)
 ```dockerfile
@@ -662,7 +698,7 @@ Response: { "status": "ok", "version": "0.26.1" }
 
 ---
 
-## 10. 현재 구현 범위
+## 12. 현재 구현 범위
 
 ### Phase A (런칭 포함 — v0.26.x)
 - 회원가입/로그인 (이메일+비밀번호)
@@ -692,7 +728,7 @@ Response: { "status": "ok", "version": "0.26.1" }
 
 ---
 
-## 11. 운영 SOP
+## 13. 운영 SOP
 
 ### 주간 BTC 지급 프로세스
 

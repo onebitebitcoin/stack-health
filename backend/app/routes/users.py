@@ -14,7 +14,6 @@ from app.models.user import User
 from app.models.video import Video
 from app.routes.auth import get_current_user as get_required_user
 from app.services.reward import (
-    KST,
     REWARD_STATUS_FIXED,
     REWARD_STATUS_QUEUED,
     _parse_tz,
@@ -151,15 +150,14 @@ def get_my_weekly_points(
 
     total_points = sum(r.points for r in records if r.status == REWARD_STATUS_FIXED)
 
-    # Convert created_at (stored as naive UTC) to KST date string
-    def to_kst_date(dt: datetime) -> str:
+    def to_client_date(dt: datetime) -> str:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(KST).date().isoformat()
+        return dt.astimezone(client_tz).date().isoformat()
 
     items = [
         {
-            "date": to_kst_date(r.created_at),
+            "date": to_client_date(r.created_at),
             "points": round(float(r.points), 2),
             "source": r.reason,
             "post_id": r.reference_id,

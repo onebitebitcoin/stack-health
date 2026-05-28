@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,8 +15,6 @@ from app.models.video import Video
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.video import PostSchema
-
-KST = timezone(timedelta(hours=9))
 
 router = APIRouter(prefix="/api/v1/feed", tags=["feed"])
 
@@ -145,13 +143,13 @@ def view_post(
         raise HTTPException(status_code=404, detail="Post not found")
 
     now_utc = datetime.now(timezone.utc)
-    today_start = datetime(now_utc.year, now_utc.month, now_utc.day)
+    today_start_utc = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     already_viewed = (
         db.query(PostView)
         .filter(
             PostView.user_id == current_user.id,
             PostView.post_id == post_id,
-            PostView.created_at >= today_start,
+            PostView.created_at >= today_start_utc,
         )
         .first()
     )

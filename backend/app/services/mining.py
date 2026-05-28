@@ -121,7 +121,7 @@ def run_lottery(
     mining_round.winner_count = len(winnings)
     mining_round.result_json = json.dumps({str(k): v for k, v in winnings.items()})
     mining_round.status = "distributed"
-    mining_round.distributed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    mining_round.distributed_at = datetime.now(timezone.utc)
     db.flush()
 
     paid_results = []
@@ -206,7 +206,7 @@ def close_week(db: Session, week_label: str) -> dict:
         mining_round = MiningRound(week_label=week_label)
         db.add(mining_round)
     mining_round.status = "closed"
-    mining_round.closed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    mining_round.closed_at = datetime.now(timezone.utc)
 
     db.flush()
 

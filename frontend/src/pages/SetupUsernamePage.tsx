@@ -6,7 +6,7 @@ import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 import type { User } from '../api/types'
 import LogoMark from '../components/LogoMark'
-import { getProfileColor } from '../components/UserAvatar'
+import { getProfileColor } from '../utils/profileColor'
 
 const PROFILE_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f97316',
