@@ -51,9 +51,11 @@ def _process_job(r, job: dict) -> None:
     set_job_status(r, job_id, status="processing")
 
     _acquire_ffmpeg_slot(r)
+    current_step: list[str | None] = [None]
     try:
         if job_type == "full-pipeline":
             def _step_cb(step: str) -> None:
+                current_step[0] = step
                 set_job_status(r, job_id, pipeline_step=step)
             result = run_full_pipeline(job, status_callback=_step_cb)
         elif job_type == "proof-merge":
@@ -73,11 +75,11 @@ def _process_job(r, job: dict) -> None:
             set_job_status(r, job_id, status="retrying", retry_count=str(job["retry_count"]))
             logger.info("Job %s 재큐잉 (retry %d/%d)", job_id, job["retry_count"], MAX_JOB_RETRIES)
             if job_type == "full-pipeline":
-                notify_video_failure(job, e, retry_count + 1, MAX_JOB_RETRIES)
+                notify_video_failure(job, e, retry_count + 1, MAX_JOB_RETRIES, current_step[0])
         else:
             set_job_status(r, job_id, status="failed", error=str(e))
             if job_type == "full-pipeline":
-                notify_video_failure(job, e, retry_count + 1, MAX_JOB_RETRIES)
+                notify_video_failure(job, e, retry_count + 1, MAX_JOB_RETRIES, current_step[0])
     finally:
         _release_ffmpeg_slot(r)
 
