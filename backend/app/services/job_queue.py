@@ -88,9 +88,11 @@ def enqueue_full_upload_pipeline(
     audio_content_type: str = "audio/webm",
     proof_r2_key: str | None = None,
     proof_cdn_url: str | None = None,
+    job_id: str | None = None,
 ) -> str:
     """영상 업로드 전체 파이프라인을 Redis 큐에 등록. job_id 즉시 반환."""
-    job_id = str(uuid.uuid4())
+    if job_id is None:
+        job_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
 
     payload = {
@@ -123,3 +125,26 @@ def enqueue_full_upload_pipeline(
     r.lpush(QUEUE_NAME, json.dumps(payload))
     logger.info("Enqueued full-pipeline job %s for user %s", job_id, user_id)
     return job_id
+
+
+def reserve_job_id(user_id: int) -> str:
+    """job_id를 미리 예약하고 Redis에 'pending' 상태로 등록. 파일 수신 즉시 응답 가능하도록."""
+    job_id = str(uuid.uuid4())
+    created_at = datetime.now(timezone.utc).isoformat()
+    r = get_redis_client()
+    _set_job_status(r, job_id,
+        status="pending",
+        job_type="full-pipeline",
+        user_id=str(user_id),
+        created_at=created_at,
+    )
+    logger.info("Reserved job_id %s for user %s", job_id, user_id)
+    return job_id
+
+
+def fail_job(job_id: str, error: str) -> None:
+    try:
+        r = get_redis_client()
+        _set_job_status(r, job_id, status="failed", error=error)
+    except Exception:
+        pass

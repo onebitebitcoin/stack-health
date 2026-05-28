@@ -307,9 +307,9 @@ def test_merge_audio_unauthenticated(client: TestClient) -> None:
 # upload-pipeline 엔드포인트 테스트
 # ──────────────────────────────────────────────
 
-@patch("app.routes.videos.enqueue_full_upload_pipeline", return_value="job-abc-123")
-@patch("app.routes.videos.r2_service.upload_fileobj", return_value=("videos/test.mp4", "https://cdn/test.mp4"))
-def test_upload_pipeline_success(mock_upload, mock_enqueue, client: TestClient) -> None:
+@patch("app.routes.videos.reserve_job_id", return_value="job-abc-123")
+@patch("app.routes.videos._r2_upload_and_enqueue")
+def test_upload_pipeline_success(mock_bg, mock_reserve, client: TestClient) -> None:
     token = _register_and_token(client, "pipe@x.com", "pipeuser")
     res = client.post(
         "/api/v1/videos/upload-pipeline",

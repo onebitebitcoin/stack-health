@@ -68,7 +68,7 @@ export default function UploadPage() {
 
   // Pipeline job polling state
   const [pipelineJobId, setPipelineJobId] = useState<string | null>(null)
-  const [, setPipelineStatus] = useState<string | null>(null)
+  const [pipelineStatus, setPipelineStatus] = useState<string | null>(null)
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Proof image
@@ -137,6 +137,7 @@ export default function UploadPage() {
       const { status, points_earned, error: jobError } = res.data.data
       setPipelineStatus(status)
       if (status === 'completed') {
+        setUploadProgress(100)
         handleJobCompleted(points_earned ?? 0)
       } else if (status === 'failed') {
         abortJob(jobError || '처리 중 오류가 발생했습니다')
@@ -150,6 +151,15 @@ export default function UploadPage() {
       // Other network errors → retry silently on next interval
     }
   }, [handleJobCompleted, abortJob])
+
+  // Slowly animate progress from 70→95 while server is processing
+  useEffect(() => {
+    if (!pipelineJobId || uploading || done) return
+    const timer = setInterval(() => {
+      setUploadProgress((p) => (p < 95 ? p + 1 : p))
+    }, 1500)
+    return () => clearInterval(timer)
+  }, [pipelineJobId, uploading, done])
 
   // Start/restart polling when pipelineJobId is set
   useEffect(() => {
@@ -326,7 +336,7 @@ export default function UploadPage() {
         form,
         {
           timeout: 300_000,
-          onUploadProgress: (e) => { if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100)) },
+          onUploadProgress: (e) => { if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 70)) },
         },
       )
 
@@ -334,6 +344,7 @@ export default function UploadPage() {
       saveJob(job_id)
       setPipelineJobId(job_id)
       setPipelineStatus('pending')
+      setUploadProgress(70)
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, '업로드 실패'))
     } finally {
@@ -383,18 +394,22 @@ export default function UploadPage() {
 
   // ── Upload / Processing screen ──
   if (uploading || pipelineJobId) {
+    const statusLabel = uploading
+      ? '업로드 중...'
+      : pipelineStatus === 'processing'
+      ? '영상 처리 중...'
+      : '잠시만 기다려주세요...'
+
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-theme-page px-6">
         <Upload size={48} strokeWidth={1.5} className="animate-bounce text-accent" />
-        <p className="text-base font-semibold text-theme-primary">업로드 중...</p>
-        {uploading && (
-          <div className="w-64 flex flex-col items-center gap-1.5">
-            <div className="h-1.5 w-full rounded-full bg-theme-surface2">
-              <div className="h-1.5 rounded-full bg-accent transition-all" style={{ width: `${uploadProgress}%` }} />
-            </div>
-            <span className="text-xs text-theme-muted">{uploadProgress}%</span>
+        <p className="text-base font-semibold text-theme-primary">{statusLabel}</p>
+        <div className="w-64 flex flex-col items-center gap-1.5">
+          <div className="h-1.5 w-full rounded-full bg-theme-surface2">
+            <div className="h-1.5 rounded-full bg-accent transition-all duration-500" style={{ width: `${uploadProgress}%` }} />
           </div>
-        )}
+          <span className="text-xs text-theme-muted">{uploadProgress}%</span>
+        </div>
         {error && (
           <div className="w-full max-w-sm rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 text-center">
             {error}

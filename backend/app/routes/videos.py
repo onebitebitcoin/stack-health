@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
@@ -27,7 +27,7 @@ from app.schemas.video import (
 )
 from app.services import r2 as r2_service
 from app.services.share_token import generate_share_token
-from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_merge_job, enqueue_proof_merge_job, get_job_status
+from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_merge_job, enqueue_proof_merge_job, fail_job, get_job_status, reserve_job_id
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
     POINTS_PER_UPLOAD,
@@ -500,6 +500,72 @@ def merge_proof(
 # MQ 방식 전체 업로드 파이프라인
 # ---------------------------------------------------------------------------
 
+def _r2_upload_and_enqueue(
+    job_id: str,
+    video_bytes: bytes,
+    video_content_type: str,
+    video_filename: str,
+    audio_bytes: bytes | None,
+    audio_content_type: str,
+    proof_bytes: bytes | None,
+    proof_content_type: str | None,
+    user_id: int,
+    duration_sec: int,
+    caption: str | None,
+    tags_list: list[str],
+    challenge_id: int | None,
+    workout_start: str | None,
+    workout_end: str | None,
+    audio_duration_sec: int,
+) -> None:
+    try:
+        r2_key, _cdn_url = r2_service.upload_fileobj(
+            io.BytesIO(video_bytes), video_content_type, video_filename, user_id
+        )
+
+        audio_r2_key: str | None = None
+        if audio_bytes and len(audio_bytes) > 0:
+            audio_ext = "mp4" if "mp4" in audio_content_type else "webm"
+            audio_r2_key, _ = r2_service.upload_fileobj(
+                io.BytesIO(audio_bytes), audio_content_type, f"audio.{audio_ext}", user_id
+            )
+
+        proof_r2_key: str | None = None
+        proof_cdn_url: str | None = None
+        if proof_bytes and len(proof_bytes) > 0 and proof_content_type:
+            ext = "jpg" if "jpeg" in proof_content_type or "jpg" in proof_content_type else "png"
+            proof_r2_key = f"proof/{user_id}/{uuid.uuid4()}.{ext}"
+            r2_client = r2_service.get_r2_client()
+            r2_client.put_object(
+                Bucket=app_settings.r2_bucket_name,
+                Key=proof_r2_key,
+                Body=proof_bytes,
+                ContentType=proof_content_type,
+            )
+            proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
+
+        enqueue_full_upload_pipeline(
+            job_id=job_id,
+            r2_key=r2_key,
+            file_hash=r2_key,
+            duration_sec=duration_sec,
+            caption=caption,
+            tags=tags_list,
+            challenge_id=challenge_id,
+            workout_start=workout_start,
+            workout_end=workout_end,
+            user_id=user_id,
+            audio_r2_key=audio_r2_key,
+            audio_duration_sec=audio_duration_sec,
+            audio_content_type=audio_content_type,
+            proof_r2_key=proof_r2_key,
+            proof_cdn_url=proof_cdn_url,
+        )
+    except Exception as e:
+        logger.error("Background R2 upload failed job_id=%s: %s", job_id, e)
+        fail_job(job_id, str(e))
+
+
 @router.post("/upload-pipeline")
 async def upload_pipeline(
     file: UploadFile = File(...),
@@ -514,8 +580,9 @@ async def upload_pipeline(
     proof_image: UploadFile | None = File(None),
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = ...,
 ) -> dict:
-    """단일 요청으로 영상 + 오디오 + 사진을 받아 MQ 방식으로 백그라운드 처리 후 job_id 반환."""
+    """파일 수신 즉시 job_id 반환. R2 업로드 + 처리는 백그라운드에서 실행."""
     content_type = file.content_type or "video/mp4"
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식: {content_type}")
@@ -532,62 +599,47 @@ async def upload_pipeline(
     if invalid_tags:
         raise HTTPException(status_code=400, detail=f"Invalid tags: {invalid_tags}")
 
-    # 1. 영상 R2 업로드 (동기)
-    logger.info("upload_pipeline: user_id=%s", current_user.id)
-    r2_key, _cdn_url = r2_service.upload_fileobj(file.file, content_type, file.filename or "video.mp4", current_user.id)
+    # 파일 바이트를 모두 읽어둠 (HTTP 전송 완료 — 이후 연결 불필요)
+    video_bytes = await file.read()
 
-    # 2. 오디오 R2 업로드 (동기)
-    # UploadFile.size는 multipart Content-Length 헤더 기반이라 모바일에서 None일 수 있음.
-    # bytes를 직접 읽어서 크기를 확인한다.
-    audio_r2_key: str | None = None
+    audio_bytes: bytes | None = None
     audio_content_type = "audio/webm"
     if audio is not None:
         audio_content_type = audio.content_type or "audio/webm"
-        audio_ext = "mp4" if "mp4" in audio_content_type else "webm"
         audio_bytes = await audio.read()
-        if len(audio_bytes) > 0:
-            audio_r2_key, _ = r2_service.upload_fileobj(
-                io.BytesIO(audio_bytes), audio_content_type, f"audio.{audio_ext}", current_user.id
-            )
 
-    # 3. 증거 사진 R2 업로드 (동기)
-    proof_r2_key: str | None = None
-    proof_cdn_url: str | None = None
+    proof_bytes: bytes | None = None
+    proof_content_type: str | None = None
     if proof_image is not None:
-        proof_ct = proof_image.content_type or "image/jpeg"
-        if proof_ct not in ALLOWED_IMAGE_CONTENT_TYPES:
-            raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식: {proof_ct}")
-        image_bytes = await proof_image.read()
-        if len(image_bytes) > MAX_IMAGE_SIZE:
+        proof_content_type = proof_image.content_type or "image/jpeg"
+        if proof_content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+            raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식: {proof_content_type}")
+        proof_bytes = await proof_image.read()
+        if len(proof_bytes) > MAX_IMAGE_SIZE:
             raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 10MB)")
-        if len(image_bytes) > 0:
-            ext = "jpg" if "jpeg" in proof_ct or "jpg" in proof_ct else "png"
-            proof_r2_key = f"proof/{current_user.id}/{uuid.uuid4()}.{ext}"
-            r2_client = r2_service.get_r2_client()
-            r2_client.put_object(
-                Bucket=app_settings.r2_bucket_name,
-                Key=proof_r2_key,
-                Body=image_bytes,
-                ContentType=proof_ct,
-            )
-            proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
 
-    # 4. 전체 파이프라인 비동기 시작
-    job_id = enqueue_full_upload_pipeline(
-        r2_key=r2_key,
-        file_hash=r2_key,
+    # job_id 선점: 응답 전에 Redis에 등록해 폴링 가능하게
+    job_id = reserve_job_id(current_user.id)
+    logger.info("upload_pipeline: user_id=%s job_id=%s", current_user.id, job_id)
+
+    background_tasks.add_task(
+        _r2_upload_and_enqueue,
+        job_id=job_id,
+        video_bytes=video_bytes,
+        video_content_type=content_type,
+        video_filename=file.filename or "video.mp4",
+        audio_bytes=audio_bytes,
+        audio_content_type=audio_content_type,
+        proof_bytes=proof_bytes,
+        proof_content_type=proof_content_type,
+        user_id=current_user.id,
         duration_sec=duration_sec,
         caption=caption,
-        tags=tags_list,
+        tags_list=tags_list,
         challenge_id=challenge_id,
         workout_start=workout_start,
         workout_end=workout_end,
-        user_id=current_user.id,
-        audio_r2_key=audio_r2_key,
         audio_duration_sec=audio_duration_sec,
-        audio_content_type=audio_content_type,
-        proof_r2_key=proof_r2_key,
-        proof_cdn_url=proof_cdn_url,
     )
 
     return {"data": {"job_id": job_id, "status": "processing"}}
