@@ -27,7 +27,7 @@ from app.schemas.video import (
 )
 from app.services import r2 as r2_service
 from app.services.share_token import generate_share_token
-from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_merge_job, enqueue_proof_merge_job, fail_job, get_job_status, reserve_job_id
+from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_merge_job, enqueue_image_merge_job, fail_job, get_job_status, reserve_job_id
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
     POINTS_PER_UPLOAD,
@@ -504,7 +504,7 @@ def merge_proof(
 
     logger.info("merge_proof: user_id=%s video=%s proof=%s", current_user.id, video_r2_key, proof_r2_key)
     try:
-        job_id = enqueue_proof_merge_job(video_r2_key, proof_r2_key)
+        job_id = enqueue_image_merge_job(video_r2_key, proof_r2_key)
     except Exception as e:
         logger.error("proof merge 큐 등록 실패: %s", e)
         raise HTTPException(status_code=500, detail="영상 처리에 실패했습니다")

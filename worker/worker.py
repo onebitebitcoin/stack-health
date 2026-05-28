@@ -8,7 +8,7 @@ from queue_client import dequeue_job, get_redis_client, set_job_status
 from notify import notify_video_failure, notify_video_success
 from tasks.full_pipeline import run_full_pipeline
 from tasks.merge import run_merge
-from tasks.proof_merge import run_proof_merge
+from tasks.image_merge import run_image_merge
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ def _process_job(r, job: dict) -> None:
                 set_job_status(r, job_id, pipeline_step=step)
             result = run_full_pipeline(job, status_callback=_step_cb)
         elif job_type == "proof-merge":
-            result = run_proof_merge(job)
+            result = run_image_merge(job)
         else:
             result = run_merge(job)
 

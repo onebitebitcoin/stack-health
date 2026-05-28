@@ -54,7 +54,7 @@ def enqueue_merge_job(job_payload: dict) -> str:
     return job_id
 
 
-def enqueue_proof_merge_job(video_r2_key: str, proof_r2_key: str) -> str:
+def enqueue_image_merge_job(video_r2_key: str, proof_r2_key: str) -> str:
     """Redis 큐에 proof merge 잡 등록."""
     job_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()

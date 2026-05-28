@@ -488,7 +488,7 @@ def test_upload_proof_image_invalid_type(mock_r2_client, client: TestClient) -> 
     assert res.status_code == 400
 
 
-@patch("app.routes.videos.enqueue_proof_merge_job", return_value="proof-job-123")
+@patch("app.routes.videos.enqueue_image_merge_job", return_value="proof-job-123")
 def test_merge_proof_success(mock_enqueue, client: TestClient) -> None:
     """merge-proof 잡 등록 성공."""
     token, uid = _register(client, "mergeproof@x.com", "mergeproofuser")

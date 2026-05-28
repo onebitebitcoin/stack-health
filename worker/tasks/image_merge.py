@@ -28,7 +28,7 @@ def _make_tmp(suffix: str) -> str:
         return f.name
 
 
-def run_proof_merge(job: dict) -> dict:
+def run_image_merge(job: dict) -> dict:
     """R2에서 video와 proof 이미지를 다운로드하고 filter_complex로 단일 패스 concat."""
     video_r2_key: str = job["video_r2_key"]
     proof_r2_key: str = job["proof_r2_key"]

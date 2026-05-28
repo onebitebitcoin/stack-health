@@ -103,7 +103,7 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
                 os.unlink(tmp)
 
 
-def _proof_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
+def _image_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
     """Proof image concat via filter_complex (single pass). Returns (merged_r2_key, proof_cdn_url) or None."""
     img_suffix = ".jpg" if proof_key.lower().endswith((".jpg", ".jpeg")) else ".png"
     tmp_video = tmp_image = tmp_output = None
@@ -320,8 +320,8 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
 
     proof_r2_key: str | None = job.get("proof_r2_key")
     if proof_r2_key:
-        if status_callback: status_callback("proof_merge")
-        result = _proof_merge(r2, current_key, proof_r2_key)
+        if status_callback: status_callback("image_merge")
+        result = _image_merge(r2, current_key, proof_r2_key)
         if result:
             current_key, final_proof_url = result
             logger.info("[full-pipeline] job=%s proof merged → %s", job_id, current_key)

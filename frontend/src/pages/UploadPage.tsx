@@ -45,7 +45,7 @@ function clearJob() {
 
 const STEP_CONFIG: Record<string, { start: number; ceiling: number; interval: number }> = {
   audio_merge: { start: 73, ceiling: 75,  interval: 1500 },
-  proof_merge: { start: 76, ceiling: 88,  interval: 5000 },
+  image_merge: { start: 76, ceiling: 88,  interval: 5000 },
   compress:    { start: 90, ceiling: 93,  interval: 1500 },
   db_save:     { start: 95, ceiling: 98,  interval: 1500 },
 }
@@ -168,7 +168,7 @@ export default function UploadPage() {
     }
   }, [handleJobCompleted, abortJob])
 
-  // 단계별 상한까지 느리게 진행 (proof_merge는 5초 간격, 나머지는 1.5초)
+  // 단계별 상한까지 느리게 진행 (image_merge는 5초 간격, 나머지는 1.5초)
   useEffect(() => {
     if (!pipelineJobId || uploading || done) return
     const cfg = STEP_CONFIG[pipelineStep]
