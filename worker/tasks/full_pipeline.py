@@ -226,10 +226,36 @@ def _compress_video(r2, video_key: str) -> tuple[str, int, int] | None:
             raise RuntimeError(f"ffmpeg compress: {result.stderr.decode()[:500]}")
 
         post_bytes = os.path.getsize(tmp_output)
+
+        meta_probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
+             "-show_entries", "stream=width,height,r_frame_rate,codec_name:format=duration",
+             "-of", "json", tmp_output],
+            capture_output=True, text=True, timeout=15,
+        )
+        video_meta: dict = {}
+        try:
+            import json as _json
+            probe_data = _json.loads(meta_probe.stdout)
+            stream = probe_data.get("streams", [{}])[0]
+            fmt = probe_data.get("format", {})
+            fps_raw = stream.get("r_frame_rate", "0/1")
+            num, den = (fps_raw.split("/") + ["1"])[:2]
+            fps = round(int(num) / max(int(den), 1), 1)
+            video_meta = {
+                "width": stream.get("width", 0),
+                "height": stream.get("height", 0),
+                "fps": fps,
+                "codec": stream.get("codec_name", ""),
+                "duration_sec": round(float(fmt.get("duration", 0)), 1),
+            }
+        except Exception:
+            pass
+
         compressed_key = f"videos/c-{uuid.uuid4()}.mp4"
         with open(tmp_output, "rb") as f:
             r2.put_object(Bucket=R2_BUCKET_NAME, Key=compressed_key, Body=f, ContentType="video/mp4")
-        return compressed_key, pre_bytes, post_bytes
+        return compressed_key, pre_bytes, post_bytes, video_meta
     except Exception as e:
         logger.warning("Video compression failed (using original): %s", e)
         return None
@@ -273,9 +299,10 @@ def run_full_pipeline(job: dict) -> dict:
     pre_compress_key = current_key
     pre_size_bytes: int = 0
     post_size_bytes: int = 0
+    video_meta: dict = {}
     compress_result = _compress_video(r2, current_key)
     if compress_result:
-        compressed_key, pre_size_bytes, post_size_bytes = compress_result
+        compressed_key, pre_size_bytes, post_size_bytes, video_meta = compress_result
         try:
             r2.delete_object(Bucket=R2_BUCKET_NAME, Key=pre_compress_key)
         except Exception:
@@ -339,6 +366,7 @@ def run_full_pipeline(job: dict) -> dict:
             "elapsed_sec": round(elapsed_sec, 1),
             "pre_size_bytes": pre_size_bytes,
             "post_size_bytes": post_size_bytes,
+            "video_meta": video_meta,
         }
     finally:
         db.close()

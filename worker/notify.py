@@ -30,9 +30,17 @@ def notify_video_success(job: dict, result: dict) -> None:
     pre = result.get("pre_size_bytes", 0)
     post = result.get("post_size_bytes", 0)
     ratio = f"{post / pre * 100:.0f}%" if pre and post else "-"
+    meta = result.get("video_meta", {})
+    duration = meta.get("duration_sec", 0)
+    width = meta.get("width", 0)
+    height = meta.get("height", 0)
+    fps = meta.get("fps", 0)
+    codec = meta.get("codec", "")
+    meta_line = f"{duration}초  {width}x{height}  {fps}fps  {codec}" if width else "-"
     _send(
         f"✅ <b>영상 업로드 성공</b>\n"
         f"• 유저: {username} ({email})\n"
+        f"• 영상: {meta_line}\n"
         f"• 처리 시간: {elapsed}초\n"
         f"• 압축: {_fmt_mb(pre)} → {_fmt_mb(post)} ({ratio})\n"
         f"• job: <code>{job_id}</code>\n"
