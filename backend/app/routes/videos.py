@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
 from app.database import get_db
+from app.models.challenge import ChallengeParticipation
 from app.models.comment import Comment
 from app.models.post import Post
 from app.models.post_like import PostLike
@@ -96,7 +97,6 @@ def confirm_upload(
     if req.duration_sec < 5 or req.duration_sec > 30:
         raise HTTPException(status_code=400, detail="Duration must be 5-30 seconds")
 
-    # H-3: Verify r2_key ownership via user-scoped prefix
     expected_prefix = f"videos/{current_user.id}/"
     if not req.r2_key.startswith(expected_prefix):
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
@@ -131,6 +131,7 @@ def confirm_upload(
         workout_end=req.workout_end,
         proof_image_url=req.proof_image_url,
         share_token=generate_share_token(current_user.id),
+        challenge_id=req.challenge_id,
     )
     db.add(post)
     db.flush()
@@ -334,6 +335,20 @@ def delete_post(
     db.query(PostLike).filter(PostLike.post_id == post_id).delete()
     db.query(Comment).filter(Comment.post_id == post_id).delete()
 
+    if post.challenge_id:
+        participation = (
+            db.query(ChallengeParticipation)
+            .filter(
+                ChallengeParticipation.challenge_id == post.challenge_id,
+                ChallengeParticipation.user_id == post.user_id,
+            )
+            .first()
+        )
+        if participation and participation.upload_count > 0:
+            participation.upload_count -= 1
+            if participation.completed_at is not None and participation.upload_count < participation.challenge.condition_value:
+                participation.completed_at = None
+
     db.delete(post)
     if video:
         revoke_queued_upload_reward(db, video.id)
@@ -357,7 +372,6 @@ async def merge_audio(
     current_user: User = Depends(get_active_user),
 ) -> dict:
     """오디오+비디오 병합 잡을 외부 워커 큐에 등록한다."""
-    # H-4: Verify video_r2_key ownership via user-scoped prefix
     if not video_r2_key.startswith(f"videos/{current_user.id}/"):
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
 
@@ -468,7 +482,6 @@ def merge_proof(
     current_user: User = Depends(get_active_user),
 ) -> dict:
     """증거 이미지를 비디오 끝에 3초 슬라이드로 붙인다."""
-    # H-4: Verify both keys belong to current user
     if not video_r2_key.startswith(f"videos/{current_user.id}/"):
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
     if not proof_r2_key.startswith(f"proof/{current_user.id}/"):

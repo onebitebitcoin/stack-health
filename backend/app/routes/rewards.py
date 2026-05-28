@@ -35,7 +35,7 @@ def get_summary(
         db.commit()
 
     fixed_pts = get_weekly_points(db, current_user.id, week_label)
-    queued_pts = get_weekly_queued_points(db, current_user.id, week_label)
+    queued_pts = get_weekly_queued_points(db, current_user.id)
     total_pts = get_total_weekly_points_all_users(db, week_label)
     contribution_pct = round(fixed_pts / total_pts * 100, 1) if total_pts > 0 else 0.0
     sats = points_to_sats(fixed_pts)

@@ -1,9 +1,7 @@
 import json
-from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import case, func, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -15,6 +13,7 @@ from app.models.video import Video
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.video import PostSchema
+from app.services.reward import _utc_today_start
 
 router = APIRouter(prefix="/api/v1/feed", tags=["feed"])
 
@@ -50,10 +49,10 @@ def _post_to_schema(
 
 @router.get("")
 def get_feed(
-    cursor: Optional[int] = None,
+    cursor: int | None = None,
     limit: int = 10,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User | None = Depends(get_optional_user),
 ) -> dict:
     limit = min(limit, 20)
     query = (
@@ -120,15 +119,15 @@ def like_post(
 
     if existing_like:
         db.delete(existing_like)
-        post.like_count = max(0, post.like_count - 1)
+        db.execute(update(Post).where(Post.id == post_id).values(like_count=case((Post.like_count > 0, Post.like_count - 1), else_=0)))
         db.commit()
+        db.refresh(post)
         return {"data": {"liked": False, "like_count": post.like_count}}
 
-    like_record = PostLike(user_id=current_user.id, post_id=post_id)
-    db.add(like_record)
-
-    post.like_count += 1
+    db.add(PostLike(user_id=current_user.id, post_id=post_id))
+    db.execute(update(Post).where(Post.id == post_id).values(like_count=Post.like_count + 1))
     db.commit()
+    db.refresh(post)
     return {"data": {"liked": True, "like_count": post.like_count}}
 
 
@@ -142,22 +141,21 @@ def view_post(
     if post is None:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    now_utc = datetime.now(timezone.utc)
-    today_start_utc = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = _utc_today_start()
     already_viewed = (
         db.query(PostView)
         .filter(
             PostView.user_id == current_user.id,
             PostView.post_id == post_id,
-            PostView.created_at >= today_start_utc,
+            PostView.created_at >= today_start,
         )
         .first()
     )
 
-    post.view_count += 1
-
     if not already_viewed:
         db.add(PostView(user_id=current_user.id, post_id=post_id))
+        db.execute(update(Post).where(Post.id == post_id).values(view_count=Post.view_count + 1))
 
     db.commit()
+    db.refresh(post)
     return {"data": {"view_count": post.view_count}}

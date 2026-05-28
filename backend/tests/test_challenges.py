@@ -351,3 +351,47 @@ def test_challenge_participants_not_found(client: TestClient) -> None:
     token, _ = _register(client, "cp_nf@x.com", "cp_notfound")
     res = client.get("/api/v1/challenges/99999/participants", headers=_auth(token))
     assert res.status_code == 404
+
+
+def test_delete_post_decrements_challenge_count(client: TestClient, db: Session) -> None:
+    token, user = _register(client, "del_ch@x.com", "del_ch_user")
+    challenge = _make_challenge(db, condition_value=3)
+    client.post(f"/api/v1/challenges/{challenge.id}/join", headers=_auth(token))
+    _confirm_upload(client, token, user["id"], "v1.mp4", challenge_id=challenge.id)
+    _confirm_upload(client, token, user["id"], "v2.mp4", challenge_id=challenge.id)
+
+    res = client.get("/api/v1/challenges/my", headers=_auth(token))
+    assert res.json()["data"]["challenges"][0]["my_upload_count"] == 2
+
+    # get post_id for first upload
+    feed_res = client.get("/api/v1/feed?limit=10")
+    posts = [p for p in feed_res.json()["data"]["posts"] if p["user_id"] == user["id"]]
+    post_id = posts[0]["id"]
+
+    with patch("app.routes.videos.r2_service.delete_object"):
+        client.delete(f"/api/v1/videos/posts/{post_id}", headers=_auth(token))
+
+    res2 = client.get("/api/v1/challenges/my", headers=_auth(token))
+    assert res2.json()["data"]["challenges"][0]["my_upload_count"] == 1
+
+
+def test_delete_post_clears_completed_at_if_below_threshold(client: TestClient, db: Session) -> None:
+    token, user = _register(client, "del_comp@x.com", "del_comp_user")
+    challenge = _make_challenge(db, condition_value=2)
+    client.post(f"/api/v1/challenges/{challenge.id}/join", headers=_auth(token))
+    _confirm_upload(client, token, user["id"], "c1.mp4", challenge_id=challenge.id)
+    _confirm_upload(client, token, user["id"], "c2.mp4", challenge_id=challenge.id)
+
+    res = client.get("/api/v1/challenges/my", headers=_auth(token))
+    assert res.json()["data"]["challenges"][0]["completed"] is True
+
+    feed_res = client.get("/api/v1/feed?limit=10")
+    posts = [p for p in feed_res.json()["data"]["posts"] if p["user_id"] == user["id"]]
+    post_id = posts[0]["id"]
+
+    with patch("app.routes.videos.r2_service.delete_object"):
+        client.delete(f"/api/v1/videos/posts/{post_id}", headers=_auth(token))
+
+    res2 = client.get("/api/v1/challenges/my", headers=_auth(token))
+    assert res2.json()["data"]["challenges"][0]["completed"] is False
+    assert res2.json()["data"]["challenges"][0]["my_upload_count"] == 1

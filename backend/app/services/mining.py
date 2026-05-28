@@ -168,7 +168,10 @@ def close_week(db: Session, week_label: str) -> dict:
     claimed_user_ids = {
         row.user_id
         for row in db.query(LightningClaim.user_id)
-        .filter(LightningClaim.week_label == week_label)
+        .filter(
+            LightningClaim.week_label == week_label,
+            LightningClaim.status != "cancelled",
+        )
         .all()
     }
 

@@ -96,7 +96,7 @@ def test_view_dedup_same_user_same_day(client: TestClient) -> None:
     token_poster, user_poster = _make_user(client, "vp@x.com", "vp")
     post = _create_post(client, token_poster, user_poster["id"])
 
-    # 같은 날 2번 조회 — view_count는 2 증가, 포인트는 없음
+    # 같은 날 같은 유저가 2번 조회 — dedup으로 view_count는 1만 증가
     client.post(f"/api/v1/feed/{post['id']}/view", headers=_auth(token_viewer))
     res = client.post(f"/api/v1/feed/{post['id']}/view", headers=_auth(token_viewer))
     assert res.status_code == 200
@@ -105,7 +105,7 @@ def test_view_dedup_same_user_same_day(client: TestClient) -> None:
     posts = feed_res.json()["data"]["posts"]
     found = next((p for p in posts if p["id"] == post["id"]), None)
     assert found is not None
-    assert found["view_count"] == 2
+    assert found["view_count"] == 1
 
     summary = client.get("/api/v1/rewards/summary", headers=_auth(token_poster))
     data = summary.json()["data"]

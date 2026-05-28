@@ -12,20 +12,9 @@ import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
 
+import { getDaysInMonth, getFirstDayIndex, pad2 } from '../utils/calendar'
+
 const DAYS_KO = ['월', '화', '수', '목', '금', '토', '일']
-
-function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate()
-}
-
-function getFirstDayIndex(year: number, month: number): number {
-  const day = new Date(year, month - 1, 1).getDay()
-  return day === 0 ? 6 : day - 1
-}
-
-function pad2(n: number): string {
-  return n.toString().padStart(2, '0')
-}
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user)

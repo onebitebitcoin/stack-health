@@ -16,6 +16,7 @@ from app.routes.auth import get_current_user as get_required_user
 from app.services.reward import (
     REWARD_STATUS_FIXED,
     REWARD_STATUS_QUEUED,
+    SETTLEMENT_WINDOW,
     _parse_tz,
     get_week_label,
     get_weekly_points,
@@ -62,7 +63,6 @@ class ActiveChallengeSchema(BaseModel):
 def get_my_stats(
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
-    x_client_timezone: str = Header(default="Asia/Seoul"),
 ) -> dict:
     settled_count = settle_queued_rewards(db, current_user.id)
     if settled_count:
@@ -100,10 +100,9 @@ def get_my_stats(
         or 0
     )
 
-    client_tz = _parse_tz(x_client_timezone)
-    week_label = get_week_label(datetime.now(client_tz))
+    week_label = get_week_label()
     week_points = get_weekly_points(db, current_user.id, week_label)
-    week_queued = get_weekly_queued_points(db, current_user.id, week_label)
+    week_queued = get_weekly_queued_points(db, current_user.id)
     week_sats = points_to_sats(week_points)
 
     return {
@@ -125,15 +124,13 @@ def get_my_weekly_points(
     x_client_timezone: str = Header(default="Asia/Seoul"),
 ) -> dict:
     client_tz = _parse_tz(x_client_timezone)
-    week_label = get_week_label(datetime.now(client_tz))
+    week_label = get_week_label()
     year, week = int(week_label[:4]), int(week_label[6:])
     monday = datetime.fromisocalendar(year, week, 1).replace(tzinfo=client_tz)
     sunday = monday + timedelta(days=6)
     start_date = monday.date().isoformat()
     end_date = sunday.date().isoformat()
 
-    # Fetch current week's reward points.
-    # FIXED: filter by current week_label; QUEUED: include all (week_label may be stale if /me/stats failed to settle)
     records = (
         db.query(RewardPoint)
         .filter(
@@ -159,8 +156,6 @@ def get_my_weekly_points(
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc).isoformat()
-
-    SETTLEMENT_WINDOW = timedelta(hours=24)
 
     items = [
         {
@@ -220,7 +215,7 @@ def get_leaderboard(
 
     rows = (
         base_query
-        .order_by(sqlfunc.sum(RewardPoint.points).desc())
+        .order_by(sqlfunc.sum(RewardPoint.points).desc(), User.id.asc())
         .offset(offset)
         .limit(limit + 1)
         .all()
@@ -254,6 +249,12 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
     if not user or user.is_banned:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
+    post_count = (
+        db.query(Post)
+        .join(Post.video)
+        .filter(Post.user_id == user_id, Video.status == "active")
+        .count()
+    )
     posts_raw = (
         db.query(Post)
         .join(Post.video)
@@ -314,7 +315,7 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
     return {
         "data": {
             "user": PublicUserSchema.model_validate(user),
-            "post_count": len(posts),
+            "post_count": post_count,
             "posts": posts,
             "titles": titles,
             "active_challenges": active_challenges,

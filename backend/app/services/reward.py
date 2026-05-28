@@ -15,6 +15,7 @@ SATS_PER_POINT = 10  # TBD
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
 REWARD_STATUS_REVOKED = "revoked"
+SETTLEMENT_WINDOW = timedelta(hours=24)
 
 KST = timezone(timedelta(hours=9))
 
@@ -58,12 +59,11 @@ def get_weekly_points(db: Session, user_id: int, week_label: str) -> float:
     return result or 0
 
 
-def get_weekly_queued_points(db: Session, user_id: int, week_label: str) -> float:
+def get_weekly_queued_points(db: Session, user_id: int) -> float:
     result = (
         db.query(func.sum(RewardPoint.points))
         .filter(
             RewardPoint.user_id == user_id,
-            RewardPoint.week_label == week_label,
             RewardPoint.status == REWARD_STATUS_QUEUED,
         )
         .scalar()
