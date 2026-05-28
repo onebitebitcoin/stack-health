@@ -300,6 +300,7 @@ def run_full_pipeline(job: dict) -> dict:
     pre_size_bytes: int = 0
     post_size_bytes: int = 0
     video_meta: dict = {}
+    compressed_key: str | None = None
     compress_result = _compress_video(r2, current_key)
     if compress_result:
         compressed_key, pre_size_bytes, post_size_bytes, video_meta = compress_result
@@ -312,6 +313,7 @@ def run_full_pipeline(job: dict) -> dict:
 
     db = SessionLocal()
     try:
+
         if get_daily_upload_count(db, user_id) >= DAILY_MAX_UPLOADS:
             raise RuntimeError("하루 업로드 한도 초과")
 
@@ -368,5 +370,14 @@ def run_full_pipeline(job: dict) -> dict:
             "post_size_bytes": post_size_bytes,
             "video_meta": video_meta,
         }
+    except Exception:
+        # DB 실패 시 압축된 c- 파일이 R2에 고아로 남지 않도록 정리
+        if compressed_key:
+            try:
+                r2.delete_object(Bucket=R2_BUCKET_NAME, Key=compressed_key)
+                logger.info("[full-pipeline] job=%s 실패 — 고아 c- 파일 삭제: %s", job_id, compressed_key)
+            except Exception:
+                pass
+        raise
     finally:
         db.close()
