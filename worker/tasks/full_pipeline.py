@@ -201,7 +201,7 @@ def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tupl
 
         result = subprocess.run(cmd, capture_output=True, timeout=180)
         if result.returncode != 0:
-            raise RuntimeError(f"ffmpeg compress: {result.stderr.decode()[:500]}")
+            raise RuntimeError(f"ffmpeg compress: {result.stderr.decode()[-800:]}")
 
         post_bytes = os.path.getsize(tmp_output)
 
