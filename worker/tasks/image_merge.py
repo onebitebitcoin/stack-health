@@ -29,13 +29,18 @@ def _make_tmp(suffix: str) -> str:
 
 
 def run_image_merge(job: dict) -> dict:
-    """R2에서 video와 proof 이미지를 다운로드하고 filter_complex로 단일 패스 concat."""
+    """R2에서 video와 proof 이미지를 다운로드하고 두 단계로 concat.
+    Step 1: 이미지를 3초 클립으로 인코딩 (빠름, 영상 길이 무관)
+    Step 2: concat demuxer + stream copy로 합치기 (원본 영상 재인코딩 없음)
+    """
     video_r2_key: str = job["video_r2_key"]
     proof_r2_key: str = job["proof_r2_key"]
     img_suffix = ".jpg" if proof_r2_key.lower().endswith((".jpg", ".jpeg")) else ".png"
 
     tmp_video = _make_tmp(".mp4")
     tmp_image = _make_tmp(img_suffix)
+    tmp_image_clip = _make_tmp(".mp4")
+    tmp_concat_list = _make_tmp(".txt")
     tmp_output = _make_tmp(".mp4")
 
     try:
@@ -49,16 +54,18 @@ def run_image_merge(job: dict) -> dict:
         with open(tmp_image, "wb") as f:
             f.write(resp["Body"].read())
 
-        # coded 해상도 조회
+        # 해상도 + fps 조회
         probe_v = subprocess.run(
             ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
-             "-show_entries", "stream=width,height", "-of", "csv=p=0", tmp_video],
+             "-show_entries", "stream=width,height,r_frame_rate",
+             "-of", "csv=p=0", tmp_video],
             capture_output=True, text=True, timeout=30,
         )
         first_line = probe_v.stdout.strip().splitlines()[0] if probe_v.stdout.strip() else ""
         dims = first_line.split(",")
         vw = int(dims[0].strip()) if len(dims) >= 2 else 720
         vh = int(dims[1].strip()) if len(dims) >= 2 else 1280
+        fps = dims[2].strip() if len(dims) >= 3 else "30/1"
 
         # rotate 태그로 display 해상도 보정
         probe_rot = subprocess.run(
@@ -84,51 +91,56 @@ def run_image_merge(job: dict) -> dict:
         )
         has_audio = bool(probe_a.stdout.strip())
 
-        vid_vf = f"scale={vw}:{vh},setsar=1,format=yuv420p"
         img_vf = (
             f"scale={vw}:{vh}:force_original_aspect_ratio=decrease,"
             f"pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p"
         )
 
+        # Step 1: 이미지 → 3초 클립 인코딩 (영상 길이와 무관하게 빠름)
         if has_audio:
-            fc = (
-                f"[0:v]{vid_vf}[v0];"
-                f"[1:v]{img_vf}[v1];"
-                f"anullsrc=r=48000:cl=stereo,atrim=duration=3,asetpts=PTS-STARTPTS[a1];"
-                f"[v0][0:a][v1][a1]concat=n=2:v=1:a=1[outv][outa]"
-            )
-            cmd = [
+            clip_cmd = [
                 "ffmpeg", "-y",
-                "-i", tmp_video,
                 "-loop", "1", "-t", "3", "-i", tmp_image,
-                "-filter_complex", fc,
-                "-map", "[outv]", "-map", "[outa]",
+                "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+                "-vf", img_vf,
                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
+                "-r", fps,
                 "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
-                "-movflags", "+faststart",
-                tmp_output,
+                "-t", "3",
+                tmp_image_clip,
             ]
         else:
-            fc = (
-                f"[0:v]{vid_vf}[v0];"
-                f"[1:v]{img_vf}[v1];"
-                f"[v0][v1]concat=n=2:v=1:a=0[outv]"
-            )
-            cmd = [
+            clip_cmd = [
                 "ffmpeg", "-y",
-                "-i", tmp_video,
                 "-loop", "1", "-t", "3", "-i", tmp_image,
-                "-filter_complex", fc,
-                "-map", "[outv]",
+                "-vf", img_vf,
                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
-                "-an",
-                "-movflags", "+faststart",
-                tmp_output,
+                "-r", fps,
+                "-an", "-t", "3",
+                tmp_image_clip,
             ]
 
-        result = subprocess.run(cmd, capture_output=True, timeout=600)
+        result = subprocess.run(clip_cmd, capture_output=True, timeout=30)
         if result.returncode != 0:
-            raise RuntimeError(f"proof merge 실패: {result.stderr.decode()[-800:]}")
+            raise RuntimeError(f"이미지 클립 생성 실패: {result.stderr.decode()[-800:]}")
+
+        # Step 2: concat demuxer로 stream copy (원본 영상 재인코딩 없음)
+        with open(tmp_concat_list, "w") as f:
+            f.write(f"file '{tmp_video}'\n")
+            f.write(f"file '{tmp_image_clip}'\n")
+
+        concat_cmd = [
+            "ffmpeg", "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", tmp_concat_list,
+            "-c", "copy",
+            "-movflags", "+faststart",
+            tmp_output,
+        ]
+
+        result = subprocess.run(concat_cmd, capture_output=True, timeout=30)
+        if result.returncode != 0:
+            raise RuntimeError(f"concat 실패: {result.stderr.decode()[-800:]}")
 
         merged_key = f"videos/proof-merged-{uuid.uuid4()}.mp4"
         with open(tmp_output, "rb") as f:
@@ -141,6 +153,6 @@ def run_image_merge(job: dict) -> dict:
         }
 
     finally:
-        for tmp in [tmp_video, tmp_image, tmp_output]:
+        for tmp in [tmp_video, tmp_image, tmp_image_clip, tmp_concat_list, tmp_output]:
             if tmp and os.path.exists(tmp):
                 os.unlink(tmp)
