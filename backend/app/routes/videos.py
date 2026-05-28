@@ -93,8 +93,8 @@ def confirm_upload(
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    if req.duration_sec < 15 or req.duration_sec > 30:
-        raise HTTPException(status_code=400, detail="15초 이상 30초 이하의 영상만 업로드할 수 있습니다")
+    if req.duration_sec < 5 or req.duration_sec > 60:
+        raise HTTPException(status_code=400, detail="5초 이상 60초 이하의 영상만 업로드할 수 있습니다")
 
     expected_prefix = f"videos/{current_user.id}/"
     if not req.r2_key.startswith(expected_prefix):
@@ -390,7 +390,7 @@ async def merge_audio(
     if not video_r2_key.startswith(f"videos/{current_user.id}/"):
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
 
-    if audio_duration_sec <= 0 or audio_duration_sec > 35:
+    if audio_duration_sec <= 0 or audio_duration_sec > 65:
         raise HTTPException(status_code=400, detail="오디오 길이가 올바르지 않습니다")
 
     logger.info("merge_audio enqueue: user_id=%s video_r2_key=%s", current_user.id, video_r2_key)
@@ -598,8 +598,8 @@ async def upload_pipeline(
     background_tasks: BackgroundTasks = ...,
 ) -> dict:
     """파일 수신 즉시 job_id 반환. R2 업로드 + 처리는 백그라운드에서 실행."""
-    if duration_sec < 15 or duration_sec > 30:
-        raise HTTPException(status_code=400, detail="15초 이상 30초 이하의 영상만 업로드할 수 있습니다")
+    if duration_sec < 5 or duration_sec > 60:
+        raise HTTPException(status_code=400, detail="5초 이상 60초 이하의 영상만 업로드할 수 있습니다")
 
     content_type = file.content_type or "video/mp4"
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:

@@ -267,7 +267,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             r2_key=current_key,
             cdn_url=cdn_url,
             file_hash=job["file_hash"],
-            duration_sec=min(30, max(5, int(job.get("duration_sec", 15)))),
+            duration_sec=min(60, max(5, int(job.get("duration_sec", 15)))),
         )
         db.add(video)
         db.flush()
