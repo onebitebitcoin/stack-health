@@ -203,6 +203,9 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     user_id: int = int(job["user_id"])
     job_id: str = job["job_id"]
 
+    has_audio_merged = False
+    has_image_merged = False
+
     audio_r2_key: str | None = job.get("audio_r2_key")
     if audio_r2_key:
         if status_callback: status_callback("audio_merge")
@@ -211,6 +214,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         merged = _audio_merge(r2, current_key, audio_r2_key, float(job.get("audio_duration_sec", 0)), audio_suffix)
         if merged:
             current_key = merged
+            has_audio_merged = True
             logger.info("[full-pipeline] job=%s audio merged → %s", job_id, current_key)
 
     proof_r2_key: str | None = job.get("proof_r2_key")
@@ -220,6 +224,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             merge_result = run_image_merge({"video_r2_key": current_key, "proof_r2_key": proof_r2_key})
             current_key = merge_result["output_r2_key"]
             final_proof_url = merge_result["proof_image_url"]
+            has_image_merged = True
             logger.info("[full-pipeline] job=%s proof merged → %s", job_id, current_key)
         except Exception as e:
             logger.warning("Proof merge failed: %s", e)
@@ -293,6 +298,14 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
 
         db.commit()
         elapsed_sec = time.time() - start_time
+        if has_audio_merged and has_image_merged:
+            merge_type = "video + audio + image"
+        elif has_image_merged:
+            merge_type = "video + image"
+        elif has_audio_merged:
+            merge_type = "video + audio"
+        else:
+            merge_type = "video"
         logger.info("[full-pipeline] job=%s 완료, post_id=%s points=%s elapsed=%.1fs", job_id, post.id, points_earned, elapsed_sec)
         return {
             "post_id": str(post.id),
@@ -304,6 +317,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             "pre_size_bytes": pre_size_bytes,
             "post_size_bytes": post_size_bytes,
             "video_meta": video_meta,
+            "merge_type": merge_type,
         }
     except Exception:
         # DB 실패 시 압축된 c- 파일이 R2에 고아로 남지 않도록 정리

@@ -43,9 +43,11 @@ def notify_video_success(job: dict, result: dict) -> None:
     fps = meta.get("fps", 0)
     codec = meta.get("codec", "")
     meta_line = f"{duration}초  {width}x{height}  {fps}fps  {codec}" if width else "-"
+    merge_type = result.get("merge_type", "video")
     _send(
         f"✅ <b>영상 업로드 성공</b>\n"
         f"• 유저: {username} ({email})\n"
+        f"• 유형: {merge_type}\n"
         f"• 영상: {meta_line}\n"
         f"• 처리 시간: {elapsed}초\n"
         f"• 압축: {_fmt_mb(pre)} → {_fmt_mb(post)} ({ratio})\n"
