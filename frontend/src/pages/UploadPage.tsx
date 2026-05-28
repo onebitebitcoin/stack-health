@@ -207,10 +207,14 @@ export default function UploadPage() {
     videoEl.preload = 'metadata'
     videoEl.src = url
     videoEl.onloadedmetadata = () => {
-      if (videoEl.duration > 30) {
+      if (videoEl.duration < 15 || videoEl.duration > 30) {
         URL.revokeObjectURL(url)
         e.target.value = ''
-        setError(`영상 길이가 ${Math.round(videoEl.duration)}초입니다. 30초 이하 영상만 업로드할 수 있습니다.`)
+        const secs = Math.round(videoEl.duration)
+        setError(secs < 15
+          ? `영상 길이가 ${secs}초입니다. 15초 이상 영상만 업로드할 수 있습니다.`
+          : `영상 길이가 ${secs}초입니다. 30초 이하 영상만 업로드할 수 있습니다.`
+        )
         return
       }
       setError('')
@@ -349,7 +353,7 @@ export default function UploadPage() {
       // Build single multipart request: video + audio + proof + metadata
       const form = new FormData()
       form.append('file', file, file.name)
-      form.append('duration_sec', String(Math.min(30, Math.max(5, duration))))
+      form.append('duration_sec', String(Math.min(30, Math.max(15, duration))))
       if (caption) form.append('caption', caption)
       form.append('tags', JSON.stringify(selectedTags))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))

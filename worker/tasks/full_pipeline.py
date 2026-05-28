@@ -107,12 +107,11 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
 
 
 
-def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tuple[str, int, int, dict] | None:
-    """Re-encode video to reduce file size (CRF 28).
-    proof_r2_key가 있으면 3초 이미지 클립을 영상 뒤에 붙여서 한 번에 인코딩.
-    Returns None if no benefit (proof 없는 경우만).
+def _compress_video(r2, video_key: str) -> tuple[str, int, int, dict] | None:
+    """Re-encode video to reduce file size (CRF 28, ultrafast).
+    Returns (compressed_key, pre_bytes, post_bytes, video_meta) or None if no benefit / failure.
     """
-    tmp_input = tmp_output = tmp_image = None
+    tmp_input = tmp_output = None
     try:
         tmp_input = _make_tmp(".mp4")
         tmp_output = _make_tmp(".mp4")
@@ -130,80 +129,16 @@ def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tupl
         )
         has_audio = bool(probe_a.stdout.strip())
 
-        if proof_r2_key:
-            img_suffix = ".jpg" if proof_r2_key.lower().endswith((".jpg", ".jpeg")) else ".png"
-            tmp_image = _make_tmp(img_suffix)
-            resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=proof_r2_key)
-            with open(tmp_image, "wb") as f:
-                f.write(resp["Body"].read())
-
-            probe_v = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
-                 "-show_entries", "stream=width,height,avg_frame_rate",
-                 "-of", "csv=p=0", tmp_input],
-                capture_output=True, text=True, timeout=30,
-            )
-            first_line = probe_v.stdout.strip().splitlines()[0] if probe_v.stdout.strip() else "720,1280,30/1"
-            dims = first_line.split(",")
-            vw = int(dims[0]) - int(dims[0]) % 2
-            vh = int(dims[1]) - int(dims[1]) % 2
-            try:
-                fps_raw = dims[2].strip() if len(dims) >= 3 else "30/1"
-                num, den = (int(x) for x in fps_raw.split("/"))
-                img_fps = str(min(int(num / den) if den else 30, 60))
-            except Exception:
-                img_fps = "30"
-
-            vid_vf = f"scale={vw}:{vh},setsar=1,format=yuv420p"
-            img_vf = (
-                f"scale={vw}:{vh}:force_original_aspect_ratio=decrease,"
-                f"pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p"
-            )
-
-            if has_audio:
-                fc = (
-                    f"[0:v]{vid_vf}[v0];"
-                    f"[1:v]{img_vf}[v1];"
-                    f"anullsrc=r=48000:cl=stereo,atrim=duration=3,asetpts=PTS-STARTPTS[a1];"
-                    f"[v0][0:a][v1][a1]concat=n=2:v=1:a=1[outv][outa]"
-                )
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-i", tmp_input,
-                    "-loop", "1", "-t", "3", "-r", img_fps, "-i", tmp_image,
-                    "-filter_complex", fc,
-                    "-map", "[outv]", "-map", "[outa]",
-                    "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-b:a", "96k",
-                    "-movflags", "+faststart", tmp_output,
-                ]
-            else:
-                fc = (
-                    f"[0:v]{vid_vf}[v0];"
-                    f"[1:v]{img_vf}[v1];"
-                    f"[v0][v1]concat=n=2:v=1:a=0[outv]"
-                )
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-i", tmp_input,
-                    "-loop", "1", "-t", "3", "-r", img_fps, "-i", tmp_image,
-                    "-filter_complex", fc,
-                    "-map", "[outv]",
-                    "-c:v", "libx264", "-crf", "28", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-                    "-an",
-                    "-movflags", "+faststart", tmp_output,
-                ]
-        else:
-            vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1,format=yuv420p"
-            cmd = [
-                "ffmpeg", "-y",
-                "-i", tmp_input,
-                "-vf", vf,
-                "-vcodec", "libx264", "-crf", "28", "-preset", "fast",
-                "-pix_fmt", "yuv420p",
-            ]
-            cmd += ["-c:a", "aac", "-b:a", "96k"] if has_audio else ["-an"]
-            cmd += ["-movflags", "+faststart", tmp_output]
+        vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1,format=yuv420p"
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", tmp_input,
+            "-vf", vf,
+            "-vcodec", "libx264", "-crf", "28", "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p",
+        ]
+        cmd += ["-c:a", "aac", "-b:a", "96k"] if has_audio else ["-an"]
+        cmd += ["-movflags", "+faststart", tmp_output]
 
         result = subprocess.run(cmd, capture_output=True, timeout=180)
         if result.returncode != 0:
@@ -236,8 +171,7 @@ def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tupl
         except Exception:
             pass
 
-        # proof 없는 단순 압축만 효과 검사 (proof 있으면 항상 유지)
-        if not proof_r2_key and post_bytes >= pre_bytes:
+        if post_bytes >= pre_bytes:
             logger.info("[compress] 압축 효과 없음 (%dB → %dB), 원본 유지", pre_bytes, post_bytes)
             return None
 
@@ -249,7 +183,7 @@ def _compress_video(r2, video_key: str, proof_r2_key: str | None = None) -> tupl
         logger.warning("Video compression failed (using original): %s", e)
         return None
     finally:
-        for tmp in [tmp_input, tmp_output, tmp_image]:
+        for tmp in [tmp_input, tmp_output]:
             if tmp and os.path.exists(tmp):
                 os.unlink(tmp)
 
@@ -287,6 +221,17 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     if proof_r2_key:
         if status_callback: status_callback("image_merge")
         final_proof_url = f"{R2_PUBLIC_URL}/{proof_r2_key}"
+        try:
+            merge_result = run_image_merge({"video_r2_key": current_key, "proof_r2_key": proof_r2_key})
+        except Exception as e:
+            raise RuntimeError("증거 사진 이미지 머지 실패 — 업로드 취소") from e
+        try:
+            r2.delete_object(Bucket=R2_BUCKET_NAME, Key=current_key)
+        except Exception:
+            pass
+        current_key = merge_result["output_r2_key"]
+        has_image_merged = True
+        logger.info("[full-pipeline] job=%s proof merged → %s", job_id, current_key)
 
     pre_compress_key = current_key
     pre_size_bytes: int = 0
@@ -294,7 +239,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     video_meta: dict = {}
     compressed_key: str | None = None
     if status_callback: status_callback("compress")
-    compress_result = _compress_video(r2, current_key, proof_r2_key=proof_r2_key)
+    compress_result = _compress_video(r2, current_key)
     if compress_result:
         compressed_key, pre_size_bytes, post_size_bytes, video_meta = compress_result
         try:
@@ -302,13 +247,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         except Exception:
             pass
         current_key = compressed_key
-        if proof_r2_key:
-            has_image_merged = True
-            logger.info("[full-pipeline] job=%s proof merged+compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
-        else:
-            logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
-    elif proof_r2_key:
-        raise RuntimeError("증거 사진 이미지 머지 실패 — 업로드 취소")
+        logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
 
     if status_callback: status_callback("db_save")
     db = SessionLocal()

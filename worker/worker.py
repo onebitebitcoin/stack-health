@@ -1,9 +1,8 @@
-import json
 import logging
 import signal
 import time
 
-from config import LOG_LEVEL, MAX_FFMPEG_CONCURRENT, MAX_JOB_RETRIES, QUEUE_NAME
+from config import LOG_LEVEL, MAX_FFMPEG_CONCURRENT, QUEUE_NAME
 from queue_client import dequeue_job, get_redis_client, set_job_status
 from notify import notify_video_failure, notify_video_success
 from tasks.full_pipeline import run_full_pipeline
@@ -45,9 +44,8 @@ def _release_ffmpeg_slot(r) -> None:
 def _process_job(r, job: dict) -> None:
     job_id = job["job_id"]
     job_type = job.get("job_type", "merge")
-    retry_count = int(job.get("retry_count", 0))
 
-    logger.info("Processing job %s (type=%s, attempt=%d)", job_id, job_type, retry_count + 1)
+    logger.info("Processing job %s (type=%s, attempt=1)", job_id, job_type)
     set_job_status(r, job_id, status="processing")
 
     _acquire_ffmpeg_slot(r)
@@ -68,18 +66,10 @@ def _process_job(r, job: dict) -> None:
         if job_type == "full-pipeline":
             notify_video_success(job, result)
     except Exception as e:
-        logger.exception("Job %s failed (attempt %d): %s", job_id, retry_count + 1, e)
-        if retry_count < MAX_JOB_RETRIES:
-            job["retry_count"] = retry_count + 1
-            r.rpush(QUEUE_NAME, json.dumps(job))  # 큐 tail에 넣어 fresh job 기아 방지
-            set_job_status(r, job_id, status="retrying", retry_count=str(job["retry_count"]))
-            logger.info("Job %s 재큐잉 (retry %d/%d)", job_id, job["retry_count"], MAX_JOB_RETRIES)
-            if job_type == "full-pipeline":
-                notify_video_failure(job, e, retry_count + 1, MAX_JOB_RETRIES, current_step[0])
-        else:
-            set_job_status(r, job_id, status="failed", error=str(e))
-            if job_type == "full-pipeline":
-                notify_video_failure(job, e, retry_count + 1, MAX_JOB_RETRIES, current_step[0])
+        logger.exception("Job %s failed: %s", job_id, e)
+        set_job_status(r, job_id, status="failed", error=str(e))
+        if job_type == "full-pipeline":
+            notify_video_failure(job, e, 1, 0, current_step[0])
     finally:
         _release_ffmpeg_slot(r)
 
