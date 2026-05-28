@@ -20,6 +20,8 @@ from config import (
     R2_PUBLIC_URL,
     R2_SECRET_ACCESS_KEY,
 )
+from notify import notify_video_failure
+from tasks.image_merge import run_image_merge
 
 logger = logging.getLogger(__name__)
 
@@ -103,119 +105,6 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
                 os.unlink(tmp)
 
 
-def _image_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
-    """Proof image concat via filter_complex (single pass). Returns (merged_r2_key, proof_cdn_url) or None."""
-    img_suffix = ".jpg" if proof_key.lower().endswith((".jpg", ".jpeg")) else ".png"
-    tmp_video = tmp_image = tmp_output = None
-    try:
-        tmp_video = _make_tmp(".mp4")
-        tmp_image = _make_tmp(img_suffix)
-        tmp_output = _make_tmp(".mp4")
-
-        resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=video_key)
-        with open(tmp_video, "wb") as f:
-            f.write(resp["Body"].read())
-
-        resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=proof_key)
-        with open(tmp_image, "wb") as f:
-            f.write(resp["Body"].read())
-
-        # coded 해상도 조회
-        probe_v = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
-             "-show_entries", "stream=width,height", "-of", "csv=p=0", tmp_video],
-            capture_output=True, text=True, timeout=30,
-        )
-        first_line = probe_v.stdout.strip().splitlines()[0] if probe_v.stdout.strip() else ""
-        dims = first_line.split(",")
-        vw = int(dims[0].strip()) if len(dims) >= 2 else 720
-        vh = int(dims[1].strip()) if len(dims) >= 2 else 1280
-
-        # rotate 태그로 display 해상도 보정 (모바일 세로 촬영 영상 대응)
-        probe_rot = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
-             "-show_entries", "stream_tags=rotate",
-             "-of", "default=noprint_wrappers=1:nokey=1", tmp_video],
-            capture_output=True, text=True, timeout=30,
-        )
-        try:
-            rotation = abs(int(probe_rot.stdout.strip()))
-        except ValueError:
-            rotation = 0
-        if rotation in (90, 270):
-            vw, vh = vh, vw
-
-        # libx264는 짝수 해상도 필요
-        vw -= vw % 2
-        vh -= vh % 2
-
-        probe_a = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-select_streams", "a:0",
-             "-show_entries", "stream=codec_type", "-of", "csv=p=0", tmp_video],
-            capture_output=True, text=True, timeout=30,
-        )
-        has_audio = bool(probe_a.stdout.strip())
-
-        # 영상: display 해상도로 정규화 (ffmpeg autorotate 적용)
-        vid_vf = f"scale={vw}:{vh},setsar=1,format=yuv420p"
-        # 이미지: display 해상도에 letterbox (비율 유지, 상하 검정 여백)
-        img_vf = (
-            f"scale={vw}:{vh}:force_original_aspect_ratio=decrease,"
-            f"pad={vw}:{vh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p"
-        )
-
-        if has_audio:
-            fc = (
-                f"[0:v]{vid_vf}[v0];"
-                f"[1:v]{img_vf}[v1];"
-                f"anullsrc=r=48000:cl=stereo,atrim=duration=3,asetpts=PTS-STARTPTS[a1];"
-                f"[v0][0:a][v1][a1]concat=n=2:v=1:a=1[outv][outa]"
-            )
-            cmd = [
-                "ffmpeg", "-y",
-                "-i", tmp_video,
-                "-loop", "1", "-t", "3", "-i", tmp_image,
-                "-filter_complex", fc,
-                "-map", "[outv]", "-map", "[outa]",
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
-                "-movflags", "+faststart",
-                tmp_output,
-            ]
-        else:
-            fc = (
-                f"[0:v]{vid_vf}[v0];"
-                f"[1:v]{img_vf}[v1];"
-                f"[v0][v1]concat=n=2:v=1:a=0[outv]"
-            )
-            cmd = [
-                "ffmpeg", "-y",
-                "-i", tmp_video,
-                "-loop", "1", "-t", "3", "-i", tmp_image,
-                "-filter_complex", fc,
-                "-map", "[outv]",
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
-                "-an",
-                "-movflags", "+faststart",
-                tmp_output,
-            ]
-
-        result = subprocess.run(cmd, capture_output=True, timeout=600)
-        if result.returncode != 0:
-            raise RuntimeError(f"proof merge 실패: {result.stderr.decode()[-800:]}")
-
-        merged_key = f"videos/proof-merged-{uuid.uuid4()}.mp4"
-        with open(tmp_output, "rb") as f:
-            r2.put_object(Bucket=R2_BUCKET_NAME, Key=merged_key, Body=f, ContentType="video/mp4")
-
-        return merged_key, f"{R2_PUBLIC_URL}/{proof_key}"
-    except Exception as e:
-        logger.warning("Proof merge failed: %s", e)
-        return None
-    finally:
-        for tmp in [tmp_video, tmp_image, tmp_output]:
-            if tmp and os.path.exists(tmp):
-                os.unlink(tmp)
 
 
 def _compress_video(r2, video_key: str) -> tuple[str, int, int, dict] | None:
@@ -327,10 +216,14 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     proof_r2_key: str | None = job.get("proof_r2_key")
     if proof_r2_key:
         if status_callback: status_callback("image_merge")
-        result = _image_merge(r2, current_key, proof_r2_key)
-        if result:
-            current_key, final_proof_url = result
+        try:
+            merge_result = run_image_merge({"video_r2_key": current_key, "proof_r2_key": proof_r2_key})
+            current_key = merge_result["output_r2_key"]
+            final_proof_url = merge_result["proof_image_url"]
             logger.info("[full-pipeline] job=%s proof merged → %s", job_id, current_key)
+        except Exception as e:
+            logger.warning("Proof merge failed: %s", e)
+            notify_video_failure(job, e, attempt=1, max_retries=0, pipeline_step="image_merge")
 
     pre_compress_key = current_key
     pre_size_bytes: int = 0
