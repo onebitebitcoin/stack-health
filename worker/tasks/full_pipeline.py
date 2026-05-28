@@ -293,7 +293,7 @@ def _compress_video(r2, video_key: str) -> tuple[str, int, int] | None:
                 os.unlink(tmp)
 
 
-def run_full_pipeline(job: dict) -> dict:
+def run_full_pipeline(job: dict, status_callback=None) -> dict:
     """Full upload pipeline: optional merges → DB commit."""
     from app.models.post import Post
     from app.models.user import User
@@ -310,6 +310,7 @@ def run_full_pipeline(job: dict) -> dict:
 
     audio_r2_key: str | None = job.get("audio_r2_key")
     if audio_r2_key:
+        if status_callback: status_callback("audio_merge")
         audio_content_type = job.get("audio_content_type", "audio/webm")
         audio_suffix = ".mp4" if audio_content_type == "audio/mp4" else ".webm"
         merged = _audio_merge(r2, current_key, audio_r2_key, float(job.get("audio_duration_sec", 0)), audio_suffix)
@@ -319,6 +320,7 @@ def run_full_pipeline(job: dict) -> dict:
 
     proof_r2_key: str | None = job.get("proof_r2_key")
     if proof_r2_key:
+        if status_callback: status_callback("proof_merge")
         result = _proof_merge(r2, current_key, proof_r2_key)
         if result:
             current_key, final_proof_url = result
@@ -329,6 +331,7 @@ def run_full_pipeline(job: dict) -> dict:
     post_size_bytes: int = 0
     video_meta: dict = {}
     compressed_key: str | None = None
+    if status_callback: status_callback("compress")
     compress_result = _compress_video(r2, current_key)
     if compress_result:
         compressed_key, pre_size_bytes, post_size_bytes, video_meta = compress_result
@@ -339,6 +342,7 @@ def run_full_pipeline(job: dict) -> dict:
         current_key = compressed_key
         logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
 
+    if status_callback: status_callback("db_save")
     db = SessionLocal()
     try:
 

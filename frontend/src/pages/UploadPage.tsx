@@ -43,6 +43,13 @@ function clearJob() {
   localStorage.removeItem(PIPELINE_JOB_KEY)
 }
 
+const STEP_CONFIG: Record<string, { start: number; ceiling: number; interval: number }> = {
+  audio_merge: { start: 73, ceiling: 75,  interval: 1500 },
+  proof_merge: { start: 76, ceiling: 88,  interval: 5000 },
+  compress:    { start: 90, ceiling: 93,  interval: 1500 },
+  db_save:     { start: 95, ceiling: 98,  interval: 1500 },
+}
+
 function getSupportedAudioMimeType(): string {
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return ''
   return PREFERRED_AUDIO_MIME_TYPES.find((m) => MediaRecorder.isTypeSupported(m)) ?? ''
@@ -71,7 +78,9 @@ export default function UploadPage() {
   // Pipeline job polling state
   const [pipelineJobId, setPipelineJobId] = useState<string | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<string | null>(null)
+  const [pipelineStep, setPipelineStep] = useState<string>('')
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
 
   // Proof image
   const proofImageRef = useRef<HTMLInputElement>(null)
@@ -133,11 +142,16 @@ export default function UploadPage() {
 
   const pollJob = useCallback(async (jobId: string) => {
     try {
-      const res = await client.get<{ data: { status: string; points_earned?: number; error?: string } }>(
+      const res = await client.get<{ data: { status: string; pipeline_step?: string; points_earned?: number; error?: string } }>(
         `/videos/upload-job/${jobId}`
       )
-      const { status, points_earned, error: jobError } = res.data.data
+      const { status, pipeline_step, points_earned, error: jobError } = res.data.data
       setPipelineStatus(status)
+      if (pipeline_step) {
+        setPipelineStep(pipeline_step)
+        const cfg = STEP_CONFIG[pipeline_step]
+        if (cfg) setUploadProgress((p) => Math.max(p, cfg.start))
+      }
       if (status === 'completed') {
         setUploadProgress(100)
         handleJobCompleted(points_earned ?? 0)
@@ -154,14 +168,17 @@ export default function UploadPage() {
     }
   }, [handleJobCompleted, abortJob])
 
-  // Slowly animate progress from 70→95 while server is processing
+  // 단계별 상한까지 느리게 진행 (proof_merge는 5초 간격, 나머지는 1.5초)
   useEffect(() => {
     if (!pipelineJobId || uploading || done) return
+    const cfg = STEP_CONFIG[pipelineStep]
+    const ceiling = cfg?.ceiling ?? 88
+    const interval = cfg?.interval ?? 1500
     const timer = setInterval(() => {
-      setUploadProgress((p) => (p < 95 ? p + 1 : p))
-    }, 1500)
+      setUploadProgress((p) => (p < ceiling ? p + 1 : p))
+    }, interval)
     return () => clearInterval(timer)
-  }, [pipelineJobId, uploading, done])
+  }, [pipelineJobId, uploading, done, pipelineStep])
 
   // Start/restart polling when pipelineJobId is set
   useEffect(() => {

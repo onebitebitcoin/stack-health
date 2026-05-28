@@ -682,6 +682,7 @@ def get_upload_job_status(
         "data": {
             "job_id": job_id,
             "status": status,
+            "pipeline_step": job.get("pipeline_step", ""),
             "cdn_url": job.get("cdn_url", ""),
             "post_id": job.get("post_id", ""),
             "points_earned": points_earned,

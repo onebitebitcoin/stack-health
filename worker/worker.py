@@ -53,7 +53,9 @@ def _process_job(r, job: dict) -> None:
     _acquire_ffmpeg_slot(r)
     try:
         if job_type == "full-pipeline":
-            result = run_full_pipeline(job)
+            def _step_cb(step: str) -> None:
+                set_job_status(r, job_id, pipeline_step=step)
+            result = run_full_pipeline(job, status_callback=_step_cb)
         elif job_type == "proof-merge":
             result = run_proof_merge(job)
         else:
