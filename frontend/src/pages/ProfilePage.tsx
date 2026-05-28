@@ -240,7 +240,7 @@ export default function ProfilePage() {
 
       {/* ── 땀 카드 ── */}
       <button
-        onClick={() => { setShowWeeklyHistory((v) => !v); setShowWeeklyActivity(true) }}
+        onClick={() => { setShowWeeklyHistory((v) => !v) }}
         className={`mx-4 flex flex-col items-center gap-2 w-[calc(100%-2rem)] bg-theme-surface px-6 py-6 active:scale-[0.98] transition-transform ${showWeeklyHistory ? 'rounded-t-2xl mb-0' : 'rounded-2xl mb-4'}`}
       >
         <span className="text-xs text-theme-muted">이번 주 흘린 땀</span>
