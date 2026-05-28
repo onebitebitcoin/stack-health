@@ -218,8 +218,8 @@ def _image_merge(r2, video_key: str, proof_key: str) -> tuple[str, str] | None:
                 os.unlink(tmp)
 
 
-def _compress_video(r2, video_key: str) -> tuple[str, int, int] | None:
-    """Re-encode video to reduce file size. Returns (new_r2_key, pre_bytes, post_bytes) or None."""
+def _compress_video(r2, video_key: str) -> tuple[str, int, int, dict] | None:
+    """Re-encode video to reduce file size (CRF 28). Returns None if no benefit."""
     tmp_input = tmp_output = None
     try:
         tmp_input = _make_tmp(".mp4")
@@ -231,19 +231,20 @@ def _compress_video(r2, video_key: str) -> tuple[str, int, int] | None:
 
         pre_bytes = os.path.getsize(tmp_input)
 
-        probe = subprocess.run(
+        probe_a = subprocess.run(
             ["ffprobe", "-v", "quiet", "-select_streams", "a:0",
              "-show_entries", "stream=codec_type", "-of", "csv=p=0", tmp_input],
             capture_output=True, text=True, timeout=30,
         )
-        has_audio = bool(probe.stdout.strip())
+        has_audio = bool(probe_a.stdout.strip())
+
+        vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1,format=yuv420p"
 
         cmd = [
             "ffmpeg", "-y",
             "-i", tmp_input,
-            "-vcodec", "libx264",
-            "-crf", "26",
-            "-preset", "fast",
+            "-vf", vf,
+            "-vcodec", "libx264", "-crf", "28", "-preset", "fast",
             "-pix_fmt", "yuv420p",
         ]
         cmd += ["-c:a", "aac", "-b:a", "96k"] if has_audio else ["-an"]
@@ -279,6 +280,11 @@ def _compress_video(r2, video_key: str) -> tuple[str, int, int] | None:
             }
         except Exception:
             pass
+
+        # 압축 효과가 없으면 원본 유지
+        if post_bytes >= pre_bytes:
+            logger.info("[compress] 압축 효과 없음 (%dB → %dB), 원본 유지", pre_bytes, post_bytes)
+            return None
 
         compressed_key = f"videos/c-{uuid.uuid4()}.mp4"
         with open(tmp_output, "rb") as f:

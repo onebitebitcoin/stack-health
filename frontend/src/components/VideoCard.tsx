@@ -25,6 +25,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   const [isPaused, setIsPaused] = useState(false)
   const [flashIcon, setFlashIcon] = useState<'play' | 'pause' | null>(null)
   const [progress, setProgress] = useState(0)
+  const [isLandscape, setIsLandscape] = useState(false)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const commentCount = post.comment_count ?? 0
 
@@ -63,8 +64,15 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
     const onTimeUpdate = () => {
       if (video.duration) setProgress((video.currentTime / video.duration) * 100)
     }
+    const onMeta = () => {
+      setIsLandscape(video.videoWidth > video.videoHeight)
+    }
     video.addEventListener('timeupdate', onTimeUpdate)
-    return () => video.removeEventListener('timeupdate', onTimeUpdate)
+    video.addEventListener('loadedmetadata', onMeta)
+    return () => {
+      video.removeEventListener('timeupdate', onTimeUpdate)
+      video.removeEventListener('loadedmetadata', onMeta)
+    }
   }, [])
 
   const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -114,7 +122,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       <video
         ref={videoRef}
         src={post.cdn_url}
-        className="h-full w-full object-cover"
+        className={`h-full w-full ${isLandscape ? 'object-contain' : 'object-cover'}`}
         loop
         muted={isMuted}
         playsInline
