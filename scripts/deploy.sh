@@ -10,6 +10,19 @@ NGINX_UPSTREAM="$APP_DIR/nginx/upstream.conf"
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus
 
+TELEGRAM_SCRIPT="/home/measly/.claude/scripts/telegram-send.sh"
+_notify_fail() {
+    local EXIT_CODE=$?
+    local NOW
+    NOW=$(TZ="Asia/Seoul" date "+%Y-%m-%d %H:%M")
+    bash "$TELEGRAM_SCRIPT" "❌ <b>Stack Health 배포 실패</b>
+🕐 ${NOW} (KST)
+• 배포 슬롯: ${NEXT_SLOT:-unknown} (포트 ${NEXT_PORT:-?})
+• 실패 코드: ${EXIT_CODE}
+• 현재 슬롯 유지: ${CURRENT_SLOT:-unknown}" 2>/dev/null || true
+}
+trap '_notify_fail' ERR
+
 # ── 현재/다음 슬롯 결정 ───────────────────────────────────────────────
 CURRENT_SLOT=$(cat "$SLOT_FILE" 2>/dev/null || echo "blue")
 if [ "$CURRENT_SLOT" = "blue" ]; then
