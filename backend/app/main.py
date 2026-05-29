@@ -1,6 +1,8 @@
 import html
+import json
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
@@ -98,6 +100,44 @@ def _is_crawler(request: Request) -> bool:
     return bool(_CRAWLER_RE.search(ua))
 
 
+def _build_og_meta(post: "Post") -> tuple[str, str]:  # type: ignore[name-defined]
+    """Return (og_title, og_description) with meaningful content."""
+    username = post.user.username if post.user else "운동러"
+
+    # Title: "{caption} — @{username}" or fallback
+    if post.caption and post.caption.strip():
+        title = f"{post.caption.strip()} — @{username}"
+    else:
+        title = f"@{username}의 운동 기록"
+
+    # Description parts
+    parts: list[str] = []
+
+    # Tags as hashtags
+    try:
+        tags: list[str] = json.loads(post.tags) if post.tags else []
+    except (json.JSONDecodeError, TypeError):
+        tags = []
+    if tags:
+        parts.append(" ".join(f"#{t}" for t in tags[:5]))
+
+    # Workout duration
+    if post.workout_start and post.workout_end:
+        try:
+            fmt = "%H:%M"
+            start = datetime.strptime(post.workout_start, fmt)
+            end = datetime.strptime(post.workout_end, fmt)
+            minutes = int((end - start).total_seconds() / 60)
+            if minutes > 0:
+                parts.append(f"{minutes}분 운동")
+        except ValueError:
+            pass
+
+    parts.append("Stack Health")
+    description = " · ".join(parts)
+    return title, description
+
+
 def _og_html(title: str, description: str, image: str, url: str, video_url: str | None) -> str:
     t = html.escape(title)
     d = html.escape(description)
@@ -152,17 +192,23 @@ if _static_dir.exists():
         m = _SHORTS_RE.match(full_path)
         if m and _is_crawler(request):
             share_token = m.group(1)
-            post = db.query(Post).filter(Post.share_token == share_token).first()
+            from sqlalchemy.orm import selectinload as _sil
+            post = (
+                db.query(Post)
+                .options(_sil(Post.user), _sil(Post.video))
+                .filter(Post.share_token == share_token)
+                .first()
+            )
             if post:
                 from app.config import settings as app_settings
 
                 base = app_settings.app_base_url.rstrip("/")
                 image = post.thumbnail_url or f"{base}/og-image.png"
-                caption = post.caption or "Stack Health 운동 영상"
                 video_url = post.video.cdn_url if post.video else None
                 page_url = f"{base}/shorts/{share_token}"
+                og_title, og_desc = _build_og_meta(post)
                 return HTMLResponse(
-                    content=_og_html(caption, "Stack Health에서 운동 영상 보기", image, page_url, video_url),
+                    content=_og_html(og_title, og_desc, image, page_url, video_url),
                     headers={"Cache-Control": "public, max-age=3600"},
                 )
 
