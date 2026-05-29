@@ -1,7 +1,8 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock, Share2 } from 'lucide-react'
-import type { Post } from '../api/types'
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import type { Post, FeedResponse } from '../api/types'
 import TagChip from './TagChip'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
@@ -19,9 +20,14 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const token = useAuthStore((s) => s.token)
+  const queryClient = useQueryClient()
   const [liked, setLiked] = useState(post.is_liked ?? false)
   const [likeCount, setLikeCount] = useState(post.like_count)
   const [viewSent, setViewSent] = useState(false)
+
+  // Sync local state when feed data is refetched (SPA navigation stale cache fix)
+  useEffect(() => { setLiked(post.is_liked ?? false) }, [post.is_liked])
+  useEffect(() => { setLikeCount(post.like_count) }, [post.like_count])
   const [isPaused, setIsPaused] = useState(false)
   const [flashIcon, setFlashIcon] = useState<'play' | 'pause' | null>(null)
   const [progress, setProgress] = useState(0)
@@ -110,12 +116,26 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       const res = await client.post<{ data: { liked: boolean; like_count: number } }>(
         `/feed/${post.id}/like`,
       )
-      setLiked(res.data.data.liked)
-      setLikeCount(res.data.data.like_count)
+      const { liked: newLiked, like_count: newCount } = res.data.data
+      setLiked(newLiked)
+      setLikeCount(newCount)
+      // Update feed cache so navigating away and back shows correct liked state
+      queryClient.setQueryData<InfiniteData<FeedResponse>>(['feed'], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            posts: page.posts.map((p) =>
+              p.id === post.id ? { ...p, is_liked: newLiked, like_count: newCount } : p
+            ),
+          })),
+        }
+      })
     } catch {
       // ignore
     }
-  }, [token, post.id, onLoginRequired])
+  }, [token, post.id, onLoginRequired, queryClient])
 
   return (
     <div ref={containerRef} className="relative h-[100dvh] w-full flex-shrink-0 bg-black">
