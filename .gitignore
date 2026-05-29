@@ -87,3 +87,8 @@ mobile/ios/.symlinks/
 mobile/ios/Pods/
 mobile/ios/Flutter/Flutter.framework
 mobile/ios/Flutter/Flutter.podspec
+
+# Playwright production report & root screenshots (artifacts)
+playwright-report-prod/
+**/playwright-report-prod/
+/*.png
