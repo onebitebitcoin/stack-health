@@ -169,7 +169,7 @@ def test_confirm_duration_too_short(mock_cdn, client: TestClient) -> None:
 def test_confirm_duration_too_long(mock_cdn, client: TestClient) -> None:
     token = _register_and_token(client)
     res = client.post("/api/v1/videos/confirm", json={
-        "r2_key": "videos/x.mp4", "duration_sec": 31,
+        "r2_key": "videos/x.mp4", "duration_sec": 61,
     }, headers=_auth(token))
     assert res.status_code == 400
 
