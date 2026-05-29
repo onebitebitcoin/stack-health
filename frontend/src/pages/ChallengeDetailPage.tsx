@@ -143,7 +143,7 @@ export default function ChallengeDetailPage() {
           <img
             src={challenge.image_url}
             alt=""
-            className="w-full aspect-video object-cover"
+            className="w-full aspect-square object-cover"
           />
         </div>
       )}
