@@ -214,7 +214,7 @@ def _extract_thumbnail(r2, video_key: str) -> str | None:
                 "-ss", str(seek),
                 "-i", tmp_video,
                 "-vframes", "1",
-                "-vf", "scale=320:-2",
+                "-vf", "scale=240:-2",
                 "-q:v", "5",
                 tmp_thumb,
             ],
@@ -224,13 +224,13 @@ def _extract_thumbnail(r2, video_key: str) -> str | None:
         if result.returncode != 0 or not os.path.getsize(tmp_thumb):
             raise RuntimeError(f"ffmpeg thumbnail: {result.stderr.decode()[:300]}")
 
-        # Pillow로 30KB 이하 보장 (품질 단계적 감소)
+        # Pillow로 15KB 이하 보장 (품질 단계적 감소)
         img = _Image.open(tmp_thumb).convert("RGB")
         buf = _io.BytesIO()
-        for quality in (75, 60, 50):
+        for quality in (70, 55, 45):
             buf = _io.BytesIO()
             img.save(buf, format="JPEG", quality=quality, optimize=True)
-            if buf.tell() <= 30 * 1024:
+            if buf.tell() <= 15 * 1024:
                 break
         buf.seek(0)
 

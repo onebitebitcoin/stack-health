@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 CACHE_CTRL = "public, max-age=31536000, immutable"
-SIZE_LIMIT = 30 * 1024  # 30KB
+SIZE_LIMIT = 15 * 1024  # 15KB
 
 
 def _r2_key(url: str) -> str:
@@ -43,12 +43,16 @@ def _patch_cache_control(r2, key: str) -> None:
 
 
 def _recompress(r2, key: str) -> None:
-    """기존 썸네일을 다운로드 → Pillow 30KB 재압축 → 같은 key로 덮어쓰기."""
+    """기존 썸네일을 다운로드 → 240px 리사이즈 + 15KB 재압축 → 같은 key로 덮어쓰기."""
     resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=key)
     raw = resp["Body"].read()
     img = Image.open(io.BytesIO(raw)).convert("RGB")
+    # 240px 폭으로 리사이즈 (비율 유지)
+    if img.width > 240:
+        h = int(img.height * 240 / img.width)
+        img = img.resize((240, h), Image.LANCZOS)
     buf = io.BytesIO()
-    for quality in (75, 60, 50):
+    for quality in (70, 55, 45):
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=quality, optimize=True)
         if buf.tell() <= SIZE_LIMIT:
