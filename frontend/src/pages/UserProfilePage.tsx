@@ -90,13 +90,23 @@ export default function UserProfilePage() {
                 key={post.id}
                 className="relative aspect-[9/16] overflow-hidden bg-theme-surface"
               >
-                <video
-                  src={post.cdn_url}
-                  className="h-full w-full object-cover"
-                  muted
-                  playsInline
-                  preload="metadata"
-                />
+                {post.thumbnail_url ? (
+                  <img
+                    src={post.thumbnail_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <video
+                    src={post.cdn_url}
+                    className="h-full w-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                )}
                 <div className="absolute inset-0 bg-black/30" />
                 <div className="absolute bottom-1.5 left-1 right-1 flex items-center justify-between text-white/90">
                   <div className="flex items-center gap-1">

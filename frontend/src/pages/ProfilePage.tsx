@@ -477,11 +477,21 @@ export default function ProfilePage() {
                     onClick={() => openDay(cell.dateStr!, posts)}
                     className={`aspect-square relative overflow-hidden rounded-xl active:scale-95 transition-transform ${isToday ? 'ring-2 ring-accent ring-offset-1 ring-offset-[--bg-page]' : ''}`}
                   >
-                    <video
-                      src={posts[0].cdn_url}
-                      className="absolute inset-0 h-full w-full object-cover"
-                      muted playsInline preload="metadata"
-                    />
+                    {posts[0].thumbnail_url ? (
+                      <img
+                        src={posts[0].thumbnail_url}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <video
+                        src={posts[0].cdn_url}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        muted playsInline preload="metadata"
+                      />
+                    )}
                     <div className="absolute inset-0 bg-black/30" />
                     <span className="absolute inset-x-0 bottom-0 flex items-center justify-center pb-1.5 text-[11px] font-bold text-white leading-none">
                       {cell.day}
