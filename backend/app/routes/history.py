@@ -91,6 +91,7 @@ def get_history(
                 {
                     "id": post.id,
                     "cdn_url": post.video.cdn_url,
+                    "thumbnail_url": post.thumbnail_url,
                     "like_count": post.like_count,
                     "view_count": post.view_count,
                     "caption": post.caption,

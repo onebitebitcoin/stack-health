@@ -418,7 +418,7 @@ export default function ProfilePage() {
                         src={posts[0].thumbnail_url}
                         alt=""
                         className="absolute inset-0 h-full w-full object-cover"
-                        loading="lazy"
+                        loading="eager"
                         decoding="async"
                       />
                     ) : (
