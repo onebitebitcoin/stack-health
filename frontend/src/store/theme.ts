@@ -1,16 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export const THEMES = ['sapphire', 'volt', 'volt-light', 'indigo', 'arctic', 'forest'] as const
+export const THEMES = ['sapphire', 'volt', 'indigo'] as const
 export type Theme = (typeof THEMES)[number]
 
 export const THEME_LABELS: Record<Theme, string> = {
   sapphire: 'Sapphire',
-  volt: 'Volt Dark',
-  'volt-light': 'Volt Light',
+  volt: 'Volt',
   indigo: 'Royal Indigo',
-  arctic: 'Arctic Light',
-  forest: 'Forest Light',
 }
 
 interface ThemeState {
@@ -33,7 +30,9 @@ export const useThemeStore = create<ThemeState>()(
 
 export function initTheme(override?: string | null) {
   const stored = useThemeStore.getState().theme
-  const t = (override && THEMES.includes(override as Theme) ? override : stored) as Theme
+  const candidate = override && THEMES.includes(override as Theme) ? (override as Theme) : stored
+  // 저장된 테마가 구 라이트 테마이면 기본 다크로 마이그레이션
+  const t: Theme = THEMES.includes(candidate as Theme) ? (candidate as Theme) : 'volt'
   document.documentElement.setAttribute('data-theme', t)
   if (t !== useThemeStore.getState().theme) {
     useThemeStore.getState().setTheme(t)

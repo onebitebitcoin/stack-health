@@ -43,14 +43,20 @@ describe('THEMES / THEME_LABELS', () => {
 
 describe('initTheme', () => {
   it('override 없으면 저장된 테마 적용', () => {
-    useThemeStore.setState({ theme: 'forest' })
+    useThemeStore.setState({ theme: 'indigo' })
     initTheme()
-    expect(document.documentElement.getAttribute('data-theme')).toBe('forest')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('indigo')
   })
 
   it('유효한 override는 적용된다', () => {
-    initTheme('arctic')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('arctic')
+    initTheme('sapphire')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('sapphire')
+  })
+
+  it('구 라이트 테마가 저장된 경우 volt로 마이그레이션', () => {
+    useThemeStore.setState({ theme: 'volt' as never })
+    initTheme('volt-light')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('volt')
   })
 
   it('유효하지 않은 override는 무시하고 저장된 테마 사용', () => {

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock, Share2, RotateCcw, RotateCw } from 'lucide-react'
+import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock, Share2 } from 'lucide-react'
 import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import type { Post, FeedResponse } from '../api/types'
 import TagChip from './TagChip'
@@ -30,12 +30,12 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   useEffect(() => { setLikeCount(post.like_count) }, [post.like_count])
   const [isPaused, setIsPaused] = useState(false)
   const [flashIcon, setFlashIcon] = useState<'play' | 'pause' | null>(null)
-  const [seekFlash, setSeekFlash] = useState<'forward' | 'backward' | null>(null)
   const [progress, setProgress] = useState(0)
+  const [isScrubbing, setIsScrubbing] = useState(false)
   const [isLandscape, setIsLandscape] = useState(false)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const seekFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isDragging = useRef(false)
+  const progressBarRef = useRef<HTMLDivElement>(null)
   const isLikePending = useRef(false)
   const commentCount = post.comment_count ?? 0
 
@@ -87,19 +87,41 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
 
   useEffect(() => () => {
     if (flashTimer.current) clearTimeout(flashTimer.current)
-    if (seekFlashTimer.current) clearTimeout(seekFlashTimer.current)
-    if (tapTimer.current) clearTimeout(tapTimer.current)
   }, [])
 
-  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const seekToRatio = useCallback((clientX: number) => {
     const video = videoRef.current
-    if (!video || !video.duration) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const ratio = (e.clientX - rect.left) / rect.width
+    const bar = progressBarRef.current
+    if (!video || !video.duration || !bar) return
+    const rect = bar.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
     video.currentTime = ratio * video.duration
   }, [])
 
-  const triggerPlayPause = useCallback(() => {
+  useEffect(() => {
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!isDragging.current) return
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+      seekToRatio(clientX)
+    }
+    const onEnd = () => {
+      if (!isDragging.current) return
+      isDragging.current = false
+      setIsScrubbing(false)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onEnd)
+    document.addEventListener('touchmove', onMove as EventListener, { passive: true })
+    document.addEventListener('touchend', onEnd)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onEnd)
+      document.removeEventListener('touchmove', onMove as EventListener)
+      document.removeEventListener('touchend', onEnd)
+    }
+  }, [seekToRatio])
+
+  const handleTap = useCallback(() => {
     const video = videoRef.current
     if (!video) return
     if (video.paused) {
@@ -114,36 +136,6 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
     if (flashTimer.current) clearTimeout(flashTimer.current)
     flashTimer.current = setTimeout(() => setFlashIcon(null), 600)
   }, [])
-
-  const handleOverlayClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const isRight = (e.clientX - rect.left) > rect.width / 2
-
-    if (tapTimer.current) {
-      // 두 번째 탭 → 더블탭
-      clearTimeout(tapTimer.current)
-      tapTimer.current = null
-
-      const video = videoRef.current
-      if (!video) return
-
-      if (isRight) {
-        video.currentTime = Math.min(video.currentTime + 5, video.duration || 0)
-        setSeekFlash('forward')
-      } else {
-        video.currentTime = Math.max(video.currentTime - 5, 0)
-        setSeekFlash('backward')
-      }
-      if (seekFlashTimer.current) clearTimeout(seekFlashTimer.current)
-      seekFlashTimer.current = setTimeout(() => setSeekFlash(null), 700)
-    } else {
-      // 첫 번째 탭 → 250ms 대기 후 단일탭으로 처리
-      tapTimer.current = setTimeout(() => {
-        tapTimer.current = null
-        triggerPlayPause()
-      }, 250)
-    }
-  }, [triggerPlayPause])
 
   const handleLike = useCallback(async () => {
     if (!token) {
@@ -191,10 +183,10 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         preload="metadata"
       />
 
-      {/* 탭/더블탭 오버레이 */}
+      {/* 탭 오버레이 */}
       <div
         className="absolute inset-0"
-        onClick={handleOverlayClick}
+        onClick={handleTap}
         style={{ zIndex: 1 }}
       />
 
@@ -209,32 +201,6 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
               ? <Pause size={40} className="text-white fill-white" />
               : <Play size={40} className="text-white fill-white" />
             }
-          </div>
-        </div>
-      )}
-
-      {/* 되감기 플래시 (왼쪽 더블탭) */}
-      {seekFlash === 'backward' && (
-        <div
-          className="absolute left-0 top-0 bottom-0 w-1/2 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 2 }}
-        >
-          <div className="rounded-full bg-white/20 p-5 animate-ping-once flex flex-col items-center gap-1">
-            <RotateCcw size={32} className="text-white" />
-            <span className="text-xs font-bold text-white">5초</span>
-          </div>
-        </div>
-      )}
-
-      {/* 빨리감기 플래시 (오른쪽 더블탭) */}
-      {seekFlash === 'forward' && (
-        <div
-          className="absolute right-0 top-0 bottom-0 w-1/2 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 2 }}
-        >
-          <div className="rounded-full bg-white/20 p-5 animate-ping-once flex flex-col items-center gap-1">
-            <RotateCw size={32} className="text-white" />
-            <span className="text-xs font-bold text-white">5초</span>
           </div>
         </div>
       )}
@@ -314,17 +280,24 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         </button>
       </div>
 
-      {/* 재생 진행 바 — 네비게이션 바 바로 위 */}
+      {/* 재생 진행 바 — 드래그로 위치 조정 가능 */}
       <div
-        className="absolute left-0 right-0 h-8 flex items-end cursor-pointer bottom-nav-safe"
+        ref={progressBarRef}
+        className={`absolute left-0 right-0 flex items-end cursor-pointer bottom-nav-safe touch-none ${isScrubbing ? 'h-12' : 'h-8'}`}
         style={{ zIndex: 5 }}
-        onClick={(e) => { e.stopPropagation(); handleSeek(e) }}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => { e.stopPropagation(); isDragging.current = true; setIsScrubbing(true); seekToRatio(e.clientX) }}
+        onTouchStart={(e) => { e.stopPropagation(); isDragging.current = true; setIsScrubbing(true); seekToRatio(e.touches[0].clientX) }}
       >
-        <div className="w-full h-0.5 bg-white/30">
+        <div className={`w-full bg-white/30 transition-all ${isScrubbing ? 'h-1.5' : 'h-0.5'}`}>
           <div
-            className="h-full bg-white transition-none"
+            className="h-full bg-white transition-none relative"
             style={{ width: `${progress}%` }}
-          />
+          >
+            {isScrubbing && (
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white shadow" />
+            )}
+          </div>
         </div>
       </div>
 

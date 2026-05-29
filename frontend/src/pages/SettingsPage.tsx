@@ -1,10 +1,9 @@
-import { Moon, Sun, ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2 } from 'lucide-react'
+import { ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2 } from 'lucide-react'
 import { useState, useRef, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
-import { useThemeStore, type Theme } from '../store/theme'
 import UserAvatar from '../components/UserAvatar'
 
 const ROW = 'flex items-center justify-between px-4 py-3.5'
@@ -18,8 +17,6 @@ export default function SettingsPage() {
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
   const logout = useAuthStore((s) => s.logout)
-  const { theme, setTheme } = useThemeStore()
-
   const [editingLn, setEditingLn] = useState(false)
   const [lnInput, setLnInput] = useState(user?.lightning_address ?? '')
   const [saving, setSaving] = useState(false)
@@ -95,20 +92,6 @@ export default function SettingsPage() {
       return res.data.data
     },
   })
-
-  const DARK_THEMES: Theme[] = ['volt', 'sapphire', 'indigo']
-  const isDark = DARK_THEMES.includes(theme)
-
-  async function handleThemeChange(dark: boolean) {
-    const next: Theme = dark ? 'volt' : 'volt-light'
-    setTheme(next)
-    try {
-      const res = await client.patch<{ data: typeof user }>('/auth/me', {
-        app_settings: { ...((user?.app_settings ?? {}) as object), theme: next },
-      })
-      if (res.data.data) setUser(res.data.data)
-    } catch { /* theme already applied locally */ }
-  }
 
   async function saveUsername(e: FormEvent) {
     e.preventDefault()
@@ -296,34 +279,6 @@ export default function SettingsPage() {
                   {lnError && <p className="text-[10px] text-red-400">{lnError}</p>}
                 </form>
               )}
-            </div>
-          </div>
-        </div>
-
-        {/* 화면 */}
-        <div>
-          <p className={SECTION}>화면</p>
-          <div className={GROUP}>
-            <div className={ROW}>
-              <span className={LABEL}>테마</span>
-              <div className="flex items-center gap-1 rounded-lg bg-theme-surface2 p-0.5">
-                <button
-                  onClick={() => handleThemeChange(true)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    isDark ? 'bg-theme-page text-theme-primary shadow-sm' : 'text-theme-muted'
-                  }`}
-                >
-                  <Moon size={11} strokeWidth={1.5} />다크
-                </button>
-                <button
-                  onClick={() => handleThemeChange(false)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    !isDark ? 'bg-theme-page text-theme-primary shadow-sm' : 'text-theme-muted'
-                  }`}
-                >
-                  <Sun size={11} strokeWidth={1.5} />라이트
-                </button>
-              </div>
             </div>
           </div>
         </div>
