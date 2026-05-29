@@ -58,13 +58,6 @@ function ChallengeCard({
           ) : null}
         </div>
 
-        {/* 리워드 배지 */}
-        <div className="flex items-center gap-1">
-          <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
-            <Dumbbell size={9} />{challenge.reward_title}
-          </span>
-        </div>
-
         {/* 설명 요약 */}
         {challenge.description && (
           <p className="text-[11px] text-theme-muted leading-snug line-clamp-1">{challenge.description}</p>
