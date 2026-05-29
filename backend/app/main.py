@@ -1,13 +1,18 @@
+import html
 import logging
+import re
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
 
-from app.routes import auth, videos, feed, rewards, admin, comments, history, challenges, users
+from app.database import get_db
+from app.models.post import Post
+from app.routes import admin, auth, challenges, comments, feed, history, rewards, users, videos
 from app.services.r2 import ensure_r2_cors
 
 logging.basicConfig(
@@ -78,16 +83,89 @@ def health() -> dict:
     return {"status": "ok", "version": version}
 
 
+_CRAWLER_RE = re.compile(
+    r"(Twitterbot|facebookexternalhit|LinkedInBot|TelegramBot|Slackbot|"
+    r"WhatsApp|kakaotalk-scrap|KakaoTalk|Discordbot|Googlebot|bingbot|"
+    r"ia_archiver|Applebot|vk\.com/dev/Share)",
+    re.IGNORECASE,
+)
+
+_SHORTS_RE = re.compile(r"^shorts/([A-Za-z0-9_-]+)$")
+
+
+def _is_crawler(request: Request) -> bool:
+    ua = request.headers.get("user-agent", "")
+    return bool(_CRAWLER_RE.search(ua))
+
+
+def _og_html(title: str, description: str, image: str, url: str, video_url: str | None) -> str:
+    t = html.escape(title)
+    d = html.escape(description)
+    i = html.escape(image)
+    u = html.escape(url)
+    video_tags = (
+        f'<meta property="og:video" content="{html.escape(video_url)}" />'
+        f'<meta property="og:video:type" content="video/mp4" />'
+        if video_url
+        else ""
+    )
+    return f"""<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>{t}</title>
+<meta property="og:type" content="video.other" />
+<meta property="og:site_name" content="Stack Health" />
+<meta property="og:title" content="{t}" />
+<meta property="og:description" content="{d}" />
+<meta property="og:image" content="{i}" />
+<meta property="og:image:width" content="1080" />
+<meta property="og:image:height" content="1920" />
+<meta property="og:url" content="{u}" />
+{video_tags}
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="{t}" />
+<meta name="twitter:description" content="{d}" />
+<meta name="twitter:image" content="{i}" />
+</head>
+<body><script>window.location.href="{u}";</script></body>
+</html>"""
+
+
 # Serve React SPA (production: static/ dir built by Docker)
 _static_dir = Path(__file__).parent.parent / "static"
 if _static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="assets")
 
     @app.get("/{full_path:path}")
-    def spa_fallback(full_path: str) -> FileResponse:
+    def spa_fallback(
+        full_path: str,
+        request: Request,
+        db: Session = Depends(get_db),
+    ) -> FileResponse | HTMLResponse:
+        # Serve static files first
         file_path = _static_dir / full_path
         if file_path.exists() and file_path.is_file():
             return FileResponse(str(file_path))
+
+        # OG tag injection for share pages (crawler only)
+        m = _SHORTS_RE.match(full_path)
+        if m and _is_crawler(request):
+            share_token = m.group(1)
+            post = db.query(Post).filter(Post.share_token == share_token).first()
+            if post:
+                from app.config import settings as app_settings
+
+                base = app_settings.app_base_url.rstrip("/")
+                image = post.thumbnail_url or f"{base}/og-image.png"
+                caption = post.caption or "Stack Health 운동 영상"
+                video_url = post.video.cdn_url if post.video else None
+                page_url = f"{base}/shorts/{share_token}"
+                return HTMLResponse(
+                    content=_og_html(caption, "Stack Health에서 운동 영상 보기", image, page_url, video_url),
+                    headers={"Cache-Control": "public, max-age=3600"},
+                )
+
         return FileResponse(
             str(_static_dir / "index.html"),
             headers={

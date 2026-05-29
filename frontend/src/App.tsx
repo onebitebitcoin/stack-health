@@ -23,17 +23,18 @@ import ChallengeDetailPage from './pages/ChallengeDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import LeaderboardPage from './pages/LeaderboardPage'
 import SharedVideoPage from './pages/SharedVideoPage'
+import LightningWalletGuidePage from './pages/LightningWalletGuidePage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
   return token ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-const HIDE_NAV = ['/login', '/admin', '/terms', '/team', '/setup-username']
+const HIDE_NAV = ['/login', '/admin', '/terms', '/team', '/setup-username', '/lightning-guide']
 const KNOWN_ROUTE_SEGMENTS = new Set([
   'login', 'upload', 'rewards', 'challenges', 'my-challenges',
   'profile', 'setup-username', 'users', 'admin', 'terms',
-  'settings', 'team', 'leaderboard', 'share',
+  'settings', 'team', 'leaderboard', 'share', 'lightning-guide',
 ])
 
 function Layout() {
@@ -131,6 +132,7 @@ function Layout() {
         <Route path="/team" element={<TeamPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/shorts/:shareToken" element={<SharedVideoPage />} />
+        <Route path="/lightning-guide" element={<LightningWalletGuidePage />} />
       </Routes>
       </div>
       {!hideNav && !isFlutter && <BottomNav />}

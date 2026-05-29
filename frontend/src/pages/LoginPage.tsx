@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { Zap, Mail, AlertCircle, Copy, Check, ArrowLeft } from 'lucide-react'
 import client from '../api/client'
@@ -27,6 +27,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [lightningAddress, setLightningAddress] = useState('')
   const [emailError, setEmailError] = useState('')
   const [emailLoading, setEmailLoading] = useState(false)
 
@@ -126,7 +127,17 @@ export default function LoginPage() {
           '/auth/register',
           { email, username, password },
         )
-        login(res.data.data.access_token, res.data.data.user)
+        const { access_token, user: registeredUser } = res.data.data
+        if (lightningAddress.trim()) {
+          const updated = await client.patch<{ data: User }>(
+            '/auth/me',
+            { lightning_address: lightningAddress.trim() },
+            { headers: { Authorization: `Bearer ${access_token}` } },
+          )
+          login(access_token, updated.data.data)
+        } else {
+          login(access_token, registeredUser)
+        }
       } else {
         const res = await client.post<{ data: { access_token: string; user: User } }>(
           '/auth/login',
@@ -328,14 +339,38 @@ export default function LoginPage() {
                 className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
               />
               {isRegister && (
-                <input
-                  type="text"
-                  placeholder="닉네임"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
-                />
+                <>
+                  <input
+                    type="text"
+                    placeholder="닉네임"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                    className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+                  />
+                  <div className="relative">
+                    <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
+                      <Zap size={16} className="text-yellow-500" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="라이트닝 주소 (선택, 예: user@walletofsatoshi.com)"
+                      value={lightningAddress}
+                      onChange={(e) => setLightningAddress(e.target.value)}
+                      className="w-full rounded-lg bg-theme-surface py-3 pl-9 pr-4 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                  <div className="flex justify-end -mt-2">
+                    <Link
+                      to="/lightning-guide"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-accent underline underline-offset-2"
+                    >
+                      지갑 만드는 법
+                    </Link>
+                  </div>
+                </>
               )}
               <input
                 type="password"
