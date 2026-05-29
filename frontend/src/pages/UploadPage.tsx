@@ -542,13 +542,18 @@ export default function UploadPage() {
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
           <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileChange} />
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-theme-border p-12 text-theme-muted transition-colors hover:border-accent hover:text-accent"
+            onClick={() => { setError(''); fileInputRef.current?.click() }}
+            className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-12 transition-colors ${
+              error ? 'border-red-500 text-red-400' : 'border-theme-border text-theme-muted hover:border-accent hover:text-accent'
+            }`}
           >
             <LogoMark size={48} />
             <span>영상을 선택하세요</span>
-            <span className="text-xs">5~30초, 최대 50MB</span>
+            <span className="text-xs">5~60초, 최대 50MB</span>
           </button>
+          {error && (
+            <p className="text-sm text-red-400 text-center">{error}</p>
+          )}
         </div>
       )}
 

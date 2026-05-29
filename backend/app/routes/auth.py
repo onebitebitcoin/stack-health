@@ -62,10 +62,10 @@ def get_current_user(
 ) -> User:
     user_id = decode_token(credentials.credentials)
     if user_id is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰입니다")
     user = get_user_by_id(db, user_id)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="사용자를 찾을 수 없습니다")
     return user
 
 
@@ -92,9 +92,9 @@ def get_optional_user(
 def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     check_rate_limit(request, "auth:register", max_calls=5, period_seconds=3600)
     if get_user_by_email(db, req.email):
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다")
     if db.query(User).filter(User.username == req.username).first():
-        raise HTTPException(status_code=400, detail="Username already taken")
+        raise HTTPException(status_code=400, detail="이미 사용 중인 닉네임입니다")
 
     user = User(
         email=req.email,
@@ -115,7 +115,7 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)) ->
     check_rate_limit(request, "auth:login", max_calls=10, period_seconds=900)
     user = get_user_by_email(db, req.email)
     if user is None or not verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다")
 
     token = create_access_token(user.id)
     return {"data": TokenResponse(access_token=token, user=UserSchema.model_validate(user))}
@@ -145,7 +145,7 @@ def update_me(
             User.username == req.username, User.id != current_user.id
         ).first()
         if existing:
-            raise HTTPException(status_code=400, detail="Username already taken")
+            raise HTTPException(status_code=400, detail="이미 사용 중인 닉네임입니다")
         current_user.username = req.username
         settings = dict(current_user.app_settings or {})
         settings.pop("needs_username", None)
@@ -195,7 +195,7 @@ async def upload_avatar(
 @router.get("/google")
 def google_login() -> RedirectResponse:
     if not settings.google_client_id:
-        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+        raise HTTPException(status_code=503, detail="Google 로그인이 설정되지 않았습니다")
     url = get_google_auth_url()
     return RedirectResponse(url=url)
 
@@ -280,11 +280,11 @@ def lnauth_callback(
 ) -> dict:
     challenge = db.query(LNAuthChallenge).filter(LNAuthChallenge.k1 == k1).first()
     if not challenge:
-        raise HTTPException(status_code=400, detail="Invalid k1")
+        raise HTTPException(status_code=400, detail="유효하지 않은 챌린지입니다")
     if datetime.utcnow() - challenge.created_at > LNAUTH_CHALLENGE_TTL:
         db.delete(challenge)
         db.commit()
-        raise HTTPException(status_code=400, detail="Challenge expired. Please request a new one.")
+        raise HTTPException(status_code=400, detail="챌린지가 만료되었습니다. 다시 시도해주세요")
 
     if sig is None or key is None:
         return {
@@ -295,7 +295,7 @@ def lnauth_callback(
         }
 
     if not verify_signature(k1, sig, key):
-        return {"status": "ERROR", "reason": "Invalid signature"}
+        return {"status": "ERROR", "reason": "서명이 유효하지 않습니다"}
 
     user = db.query(User).filter(User.oauth_sub == key, User.oauth_provider == "lnauth").first()
     if user is None:

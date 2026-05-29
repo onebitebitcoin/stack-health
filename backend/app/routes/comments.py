@@ -20,7 +20,7 @@ class CreateCommentRequest(BaseModel):
 def list_comments(post_id: int, db: Session = Depends(get_db)) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
+        raise HTTPException(status_code=404, detail="게시물을 찾을 수 없습니다")
     comments = (
         db.query(Comment)
         .filter(Comment.post_id == post_id)
@@ -51,15 +51,15 @@ def create_comment(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     if current_user.is_banned:
-        raise HTTPException(status_code=403, detail="Banned users cannot comment")
+        raise HTTPException(status_code=403, detail="정지된 계정은 댓글을 작성할 수 없습니다")
     post = db.query(Post).filter(Post.id == post_id).first()
     if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
+        raise HTTPException(status_code=404, detail="게시물을 찾을 수 없습니다")
     content = body.content.strip()
     if not content:
-        raise HTTPException(status_code=422, detail="Content cannot be empty")
+        raise HTTPException(status_code=422, detail="댓글 내용을 입력해주세요")
     if len(content) > 500:
-        raise HTTPException(status_code=422, detail="Content too long")
+        raise HTTPException(status_code=422, detail="댓글이 너무 깁니다")
     comment = Comment(post_id=post_id, user_id=current_user.id, content=content)
     db.add(comment)
     db.flush()
@@ -89,9 +89,9 @@ def delete_comment(
         Comment.id == comment_id, Comment.post_id == post_id
     ).first()
     if comment is None:
-        raise HTTPException(status_code=404, detail="Comment not found")
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다")
     if comment.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not authorized")
+        raise HTTPException(status_code=403, detail="권한이 없습니다")
     db.delete(comment)
     db.commit()
     return {"data": {"deleted": True}}

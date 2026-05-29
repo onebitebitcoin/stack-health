@@ -72,14 +72,14 @@ def create_claim(
         db.commit()
 
     if has_claimed_this_week(db, current_user.id, week_label):
-        raise HTTPException(status_code=409, detail="Already claimed this week")
+        raise HTTPException(status_code=409, detail="이번 주에 이미 청구하셨습니다")
 
     pts = get_weekly_points(db, current_user.id, week_label)
     sats = points_to_sats(pts)
 
     ln_address = req.ln_address or current_user.lightning_address
     if not ln_address:
-        raise HTTPException(status_code=400, detail="Lightning address required")
+        raise HTTPException(status_code=400, detail="라이트닝 주소를 먼저 등록해주세요")
 
     claim = LightningClaim(
         user_id=current_user.id,

@@ -104,7 +104,7 @@ def confirm_upload(
     tags = req.tags or []
     invalid = [t for t in tags if t not in ALLOWED_TAGS]
     if invalid:
-        raise HTTPException(status_code=400, detail=f"Invalid tags: {invalid}")
+        raise HTTPException(status_code=400, detail=f"허용되지 않는 태그입니다: {invalid}")
 
     if is_workout_upload(tags) and get_daily_workout_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
         raise HTTPException(status_code=429, detail=f"운동 영상 하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
@@ -362,9 +362,9 @@ def delete_post(
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
-        raise HTTPException(status_code=404, detail="Post not found")
+        raise HTTPException(status_code=404, detail="게시물을 찾을 수 없습니다")
     if post.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Not allowed")
+        raise HTTPException(status_code=403, detail="권한이 없습니다")
 
     video = db.query(Video).filter(Video.id == post.video_id).first()
 

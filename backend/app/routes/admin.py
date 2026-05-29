@@ -52,7 +52,7 @@ def require_admin(
     from app.services.auth import get_user_by_id
     user_id = decode_token(auth.removeprefix("Bearer "))
     if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다")
     user = get_user_by_id(db, user_id)
     if user is None or not user.is_admin:
         raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
@@ -99,7 +99,7 @@ def mark_paid(
 ) -> dict:
     claim = db.query(LightningClaim).filter(LightningClaim.id == claim_id).first()
     if claim is None:
-        raise HTTPException(status_code=404, detail="Claim not found")
+        raise HTTPException(status_code=404, detail="청구 내역을 찾을 수 없습니다")
 
     claim.status = "paid"
     if payment_memo is not None:
@@ -158,7 +158,7 @@ def reject_video(
 ) -> dict:
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
+        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
 
     revoke_queued_upload_reward(db, video.id)
     video.status = "rejected"
@@ -175,7 +175,7 @@ def delete_video(
 ) -> dict:
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
+        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
 
     r2_key = video.r2_key
     revoke_queued_upload_reward(db, video.id)
@@ -291,7 +291,7 @@ def toggle_ban(
 ) -> dict:
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
     user.is_banned = not user.is_banned
     log = AdminLog(
         action="ban_toggle",
@@ -313,7 +313,7 @@ def delete_user(
 ) -> dict:
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
     if admin is not None and user.id == admin.id:
         raise HTTPException(status_code=400, detail="자신의 계정은 삭제할 수 없습니다")
     # X-Admin-Key (admin=None) cannot delete admin accounts — no self-identity check possible
@@ -369,7 +369,7 @@ def get_user_detail(
 
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
 
     videos = (
         db.query(Video)

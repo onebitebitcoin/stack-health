@@ -112,7 +112,7 @@ def like_post(
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
+        raise HTTPException(status_code=404, detail="게시물을 찾을 수 없습니다")
 
     existing_like = (
         db.query(PostLike)
@@ -142,7 +142,7 @@ def view_post(
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
+        raise HTTPException(status_code=404, detail="게시물을 찾을 수 없습니다")
 
     today_start = _utc_today_start()
     already_viewed = (
