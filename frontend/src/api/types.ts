@@ -157,6 +157,7 @@ export interface Challenge {
   completed: boolean
   categories: string[]
   creator_id?: number | null
+  creator_username?: string | null
   completed_count?: number
   image_url?: string | null
   image_thumb_url?: string | null

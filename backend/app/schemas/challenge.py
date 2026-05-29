@@ -18,6 +18,7 @@ class ChallengeSchema(BaseModel):
     joined: bool = False
     completed: bool = False
     creator_id: int | None = None
+    creator_username: str | None = None
     image_url: str | None = None
     image_thumb_url: str | None = None
 

@@ -44,6 +44,11 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
             my_upload_count = p.upload_count
             completed = p.completed_at is not None
 
+    creator_username: str | None = None
+    if challenge.creator_id:
+        creator = db.get(User, challenge.creator_id)
+        creator_username = creator.username if creator else None
+
     return ChallengeSchema(
         id=challenge.id,
         title=challenge.title,
@@ -59,6 +64,7 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
         joined=joined,
         completed=completed,
         creator_id=challenge.creator_id,
+        creator_username=creator_username,
         image_url=challenge.image_url,
         image_thumb_url=challenge.image_thumb_url,
     )

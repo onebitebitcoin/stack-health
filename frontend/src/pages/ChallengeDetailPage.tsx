@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays, Edit2 } from 'lucide-react'
+import { ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays, Edit2, UserCircle } from 'lucide-react'
 import client from '../api/client'
 import type { Challenge, ChallengeUpdateRequest } from '../api/types'
 import { getApiErrorMessage } from '../api/errors'
@@ -239,6 +239,15 @@ export default function ChallengeDetailPage() {
             <span className="text-theme-muted">목표</span>
             <span className="text-theme-primary font-medium">업로드 {challenge.condition_value}회</span>
           </div>
+          {challenge.creator_username && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-theme-muted flex items-center gap-1.5">
+                <UserCircle size={14} />
+                매니저
+              </span>
+              <span className="text-theme-primary font-medium">@{challenge.creator_username}</span>
+            </div>
+          )}
         </div>
 
         {/* 내 진행 상황 */}
