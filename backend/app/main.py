@@ -186,6 +186,12 @@ if _static_dir.exists():
         # Serve static files first
         file_path = _static_dir / full_path
         if file_path.exists() and file_path.is_file():
+            name = file_path.name
+            if name == "sw.js" or name.startswith("workbox-"):
+                return FileResponse(
+                    str(file_path),
+                    headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+                )
             return FileResponse(str(file_path))
 
         # OG tag injection for share pages (crawler only)

@@ -3,6 +3,8 @@ import { useEffect } from 'react'
 import { useAuthStore } from './store/auth'
 import client from './api/client'
 import type { User } from './api/types'
+import { useVersionCheck } from './hooks/useVersionCheck'
+import UpdateBanner from './components/UpdateBanner'
 import BottomNav from './components/BottomNav'
 import { isFlutterWebView } from './lib/platform'
 import FeedPage from './pages/FeedPage'
@@ -88,9 +90,11 @@ function Layout() {
   }, [])
 
   const isFlutter = isFlutterWebView()
+  const updateAvailable = useVersionCheck()
 
   return (
     <div className="relative h-full">
+      {updateAvailable && !isFlutter && <UpdateBanner />}
       <div key={location.key} className="absolute inset-0 page-enter">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
