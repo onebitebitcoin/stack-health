@@ -25,6 +25,8 @@ export interface Post {
   workout_end: string | null
   share_token: string
   thumbnail_url: string | null
+  avatar_url: string | null
+  profile_color: string | null
 }
 
 export interface FeedResponse {

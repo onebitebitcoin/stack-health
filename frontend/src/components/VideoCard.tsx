@@ -275,9 +275,20 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
           onClick={(e) => { e.stopPropagation(); navigate(`/users/${post.user_id}`) }}
           className="flex items-center gap-2 mb-1 active:opacity-70"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg text-xs font-bold shrink-0">
-            {post.username.charAt(0).toUpperCase()}
-          </div>
+          {post.avatar_url ? (
+            <img
+              src={post.avatar_url}
+              alt={post.username}
+              className="h-8 w-8 rounded-full object-cover shrink-0"
+            />
+          ) : (
+            <div
+              className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold shrink-0 ${post.profile_color ? 'text-white' : 'bg-accent text-accent-fg'}`}
+              style={post.profile_color ? { backgroundColor: post.profile_color } : undefined}
+            >
+              {post.username.charAt(0).toUpperCase()}
+            </div>
+          )}
           <p className="font-semibold text-white drop-shadow">@{post.username}</p>
         </button>
         {post.caption && (
