@@ -137,7 +137,7 @@ _static_dir = Path(__file__).parent.parent / "static"
 if _static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="assets")
 
-    @app.get("/{full_path:path}")
+    @app.get("/{full_path:path}", response_model=None)
     def spa_fallback(
         full_path: str,
         request: Request,
