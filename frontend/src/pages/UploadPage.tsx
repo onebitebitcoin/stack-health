@@ -80,7 +80,7 @@ export default function UploadPage() {
   const [pipelineStatus, setPipelineStatus] = useState<string | null>(null)
   const [pipelineStep, setPipelineStep] = useState<string>('')
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
+  const uploadAbortRef = useRef<AbortController | null>(null)
 
   // Proof image
   const proofImageRef = useRef<HTMLInputElement>(null)
@@ -106,10 +106,30 @@ export default function UploadPage() {
       setPipelineJobId(savedJobId)
       setPipelineStatus('pending')
     }
+
+    // Samsung/mobile browsers use BFCache: when navigating away, the XHR is killed
+    // causing a "Network Error" on return. We abort the upload proactively on pagehide
+    // so Axios throws ERR_CANCELED (which we ignore) instead of Network Error.
+    const handlePageHide = () => {
+      uploadAbortRef.current?.abort()
+    }
+    // On BFCache restore (persisted=true), reset any stale uploading state
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setUploading(false)
+        setError('')
+      }
+    }
+    window.addEventListener('pagehide', handlePageHide)
+    window.addEventListener('pageshow', handlePageShow)
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (pollTimerRef.current) clearInterval(pollTimerRef.current)
       streamRef.current?.getTracks().forEach((t) => t.stop())
+      uploadAbortRef.current?.abort()
+      window.removeEventListener('pagehide', handlePageHide)
+      window.removeEventListener('pageshow', handlePageShow)
     }
   }, [])
 
@@ -338,6 +358,9 @@ export default function UploadPage() {
     setUploading(true)
     setUploadProgress(0)
 
+    const abortController = new AbortController()
+    uploadAbortRef.current = abortController
+
     try {
       // Get video duration
       let duration = 15
@@ -376,6 +399,7 @@ export default function UploadPage() {
         '/videos/upload-pipeline',
         form,
         {
+          signal: abortController.signal,
           timeout: 300_000,
           onUploadProgress: (e) => { if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 70)) },
         },
@@ -387,6 +411,8 @@ export default function UploadPage() {
       setPipelineStatus('pending')
       setUploadProgress(70)
     } catch (err: unknown) {
+      // Ignore cancellations caused by navigating away (pagehide aborts the controller)
+      if (isAxiosError(err) && err.code === 'ERR_CANCELED') return
       setError(getApiErrorMessage(err, '업로드 실패'))
     } finally {
       setUploading(false)
