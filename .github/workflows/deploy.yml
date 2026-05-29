@@ -29,8 +29,8 @@ jobs:
           COMMIT_HASH="${{ github.sha }}"
           SHORT_HASH="${COMMIT_HASH:0:7}"
           COMMIT_MSG="${{ github.event.head_commit.message }}"
-          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S KST' --date='TZ="Asia/Seoul"' 2>/dev/null || date '+%Y-%m-%d %H:%M:%S')
-          MESSAGE="✅ 배포 완료%0A%0A🔖 ${SHORT_HASH}%0A📝 ${COMMIT_MSG}%0A🕐 ${TIMESTAMP}"
+          VERSION=$(cat /home/measly/stack-health/VERSION 2>/dev/null || echo "unknown")
+          MESSAGE="✅ 배포 완료%0A%0A📦 v${VERSION}%0A🔖 ${SHORT_HASH}%0A📝 ${COMMIT_MSG}"
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
             -d "text=${MESSAGE}" \
