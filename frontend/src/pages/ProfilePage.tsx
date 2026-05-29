@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
-import type { MyStats, HistoryResponse, HistoryWorkoutPost, Claim, WeeklyPointsHistory } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost, WeeklyPointsHistory } from '../api/types'
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
@@ -73,14 +73,6 @@ export default function ProfilePage() {
     enabled: !!user,
   })
 
-  const { data: claimsData } = useQuery<Claim[]>({
-    queryKey: ['my-claims'],
-    queryFn: async () => {
-      const res = await client.get<{ data: { claims: Claim[] } }>('/rewards/claims')
-      return res.data.data.claims
-    },
-    enabled: !!user && showWeeklyHistory,
-  })
 
   const { data: weeklyPointsData, isLoading: weeklyPointsLoading, isError: weeklyPointsError } = useQuery<WeeklyPointsHistory>({
     queryKey: ['my-weekly-points'],
@@ -331,35 +323,6 @@ export default function ProfilePage() {
             })())}
           </div>
 
-          {/* 클레임 이력 리스트 — 최대 높이 제한 + 스크롤 */}
-          <div className="max-h-52 overflow-y-auto">
-            {!claimsData ? (
-              <div className="py-6 text-center text-xs text-theme-muted">불러오는 중...</div>
-            ) : claimsData.length === 0 ? (
-              <div className="py-6 text-center text-xs text-theme-muted">클레임 이력이 없습니다</div>
-            ) : (
-              claimsData.map((claim) => (
-                <div key={claim.id} className="flex items-center justify-between px-5 py-3 border-b border-theme-border last:border-0">
-                  <div>
-                    <p className="text-xs font-medium text-theme-primary">{claim.week_label}</p>
-                    <p className="text-xs text-theme-muted mt-0.5">
-                      {claim.points_used.toFixed(2)} L
-                    </p>
-                  </div>
-                  <span className={`text-xs font-semibold ${
-                    claim.status === 'paid' ? 'text-green-400' :
-                    claim.status === 'pending' ? 'text-yellow-400' :
-                    claim.status === 'failed' ? 'text-red-400' :
-                    'text-theme-muted'
-                  }`}>
-                    {claim.status === 'paid' ? '지급완료' :
-                     claim.status === 'pending' ? '대기' :
-                     claim.status === 'failed' ? '실패' : '취소'}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
 
           {/* 접기 버튼 */}
           <button
