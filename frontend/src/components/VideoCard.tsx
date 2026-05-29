@@ -33,6 +33,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   const [progress, setProgress] = useState(0)
   const [isLandscape, setIsLandscape] = useState(false)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isLikePending = useRef(false)
   const commentCount = post.comment_count ?? 0
 
   useEffect(() => {
@@ -112,6 +113,8 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       onLoginRequired()
       return
     }
+    if (isLikePending.current) return
+    isLikePending.current = true
     try {
       const res = await client.post<{ data: { liked: boolean; like_count: number } }>(
         `/feed/${post.id}/like`,
@@ -134,6 +137,8 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       })
     } catch {
       // ignore
+    } finally {
+      isLikePending.current = false
     }
   }, [token, post.id, onLoginRequired, queryClient])
 
