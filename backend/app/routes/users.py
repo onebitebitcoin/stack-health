@@ -39,6 +39,7 @@ class PublicUserSchema(BaseModel):
 class PublicPostSchema(BaseModel):
     id: int
     cdn_url: str
+    thumbnail_url: str | None = None
     like_count: int
     view_count: int
     comment_count: int
@@ -276,6 +277,7 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
         PublicPostSchema(
             id=p.id,
             cdn_url=p.video.cdn_url,
+            thumbnail_url=p.thumbnail_url,
             like_count=p.like_count,
             view_count=p.view_count,
             comment_count=comment_counts.get(p.id, 0),

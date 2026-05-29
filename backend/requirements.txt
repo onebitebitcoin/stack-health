@@ -14,3 +14,4 @@ bech32==1.2.0
 redis==5.0.8
 pytest==8.3.4
 pytest-asyncio==0.24.0
+Pillow==11.2.1

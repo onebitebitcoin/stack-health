@@ -211,8 +211,8 @@ def _extract_thumbnail(r2, video_key: str) -> str | None:
                 "-ss", str(seek),
                 "-i", tmp_video,
                 "-vframes", "1",
-                "-vf", "scale=640:-2",
-                "-q:v", "5",
+                "-vf", "scale=480:-2",
+                "-q:v", "3",
                 tmp_thumb,
             ],
             capture_output=True,
@@ -223,7 +223,13 @@ def _extract_thumbnail(r2, video_key: str) -> str | None:
 
         thumb_key = f"thumbnails/t-{uuid.uuid4()}.jpg"
         with open(tmp_thumb, "rb") as f:
-            r2.put_object(Bucket=R2_BUCKET_NAME, Key=thumb_key, Body=f, ContentType="image/jpeg")
+            r2.put_object(
+                Bucket=R2_BUCKET_NAME,
+                Key=thumb_key,
+                Body=f,
+                ContentType="image/jpeg",
+                CacheControl="public, max-age=31536000, immutable",
+            )
         return thumb_key
     except Exception as e:
         logger.warning("Thumbnail extraction failed: %s", e)

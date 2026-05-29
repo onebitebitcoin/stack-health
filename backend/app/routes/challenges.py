@@ -1,8 +1,10 @@
+import io
 import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from PIL import Image
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -123,14 +125,24 @@ async def upload_challenge_image(
     content_type = file.content_type or "image/jpeg"
     if not content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
-    ext = (file.filename or "img.jpg").rsplit(".", 1)[-1].lower()
-    r2_key = f"challenges/{uuid.uuid4()}.{ext}"
+
+    raw = await file.read()
+    img = Image.open(io.BytesIO(raw)).convert("RGB")
+    if img.width > 800:
+        ratio = 800 / img.width
+        img = img.resize((800, int(img.height * ratio)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=75, optimize=True)
+    buf.seek(0)
+
+    r2_key = f"challenges/{uuid.uuid4()}.jpg"
     client = r2_service.get_r2_client()
-    client.upload_fileobj(
-        file.file,
-        app_settings.r2_bucket_name,
-        r2_key,
-        ExtraArgs={"ContentType": content_type},
+    client.put_object(
+        Bucket=app_settings.r2_bucket_name,
+        Key=r2_key,
+        Body=buf,
+        ContentType="image/jpeg",
+        CacheControl="public, max-age=31536000, immutable",
     )
     image_url = r2_service.get_cdn_url(r2_key)
     challenge.image_url = image_url
