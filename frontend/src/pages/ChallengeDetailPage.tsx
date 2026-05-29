@@ -150,11 +150,32 @@ export default function ChallengeDetailPage() {
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
       {/* 헤더 */}
-      <div className="px-4 pt-5 pb-3 flex items-center gap-3">
+      <div className="px-4 pt-5 pb-3 flex items-center gap-2">
         <button onClick={() => navigate(-1)} className="text-theme-muted flex-shrink-0">
           <ArrowLeft size={20} />
         </button>
         <h1 className="text-lg font-bold text-theme-primary flex-1 truncate">{challenge.title}</h1>
+        {isCreator && (
+          <>
+            <span className="text-xs bg-accent/15 text-accent px-2 py-0.5 rounded-full font-medium flex-shrink-0">
+              매니저
+            </span>
+            <button
+              onClick={startEditing}
+              className="text-theme-muted flex-shrink-0 p-1"
+              aria-label="챌린지 수정"
+            >
+              <Edit2 size={17} />
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="text-red-400 flex-shrink-0 p-1"
+              aria-label="챌린지 삭제"
+            >
+              <Trash2 size={17} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* 이미지 */}
@@ -328,26 +349,6 @@ export default function ChallengeDetailPage() {
                 {updateMutation.isPending ? '저장 중...' : '저장'}
               </button>
             </div>
-          </div>
-        )}
-
-        {/* 수정/삭제 버튼 (생성자/관리자) */}
-        {isCreator && !isEditing && (
-          <div className="flex gap-2 mt-2">
-            <button
-              onClick={startEditing}
-              className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-accent/30 py-3 text-sm text-accent"
-            >
-              <Edit2 size={15} />
-              수정
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-red-400/30 py-3 text-sm text-red-400"
-            >
-              <Trash2 size={15} />
-              삭제
-            </button>
           </div>
         )}
       </div>
