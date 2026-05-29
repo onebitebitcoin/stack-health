@@ -53,5 +53,6 @@ class PostSchema(BaseModel):
     workout_start: str | None = None
     workout_end: str | None = None
     share_token: str = ""
+    thumbnail_url: str | None = None
 
     model_config = {"from_attributes": True}

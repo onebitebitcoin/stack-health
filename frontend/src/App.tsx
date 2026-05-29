@@ -30,11 +30,18 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 const HIDE_NAV = ['/login', '/admin', '/terms', '/team', '/setup-username']
+const KNOWN_ROUTE_SEGMENTS = new Set([
+  'login', 'upload', 'rewards', 'challenges', 'my-challenges',
+  'profile', 'setup-username', 'users', 'admin', 'terms',
+  'settings', 'team', 'leaderboard', 'share',
+])
 
 function Layout() {
   const location = useLocation()
   const { pathname } = location
-  const hideNav = HIDE_NAV.includes(pathname)
+  const segments = pathname.split('/').filter(Boolean)
+  const isShareRoute = segments.length === 1 && !KNOWN_ROUTE_SEGMENTS.has(segments[0])
+  const hideNav = HIDE_NAV.includes(pathname) || isShareRoute
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
   const { token, setUser } = useAuthStore()
@@ -86,7 +93,6 @@ function Layout() {
       <div key={location.key} className="absolute inset-0 page-enter">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/share/:shareToken" element={<SharedVideoPage />} />
         <Route path="/" element={<RequireAuth><FeedPage /></RequireAuth>} />
         <Route
           path="/upload"
@@ -124,6 +130,7 @@ function Layout() {
         <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/:shareToken" element={<SharedVideoPage />} />
       </Routes>
       </div>
       {!hideNav && !isFlutter && <BottomNav />}

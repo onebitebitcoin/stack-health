@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Heart, Eye, Dumbbell } from 'lucide-react'
@@ -5,6 +6,26 @@ import client from '../api/client'
 import type { Post } from '../api/types'
 import LoadingScreen from '../components/LoadingScreen'
 import { useAuthStore } from '../store/auth'
+
+function setMetaProperty(property: string, content: string) {
+  let el = document.querySelector<HTMLMetaElement>(`meta[property="${property}"]`)
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute('property', property)
+    document.head.appendChild(el)
+  }
+  el.setAttribute('content', content)
+}
+
+function setMetaName(name: string, content: string) {
+  let el = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`)
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute('name', name)
+    document.head.appendChild(el)
+  }
+  el.setAttribute('content', content)
+}
 
 export default function SharedVideoPage() {
   const { shareToken } = useParams<{ shareToken: string }>()
@@ -19,6 +40,30 @@ export default function SharedVideoPage() {
     },
     enabled: !!shareToken,
   })
+
+  useEffect(() => {
+    if (!post) return
+
+    const title = `@${post.username} - Stack Health`
+    const description = post.caption ?? '같이 운동하고 비트코인 모으자'
+    const image = post.thumbnail_url ?? `${window.location.origin}/og-image.png`
+
+    document.title = title
+    setMetaProperty('og:title', title)
+    setMetaProperty('og:description', description)
+    setMetaProperty('og:image', image)
+    setMetaProperty('og:type', 'video.other')
+    setMetaProperty('og:video', post.cdn_url)
+    setMetaProperty('og:video:type', 'video/mp4')
+    setMetaName('twitter:title', title)
+    setMetaName('twitter:description', description)
+    setMetaName('twitter:image', image)
+    setMetaName('twitter:card', 'player')
+
+    return () => {
+      document.title = 'Stack Health | 운동하고 비트코인 모으자'
+    }
+  }, [post])
 
   if (isLoading) return <LoadingScreen />
 

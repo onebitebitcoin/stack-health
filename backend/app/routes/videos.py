@@ -289,6 +289,7 @@ def get_post_by_share_token(
         workout_start=post.workout_start,
         workout_end=post.workout_end,
         share_token=post.share_token,
+        thumbnail_url=post.proof_image_url,
     )
     return {"data": {"post": post_schema}}
 
