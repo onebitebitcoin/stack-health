@@ -115,6 +115,7 @@ export interface HistoryWorkoutPost {
   like_count: number
   view_count: number
   caption: string | null
+  thumbnail_url?: string | null
 }
 
 export interface HistoryResponse {
@@ -190,6 +191,7 @@ export interface PublicPost {
   comment_count: number
   caption: string | null
   created_at: string
+  thumbnail_url?: string | null
 }
 
 export interface ActiveChallenge {
