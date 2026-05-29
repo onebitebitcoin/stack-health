@@ -545,7 +545,7 @@ export default function UploadPage() {
             onClick={() => fileInputRef.current?.click()}
             className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-theme-border p-12 text-theme-muted transition-colors hover:border-accent hover:text-accent"
           >
-            <Upload size={48} strokeWidth={1.5} />
+            <LogoMark size={48} />
             <span>영상을 선택하세요</span>
             <span className="text-xs">5~30초, 최대 50MB</span>
           </button>
