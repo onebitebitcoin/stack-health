@@ -68,6 +68,8 @@ def run_image_merge(job: dict) -> dict:
             fps_raw = dims[2].strip() if len(dims) >= 3 else "30/1"
             num, den = (int(x) for x in fps_raw.split("/"))
             fps_val = num / den if den else 30
+            if fps_val < 1:
+                fps_val = 30
             fps = f"{min(int(fps_val), 60)}/1"
         except Exception:
             fps = "30/1"

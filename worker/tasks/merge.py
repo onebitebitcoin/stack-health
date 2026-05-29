@@ -42,7 +42,15 @@ def _probe_duration(path: str) -> float:
         text=True,
         timeout=30,
     )
-    return float(result.stdout.strip())
+    raw = result.stdout.strip()
+    if result.returncode != 0 or not raw:
+        raise RuntimeError(
+            f"ffprobe failed (rc={result.returncode}) for {path}: {result.stderr.strip()}"
+        )
+    try:
+        return float(raw)
+    except ValueError:
+        raise RuntimeError(f"ffprobe returned non-numeric duration: {raw!r}")
 
 
 def run_merge(job: dict) -> dict:
