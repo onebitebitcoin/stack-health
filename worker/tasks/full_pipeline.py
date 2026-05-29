@@ -192,7 +192,10 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
 
 
 def _extract_thumbnail(r2, video_key: str) -> str | None:
-    """mp4 첫 프레임(1초 지점)을 JPEG로 추출해 R2에 업로드. 실패 시 None 반환."""
+    """mp4 첫 프레임을 320px JPEG로 추출 (30KB 이하 보장) 후 R2에 업로드."""
+    import io as _io
+    from PIL import Image as _Image
+
     tmp_video = tmp_thumb = None
     try:
         tmp_video = _make_tmp(".mp4")
@@ -211,8 +214,8 @@ def _extract_thumbnail(r2, video_key: str) -> str | None:
                 "-ss", str(seek),
                 "-i", tmp_video,
                 "-vframes", "1",
-                "-vf", "scale=480:-2",
-                "-q:v", "3",
+                "-vf", "scale=320:-2",
+                "-q:v", "5",
                 tmp_thumb,
             ],
             capture_output=True,
@@ -221,15 +224,24 @@ def _extract_thumbnail(r2, video_key: str) -> str | None:
         if result.returncode != 0 or not os.path.getsize(tmp_thumb):
             raise RuntimeError(f"ffmpeg thumbnail: {result.stderr.decode()[:300]}")
 
+        # Pillow로 30KB 이하 보장 (품질 단계적 감소)
+        img = _Image.open(tmp_thumb).convert("RGB")
+        buf = _io.BytesIO()
+        for quality in (75, 60, 50):
+            buf = _io.BytesIO()
+            img.save(buf, format="JPEG", quality=quality, optimize=True)
+            if buf.tell() <= 30 * 1024:
+                break
+        buf.seek(0)
+
         thumb_key = f"thumbnails/t-{uuid.uuid4()}.jpg"
-        with open(tmp_thumb, "rb") as f:
-            r2.put_object(
-                Bucket=R2_BUCKET_NAME,
-                Key=thumb_key,
-                Body=f,
-                ContentType="image/jpeg",
-                CacheControl="public, max-age=31536000, immutable",
-            )
+        r2.put_object(
+            Bucket=R2_BUCKET_NAME,
+            Key=thumb_key,
+            Body=buf,
+            ContentType="image/jpeg",
+            CacheControl="public, max-age=31536000, immutable",
+        )
         return thumb_key
     except Exception as e:
         logger.warning("Thumbnail extraction failed: %s", e)
