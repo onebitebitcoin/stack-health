@@ -54,5 +54,7 @@ class PostSchema(BaseModel):
     workout_end: str | None = None
     share_token: str = ""
     thumbnail_url: str | None = None
+    avatar_url: str | None = None
+    profile_color: str | None = None
 
     model_config = {"from_attributes": True}
