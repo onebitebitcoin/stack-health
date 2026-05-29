@@ -130,7 +130,7 @@ function Layout() {
         <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
-        <Route path="/:shareToken" element={<SharedVideoPage />} />
+        <Route path="/shorts/:shareToken" element={<SharedVideoPage />} />
       </Routes>
       </div>
       {!hideNav && !isFlutter && <BottomNav />}

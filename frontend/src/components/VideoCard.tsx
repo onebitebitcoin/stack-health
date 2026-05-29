@@ -228,7 +228,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         <button
           onClick={(e) => {
             e.stopPropagation()
-            const shareUrl = `${window.location.origin}/${post.share_token}`
+            const shareUrl = `${window.location.origin}/shorts/${post.share_token}`
             const shareTitle = 'Stack Health'
             const shareText = '같이 운동하고 비트코인 모으자'
             if (typeof navigator !== 'undefined' && 'share' in navigator) {
