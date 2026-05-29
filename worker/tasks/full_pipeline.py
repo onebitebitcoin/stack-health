@@ -191,6 +191,49 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
 
 
 
+def _extract_thumbnail(r2, video_key: str) -> str | None:
+    """mp4 첫 프레임(1초 지점)을 JPEG로 추출해 R2에 업로드. 실패 시 None 반환."""
+    tmp_video = tmp_thumb = None
+    try:
+        tmp_video = _make_tmp(".mp4")
+        tmp_thumb = _make_tmp(".jpg")
+
+        resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=video_key)
+        with open(tmp_video, "wb") as f:
+            f.write(resp["Body"].read())
+
+        duration = _probe_video_duration(tmp_video)
+        seek = min(1.0, duration * 0.1) if duration > 0 else 0.0
+
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-ss", str(seek),
+                "-i", tmp_video,
+                "-vframes", "1",
+                "-vf", "scale=640:-2",
+                "-q:v", "5",
+                tmp_thumb,
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != 0 or not os.path.getsize(tmp_thumb):
+            raise RuntimeError(f"ffmpeg thumbnail: {result.stderr.decode()[:300]}")
+
+        thumb_key = f"thumbnails/t-{uuid.uuid4()}.jpg"
+        with open(tmp_thumb, "rb") as f:
+            r2.put_object(Bucket=R2_BUCKET_NAME, Key=thumb_key, Body=f, ContentType="image/jpeg")
+        return thumb_key
+    except Exception as e:
+        logger.warning("Thumbnail extraction failed: %s", e)
+        return None
+    finally:
+        for tmp in [tmp_video, tmp_thumb]:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
+
+
 def _compress_video(r2, video_key: str) -> tuple[str, int, int, dict] | None:
     """Re-encode video to reduce file size (CRF 28, ultrafast).
     Returns (compressed_key, pre_bytes, post_bytes, video_meta) or None if no benefit / failure.
@@ -342,6 +385,13 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
 
     if status_callback:
+        status_callback("thumbnail")
+    thumb_key = _extract_thumbnail(r2, current_key)
+    thumbnail_cdn_url: str | None = f"{R2_PUBLIC_URL}/{thumb_key}" if thumb_key else None
+    if thumb_key:
+        logger.info("[full-pipeline] job=%s thumbnail → %s", job_id, thumb_key)
+
+    if status_callback:
         status_callback("db_save")
     db = SessionLocal()
     try:
@@ -373,6 +423,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             workout_start=job.get("workout_start"),
             workout_end=job.get("workout_end"),
             proof_image_url=final_proof_url,
+            thumbnail_url=thumbnail_cdn_url,
             share_token=_generate_share_token(user_id),
         )
         db.add(post)

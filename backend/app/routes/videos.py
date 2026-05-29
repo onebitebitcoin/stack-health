@@ -160,6 +160,7 @@ def confirm_upload(
         workout_start=post.workout_start,
         workout_end=post.workout_end,
         share_token=post.share_token,
+        thumbnail_url=post.thumbnail_url,
     )
     return {"data": {"post": post_schema, "points_earned": points_earned}}
 
@@ -245,6 +246,7 @@ def my_posts(
                 workout_start=post.workout_start,
                 workout_end=post.workout_end,
                 share_token=post.share_token,
+                thumbnail_url=post.thumbnail_url,
             )
         )
     return {"data": {"posts": result, "has_more": has_more, "week_offset": week_offset}}
@@ -289,7 +291,7 @@ def get_post_by_share_token(
         workout_start=post.workout_start,
         workout_end=post.workout_end,
         share_token=post.share_token,
-        thumbnail_url=post.proof_image_url,
+        thumbnail_url=post.thumbnail_url,
     )
     return {"data": {"post": post_schema}}
 
@@ -329,6 +331,7 @@ def get_post(
         workout_start=post.workout_start,
         workout_end=post.workout_end,
         share_token=post.share_token,
+        thumbnail_url=post.thumbnail_url,
     )
     return {"data": {"post": post_schema}}
 
