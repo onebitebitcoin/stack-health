@@ -45,7 +45,7 @@ export default function SharedVideoPage() {
     if (!post) return
 
     const title = `@${post.username} - Stack Health`
-    const description = post.caption ?? '같이 운동하고 비트코인 모으자'
+    const description = post.caption ?? '나의 운동을 기록하자'
     const image = post.thumbnail_url ?? `${window.location.origin}/og-image.png`
 
     document.title = title
@@ -61,7 +61,7 @@ export default function SharedVideoPage() {
     setMetaName('twitter:card', 'player')
 
     return () => {
-      document.title = 'Stack Health | 운동하고 비트코인 모으자'
+      document.title = 'Stack Health | 나의 운동을 기록하자'
     }
   }, [post])
 

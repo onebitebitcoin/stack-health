@@ -421,7 +421,7 @@ export default function UploadPage() {
 
   // ── Done screen ──
   if (done) {
-    const shareText = '같이 운동하고 비트코인 모으자'
+    const shareText = '나의 운동을 기록하자'
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
         <div className="w-full max-w-sm rounded-2xl bg-theme-surface p-6">

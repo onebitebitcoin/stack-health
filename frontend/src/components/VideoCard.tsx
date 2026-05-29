@@ -230,7 +230,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
             e.stopPropagation()
             const shareUrl = `${window.location.origin}/shorts/${post.share_token}`
             const shareTitle = 'Stack Health'
-            const shareText = '같이 운동하고 비트코인 모으자'
+            const shareText = '나의 운동을 기록하자'
             if (typeof navigator !== 'undefined' && 'share' in navigator) {
               navigator.share({ title: shareTitle, text: shareText, url: shareUrl }).catch((err) => {
                 if (err instanceof DOMException && err.name === 'AbortError') return

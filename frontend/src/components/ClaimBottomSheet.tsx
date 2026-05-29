@@ -58,7 +58,7 @@ export default function ClaimBottomSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-theme-primary">비트코인 받기</h2>
+          <h2 className="text-lg font-bold text-theme-primary">보상 받기</h2>
           <button onClick={onClose}>
             <X size={20} className="text-theme-muted" />
           </button>

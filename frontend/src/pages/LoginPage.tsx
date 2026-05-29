@@ -164,7 +164,7 @@ export default function LoginPage() {
         <LogoMark aria-label="Stack Health 로고" role="img" size={40} />
       </div>
       <p className="mb-1 text-2xl font-bold text-accent">Stack Health</p>
-      <p className="mb-8 text-sm text-theme-muted">운동하고 비트코인 모으자</p>
+      <p className="mb-8 text-sm text-theme-muted">나의 운동을 기록하자</p>
 
       {errorParam && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">
