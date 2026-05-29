@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, Check, ImagePlus, X } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, Check, ImagePlus, X, Search } from 'lucide-react'
 import LogoMark from '../components/LogoMark'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import client from '../api/client'
@@ -67,6 +67,7 @@ export default function UploadPage() {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([])
   const [caption, setCaption] = useState('')
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
+  const [challengeSearch, setChallengeSearch] = useState('')
   const [workoutStart, setWorkoutStart] = useState('')
   const [workoutEnd, setWorkoutEnd] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -578,33 +579,75 @@ export default function UploadPage() {
             ))}
           </div>
           <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지 선택 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-          <div className="flex flex-col gap-2 mb-4">
-            <button
-              onClick={() => setSelectedChallengeId(null)}
-              className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
-                selectedChallengeId === null ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
-              }`}
-            >
-              <Trophy size={16} strokeWidth={1.5} />
-              <span className="text-sm font-medium">챌린지 없음</span>
-            </button>
-            {myChallenges.map((c) => (
+
+          {/* 선택된 챌린지 표시 */}
+          {selectedChallengeId !== null && (() => {
+            const sel = myChallenges.find((c) => c.id === selectedChallengeId)
+            return sel ? (
+              <div className="flex items-center gap-2 mb-2 rounded-xl bg-accent/15 px-3 py-2">
+                <Trophy size={13} className="text-accent flex-shrink-0" />
+                <span className="text-sm font-medium text-accent flex-1 truncate">{sel.title}</span>
+                <button onClick={() => setSelectedChallengeId(null)} className="text-accent/60 flex-shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : null
+          })()}
+
+          {/* 검색 입력 */}
+          <div className="relative mb-2">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted pointer-events-none" />
+            <input
+              type="text"
+              value={challengeSearch}
+              onChange={(e) => setChallengeSearch(e.target.value)}
+              placeholder="챌린지 검색..."
+              className="w-full rounded-xl bg-theme-surface pl-8 pr-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
+            />
+            {challengeSearch && (
+              <button onClick={() => setChallengeSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* 챌린지 목록 */}
+          <div className="flex flex-col gap-1.5 mb-4 max-h-52 overflow-y-auto">
+            {/* 챌린지 없음 — 검색어 없을 때만 표시 */}
+            {!challengeSearch && (
               <button
-                key={c.id}
-                onClick={() => setSelectedChallengeId(c.id)}
-                className={`flex items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
-                  selectedChallengeId === c.id ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
+                onClick={() => setSelectedChallengeId(null)}
+                className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                  selectedChallengeId === null ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
                 }`}
               >
-                <Trophy size={16} strokeWidth={1.5} className="mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">{c.title}</p>
-                  <p className={`text-xs mt-0.5 ${selectedChallengeId === c.id ? 'text-accent-fg/70' : 'text-theme-muted'}`}>
-                    {c.my_upload_count}/{c.condition_value}회 · {c.reward_title}
-                  </p>
-                </div>
+                <Trophy size={16} strokeWidth={1.5} />
+                <span className="text-sm font-medium">챌린지 없음</span>
               </button>
-            ))}
+            )}
+            {myChallenges
+              .filter((c) => !challengeSearch || c.title.toLowerCase().includes(challengeSearch.toLowerCase()))
+              .map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => { setSelectedChallengeId(c.id); setChallengeSearch('') }}
+                  className={`flex items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                    selectedChallengeId === c.id ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
+                  }`}
+                >
+                  <Trophy size={16} strokeWidth={1.5} className="mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{c.title}</p>
+                    <p className={`text-xs mt-0.5 ${selectedChallengeId === c.id ? 'text-accent-fg/70' : 'text-theme-muted'}`}>
+                      {c.my_upload_count}/{c.condition_value}회 · {c.reward_title}
+                    </p>
+                  </div>
+                </button>
+              ))
+            }
+            {challengeSearch && myChallenges.filter((c) => c.title.toLowerCase().includes(challengeSearch.toLowerCase())).length === 0 && (
+              <p className="text-sm text-theme-muted text-center py-4">검색 결과가 없습니다</p>
+            )}
           </div>
           {limitError && (
             <p className="mb-2 text-sm text-red-400 flex-shrink-0">{limitError}</p>
@@ -664,12 +707,12 @@ export default function UploadPage() {
                 </div>
               ) : !recording ? (
                 <button onClick={startRecording} className="flex h-16 w-16 items-center justify-center rounded-full bg-accent">
-                  <Mic size={26} strokeWidth={1.5} className="text-white" />
+                  <Mic size={26} strokeWidth={1.5} className="text-black" />
                 </button>
               ) : (
                 <div className="flex flex-col items-center gap-2">
                   <button onClick={stopRecording} className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
-                    <MicOff size={26} strokeWidth={1.5} className="text-white" />
+                    <MicOff size={26} strokeWidth={1.5} className="text-black" />
                   </button>
                   <span className="text-sm font-mono text-red-400">
                     {String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:{String(recordedSeconds % 60).padStart(2, '0')}
