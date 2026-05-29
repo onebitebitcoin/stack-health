@@ -22,6 +22,7 @@ class Challenge(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     creator_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_thumb_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

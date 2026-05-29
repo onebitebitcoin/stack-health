@@ -158,6 +158,7 @@ export interface Challenge {
   creator_id?: number | null
   completed_count?: number
   image_url?: string | null
+  image_thumb_url?: string | null
 }
 
 export interface ChallengeUpdateRequest {

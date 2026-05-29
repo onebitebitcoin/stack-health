@@ -39,9 +39,9 @@ function ChallengeCard({
       className="rounded-xl bg-theme-surface cursor-pointer active:opacity-80 overflow-hidden flex"
       onClick={() => onNavigate(challenge.id)}
     >
-      {challenge.image_url ? (
+      {(challenge.image_thumb_url ?? challenge.image_url) ? (
         <img
-          src={challenge.image_url}
+          src={challenge.image_thumb_url ?? challenge.image_url ?? ''}
           alt=""
           loading="lazy"
           decoding="async"

@@ -60,6 +60,7 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
         completed=completed,
         creator_id=challenge.creator_id,
         image_url=challenge.image_url,
+        image_thumb_url=challenge.image_thumb_url,
     )
 
 
@@ -140,27 +141,36 @@ async def upload_challenge_image(
 
     raw = await file.read()
     img = Image.open(io.BytesIO(raw)).convert("RGB")
-    if img.width > 800:
-        ratio = 800 / img.width
-        img = img.resize((800, int(img.height * ratio)), Image.LANCZOS)
+
+    # 원본 (최대 400×400 정방형 크롭 결과 그대로 저장)
+    if img.width > 400 or img.height > 400:
+        img = img.resize((400, 400), Image.LANCZOS)
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=75, optimize=True)
+    img.save(buf, format="JPEG", quality=80, optimize=True)
     buf.seek(0)
 
-    r2_key = f"challenges/{uuid.uuid4()}.jpg"
-    client = r2_service.get_r2_client()
-    client.put_object(
-        Bucket=app_settings.r2_bucket_name,
-        Key=r2_key,
-        Body=buf,
-        ContentType="image/jpeg",
-        CacheControl="public, max-age=31536000, immutable",
-    )
+    # 썸네일 (200×200)
+    thumb = img.resize((200, 200), Image.LANCZOS)
+    thumb_buf = io.BytesIO()
+    thumb.save(thumb_buf, format="JPEG", quality=70, optimize=True)
+    thumb_buf.seek(0)
+
+    r2 = r2_service.get_r2_client()
+    base_id = uuid.uuid4()
+    r2_key = f"challenges/{base_id}.jpg"
+    thumb_key = f"challenges/{base_id}_thumb.jpg"
+
+    cache_ctrl = "public, max-age=31536000, immutable"
+    r2.put_object(Bucket=app_settings.r2_bucket_name, Key=r2_key, Body=buf, ContentType="image/jpeg", CacheControl=cache_ctrl)
+    r2.put_object(Bucket=app_settings.r2_bucket_name, Key=thumb_key, Body=thumb_buf, ContentType="image/jpeg", CacheControl=cache_ctrl)
+
     image_url = r2_service.get_cdn_url(r2_key)
+    image_thumb_url = r2_service.get_cdn_url(thumb_key)
     challenge.image_url = image_url
+    challenge.image_thumb_url = image_thumb_url
     db.commit()
-    logger.info("Challenge image uploaded: challenge_id=%s url=%s", challenge_id, image_url)
-    return {"data": {"image_url": image_url}}
+    logger.info("Challenge image uploaded: challenge_id=%s url=%s thumb=%s", challenge_id, image_url, image_thumb_url)
+    return {"data": {"image_url": image_url, "image_thumb_url": image_thumb_url}}
 
 
 @router.get("/created")
