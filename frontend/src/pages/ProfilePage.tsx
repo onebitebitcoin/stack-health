@@ -33,6 +33,7 @@ export default function ProfilePage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   const videoItemRefs = useRef<(HTMLDivElement | null)[]>([])
+  const pendingScrollIdx = useRef<number>(0)
 
   useEffect(() => {
     videoRefs.current = videoRefs.current.slice(0, selectedPosts.length)
@@ -59,7 +60,16 @@ export default function ProfilePage() {
     )
 
     videoItemRefs.current.forEach((el) => { if (el) observer.observe(el) })
-    videoRefs.current[0]?.play().catch(() => {})
+
+    const startIdx = pendingScrollIdx.current
+    if (startIdx > 0) {
+      pendingScrollIdx.current = 0
+      requestAnimationFrame(() => {
+        videoItemRefs.current[startIdx]?.scrollIntoView()
+      })
+    } else {
+      videoRefs.current[0]?.play().catch(() => {})
+    }
 
     return () => observer.disconnect()
   }, [selectedDate, selectedPosts])
@@ -151,6 +161,13 @@ export default function ProfilePage() {
     setSelectedDate(null)
     setSelectedPosts([])
     setVideoIdx(0)
+  }
+
+  function openMyPosts(startIdx: number) {
+    pendingScrollIdx.current = startIdx
+    setSelectedDate('__my_posts__')
+    setSelectedPosts(myPosts as HistoryWorkoutPost[])
+    setVideoIdx(startIdx)
   }
 
   const totalDays = getDaysInMonth(year, month)
@@ -459,11 +476,12 @@ export default function ProfilePage() {
             className="flex gap-2 overflow-x-auto px-4 pb-1"
             style={{ scrollbarWidth: 'none' }}
           >
-            {myPosts.map((post) => (
+            {myPosts.map((post, idx) => (
               <div
                 key={post.id}
-                className="relative flex-shrink-0 overflow-hidden rounded-xl bg-theme-surface2 group"
+                className="relative flex-shrink-0 overflow-hidden rounded-xl bg-theme-surface2 group cursor-pointer active:scale-95 transition-transform"
                 style={{ width: '28vw', aspectRatio: '9/16' }}
+                onClick={() => openMyPosts(idx)}
               >
                 <video
                   src={post.cdn_url}
@@ -488,7 +506,7 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setDeleteConfirmId(post.id)}
+                  onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(post.id) }}
                   className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity active:opacity-100"
                   aria-label="삭제"
                 >
@@ -543,7 +561,7 @@ export default function ProfilePage() {
               <ArrowLeft size={20} strokeWidth={2} color="white" />
             </button>
             <span className="text-sm font-semibold text-white">
-              {selectedDate.replace(/-/g, '.')}
+              {selectedDate === '__my_posts__' ? '내 영상' : selectedDate.replace(/-/g, '.')}
             </span>
             {selectedPosts.length > 1 ? (
               <span className="text-xs text-white/70">{videoIdx + 1} / {selectedPosts.length}</span>
