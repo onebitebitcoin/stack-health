@@ -15,7 +15,7 @@ class Post(Base):
     video_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("videos.id"), unique=True, nullable=False
     )
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     caption: Mapped[str | None] = mapped_column(String(140), nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array string
     workout_start: Mapped[str | None] = mapped_column(String(5), nullable=True)  # "HH:MM"
@@ -31,6 +31,7 @@ class Post(Base):
         default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
         nullable=False,
+        index=True,
     )
 
     user: Mapped["User"] = relationship("User", back_populates="posts")  # noqa: F821

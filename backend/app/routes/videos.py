@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings as app_settings
 from app.database import get_db
@@ -193,6 +193,7 @@ def my_posts(
     base_filter = (
         db.query(Post)
         .join(Post.video)
+        .options(selectinload(Post.video))
         .filter(Post.user_id == current_user.id, Video.status == "active")
     )
 
@@ -214,11 +215,15 @@ def my_posts(
             .all()
         )
         has_more = (
-            base_filter
-            .filter(Post.created_at < week_start_utc)
-            .limit(1)
-            .count() > 0
-        )
+            db.query(Post)
+            .join(Post.video)
+            .filter(
+                Post.user_id == current_user.id,
+                Video.status == "active",
+                Post.created_at < week_start_utc,
+            )
+            .first()
+        ) is not None
 
     post_ids = [p.id for p in posts]
     comment_counts: dict[int, int] = {}
