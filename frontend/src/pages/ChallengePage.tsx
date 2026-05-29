@@ -52,14 +52,10 @@ function ChallengeCard({
       )}
 
       <div className="flex-1 min-w-0 px-3 py-2.5 flex flex-col gap-1">
-        {/* 제목 + 참여 상태 */}
+        {/* 제목 + 완료 아이콘 */}
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-semibold text-theme-primary text-sm leading-tight truncate">{challenge.title}</h3>
-          {challenge.completed ? (
-            <CheckCircle size={15} className="text-accent flex-shrink-0" />
-          ) : challenge.joined ? (
-            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-semibold text-accent flex-shrink-0">참여중</span>
-          ) : null}
+          {challenge.completed && <CheckCircle size={15} className="text-accent flex-shrink-0" />}
         </div>
 
         {/* 설명 요약 */}
