@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { InfiniteData } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Droplets, ShieldCheck, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, MessageCircle, ArrowLeft, Award, Trash2,
@@ -99,39 +98,25 @@ export default function ProfilePage() {
   const {
     data: myPostsData,
     isLoading: myPostsLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery<MyPostsPage>({
+  } = useQuery<MyPostsPage>({
     queryKey: ['my-posts'],
-    queryFn: async ({ pageParam }) => {
+    queryFn: async () => {
       const res = await client.get<{ data: MyPostsPage }>('/videos/my-posts', {
-        params: { week_offset: pageParam as number },
+        params: { all: true },
       })
       return res.data.data
     },
-    initialPageParam: 0,
-    getNextPageParam: (last) => last.has_more ? last.week_offset + 1 : undefined,
     enabled: !!user,
   })
 
-  const myPosts = myPostsData?.pages.flatMap((p) => p.posts) ?? []
+  const myPosts = myPostsData?.posts ?? []
 
   const deleteMutation = useMutation({
     mutationFn: (postId: number) => client.delete(`/videos/posts/${postId}`),
     onSuccess: (_, postId) => {
-      queryClient.setQueryData<InfiniteData<MyPostsPage>>(
+      queryClient.setQueryData<MyPostsPage>(
         ['my-posts'],
-        (old) => {
-          if (!old) return old
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              posts: page.posts.filter((p) => p.id !== postId),
-            })),
-          }
-        }
+        (old) => old ? { ...old, posts: old.posts.filter((p) => p.id !== postId) } : old
       )
       queryClient.invalidateQueries({ queryKey: ['history'] })
       queryClient.invalidateQueries({ queryKey: ['my-stats'] })
@@ -577,19 +562,6 @@ export default function ProfilePage() {
                 </button>
               </div>
             ))}
-            {hasNextPage && (
-              <button
-                onClick={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
-                className="flex-shrink-0 flex flex-col items-center justify-center gap-1.5 rounded-xl bg-theme-surface text-theme-muted disabled:opacity-50"
-                style={{ width: '20vw', aspectRatio: '9/16' }}
-              >
-                <ChevronRight size={20} />
-                <span className="text-[10px] font-medium">
-                  {isFetchingNextPage ? '...' : '더보기'}
-                </span>
-              </button>
-            )}
           </div>
         )}
       </div>

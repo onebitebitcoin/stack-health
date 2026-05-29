@@ -186,34 +186,39 @@ def get_daily_limit(
 @router.get("/my-posts")
 def my_posts(
     week_offset: int = Query(0, ge=0),
+    all: bool = Query(False),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    KST = timezone(timedelta(hours=9))
-    now_kst = datetime.now(KST)
-    monday_kst = now_kst.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=now_kst.weekday())
-    week_start_kst = monday_kst - timedelta(weeks=week_offset)
-    week_end_kst = week_start_kst + timedelta(weeks=1)
-    week_start_utc = week_start_kst.astimezone(timezone.utc)
-    week_end_utc = week_end_kst.astimezone(timezone.utc)
-
     base_filter = (
         db.query(Post)
         .join(Post.video)
         .filter(Post.user_id == current_user.id, Video.status == "active")
     )
-    posts = (
-        base_filter
-        .filter(Post.created_at >= week_start_utc, Post.created_at < week_end_utc)
-        .order_by(Post.created_at.desc())
-        .all()
-    )
-    has_more = (
-        base_filter
-        .filter(Post.created_at < week_start_utc)
-        .limit(1)
-        .count() > 0
-    )
+
+    if all:
+        posts = base_filter.order_by(Post.created_at.desc()).all()
+        has_more = False
+    else:
+        KST = timezone(timedelta(hours=9))
+        now_kst = datetime.now(KST)
+        monday_kst = now_kst.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=now_kst.weekday())
+        week_start_kst = monday_kst - timedelta(weeks=week_offset)
+        week_end_kst = week_start_kst + timedelta(weeks=1)
+        week_start_utc = week_start_kst.astimezone(timezone.utc)
+        week_end_utc = week_end_kst.astimezone(timezone.utc)
+        posts = (
+            base_filter
+            .filter(Post.created_at >= week_start_utc, Post.created_at < week_end_utc)
+            .order_by(Post.created_at.desc())
+            .all()
+        )
+        has_more = (
+            base_filter
+            .filter(Post.created_at < week_start_utc)
+            .limit(1)
+            .count() > 0
+        )
 
     post_ids = [p.id for p in posts]
     comment_counts: dict[int, int] = {}
