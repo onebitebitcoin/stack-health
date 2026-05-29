@@ -159,11 +159,13 @@ export default function ChallengeDetailPage() {
 
       {/* 이미지 */}
       {challenge.image_url && (
-        <div className="mx-4 mb-4 rounded-2xl overflow-hidden">
+        <div className="mx-4 mb-4 rounded-2xl overflow-hidden bg-theme-surface2 aspect-square">
           <img
             src={challenge.image_url}
             alt=""
-            className="w-full aspect-square object-cover"
+            loading="eager"
+            decoding="async"
+            className="w-full h-full object-cover"
           />
         </div>
       )}

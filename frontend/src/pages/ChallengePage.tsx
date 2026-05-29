@@ -39,12 +39,16 @@ function ChallengeCard({
       className="rounded-xl bg-theme-surface cursor-pointer active:opacity-80 overflow-hidden flex"
       onClick={() => onNavigate(challenge.id)}
     >
-      {challenge.image_url && (
+      {challenge.image_url ? (
         <img
           src={challenge.image_url}
           alt=""
+          loading="lazy"
+          decoding="async"
           className="w-24 flex-shrink-0 object-cover self-stretch"
         />
+      ) : (
+        <div className="w-24 flex-shrink-0 bg-theme-surface2 self-stretch" />
       )}
 
       <div className="flex-1 min-w-0 px-3 py-2.5 flex flex-col gap-1">
