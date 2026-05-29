@@ -67,6 +67,7 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
 def list_challenges(
     q: str | None = Query(None),
     category: str | None = Query(None),
+    joined: bool | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ) -> dict:
@@ -77,6 +78,17 @@ def list_challenges(
     if category:
         challenges = [c for c in challenges if category in (c.categories or [])]
     uid = current_user.id if current_user else None
+    if joined is not None and uid:
+        joined_ids = set(
+            db.query(ChallengeParticipation.challenge_id)
+            .filter(ChallengeParticipation.user_id == uid)
+            .scalars()
+            .all()
+        )
+        if joined:
+            challenges = [c for c in challenges if c.id in joined_ids]
+        else:
+            challenges = [c for c in challenges if c.id not in joined_ids]
     return {"data": {"challenges": [_to_schema(c, uid, db) for c in challenges]}}
 
 

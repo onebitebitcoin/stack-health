@@ -265,7 +265,7 @@ export default function ChallengeCreatePage() {
 
         {/* 설명 */}
         <div>
-          <label className="block text-xs text-theme-muted mb-1">설명</label>
+          <label className="block text-xs text-theme-muted mb-1">설명 <span className="text-red-400">*</span></label>
           <textarea
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
@@ -348,7 +348,7 @@ export default function ChallengeCreatePage() {
         {/* 제출 버튼 */}
         <button
           onClick={() => mutation.mutate()}
-          disabled={mutation.isPending || !form.title || !form.reward_title || !form.start_date || !form.end_date}
+          disabled={mutation.isPending || !form.title || !form.description || !form.reward_title || !form.start_date || !form.end_date}
           className="mt-6 mb-4 rounded-2xl bg-accent py-4 text-sm font-semibold text-accent-fg disabled:opacity-50"
         >
           {mutation.isPending ? '생성 중...' : '챌린지 만들기'}
