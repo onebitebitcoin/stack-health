@@ -33,6 +33,8 @@ def list_comments(post_id: int, db: Session = Depends(get_db)) -> dict:
             "post_id": c.post_id,
             "user_id": c.user_id,
             "username": c.user.username if c.user else "",
+            "avatar_url": c.user.avatar_url if c.user else None,
+            "profile_color": (c.user.app_settings or {}).get("profile_color") if c.user else None,
             "content": c.content,
             "created_at": c.created_at.isoformat(),
         }
@@ -69,6 +71,8 @@ def create_comment(
         "post_id": comment.post_id,
         "user_id": comment.user_id,
         "username": current_user.username,
+        "avatar_url": current_user.avatar_url,
+        "profile_color": (current_user.app_settings or {}).get("profile_color"),
         "content": comment.content,
         "created_at": comment.created_at.isoformat(),
     }}}

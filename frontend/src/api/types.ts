@@ -100,6 +100,8 @@ export interface Comment {
   post_id: number
   user_id: number
   username: string
+  avatar_url: string | null
+  profile_color: string | null
   content: string
   created_at: string
 }

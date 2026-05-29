@@ -5,6 +5,7 @@ import type { InfiniteData } from '@tanstack/react-query'
 import client from '../api/client'
 import type { Comment, FeedResponse } from '../api/types'
 import { useAuthStore } from '../store/auth'
+import UserAvatar from './UserAvatar'
 
 interface CommentSheetProps {
   postId: number
@@ -140,9 +141,13 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
           )}
           {comments.map((c) => (
             <div key={c.id} className="flex items-start gap-2">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg text-xs font-bold">
-                {c.username.charAt(0).toUpperCase()}
-              </div>
+              <UserAvatar
+                username={c.username}
+                avatarUrl={c.avatar_url}
+                profileColor={c.profile_color}
+                size={28}
+                className="shrink-0 mt-0.5"
+              />
               <div className="flex-1">
                 <span className="text-xs font-semibold text-zinc-300">@{c.username}</span>
                 <p className="text-sm text-white mt-0.5 break-words">{c.content}</p>
