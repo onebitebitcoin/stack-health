@@ -20,7 +20,6 @@ from config import (
     R2_PUBLIC_URL,
     R2_SECRET_ACCESS_KEY,
 )
-from notify import notify_video_failure
 from tasks.image_merge import run_image_merge
 
 logger = logging.getLogger(__name__)
@@ -59,6 +58,28 @@ def _make_tmp(suffix: str) -> str:
         return f.name
 
 
+def _probe_video_duration(path: str) -> float:
+    """ffprobe로 비디오 파일의 길이(초)를 반환. 실패하면 0.0."""
+    for extra in [
+        ["-select_streams", "v:0", "-show_entries", "stream=duration"],
+        ["-show_entries", "format=duration"],
+    ]:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error"] + extra + ["-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            raw = result.stdout.strip()
+            if raw and raw != "N/A":
+                try:
+                    val = float(raw)
+                    if val > 0:
+                        return val
+                except ValueError:
+                    pass
+    return 0.0
+
+
 def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suffix: str) -> str | None:
     """Audio+video merge. Returns merged r2_key or None on failure."""
     tmp_video = tmp_audio = tmp_output = None
@@ -75,20 +96,36 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
         with open(tmp_audio, "wb") as f:
             f.write(resp["Body"].read())
 
-        result = subprocess.run(
-            [
+        video_duration = _probe_video_duration(tmp_video)
+        output_duration = max(video_duration, duration) if video_duration > 0 else duration
+        logger.info("audio_merge: video=%.2fs audio=%.2fs output=%.2fs", video_duration, duration, output_duration)
+
+        if video_duration > 0 and video_duration >= duration:
+            # video가 더 길거나 같음: audio를 루프, video는 copy
+            cmd = [
                 "ffmpeg", "-y",
-                "-stream_loop", "-1", "-i", tmp_video,
-                "-i", tmp_audio,
-                "-t", str(duration),
+                "-i", tmp_video,
+                "-stream_loop", "-1", "-i", tmp_audio,
+                "-t", str(video_duration),
                 "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-ar", "48000", "-ac", "2",
                 "-map", "0:v:0", "-map", "1:a:0",
                 "-movflags", "+faststart",
                 tmp_output,
-            ],
-            capture_output=True,
-            timeout=120,
-        )
+            ]
+        else:
+            # audio가 더 길거나 probe 실패: video를 루프, audio는 그대로
+            cmd = [
+                "ffmpeg", "-y",
+                "-stream_loop", "-1", "-i", tmp_video,
+                "-i", tmp_audio,
+                "-t", str(output_duration),
+                "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-ar", "48000", "-ac", "2",
+                "-map", "0:v:0", "-map", "1:a:0",
+                "-movflags", "+faststart",
+                tmp_output,
+            ]
+
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
         if result.returncode != 0:
             raise RuntimeError(f"ffmpeg audio merge: {result.stderr.decode()[:500]}")
 
@@ -208,7 +245,8 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
 
     audio_r2_key: str | None = job.get("audio_r2_key")
     if audio_r2_key:
-        if status_callback: status_callback("audio_merge")
+        if status_callback:
+            status_callback("audio_merge")
         audio_content_type = job.get("audio_content_type", "audio/webm")
         audio_suffix = ".mp4" if audio_content_type == "audio/mp4" else ".webm"
         merged = _audio_merge(r2, current_key, audio_r2_key, float(job.get("audio_duration_sec", 0)), audio_suffix)
@@ -219,7 +257,8 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
 
     proof_r2_key: str | None = job.get("proof_r2_key")
     if proof_r2_key:
-        if status_callback: status_callback("image_merge")
+        if status_callback:
+            status_callback("image_merge")
         final_proof_url = f"{R2_PUBLIC_URL}/{proof_r2_key}"
         try:
             merge_result = run_image_merge({"video_r2_key": current_key, "proof_r2_key": proof_r2_key})
@@ -238,7 +277,8 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     post_size_bytes: int = 0
     video_meta: dict = {}
     compressed_key: str | None = None
-    if status_callback: status_callback("compress")
+    if status_callback:
+        status_callback("compress")
     compress_result = _compress_video(r2, current_key)
     if compress_result:
         compressed_key, pre_size_bytes, post_size_bytes, video_meta = compress_result
@@ -249,7 +289,8 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         current_key = compressed_key
         logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
 
-    if status_callback: status_callback("db_save")
+    if status_callback:
+        status_callback("db_save")
     db = SessionLocal()
     try:
 

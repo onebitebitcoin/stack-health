@@ -30,27 +30,33 @@ def _get_r2_client():
 
 
 def _probe_duration(path: str) -> float:
-    """ffprobe로 미디어 파일의 길이(초)를 반환한다."""
-    result = subprocess.run(
-        [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            path,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    raw = result.stdout.strip()
-    if result.returncode != 0 or not raw:
-        raise RuntimeError(
-            f"ffprobe failed (rc={result.returncode}) for {path}: {result.stderr.strip()}"
-        )
-    try:
-        return float(raw)
-    except ValueError:
-        raise RuntimeError(f"ffprobe returned non-numeric duration: {raw!r}")
+    """ffprobe로 미디어 파일의 길이(초)를 반환한다.
+
+    video stream → format → audio stream 순서로 시도한다.
+    """
+    probe_cmds = [
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", path],
+        ["ffprobe", "-v", "error",
+         "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", path],
+        ["ffprobe", "-v", "error", "-select_streams", "a:0",
+         "-show_entries", "stream=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", path],
+    ]
+    for cmd in probe_cmds:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            raw = result.stdout.strip()
+            if raw and raw != "N/A":
+                try:
+                    val = float(raw)
+                    if val > 0:
+                        return val
+                except ValueError:
+                    continue
+    raise RuntimeError(f"ffprobe: cannot determine duration of {path}")
 
 
 def run_merge(job: dict) -> dict:
@@ -87,23 +93,42 @@ def run_merge(job: dict) -> dict:
         output_duration = max(video_duration, audio_duration)
         logger.info("video=%.2fs audio=%.2fs output=%.2fs", video_duration, audio_duration, output_duration)
 
-        cmd = [
-            "ffmpeg", "-y",
-            "-stream_loop", "-1",
-            "-i", tmp_video,
-            "-stream_loop", "-1",
-            "-i", tmp_audio,
-            "-t", str(output_duration),
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-b:a", "256k",
-            "-ar", "48000",
-            "-ac", "2",
-            "-map", "0:v:0",
-            "-map", "1:a:0",
-            "-movflags", "+faststart",
-            tmp_output,
-        ]
+        if video_duration >= audio_duration:
+            # video가 더 길거나 같음: audio를 루프, video는 copy
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", tmp_video,
+                "-stream_loop", "-1",
+                "-i", tmp_audio,
+                "-t", str(video_duration),
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "256k",
+                "-ar", "48000",
+                "-ac", "2",
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                "-movflags", "+faststart",
+                tmp_output,
+            ]
+        else:
+            # audio가 더 길음: video를 루프, audio는 그대로
+            cmd = [
+                "ffmpeg", "-y",
+                "-stream_loop", "-1",
+                "-i", tmp_video,
+                "-i", tmp_audio,
+                "-t", str(audio_duration),
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "256k",
+                "-ar", "48000",
+                "-ac", "2",
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                "-movflags", "+faststart",
+                tmp_output,
+            ]
         result = subprocess.run(cmd, capture_output=True, timeout=120)
         if result.returncode != 0:
             raise RuntimeError(f"ffmpeg failed: {result.stderr.decode()}")

@@ -429,7 +429,7 @@ def test_get_post_by_share_token(mock_cdn, client: TestClient) -> None:
 
 @patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/share.mp4")
 def test_get_post_by_share_token_not_found(mock_cdn, client: TestClient) -> None:
-    token = _register_and_token(client, "share2@x.com", "share2user")
+    _register_and_token(client, "share2@x.com", "share2user")
     res = client.get("/api/v1/videos/posts/share/nonexistenttoken")
     assert res.status_code == 404
 
@@ -451,7 +451,7 @@ def test_get_post_by_id(mock_cdn, client: TestClient) -> None:
 
 @patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/gp2.mp4")
 def test_get_post_by_id_not_found(mock_cdn, client: TestClient) -> None:
-    token = _register_and_token(client, "getpost2@x.com", "getpost2user")
+    _register_and_token(client, "getpost2@x.com", "getpost2user")
     res = client.get("/api/v1/videos/posts/999999")
     assert res.status_code == 404
 
