@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import secrets
 import subprocess
 import tempfile
@@ -80,6 +81,45 @@ def _probe_video_duration(path: str) -> float:
     return 0.0
 
 
+def _probe_audio_duration(path: str) -> float:
+    """오디오 파일의 실제 길이(초)를 반환. 컨테이너 메타 → 디코드 패스 순으로 시도, 실패하면 0.0.
+
+    MediaRecorder가 만든 webm은 컨테이너에 duration이 기록되지 않아 메타 probe가 N/A를 반환한다.
+    그 경우 디코드 패스(ffmpeg -f null)로 실제 재생 길이를 측정한다.
+    """
+    for extra in (
+        ["-show_entries", "format=duration"],
+        ["-select_streams", "a:0", "-show_entries", "stream=duration"],
+    ):
+        result = subprocess.run(
+            ["ffprobe", "-v", "error"] + extra + ["-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            raw = result.stdout.strip()
+            if raw and raw != "N/A":
+                try:
+                    val = float(raw)
+                    if val > 0:
+                        return val
+                except ValueError:
+                    pass
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-i", path, "-f", "null", "-"],
+            capture_output=True, text=True, timeout=60,
+        )
+        matches = re.findall(r"time=(\d+):(\d+):(\d+(?:\.\d+)?)", result.stderr)
+        if matches:
+            h, m, s = matches[-1]
+            total = int(h) * 3600 + int(m) * 60 + float(s)
+            if total > 0:
+                return total
+    except Exception:
+        pass
+    return 0.0
+
+
 def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suffix: str) -> str | None:
     """Audio+video merge. Returns merged r2_key or None on failure."""
     tmp_video = tmp_audio = tmp_output = None
@@ -97,10 +137,17 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
             f.write(resp["Body"].read())
 
         video_duration = _probe_video_duration(tmp_video)
-        output_duration = max(video_duration, duration) if video_duration > 0 else duration
-        logger.info("audio_merge: video=%.2fs audio=%.2fs output=%.2fs", video_duration, duration, output_duration)
+        probed_audio = _probe_audio_duration(tmp_audio)
+        # 클라이언트가 보낸 audio_duration_sec(1초 단위 카운터)는 부정확하므로 실제 오디오를 probe한다.
+        # probe 실패 시에만 클라이언트 값으로 fallback.
+        audio_duration = probed_audio if probed_audio > 0 else duration
+        output_duration = max(video_duration, audio_duration) if video_duration > 0 else audio_duration
+        logger.info(
+            "audio_merge: video=%.2fs audio=%.2fs(probed=%.2f client=%.2f) output=%.2fs",
+            video_duration, audio_duration, probed_audio, duration, output_duration,
+        )
 
-        if video_duration > 0 and video_duration >= duration:
+        if video_duration > 0 and video_duration >= audio_duration:
             # video가 더 길거나 같음: audio를 루프, video는 copy
             cmd = [
                 "ffmpeg", "-y",
@@ -171,7 +218,7 @@ def _compress_video(r2, video_key: str) -> tuple[str, int, int, dict] | None:
             "ffmpeg", "-y",
             "-i", tmp_input,
             "-vf", vf,
-            "-vcodec", "libx264", "-crf", "28", "-preset", "ultrafast",
+            "-vcodec", "libx264", "-crf", "28", "-preset", "veryfast",
             "-pix_fmt", "yuv420p",
         ]
         cmd += ["-c:a", "aac", "-b:a", "96k"] if has_audio else ["-an"]
@@ -242,6 +289,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
 
     has_audio_merged = False
     has_image_merged = False
+    audio_merge_failed = False
 
     audio_r2_key: str | None = job.get("audio_r2_key")
     if audio_r2_key:
@@ -254,6 +302,10 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             current_key = merged
             has_audio_merged = True
             logger.info("[full-pipeline] job=%s audio merged → %s", job_id, current_key)
+        else:
+            # 오디오 머지 실패를 추적해 알림/잡 상태로 노출(조용한 보이스오버 유실 방지)
+            audio_merge_failed = True
+            logger.warning("[full-pipeline] job=%s 오디오 머지 실패 — 오디오 없이 진행", job_id)
 
     proof_r2_key: str | None = job.get("proof_r2_key")
     if proof_r2_key:
@@ -362,6 +414,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             "post_size_bytes": post_size_bytes,
             "video_meta": video_meta,
             "merge_type": merge_type,
+            "audio_merge_failed": audio_merge_failed,
         }
     except Exception:
         # DB 실패 시 압축된 c- 파일이 R2에 고아로 남지 않도록 정리

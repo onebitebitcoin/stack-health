@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import uuid
@@ -59,11 +60,50 @@ def _probe_duration(path: str) -> float:
     raise RuntimeError(f"ffprobe: cannot determine duration of {path}")
 
 
+def _probe_audio_duration(path: str) -> float:
+    """오디오 파일의 실제 길이(초). 컨테이너 메타 → 디코드 패스 순으로 시도, 실패하면 0.0.
+
+    MediaRecorder webm은 컨테이너에 duration이 없어 메타 probe가 N/A를 반환하므로
+    디코드 패스(ffmpeg -f null) fallback이 필요하다.
+    """
+    for extra in (
+        ["-show_entries", "format=duration"],
+        ["-select_streams", "a:0", "-show_entries", "stream=duration"],
+    ):
+        result = subprocess.run(
+            ["ffprobe", "-v", "error"] + extra + ["-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            raw = result.stdout.strip()
+            if raw and raw != "N/A":
+                try:
+                    val = float(raw)
+                    if val > 0:
+                        return val
+                except ValueError:
+                    pass
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-i", path, "-f", "null", "-"],
+            capture_output=True, text=True, timeout=60,
+        )
+        matches = re.findall(r"time=(\d+):(\d+):(\d+(?:\.\d+)?)", result.stderr)
+        if matches:
+            h, m, s = matches[-1]
+            total = int(h) * 3600 + int(m) * 60 + float(s)
+            if total > 0:
+                return total
+    except Exception:
+        pass
+    return 0.0
+
+
 def run_merge(job: dict) -> dict:
     """R2에서 video와 audio를 다운로드하고 ffmpeg으로 병합 후 R2에 업로드한다."""
     video_r2_key: str = job["video_r2_key"]
     audio_r2_key: str = job["audio_r2_key"]
-    audio_duration: float = float(job["audio_duration_sec"])
+    client_audio_duration: float = float(job["audio_duration_sec"])
     audio_content_type: str = job.get("audio_content_type", "audio/webm")
 
     audio_suffix = ".mp4" if audio_content_type == "audio/mp4" else ".webm"
@@ -90,8 +130,14 @@ def run_merge(job: dict) -> dict:
             f.write(response["Body"].read())
 
         video_duration = _probe_duration(tmp_video)
+        # 실제 오디오를 probe하고, 실패 시에만 클라이언트 값으로 fallback.
+        probed_audio = _probe_audio_duration(tmp_audio)
+        audio_duration = probed_audio if probed_audio > 0 else client_audio_duration
         output_duration = max(video_duration, audio_duration)
-        logger.info("video=%.2fs audio=%.2fs output=%.2fs", video_duration, audio_duration, output_duration)
+        logger.info(
+            "video=%.2fs audio=%.2fs(probed=%.2f client=%.2f) output=%.2fs",
+            video_duration, audio_duration, probed_audio, client_audio_duration, output_duration,
+        )
 
         if video_duration >= audio_duration:
             # video가 더 길거나 같음: audio를 루프, video는 copy

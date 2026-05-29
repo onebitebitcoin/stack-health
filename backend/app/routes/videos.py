@@ -690,6 +690,7 @@ def get_upload_job_status(
             "cdn_url": job.get("cdn_url", ""),
             "post_id": job.get("post_id", ""),
             "points_earned": points_earned,
+            "audio_merge_failed": job.get("audio_merge_failed", "") == "True",
             "error": job.get("error", ""),
         }
     }
