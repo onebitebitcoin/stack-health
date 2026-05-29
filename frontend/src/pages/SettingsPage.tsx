@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [lnInput, setLnInput] = useState(user?.lightning_address ?? '')
   const [saving, setSaving] = useState(false)
   const [lnSaved, setLnSaved] = useState(false)
+  const [lnError, setLnError] = useState('')
 
   const [editingUsername, setEditingUsername] = useState(false)
   const [usernameInput, setUsernameInput] = useState(user?.username ?? '')
@@ -130,11 +131,21 @@ export default function SettingsPage() {
     }
   }
 
+  function isValidLightningAddress(addr: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)
+  }
+
   async function saveLightningAddress(e: FormEvent) {
     e.preventDefault()
+    const trimmed = lnInput.trim()
+    if (trimmed && !isValidLightningAddress(trimmed)) {
+      setLnError('형식이 올바르지 않습니다 (예: user@walletofsatoshi.com)')
+      return
+    }
+    setLnError('')
     setSaving(true)
     try {
-      const res = await client.patch<{ data: typeof user }>('/auth/me', { lightning_address: lnInput.trim() })
+      const res = await client.patch<{ data: typeof user }>('/auth/me', { lightning_address: trimmed || null })
       if (res.data.data) setUser(res.data.data)
       setEditingLn(false)
       setLnSaved(true)
@@ -265,12 +276,12 @@ export default function SettingsPage() {
                 ) : null}
               </div>
               {editingLn && (
-                <form onSubmit={saveLightningAddress} className="px-4 pb-3">
+                <form onSubmit={saveLightningAddress} className="px-4 pb-3 space-y-1">
                   <div className="flex items-center gap-2 rounded-lg bg-theme-surface2 px-3 py-2">
                     <input
                       type="text"
                       value={lnInput}
-                      onChange={(e) => setLnInput(e.target.value)}
+                      onChange={(e) => { setLnInput(e.target.value); setLnError('') }}
                       placeholder="you@wallet.com"
                       autoFocus
                       className="flex-1 bg-transparent text-sm text-theme-primary outline-none font-mono"
@@ -278,10 +289,11 @@ export default function SettingsPage() {
                     <button type="submit" disabled={saving} className="text-accent disabled:opacity-50">
                       <Check size={15} />
                     </button>
-                    <button type="button" onClick={() => setEditingLn(false)} className="text-theme-muted">
+                    <button type="button" onClick={() => { setEditingLn(false); setLnError('') }} className="text-theme-muted">
                       <X size={15} />
                     </button>
                   </div>
+                  {lnError && <p className="text-[10px] text-red-400">{lnError}</p>}
                 </form>
               )}
             </div>

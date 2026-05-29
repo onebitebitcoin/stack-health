@@ -117,9 +117,19 @@ export default function LoginPage() {
     }
   }, [mode, login, navigate])
 
+  function isValidLightningAddress(addr: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)
+  }
+
   async function handleEmailSubmit(e: React.FormEvent) {
     e.preventDefault()
     setEmailError('')
+
+    if (isRegister && lightningAddress.trim() && !isValidLightningAddress(lightningAddress.trim())) {
+      setEmailError('라이트닝 주소 형식이 올바르지 않습니다 (예: user@walletofsatoshi.com)')
+      return
+    }
+
     setEmailLoading(true)
     try {
       if (isRegister) {
