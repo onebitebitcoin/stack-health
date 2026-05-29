@@ -171,10 +171,13 @@ export default function ChallengeDetailPage() {
       )}
 
       <div className="px-4 flex flex-col gap-4 pb-4">
-        {/* 리워드 배지 */}
-        <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 self-start">
-          <Dumbbell size={13} className="text-accent" />
-          <span className="text-sm font-semibold text-accent">{challenge.reward_title}</span>
+        {/* 획득 타이틀 */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-theme-muted">획득 타이틀</span>
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 self-start">
+            <Dumbbell size={13} className="text-accent" />
+            <span className="text-sm font-semibold text-accent">{challenge.reward_title}</span>
+          </div>
         </div>
 
         {/* 설명 */}
