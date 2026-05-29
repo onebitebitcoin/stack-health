@@ -29,11 +29,27 @@ def _get_r2_client():
     )
 
 
+def _probe_duration(path: str) -> float:
+    """ffprobe로 미디어 파일의 길이(초)를 반환한다."""
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            path,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return float(result.stdout.strip())
+
+
 def run_merge(job: dict) -> dict:
     """R2에서 video와 audio를 다운로드하고 ffmpeg으로 병합 후 R2에 업로드한다."""
     video_r2_key: str = job["video_r2_key"]
     audio_r2_key: str = job["audio_r2_key"]
-    duration: float = float(job["audio_duration_sec"])
+    audio_duration: float = float(job["audio_duration_sec"])
     audio_content_type: str = job.get("audio_content_type", "audio/webm")
 
     audio_suffix = ".mp4" if audio_content_type == "audio/mp4" else ".webm"
@@ -59,12 +75,17 @@ def run_merge(job: dict) -> dict:
         with open(tmp_audio, "wb") as f:
             f.write(response["Body"].read())
 
+        video_duration = _probe_duration(tmp_video)
+        output_duration = max(video_duration, audio_duration)
+        logger.info("video=%.2fs audio=%.2fs output=%.2fs", video_duration, audio_duration, output_duration)
+
         cmd = [
             "ffmpeg", "-y",
             "-stream_loop", "-1",
             "-i", tmp_video,
+            "-stream_loop", "-1",
             "-i", tmp_audio,
-            "-t", str(duration),
+            "-t", str(output_duration),
             "-c:v", "copy",
             "-c:a", "aac",
             "-b:a", "256k",
