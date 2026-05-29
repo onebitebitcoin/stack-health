@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Droplets, ShieldCheck, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, MessageCircle, ArrowLeft, Award, Trash2,
+  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
@@ -337,44 +337,15 @@ export default function ProfilePage() {
 
       {/* ── 스트릭 카드 ── */}
       <div className="mx-4 mb-4 rounded-xl bg-theme-surface px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4 py-1">
-            <div className="flex items-center gap-1.5 text-orange-400">
-              <Flame size={20} strokeWidth={2} />
-              <span className="text-2xl font-bold leading-none">{streak}</span>
-              <span className="text-sm font-medium text-theme-primary">일 연속</span>
-            </div>
-            <div className="h-4 w-px bg-theme-border" />
-            <div className="text-sm text-theme-muted">
-              이번 달 <span className="font-semibold text-theme-primary">{totalWorkoutDays}일</span> 운동
-            </div>
+        <div className="flex items-center gap-4 py-1">
+          <div className="flex items-center gap-1.5 text-orange-400">
+            <Flame size={20} strokeWidth={2} />
+            <span className="text-2xl font-bold leading-none">{streak}</span>
+            <span className="text-sm font-medium text-theme-primary">일 연속</span>
           </div>
-          <div className="text-right">
-            {streak >= 100 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-400">
-                <Award size={12} /> 100일 레전드
-              </span>
-            )}
-            {streak >= 30 && streak < 100 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-400">
-                <Award size={12} /> 한달 달성
-              </span>
-            )}
-            {streak >= 14 && streak < 30 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-2.5 py-1 text-xs font-bold text-orange-400">
-                <Award size={12} /> 2주 달성
-              </span>
-            )}
-            {streak >= 7 && streak < 14 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/20 px-2.5 py-1 text-xs font-bold text-orange-400">
-                <Award size={12} /> 7일 달성
-              </span>
-            )}
-            {streak >= 3 && streak < 7 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-2.5 py-1 text-xs font-bold text-yellow-400">
-                <Award size={12} /> 3일 달성
-              </span>
-            )}
+          <div className="h-4 w-px bg-theme-border" />
+          <div className="text-sm text-theme-muted">
+            이번 달 <span className="font-semibold text-theme-primary">{totalWorkoutDays}일</span> 운동
           </div>
         </div>
       </div>
