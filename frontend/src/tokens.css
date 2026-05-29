@@ -39,9 +39,9 @@
   --bg-page: #F8F9FA;
   --bg-surface: #FFFFFF;
   --bg-surface-2: #F1F3F5;
-  --accent: #B5FF2E;            /* surface fill only, never on text */
-  --accent-fg: #1A1A1A;        /* text on lime surface: 15:1 contrast */
-  --accent-text: #65A30D;      /* lime-700, 4.6:1 on white — WCAG AA */
+  --accent: #5A8A00;            /* dark lime — readable on white, WCAG AA */
+  --accent-fg: #FFFFFF;
+  --accent-text: #5A8A00;
   --text-primary: #111827;
   --text-muted: #4B5563;
   --text-subtle: #9CA3AF;
