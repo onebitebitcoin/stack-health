@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward, Check, ImagePlus, X } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, SkipForward, Check, ImagePlus, X } from 'lucide-react'
+import LogoMark from '../components/LogoMark'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
@@ -469,7 +470,7 @@ export default function UploadPage() {
 
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-theme-page px-6">
-        <Upload size={48} strokeWidth={1.5} className="animate-bounce text-accent" />
+        <LogoMark size={48} className="animate-bounce text-accent" />
         <p className="text-base font-semibold text-theme-primary">{statusLabel}</p>
         <div className="w-64 flex flex-col items-center gap-1.5">
           <div className="h-1.5 w-full rounded-full bg-theme-surface2">
