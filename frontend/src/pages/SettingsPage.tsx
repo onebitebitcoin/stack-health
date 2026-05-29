@@ -1,10 +1,11 @@
-import { Moon, Sun, ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { Moon, Sun, ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2 } from 'lucide-react'
+import { useState, useRef, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { useThemeStore, type Theme } from '../store/theme'
+import UserAvatar from '../components/UserAvatar'
 
 const ROW = 'flex items-center justify-between px-4 py-3.5'
 const LABEL = 'text-sm text-theme-primary'
@@ -31,6 +32,60 @@ export default function SettingsPage() {
   const [usernameSaved, setUsernameSaved] = useState(false)
 
   const [showIosGuide, setShowIosGuide] = useState(false)
+
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarError, setAvatarError] = useState('')
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  function compressImage(file: File, maxPx: number, quality: number): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file)
+      const img = new Image()
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(
+          (blob) => (blob ? resolve(blob) : reject(new Error('canvas toBlob failed'))),
+          'image/jpeg',
+          quality,
+        )
+      }
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')) }
+      img.src = url
+    })
+  }
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!avatarInputRef.current) return
+    avatarInputRef.current.value = ''
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('파일 크기는 5MB 이하여야 합니다')
+      return
+    }
+
+    setAvatarUploading(true)
+    setAvatarError('')
+    try {
+      const compressed = await compressImage(file, 200, 0.82)
+      const form = new FormData()
+      form.append('file', new File([compressed], 'avatar.jpg', { type: 'image/jpeg' }))
+      const res = await client.post<{ data: typeof user }>('/auth/avatar', form)
+      if (res.data.data) setUser(res.data.data)
+    } catch {
+      setAvatarError('이미지 업로드에 실패했습니다')
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
 
   const { data: appLinks } = useQuery<{ android_url: string | null; android_filename: string | null }>({
     queryKey: ['app-links'],
@@ -105,6 +160,40 @@ export default function SettingsPage() {
         <div>
           <p className={SECTION}>계정</p>
           <div className={GROUP}>
+            {/* 프로필 이미지 */}
+            <div className={`${ROW} border-b border-theme-surface2`}>
+              <span className={LABEL}>프로필 사진</span>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarUploading}
+                  className="relative group"
+                  aria-label="프로필 사진 변경"
+                >
+                  <UserAvatar
+                    username={user?.username ?? ''}
+                    avatarUrl={user?.avatar_url}
+                    profileColor={(user?.app_settings?.profile_color as string | null) ?? null}
+                    size={44}
+                  />
+                  <div className={`absolute inset-0 rounded-full flex items-center justify-center bg-black/40 transition-opacity ${avatarUploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    {avatarUploading
+                      ? <Loader2 size={16} className="text-white animate-spin" />
+                      : <Camera size={16} className="text-white" />
+                    }
+                  </div>
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
+              </div>
+            </div>
+            {avatarError && <p className="text-[10px] text-red-400 px-4 py-1">{avatarError}</p>}
+
             {/* 닉네임 */}
             <div className={`${DIVIDER}`}>
               <div className={ROW}>
