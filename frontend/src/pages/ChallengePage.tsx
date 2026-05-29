@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Search, Dumbbell, Users, CheckCircle, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
 import { useAuthStore } from '../store/auth'
-import LoginPromptSheet from '../components/LoginPromptSheet'
 import LoadingScreen from '../components/LoadingScreen'
 
 const CATEGORIES = [
@@ -25,38 +24,21 @@ function formatMonthDay(dateStr: string) {
 
 function ChallengeCard({
   challenge,
-  onJoin,
-  joining,
-  onLoginRequired,
   onNavigate,
 }: {
   challenge: Challenge
-  onJoin: (id: number) => void
-  joining: boolean
-  onLoginRequired: () => void
   onNavigate: (id: number) => void
 }) {
-  const token = useAuthStore((s) => s.token)
   const progress = Math.min(
     100,
     Math.round((challenge.my_upload_count / challenge.condition_value) * 100),
   )
-
-  function handleJoin(e: React.MouseEvent) {
-    e.stopPropagation()
-    if (!token) {
-      onLoginRequired()
-      return
-    }
-    onJoin(challenge.id)
-  }
 
   return (
     <div
       className="rounded-xl bg-theme-surface cursor-pointer active:opacity-80 overflow-hidden flex"
       onClick={() => onNavigate(challenge.id)}
     >
-      {/* 좌측 이미지 — 카드 전체 높이 채움 */}
       {challenge.image_url && (
         <img
           src={challenge.image_url}
@@ -65,9 +47,7 @@ function ChallengeCard({
         />
       )}
 
-      {/* 우측 콘텐츠 */}
       <div className="flex-1 min-w-0 px-3 py-2.5 flex flex-col">
-        {/* 제목 행 */}
         <div className="flex items-center justify-between gap-2 mb-1">
           <h3 className="font-semibold text-theme-primary text-sm leading-tight truncate">{challenge.title}</h3>
           {challenge.completed ? (
@@ -77,7 +57,6 @@ function ChallengeCard({
           ) : null}
         </div>
 
-        {/* 배지 행 — 리워드 + 카테고리 한 줄 */}
         <div className="flex flex-wrap items-center gap-1 mb-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
             <Dumbbell size={9} className="text-accent" />{challenge.reward_title}
@@ -90,7 +69,6 @@ function ChallengeCard({
           })}
         </div>
 
-        {/* 진행 바 */}
         {challenge.joined && (
           <div className="mb-2">
             <div className="flex justify-between text-[10px] text-theme-muted mb-0.5">
@@ -103,7 +81,6 @@ function ChallengeCard({
           </div>
         )}
 
-        {/* 하단 행 */}
         <div className="flex items-center justify-between mt-auto">
           <div className="flex items-center gap-1 text-[10px] text-theme-subtle">
             <Users size={11} />
@@ -116,13 +93,9 @@ function ChallengeCard({
           ) : challenge.joined ? (
             <span className="text-[10px] font-semibold text-accent">참여중</span>
           ) : (
-            <button
-              onClick={handleJoin}
-              disabled={joining}
-              className="rounded-lg bg-accent px-2.5 py-1 text-[10px] font-semibold text-accent-fg disabled:opacity-60"
-            >
+            <span className="rounded-lg bg-accent px-2.5 py-1 text-[10px] font-semibold text-accent-fg">
               참여하기
-            </button>
+            </span>
           )}
         </div>
       </div>
@@ -131,13 +104,10 @@ function ChallengeCard({
 }
 
 export default function ChallengePage() {
-  const qc = useQueryClient()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const [q, setQ] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
-  const [joiningId, setJoiningId] = useState<number | null>(null)
-  const [showLogin, setShowLogin] = useState(false)
 
   const { data: challenges = [], isLoading } = useQuery<Challenge[]>({
     queryKey: ['challenges', q, selectedCategory],
@@ -152,23 +122,10 @@ export default function ChallengePage() {
     },
   })
 
-  const joinMutation = useMutation({
-    mutationFn: (id: number) => client.post(`/challenges/${id}/join`),
-    onMutate: (id) => setJoiningId(id),
-    onSettled: () => setJoiningId(null),
-    onSuccess: (_, id) => {
-      qc.setQueriesData<Challenge[]>(
-        { queryKey: ['challenges'] },
-        (old) => old?.map((c) => c.id === id ? { ...c, joined: true, participant_count: c.participant_count + 1 } : c)
-      )
-    },
-  })
-
   if (isLoading) return <LoadingScreen />
 
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
-      {/* 헤더 */}
       <div className="px-4 pt-5 pb-3 flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-theme-primary">챌린지</h1>
@@ -185,7 +142,6 @@ export default function ChallengePage() {
         )}
       </div>
 
-      {/* 카테고리 필터 */}
       <div className="px-4 mb-3">
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
           <button
@@ -214,7 +170,6 @@ export default function ChallengePage() {
         </div>
       </div>
 
-      {/* 검색 */}
       <div className="px-4 mb-4">
         <div className="flex items-center gap-2 rounded-xl bg-theme-surface px-3 py-2.5">
           <Search size={16} className="text-theme-subtle flex-shrink-0" />
@@ -228,7 +183,6 @@ export default function ChallengePage() {
         </div>
       </div>
 
-      {/* 챌린지 목록 */}
       {challenges.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center px-6">
           <Dumbbell size={40} className="text-theme-surface2" strokeWidth={1} />
@@ -242,16 +196,11 @@ export default function ChallengePage() {
             <ChallengeCard
               key={c.id}
               challenge={c}
-              onJoin={(id) => joinMutation.mutate(id)}
-              joining={joiningId === c.id}
-              onLoginRequired={() => setShowLogin(true)}
               onNavigate={(id) => navigate(`/challenges/${id}`)}
             />
           ))}
         </div>
       )}
-
-      {showLogin && <LoginPromptSheet onClose={() => setShowLogin(false)} />}
     </div>
   )
 }

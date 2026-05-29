@@ -39,6 +39,7 @@ export default function ChallengeDetailPage() {
   const user = useAuthStore((s) => s.user)
   const qc = useQueryClient()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [actionError, setActionError] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [editDesc, setEditDesc] = useState('')
@@ -66,6 +67,25 @@ export default function ChallengeDetailPage() {
       setActionError('')
     },
     onError: (e: unknown) => setActionError(getApiErrorMessage(e, '참여에 실패했습니다')),
+  })
+
+  const leaveMutation = useMutation({
+    mutationFn: () => client.delete(`/challenges/${id}/leave`),
+    onSuccess: () => {
+      qc.setQueryData<Challenge>(['challenge', id], (old) =>
+        old ? { ...old, joined: false, completed: false, my_upload_count: 0, participant_count: old.participant_count - 1 } : old
+      )
+      qc.setQueriesData<Challenge[]>(
+        { queryKey: ['challenges'] },
+        (old) => old?.map((c) => c.id === Number(id) ? { ...c, joined: false, completed: false, my_upload_count: 0, participant_count: c.participant_count - 1 } : c)
+      )
+      setShowLeaveConfirm(false)
+      setActionError('')
+    },
+    onError: (e: unknown) => {
+      setShowLeaveConfirm(false)
+      setActionError(getApiErrorMessage(e, '참여 취소에 실패했습니다'))
+    },
   })
 
   const deleteMutation = useMutation({
@@ -235,9 +255,17 @@ export default function ChallengeDetailPage() {
         )}
 
         {challenge.joined && !challenge.completed && (
-          <div className="flex items-center justify-center gap-1.5 rounded-2xl bg-accent/10 py-3">
-            <Dumbbell size={15} className="text-accent" />
-            <span className="text-sm font-semibold text-accent">참여 중인 챌린지</span>
+          <div className="flex gap-2">
+            <div className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-accent/10 py-3">
+              <Dumbbell size={15} className="text-accent" />
+              <span className="text-sm font-semibold text-accent">참여 중</span>
+            </div>
+            <button
+              onClick={() => setShowLeaveConfirm(true)}
+              className="flex-1 rounded-2xl border border-red-400/30 py-3 text-sm text-red-400"
+            >
+              참여 취소
+            </button>
           </div>
         )}
 
@@ -349,6 +377,40 @@ export default function ChallengeDetailPage() {
                 className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {deleteMutation.isPending ? '삭제 중...' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLeaveConfirm && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowLeaveConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-theme-surface p-5 flex flex-col gap-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <p className="font-semibold text-theme-primary">참여를 취소할까요?</p>
+              <p className="text-xs text-theme-muted mt-1">
+                지금까지의 진행 상황이 초기화됩니다. 다시 참여하더라도 처음부터 시작해야 합니다.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted"
+              >
+                돌아가기
+              </button>
+              <button
+                onClick={() => leaveMutation.mutate()}
+                disabled={leaveMutation.isPending}
+                className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {leaveMutation.isPending ? '취소 중...' : '참여 취소'}
               </button>
             </div>
           </div>

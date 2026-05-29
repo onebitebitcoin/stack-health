@@ -231,6 +231,30 @@ def my_titles(
     return {"data": {"titles": titles}}
 
 
+@router.delete("/{challenge_id}/leave")
+def leave_challenge(
+    challenge_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    participation = (
+        db.query(ChallengeParticipation)
+        .filter(
+            ChallengeParticipation.challenge_id == challenge_id,
+            ChallengeParticipation.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not participation:
+        raise HTTPException(status_code=404, detail="참여 중인 챌린지가 아닙니다")
+    if participation.completed_at is not None:
+        raise HTTPException(status_code=400, detail="완료한 챌린지는 취소할 수 없습니다")
+    db.delete(participation)
+    db.commit()
+    logger.info("Challenge left: challenge_id=%s user_id=%s", challenge_id, current_user.id)
+    return {"data": {"left": True, "challenge_id": challenge_id}}
+
+
 @router.post("/{challenge_id}/join")
 def join_challenge(
     challenge_id: int,
