@@ -72,7 +72,7 @@ app.include_router(users.router)
 @app.get("/health")
 def health() -> dict:
     try:
-        version = Path(__file__).parent.parent.joinpath("VERSION").read_text().strip()
+        version = Path(__file__).parent.parent.parent.joinpath("VERSION").read_text().strip()
     except FileNotFoundError:
         version = "unknown"
     return {"status": "ok", "version": version}
