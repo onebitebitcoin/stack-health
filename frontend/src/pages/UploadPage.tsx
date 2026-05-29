@@ -643,7 +643,7 @@ export default function UploadPage() {
             <div>
               <p className="font-semibold text-theme-primary">음성 녹음 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
               <p className="text-xs text-theme-muted mt-1 leading-relaxed">
-                목소리로 오늘 운동을 기록해보세요. 최대 {MAX_RECORD_SECONDS}초.
+                영상에 입힐 음성이 있으면 녹음하세요. 최대 {MAX_RECORD_SECONDS}초.
               </p>
             </div>
             <div className="flex flex-col items-center gap-3">
@@ -683,21 +683,21 @@ export default function UploadPage() {
             </div>
           </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
-          <div className="mt-auto flex gap-3 pb-2">
-            <button
-              onClick={skipRecording}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
-            >
-              <SkipForward size={16} />건너뛰기
-            </button>
+          <div className="mt-auto flex flex-col items-center gap-3 pb-2">
             {recordingDone && (
               <button
                 onClick={() => setStep(3)}
-                className="flex-[2] flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
               >
                 다음 <ChevronRight size={18} />
               </button>
             )}
+            <button
+              onClick={skipRecording}
+              className="text-sm text-theme-muted underline underline-offset-2 py-1"
+            >
+              건너뛰기
+            </button>
           </div>
         </div>
       )}
@@ -735,7 +735,10 @@ export default function UploadPage() {
             </div>
           </div>
 
-          <p className="mb-2 text-sm font-semibold text-theme-primary">인증 사진 <span className="text-xs font-normal text-theme-subtle">(선택 — 영상 끝에 3초 표시)</span></p>
+          <p className="mb-1 text-sm font-semibold text-theme-primary">인증 사진 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+          <p className="mb-3 text-xs text-theme-muted leading-relaxed">
+            사진을 영상 뒷부분에 붙여서 운동 인증을 하세요. 업로드 후 영상 끝에 3초간 표시됩니다.
+          </p>
           <input
             ref={proofImageRef}
             type="file"
