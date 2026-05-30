@@ -31,9 +31,6 @@ def upgrade() -> None:
         batch_op.drop_index(batch_op.f('ix_lightning_claims_week_status'))
         batch_op.drop_column('week_label')
 
-    with op.batch_alter_table('posts', schema=None) as batch_op:
-        batch_op.drop_constraint(batch_op.f('uq_posts_share_token'), type_='unique')
-
     with op.batch_alter_table('reward_points', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_reward_points_status_created'))
         batch_op.drop_index(batch_op.f('ix_reward_points_user_week_status'))

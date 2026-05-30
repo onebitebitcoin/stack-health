@@ -505,8 +505,18 @@ def update_challenge(
         raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
     if challenge.creator_id != current_user.id and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="수정 권한이 없습니다")
+    if body.title is not None:
+        challenge.title = body.title
     if body.description is not None:
         challenge.description = body.description
+    if body.reward_title is not None:
+        challenge.reward_title = body.reward_title
+    if body.condition_value is not None:
+        challenge.condition_value = body.condition_value
+    if body.start_date is not None:
+        challenge.start_date = body.start_date
+    if body.end_date is not None:
+        challenge.end_date = body.end_date
     if body.categories is not None:
         challenge.categories = body.categories
     db.commit()

@@ -27,6 +27,7 @@ const SetupUsernamePage = lazy(() => import('./pages/SetupUsernamePage'))
 const MyChallengeDashboardPage = lazy(() => import('./pages/MyChallengeDashboardPage'))
 const ChallengeDashboardPage = lazy(() => import('./pages/ChallengeDashboardPage'))
 const ChallengeDetailPage = lazy(() => import('./pages/ChallengeDetailPage'))
+const ChallengeEditPage = lazy(() => import('./pages/ChallengeEditPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
 const SharedVideoPage = lazy(() => import('./pages/SharedVideoPage'))
@@ -116,6 +117,7 @@ function Layout() {
         <Route path="/challenges" element={<ChallengePage />} />
         <Route path="/challenges/create" element={<ChallengeCreatePage />} />
         <Route path="/challenges/:id" element={<ChallengeDetailPage />} />
+        <Route path="/challenges/:id/edit" element={<RequireAuth><ChallengeEditPage /></RequireAuth>} />
         <Route path="/my-challenges" element={<RequireAuth><MyChallengeDashboardPage /></RequireAuth>} />
         <Route path="/challenges/:id/dashboard" element={<RequireAuth><ChallengeDashboardPage /></RequireAuth>} />
         <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />

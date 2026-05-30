@@ -2,11 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Droplets, ShieldCheck, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2, RefreshCw,
+  ChevronLeft, ChevronRight, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
-import type { MyStats, HistoryResponse, HistoryWorkoutPost, WeeklyPointsHistory, MonthlyPointsResponse } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost, MonthlyPointsResponse } from '../api/types'
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
@@ -39,26 +39,15 @@ export default function ProfilePage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedPosts, setSelectedPosts] = useState<HistoryWorkoutPost[]>([])
   const [videoIdx, setVideoIdx] = useState(0)
-  const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
-
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
   type SweatPeriod = 'week' | 'month' | 'all'
   const [sweatPeriod, setSweatPeriod] = useState<SweatPeriod>('week')
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const weeklyHistoryRef = useRef<HTMLDivElement>(null)
-  const pendingScrollToHistory = useRef(false)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   const videoItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const pendingScrollIdx = useRef<number>(0)
-
-  useEffect(() => {
-    if (showWeeklyHistory && pendingScrollToHistory.current) {
-      pendingScrollToHistory.current = false
-      weeklyHistoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [showWeeklyHistory])
 
   useEffect(() => {
     videoRefs.current = videoRefs.current.slice(0, selectedPosts.length)
@@ -108,16 +97,6 @@ export default function ProfilePage() {
     enabled: !!user,
   })
 
-
-  const { data: weeklyPointsData, isLoading: weeklyPointsLoading, isError: weeklyPointsError } = useQuery<WeeklyPointsHistory>({
-    queryKey: ['my-weekly-points'],
-    queryFn: async () => {
-      const res = await client.get<{ data: WeeklyPointsHistory }>('/users/me/weekly-points')
-      return res.data.data
-    },
-    enabled: !!user && showWeeklyHistory,
-    refetchInterval: 60_000,
-  })
 
   const {
     data: monthlyPointsData,
@@ -320,16 +299,10 @@ export default function ProfilePage() {
 
         {/* 이번 주 전용 요소 */}
         {sweatPeriod === 'week' && weekQueuedPoints > 0 && (
-          <button
-            onClick={() => {
-              pendingScrollToHistory.current = true
-              setShowWeeklyHistory(true)
-            }}
-            className="flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1 active:opacity-70"
-          >
+          <div className="flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
             <span className="text-xs text-theme-muted">+{weekQueuedPoints.toFixed(2)}L 대기 중</span>
-          </button>
+          </div>
         )}
         {sweatPeriod === 'week' && (() => {
           const { weekNo, range } = getCurrentWeekInfo()
@@ -467,149 +440,68 @@ export default function ProfilePage() {
             className="flex gap-2 overflow-x-auto px-4 pb-1"
             style={{ scrollbarWidth: 'none' }}
           >
-            {myPosts.map((post, idx) => (
-              <div
-                key={post.id}
-                className="relative flex-shrink-0 overflow-hidden rounded-xl bg-theme-surface2 group cursor-pointer active:scale-95 transition-transform"
-                style={{ width: '28vw', aspectRatio: '9/16' }}
-                onClick={() => openMyPosts(idx)}
-              >
-                {post.thumbnail_url ? (
-                  <img
-                    src={post.thumbnail_url}
-                    className="absolute inset-0 h-full w-full object-cover"
-                    loading="lazy"
-                    alt=""
-                  />
-                ) : (
-                  <video
-                    src={post.cdn_url}
-                    className="absolute inset-0 h-full w-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
-                  />
-                )}
-                <div className="absolute inset-0 bg-black/30" />
-                <div className="absolute bottom-1.5 right-1 flex items-center gap-2 text-white/90">
-                  <div className="flex items-center gap-0.5">
-                    <Heart size={9} strokeWidth={2} />
-                    <span className="text-[9px] font-medium">{post.like_count}</span>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    <MessageCircle size={9} strokeWidth={2} />
-                    <span className="text-[9px] font-medium">{post.comment_count}</span>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    <Eye size={9} strokeWidth={2} />
-                    <span className="text-[9px] font-medium">{post.view_count}</span>
-                  </div>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(post.id) }}
-                  className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity active:opacity-100"
-                  aria-label="삭제"
+            {myPosts.map((post, idx) => {
+              const isPending = Date.now() - new Date(post.created_at).getTime() < 24 * 60 * 60 * 1000
+              return (
+                <div
+                  key={post.id}
+                  className="relative flex-shrink-0 overflow-hidden rounded-xl bg-theme-surface2 group cursor-pointer active:scale-95 transition-transform"
+                  style={{ width: '28vw', aspectRatio: '9/16' }}
+                  onClick={() => openMyPosts(idx)}
                 >
-                  <Trash2 size={13} strokeWidth={2} />
-                </button>
-              </div>
-            ))}
+                  {post.thumbnail_url ? (
+                    <img
+                      src={post.thumbnail_url}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      loading="lazy"
+                      alt=""
+                    />
+                  ) : (
+                    <video
+                      src={post.cdn_url}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-black/30" />
+                  {isPending && (
+                    <div className="absolute top-1.5 left-1.5 rounded-full bg-yellow-400 px-1.5 py-0.5">
+                      <span className="text-[9px] font-bold text-black leading-none">대기</span>
+                    </div>
+                  )}
+                  <div className="absolute bottom-1.5 right-1 flex items-center gap-2 text-white/90">
+                    <div className="flex items-center gap-0.5">
+                      <Heart size={9} strokeWidth={2} />
+                      <span className="text-[9px] font-medium">{post.like_count}</span>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <MessageCircle size={9} strokeWidth={2} />
+                      <span className="text-[9px] font-medium">{post.comment_count}</span>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <Eye size={9} strokeWidth={2} />
+                      <span className="text-[9px] font-medium">{post.view_count}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(post.id) }}
+                    className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity active:opacity-100"
+                    aria-label="삭제"
+                  >
+                    <Trash2 size={13} strokeWidth={2} />
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* ── 주간 이력 ── */}
-      <div ref={weeklyHistoryRef} className="mx-4 mb-6 rounded-2xl bg-theme-surface overflow-hidden">
-        <button
-          onClick={() => setShowWeeklyHistory((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <span className="text-sm font-semibold text-theme-primary">주간 이력</span>
-          <ChevronDown size={14} className={`text-theme-muted transition-transform ${showWeeklyHistory ? 'rotate-180' : ''}`} />
-        </button>
-        {showWeeklyHistory && (
-          <>
-            <div className="flex items-center justify-between px-4 py-3 border-t border-theme-border">
-              <span className="text-xs text-theme-muted">누적 총 땀</span>
-              <span className="text-sm font-semibold text-theme-primary">
-                {displayedSweatPoints.toFixed(1)}
-                <span className="text-xs font-normal text-theme-muted ml-0.5">L</span>
-              </span>
-            </div>
-            <div className="border-t border-theme-border">
-              <div className="px-4 py-3">
-                <span className="text-xs font-medium text-theme-muted">이번 주 활동</span>
-              </div>
-              {weeklyPointsLoading ? (
-                <div className="py-4 text-center text-xs text-theme-muted">불러오는 중...</div>
-              ) : weeklyPointsError ? (
-                <div className="py-4 text-center text-xs text-red-400">불러오기 실패</div>
-              ) : !weeklyPointsData || weeklyPointsData.items.length === 0 ? (
-                <div className="py-4 text-center text-xs text-theme-muted">이번 주 활동 없음</div>
-              ) : (() => {
-                const pending = weeklyPointsData.items.filter(i => i.queued)
-                const fixed = weeklyPointsData.items.filter(i => !i.queued)
-                function sourceLabel(s: string) {
-                  return s === 'upload' ? '영상 업로드' : s === 'comment' ? '댓글' : s === 'bonus' ? '보너스' : s
-                }
-                function hrsLeft(settlesAt: string) {
-                  return Math.max(0, Math.ceil((new Date(settlesAt).getTime() - Date.now()) / (60 * 60 * 1000)))
-                }
-                return (
-                  <div className="max-h-48 overflow-y-auto">
-                    {pending.length > 0 && (
-                      <>
-                        <div className="px-4 pt-2 pb-1">
-                          <span className="text-[10px] font-semibold text-yellow-400 uppercase tracking-wide">대기 중</span>
-                        </div>
-                        {pending.map((item, idx) => {
-                          const hrs = hrsLeft(item.settles_at!)
-                          return (
-                            <div key={`p-${idx}`} className="flex items-center justify-between px-4 py-2.5 border-t border-theme-border">
-                              <div>
-                                <p className="text-xs font-medium text-theme-primary">{sourceLabel(item.source)}</p>
-                                <p className="text-[10px] text-yellow-400 mt-0.5">{hrs > 0 ? `${hrs}시간 후 확정` : '곧 확정'}</p>
-                              </div>
-                              <span className="text-xs font-semibold text-yellow-400">+{item.points.toFixed(2)} L</span>
-                            </div>
-                          )
-                        })}
-                      </>
-                    )}
-                    {fixed.length > 0 && (
-                      <>
-                        <div className="px-4 pt-2 pb-1">
-                          <span className="text-[10px] font-semibold text-accent uppercase tracking-wide">확정</span>
-                        </div>
-                        {fixed.map((item, idx) => (
-                          <div key={`f-${idx}`} className="flex items-center justify-between px-4 py-2.5 border-t border-theme-border">
-                            <div>
-                              <p className="text-xs font-medium text-theme-primary">{sourceLabel(item.source)}</p>
-                              <p className="text-xs text-theme-muted">{item.date.slice(5).replace('-', '/')}</p>
-                            </div>
-                            <span className="text-xs font-semibold text-accent">+{item.points.toFixed(2)} L</span>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                )
-              })()}
-            </div>
-          </>
-        )}
-      </div>
-
       {/* ── 버전 정보 ── */}
-      <div className="mx-4 mb-6 flex items-center justify-center gap-2">
+      <div className="mx-4 mb-6 flex items-center justify-center">
         <span className="text-xs text-theme-subtle">v{__APP_VERSION__}</span>
-        <button
-          onClick={() => window.location.reload()}
-          className="text-theme-subtle hover:text-theme-muted transition-colors active:opacity-50"
-          aria-label="새로고침"
-        >
-          <RefreshCw size={12} />
-        </button>
       </div>
 
       {/* ── 삭제 확인 다이얼로그 ── */}

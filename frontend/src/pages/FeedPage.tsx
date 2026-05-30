@@ -59,22 +59,21 @@ export default function FeedPage() {
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-
-    // pull-to-refresh 및 네이티브 스크롤 차단
     const preventScroll = (e: TouchEvent) => e.preventDefault()
     el.addEventListener('touchmove', preventScroll, { passive: false })
+    return () => el.removeEventListener('touchmove', preventScroll)
+  }, [])
 
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
       if (e.deltaY > 30) goTo(activeIndex + 1)
       else if (e.deltaY < -30) goTo(activeIndex - 1)
     }
     el.addEventListener('wheel', handleWheel, { passive: false })
-
-    return () => {
-      el.removeEventListener('touchmove', preventScroll)
-      el.removeEventListener('wheel', handleWheel)
-    }
+    return () => el.removeEventListener('wheel', handleWheel)
   }, [activeIndex, goTo])
 
   if (isLoading) return <LoadingScreen />

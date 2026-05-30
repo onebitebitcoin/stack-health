@@ -116,11 +116,6 @@ export interface Challenge {
   image_thumb_url?: string | null
 }
 
-export interface ChallengeUpdateRequest {
-  description?: string
-  categories?: string[]
-}
-
 export interface ChallengeParticipant {
   user_id: number
   username: string
@@ -179,15 +174,6 @@ export interface UserProfile {
   active_challenges: ActiveChallenge[]
 }
 
-export interface ProfilePost {
-  id: number
-  cdn_url: string
-  like_count: number
-  view_count: number
-  caption: string | null
-  created_at: string
-}
-
 export interface MyStats {
   total_posts: number
   total_points: number
@@ -210,24 +196,6 @@ export interface LeaderboardResponse {
   page: number
   limit: number
   has_next: boolean
-}
-
-export interface WeeklyPointsItem {
-  date: string
-  settles_at: string | null
-  points: number
-  source: string
-  post_id: number | null
-  queued: boolean
-}
-
-export interface WeeklyPointsHistory {
-  week_label: string
-  week_number: number
-  start_date: string
-  end_date: string
-  total_points: number
-  items: WeeklyPointsItem[]
 }
 
 export interface MonthlyPointsResponse {

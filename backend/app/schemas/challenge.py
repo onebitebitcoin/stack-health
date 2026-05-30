@@ -36,19 +36,13 @@ class ChallengeCreateRequest(BaseModel):
 
 
 class ChallengeUpdateRequest(BaseModel):
+    title: str | None = None
     description: str | None = None
+    reward_title: str | None = None
+    condition_value: int | None = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
     categories: list[str] | None = None
-
-
-class ChallengeParticipationSchema(BaseModel):
-    id: int
-    challenge_id: int
-    upload_count: int
-    completed_at: datetime | None
-    joined_at: datetime
-    challenge: ChallengeSchema
-
-    model_config = {"from_attributes": True}
 
 
 class EarnedTitleSchema(BaseModel):

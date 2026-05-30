@@ -12,11 +12,11 @@ class RewardPoint(Base):
     __tablename__ = "reward_points"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     points: Mapped[float] = mapped_column(Float, nullable=False)
     reason: Mapped[str] = mapped_column(String, nullable=False)  # upload | comment
     reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    status: Mapped[str] = mapped_column(String, default="fixed", nullable=False)  # queued | fixed | revoked
+    status: Mapped[str] = mapped_column(String, default="fixed", nullable=False, index=True)  # queued | fixed | revoked
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

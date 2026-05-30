@@ -23,7 +23,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   const queryClient = useQueryClient()
   const [liked, setLiked] = useState(post.is_liked ?? false)
   const [likeCount, setLikeCount] = useState(post.like_count)
-  const [viewSent, setViewSent] = useState(false)
+  const viewSent = useRef(false)
 
   // Sync local state when feed data is refetched (SPA navigation stale cache fix)
   useEffect(() => { setLiked(post.is_liked ?? false) }, [post.is_liked])
@@ -49,8 +49,8 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         if (entry.isIntersecting) {
           setIsPaused(false)
           video.play().catch(() => undefined)
-          if (!viewSent && token) {
-            setViewSent(true)
+          if (!viewSent.current && token) {
+            viewSent.current = true
             client.post(`/feed/${post.id}/view`).catch(() => undefined)
           }
         } else {
@@ -62,7 +62,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [post.id, token, viewSent])
+  }, [post.id, token])
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.muted = isMuted

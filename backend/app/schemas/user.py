@@ -3,17 +3,6 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
-class AdminUserSchema(BaseModel):
-    id: int
-    email: str | None
-    username: str
-    is_banned: bool
-    is_admin: bool
-    video_count: int
-    created_at: datetime
-    model_config = {"from_attributes": True}
-
-
 class UserSchema(BaseModel):
     id: int
     email: str | None

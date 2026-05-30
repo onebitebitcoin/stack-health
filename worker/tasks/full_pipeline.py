@@ -148,11 +148,11 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
         )
 
         if video_duration > 0 and video_duration >= audio_duration:
-            # video가 더 길거나 같음: audio를 루프, video는 copy
+            # video가 더 길거나 같음: audio는 재생 후 무음, video는 copy
             cmd = [
                 "ffmpeg", "-y",
                 "-i", tmp_video,
-                "-stream_loop", "-1", "-i", tmp_audio,
+                "-i", tmp_audio,
                 "-t", str(video_duration),
                 "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-ar", "48000", "-ac", "2",
                 "-map", "0:v:0", "-map", "1:a:0",

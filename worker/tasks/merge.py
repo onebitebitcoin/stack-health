@@ -140,11 +140,10 @@ def run_merge(job: dict) -> dict:
         )
 
         if video_duration >= audio_duration:
-            # video가 더 길거나 같음: audio를 루프, video는 copy
+            # video가 더 길거나 같음: audio는 재생 후 무음, video는 copy
             cmd = [
                 "ffmpeg", "-y",
                 "-i", tmp_video,
-                "-stream_loop", "-1",
                 "-i", tmp_audio,
                 "-t", str(video_duration),
                 "-c:v", "copy",

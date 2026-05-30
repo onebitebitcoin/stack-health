@@ -98,8 +98,8 @@ def get_history(
                 }
             )
 
-    all_posts = (
-        db.query(Post)
+    all_dates = (
+        db.query(Post.created_at)
         .join(Post.video)
         .filter(
             Post.user_id == current_user.id,
@@ -107,7 +107,7 @@ def get_history(
         )
         .all()
     )
-    all_workout_dates = {_to_local_date(p.created_at, tz) for p in all_posts}
+    all_workout_dates = {_to_local_date(row[0], tz) for row in all_dates}
 
     today_local_str = now_local.strftime("%Y-%m-%d")
     streak = _compute_streak(all_workout_dates, today_local_str)

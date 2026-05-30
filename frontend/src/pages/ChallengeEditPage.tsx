@@ -1,0 +1,406 @@
+import { useRef, useState, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, Trophy, ImagePlus, Move } from 'lucide-react'
+import client from '../api/client'
+import { getApiErrorMessage } from '../api/errors'
+import { useAuthStore } from '../store/auth'
+import type { Challenge } from '../api/types'
+import LoadingScreen from '../components/LoadingScreen'
+
+const CATEGORIES = [
+  { value: 'strength', label: '근력' },
+  { value: 'cardio', label: '유산소' },
+  { value: 'flexibility', label: '유연성' },
+  { value: 'diet', label: '식단' },
+  { value: 'challenge', label: '도전' },
+  { value: 'social', label: '소셜' },
+  { value: 'beginner', label: '입문' },
+]
+
+const CROP_INSET = 24
+
+export default function ChallengeEditPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const user = useAuthStore((s) => s.user)
+
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    reward_title: '',
+    condition_value: 10,
+    start_date: '',
+    end_date: '',
+  })
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [error, setError] = useState('')
+  const [initialized, setInitialized] = useState(false)
+
+  const [imageSrc, setImageSrc] = useState<string | null>(null)
+  const [isExistingImage, setIsExistingImage] = useState(false)
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [imgReady, setImgReady] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef({ startX: 0, startY: 0, ox: 0, oy: 0 })
+  const previewRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const renderedRef = useRef({ w: 0, h: 0 })
+
+  const { data: challenge, isLoading, isError } = useQuery<Challenge>({
+    queryKey: ['challenge', id],
+    queryFn: async () => {
+      const res = await client.get<{ data: { challenge: Challenge } }>(`/challenges/${id}`)
+      return res.data.data.challenge
+    },
+    enabled: !!id,
+  })
+
+  useEffect(() => {
+    if (!challenge || initialized) return
+    const start = challenge.start_date ? challenge.start_date.slice(0, 10) : ''
+    const end = challenge.end_date ? challenge.end_date.slice(0, 10) : ''
+    setForm({
+      title: challenge.title ?? '',
+      description: challenge.description ?? '',
+      reward_title: challenge.reward_title ?? '',
+      condition_value: challenge.condition_value ?? 10,
+      start_date: start,
+      end_date: end,
+    })
+    setSelectedCategories(challenge.categories ?? [])
+    if (challenge.image_url) {
+      setImageSrc(challenge.image_url)
+      setIsExistingImage(true)
+      setImgReady(true)
+    }
+    setInitialized(true)
+  }, [challenge, initialized])
+
+  const isCreator = !!user && !!challenge && (user.id === challenge.creator_id || user.is_admin)
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setImageSrc(URL.createObjectURL(f))
+    setIsExistingImage(false)
+    setOffset({ x: 0, y: 0 })
+    setImgReady(false)
+    renderedRef.current = { w: 0, h: 0 }
+  }
+
+  function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    if (isExistingImage) return
+    const img = e.currentTarget
+    const container = previewRef.current
+    if (!container) return
+    const containerSize = container.getBoundingClientRect().width
+    if (!containerSize) return
+    const cropSize = containerSize - CROP_INSET * 2
+    const scale = Math.max(cropSize / img.naturalWidth, cropSize / img.naturalHeight)
+    const w = img.naturalWidth * scale
+    const h = img.naturalHeight * scale
+    renderedRef.current = { w, h }
+    setOffset({
+      x: CROP_INSET + (cropSize - w) / 2,
+      y: CROP_INSET + (cropSize - h) / 2,
+    })
+    setImgReady(true)
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (isExistingImage) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setIsDragging(true)
+    dragRef.current = { startX: e.clientX, startY: e.clientY, ox: offset.x, oy: offset.y }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!isDragging || isExistingImage) return
+    const container = previewRef.current
+    if (!container) return
+    const { w, h } = renderedRef.current
+    if (!w || !h) return
+    const { startX, startY, ox, oy } = dragRef.current
+    const containerSize = container.getBoundingClientRect().width
+    const cropSize = containerSize - CROP_INSET * 2
+    const newX = Math.min(CROP_INSET, Math.max(CROP_INSET + cropSize - w, ox + (e.clientX - startX)))
+    const newY = Math.min(CROP_INSET, Math.max(CROP_INSET + cropSize - h, oy + (e.clientY - startY)))
+    setOffset({ x: newX, y: newY })
+  }
+
+  function onPointerUp() {
+    setIsDragging(false)
+  }
+
+  async function cropAndUpload(): Promise<void> {
+    if (isExistingImage) return
+    const img = imgRef.current
+    const container = previewRef.current
+    if (!img || !container || !imageSrc) return
+    const containerSize = container.getBoundingClientRect().width
+    const cropSize = containerSize - CROP_INSET * 2
+    const scale = Math.max(cropSize / img.naturalWidth, cropSize / img.naturalHeight)
+    const srcX = (CROP_INSET - offset.x) / scale
+    const srcY = (CROP_INSET - offset.y) / scale
+    const srcSize = cropSize / scale
+
+    const canvas = document.createElement('canvas')
+    canvas.width = 400
+    canvas.height = 400
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, 400, 400)
+
+    await new Promise<void>((resolve) => {
+      canvas.toBlob(async (blob) => {
+        if (!blob) { resolve(); return }
+        const fd = new FormData()
+        fd.append('file', blob, 'challenge.jpg')
+        try {
+          await client.post(`/challenges/${id}/image`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          })
+        } catch {
+          // image upload failure is non-blocking
+        }
+        resolve()
+      }, 'image/jpeg', 0.82)
+    })
+  }
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      await client.patch(`/challenges/${id}`, {
+        ...form,
+        condition_value: Number(form.condition_value),
+        categories: selectedCategories,
+      })
+      if (imageSrc && !isExistingImage) await cropAndUpload()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['challenge', id] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['my-challenges'] }).catch(() => undefined)
+      navigate(`/challenges/${id}`)
+    },
+    onError: (e: unknown) => {
+      setError(getApiErrorMessage(e, '수정에 실패했습니다'))
+    },
+  })
+
+  function toggleCategory(value: string) {
+    setSelectedCategories((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    )
+  }
+
+  if (isLoading) return <LoadingScreen />
+
+  if (isError || !challenge) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-2 bg-theme-page lg:max-w-2xl lg:mx-auto">
+        <p className="text-sm text-theme-muted">챌린지를 찾을 수 없습니다</p>
+        <button onClick={() => navigate('/challenges')} className="text-xs text-accent">
+          목록으로 돌아가기
+        </button>
+      </div>
+    )
+  }
+
+  if (!isCreator) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page lg:max-w-2xl lg:mx-auto">
+        <p className="text-theme-muted text-sm">수정 권한이 없습니다</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
+      {/* 헤더 */}
+      <div className="px-4 pt-5 pb-3 flex items-center gap-3">
+        <button onClick={() => navigate(-1)} className="text-theme-muted">
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="text-lg font-bold text-theme-primary">챌린지 수정</h1>
+      </div>
+
+      <div className="px-4 flex flex-col gap-4">
+
+        {/* 이미지 업로드 */}
+        <div>
+          <label className="block text-xs text-theme-muted mb-2">챌린지 이미지</label>
+          {imageSrc ? (
+            <div className="flex flex-col gap-2">
+              <div
+                ref={previewRef}
+                className={`relative w-full aspect-square overflow-hidden rounded-2xl bg-black ${isExistingImage ? '' : 'cursor-grab active:cursor-grabbing touch-none'}`}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+              >
+                <img
+                  ref={imgRef}
+                  src={imageSrc}
+                  alt=""
+                  draggable={false}
+                  onLoad={onImageLoad}
+                  className={`${isExistingImage ? 'w-full h-full object-cover' : 'absolute max-w-none select-none'} transition-opacity duration-200 ${imgReady ? 'opacity-100' : 'opacity-0'}`}
+                  style={isExistingImage ? {} : {
+                    width: renderedRef.current.w ? `${renderedRef.current.w}px` : '100%',
+                    height: renderedRef.current.h ? `${renderedRef.current.h}px` : 'auto',
+                    transform: `translate(${offset.x}px, ${offset.y}px)`,
+                  }}
+                />
+
+                {!isExistingImage && (
+                  <>
+                    <div className="absolute top-0 left-0 right-0 bg-black/50 pointer-events-none" style={{ height: CROP_INSET }} />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 pointer-events-none" style={{ height: CROP_INSET }} />
+                    <div className="absolute bg-black/50 pointer-events-none" style={{ top: CROP_INSET, bottom: CROP_INSET, left: 0, width: CROP_INSET }} />
+                    <div className="absolute bg-black/50 pointer-events-none" style={{ top: CROP_INSET, bottom: CROP_INSET, right: 0, width: CROP_INSET }} />
+                    <div className="absolute border border-white/60 pointer-events-none" style={{ inset: CROP_INSET }} />
+                    <div className="absolute pointer-events-none flex items-center justify-center" style={{ inset: CROP_INSET }}>
+                      <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1">
+                        <Move size={12} className="text-white/80" />
+                        <span className="text-xs text-white/80">드래그해서 위치 조정</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-xs text-theme-muted text-center py-1"
+              >
+                다른 이미지 선택
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full aspect-square rounded-2xl bg-theme-surface flex flex-col items-center justify-center gap-2 text-theme-muted border-2 border-dashed border-theme-border"
+            >
+              <ImagePlus size={28} strokeWidth={1.5} />
+              <span className="text-xs">이미지 선택</span>
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={onFileChange}
+          />
+        </div>
+
+        {/* 제목 */}
+        <div>
+          <label className="block text-xs text-theme-muted mb-1">챌린지 제목</label>
+          <input
+            value={form.title}
+            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            placeholder="예: 30일 스쿼트 챌린지"
+            className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
+          />
+        </div>
+
+        {/* 설명 */}
+        <div>
+          <label className="block text-xs text-theme-muted mb-1">설명 <span className="text-red-400">*</span></label>
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            placeholder="챌린지 내용을 입력하세요"
+            rows={3}
+            className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none resize-none"
+          />
+        </div>
+
+        {/* 리워드 타이틀 */}
+        <div>
+          <label className="block text-xs text-theme-muted mb-1">획득 타이틀</label>
+          <div className="flex items-center gap-2 rounded-xl bg-theme-surface px-3 py-2.5">
+            <Trophy size={14} className="text-accent flex-shrink-0" />
+            <input
+              value={form.reward_title}
+              onChange={(e) => setForm((f) => ({ ...f, reward_title: e.target.value }))}
+              placeholder="예: 스쿼트 마스터"
+              className="flex-1 bg-transparent text-sm text-theme-primary placeholder-theme-subtle outline-none"
+            />
+          </div>
+        </div>
+
+        {/* 업로드 목표 횟수 */}
+        <div>
+          <label className="block text-xs text-theme-muted mb-1">목표 업로드 횟수</label>
+          <input
+            type="number"
+            min={1}
+            value={form.condition_value}
+            onChange={(e) => setForm((f) => ({ ...f, condition_value: Number(e.target.value) }))}
+            className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
+          />
+        </div>
+
+        {/* 날짜 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-theme-muted mb-1">시작일</label>
+            <input
+              type="date"
+              value={form.start_date}
+              onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
+              className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-theme-muted mb-1">종료일</label>
+            <input
+              type="date"
+              value={form.end_date}
+              onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))}
+              className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
+            />
+          </div>
+        </div>
+
+        {/* 카테고리 선택 */}
+        <div>
+          <label className="block text-xs text-theme-muted mb-2">카테고리 (복수 선택 가능)</label>
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.value}
+                onClick={() => toggleCategory(cat.value)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  selectedCategories.includes(cat.value)
+                    ? 'bg-accent text-accent-fg'
+                    : 'bg-theme-surface text-theme-muted'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && <p className="text-xs text-red-400">{error}</p>}
+
+        {/* 제출 버튼 */}
+        <button
+          onClick={() => mutation.mutate()}
+          disabled={mutation.isPending || !form.title || !form.description || !form.reward_title || !form.start_date || !form.end_date}
+          className="mt-6 mb-4 rounded-2xl bg-accent py-4 text-sm font-semibold text-accent-fg disabled:opacity-50"
+        >
+          {mutation.isPending ? '저장 중...' : '저장'}
+        </button>
+      </div>
+    </div>
+  )
+}

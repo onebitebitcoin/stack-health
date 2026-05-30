@@ -40,7 +40,7 @@ class ChallengeParticipation(Base):
     __tablename__ = "challenge_participations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     challenge_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("challenges.id"), nullable=False
     )
