@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays, Edit2, UserCircle, Zap } from 'lucide-react'
+import { ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays, Edit2, UserCircle } from 'lucide-react'
 import client from '../api/client'
 import type { Challenge, ChallengeUpdateRequest } from '../api/types'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 import LoadingScreen from '../components/LoadingScreen'
-import ClaimBottomSheet from '../components/ClaimBottomSheet'
 
 const CATEGORY_LABELS: Record<string, string> = {
   strength: '근력',
