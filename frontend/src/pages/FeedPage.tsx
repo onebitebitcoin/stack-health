@@ -111,15 +111,18 @@ export default function FeedPage() {
               willChange: 'transform',
             }}
           >
-            {posts.map((post) => (
-              <VideoCard
-                key={post.id}
-                post={post}
-                onLoginRequired={() => setShowLogin(true)}
-                onCommentClick={() => setCommentPostId(post.id)}
-                isMuted={isMuted}
-                onToggleMute={() => setIsMuted((m) => !m)}
-              />
+            {posts.map((post, idx) => (
+              <div key={post.id} style={{ height: '100dvh' }}>
+                {Math.abs(idx - activeIndex) <= 1 ? (
+                  <VideoCard
+                    post={post}
+                    onLoginRequired={() => setShowLogin(true)}
+                    onCommentClick={() => setCommentPostId(post.id)}
+                    isMuted={isMuted}
+                    onToggleMute={() => setIsMuted((m) => !m)}
+                  />
+                ) : null}
+              </div>
             ))}
           </div>
         </div>

@@ -5,7 +5,7 @@ import time
 import uuid
 
 from config import LOG_LEVEL, MAX_FFMPEG_CONCURRENT, QUEUE_NAME
-from queue_client import dequeue_job, get_redis_client, set_job_status
+from queue_client import ack_job, dequeue_job, get_redis_client, set_job_status
 from notify import notify_video_failure, notify_video_success
 from tasks.full_pipeline import run_full_pipeline
 from tasks.merge import run_merge
@@ -93,6 +93,7 @@ def _process_job(r, job: dict) -> None:
             notify_video_failure(job, e, 1, 0, current_step[0])
     finally:
         _release_ffmpeg_slot(r, slot_token)
+        ack_job(r, job)
 
 
 def main() -> None:

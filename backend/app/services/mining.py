@@ -113,6 +113,11 @@ def run_lottery(
     if mining_round is None:
         mining_round = MiningRound(week_label=week_label)
         db.add(mining_round)
+    elif mining_round.status == "distributed":
+        return {"error": f"이미 분배된 주차입니다 ({week_label}). 재실행이 차단되었습니다."}
+
+    mining_round.status = "distributing"
+    db.flush()
 
     mining_round.total_pool_sats = total_pool
     mining_round.sats_per_block = reward_per_draw

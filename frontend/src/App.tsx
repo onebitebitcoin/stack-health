@@ -1,34 +1,39 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { useAuthStore } from './store/auth'
 import client from './api/client'
 import type { User } from './api/types'
 import { useVersionCheck } from './hooks/useVersionCheck'
 import UpdateBanner from './components/UpdateBanner'
 import BottomNav from './components/BottomNav'
+import LoadingScreen from './components/LoadingScreen'
 import { isFlutterWebView } from './lib/platform'
+
+// 초기 번들에 포함 (첫 화면)
 import FeedPage from './pages/FeedPage'
 import LoginPage from './pages/LoginPage'
-import UploadPage from './pages/UploadPage'
-import RewardsPage from './pages/RewardsPage'
-import ChallengePage from './pages/ChallengePage'
-import ChallengeCreatePage from './pages/ChallengeCreatePage'
-import ProfilePage from './pages/ProfilePage'
-import AdminPage from './pages/AdminPage'
-import TermsPage from './pages/TermsPage'
-import TeamPage from './pages/TeamPage'
-import UserProfilePage from './pages/UserProfilePage'
-import SetupUsernamePage from './pages/SetupUsernamePage'
-import MyChallengeDashboardPage from './pages/MyChallengeDashboardPage'
-import ChallengeDashboardPage from './pages/ChallengeDashboardPage'
-import ChallengeDetailPage from './pages/ChallengeDetailPage'
-import SettingsPage from './pages/SettingsPage'
-import LeaderboardPage from './pages/LeaderboardPage'
-import SharedVideoPage from './pages/SharedVideoPage'
-import LightningWalletGuidePage from './pages/LightningWalletGuidePage'
-import LightningLoginPage from './pages/LightningLoginPage'
-import EmailLoginPage from './pages/EmailLoginPage'
-import RegisterPage from './pages/RegisterPage'
+
+// 나머지는 lazy load
+const UploadPage = lazy(() => import('./pages/UploadPage'))
+const RewardsPage = lazy(() => import('./pages/RewardsPage'))
+const ChallengePage = lazy(() => import('./pages/ChallengePage'))
+const ChallengeCreatePage = lazy(() => import('./pages/ChallengeCreatePage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const AdminPage = lazy(() => import('./pages/AdminPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
+const TeamPage = lazy(() => import('./pages/TeamPage'))
+const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
+const SetupUsernamePage = lazy(() => import('./pages/SetupUsernamePage'))
+const MyChallengeDashboardPage = lazy(() => import('./pages/MyChallengeDashboardPage'))
+const ChallengeDashboardPage = lazy(() => import('./pages/ChallengeDashboardPage'))
+const ChallengeDetailPage = lazy(() => import('./pages/ChallengeDetailPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
+const SharedVideoPage = lazy(() => import('./pages/SharedVideoPage'))
+const LightningWalletGuidePage = lazy(() => import('./pages/LightningWalletGuidePage'))
+const LightningLoginPage = lazy(() => import('./pages/LightningLoginPage'))
+const EmailLoginPage = lazy(() => import('./pages/EmailLoginPage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -99,6 +104,7 @@ function Layout() {
     <div className="relative h-full">
       {updateAvailable && !isFlutter && <UpdateBanner />}
       <div key={location.key} className="absolute inset-0 page-enter">
+      <Suspense fallback={<LoadingScreen />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/lightning" element={<LightningLoginPage />} />
@@ -144,6 +150,7 @@ function Layout() {
         <Route path="/shorts/:shareToken" element={<SharedVideoPage />} />
         <Route path="/lightning-guide" element={<LightningWalletGuidePage />} />
       </Routes>
+      </Suspense>
       </div>
       {!hideNav && !isFlutter && <BottomNav />}
     </div>

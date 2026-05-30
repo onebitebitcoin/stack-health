@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from PIL import Image
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models.challenge import Challenge, ChallengeParticipation
@@ -20,25 +20,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/challenges", tags=["challenges"])
 
 
-def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> ChallengeSchema:
-    participant_count = (
-        db.query(func.count(ChallengeParticipation.id))
-        .filter(ChallengeParticipation.challenge_id == challenge.id)
-        .scalar()
-        or 0
-    )
+def _to_schema(
+    challenge: Challenge,
+    user_id: int | None,
+    db: Session,
+    *,
+    participant_counts: dict[int, int] | None = None,
+    my_participations: dict[int, ChallengeParticipation] | None = None,
+    creator_map: dict[int, User] | None = None,
+) -> ChallengeSchema:
+    if participant_counts is not None:
+        participant_count = participant_counts.get(challenge.id, 0)
+    else:
+        participant_count = (
+            db.query(func.count(ChallengeParticipation.id))
+            .filter(ChallengeParticipation.challenge_id == challenge.id)
+            .scalar()
+            or 0
+        )
+
     my_upload_count = 0
     joined = False
     completed = False
     if user_id:
-        p = (
-            db.query(ChallengeParticipation)
-            .filter(
-                ChallengeParticipation.challenge_id == challenge.id,
-                ChallengeParticipation.user_id == user_id,
+        if my_participations is not None:
+            p = my_participations.get(challenge.id)
+        else:
+            p = (
+                db.query(ChallengeParticipation)
+                .filter(
+                    ChallengeParticipation.challenge_id == challenge.id,
+                    ChallengeParticipation.user_id == user_id,
+                )
+                .first()
             )
-            .first()
-        )
         if p:
             joined = True
             my_upload_count = p.upload_count
@@ -46,7 +61,10 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
 
     creator_username: str | None = None
     if challenge.creator_id:
-        creator = db.get(User, challenge.creator_id)
+        if creator_map is not None:
+            creator = creator_map.get(challenge.creator_id)
+        else:
+            creator = db.get(User, challenge.creator_id)
         creator_username = creator.username if creator else None
 
     return ChallengeSchema(
@@ -68,6 +86,45 @@ def _to_schema(challenge: Challenge, user_id: int | None, db: Session) -> Challe
         image_url=challenge.image_url,
         image_thumb_url=challenge.image_thumb_url,
     )
+
+
+def _build_batch_maps(
+    challenges: list[Challenge],
+    user_id: int | None,
+    db: Session,
+) -> tuple[dict[int, int], dict[int, ChallengeParticipation], dict[int, User]]:
+    """챌린지 목록에 대한 N+1 없이 배치 조회."""
+    ids = [c.id for c in challenges]
+
+    participant_counts: dict[int, int] = {}
+    if ids:
+        rows = (
+            db.query(ChallengeParticipation.challenge_id, func.count(ChallengeParticipation.id))
+            .filter(ChallengeParticipation.challenge_id.in_(ids))
+            .group_by(ChallengeParticipation.challenge_id)
+            .all()
+        )
+        participant_counts = {cid: cnt for cid, cnt in rows}
+
+    my_participations: dict[int, ChallengeParticipation] = {}
+    if user_id and ids:
+        ps = (
+            db.query(ChallengeParticipation)
+            .filter(
+                ChallengeParticipation.challenge_id.in_(ids),
+                ChallengeParticipation.user_id == user_id,
+            )
+            .all()
+        )
+        my_participations = {p.challenge_id: p for p in ps}
+
+    creator_ids = list({c.creator_id for c in challenges if c.creator_id})
+    creator_map: dict[int, User] = {}
+    if creator_ids:
+        creators = db.query(User).filter(User.id.in_(creator_ids)).all()
+        creator_map = {u.id: u for u in creators}
+
+    return participant_counts, my_participations, creator_map
 
 
 @router.get("")
@@ -96,7 +153,17 @@ def list_challenges(
             challenges = [c for c in challenges if c.id in joined_ids]
         else:
             challenges = [c for c in challenges if c.id not in joined_ids]
-    return {"data": {"challenges": [_to_schema(c, uid, db) for c in challenges]}}
+
+    participant_counts, my_participations, creator_map = _build_batch_maps(challenges, uid, db)
+    return {
+        "data": {
+            "challenges": [
+                _to_schema(c, uid, db, participant_counts=participant_counts,
+                           my_participations=my_participations, creator_map=creator_map)
+                for c in challenges
+            ]
+        }
+    }
 
 
 @router.post("")
@@ -190,28 +257,30 @@ def my_created_challenges(
         .order_by(Challenge.created_at.desc())
         .all()
     )
-    result = []
-    for c in challenges:
-        participant_count = (
-            db.query(func.count(ChallengeParticipation.id))
-            .filter(ChallengeParticipation.challenge_id == c.id)
-            .scalar()
-            or 0
-        )
-        completed_count = (
-            db.query(func.count(ChallengeParticipation.id))
+    ids = [c.id for c in challenges]
+    participant_counts, my_participations, creator_map = _build_batch_maps(challenges, current_user.id, db)
+
+    completed_counts: dict[int, int] = {}
+    if ids:
+        rows = (
+            db.query(ChallengeParticipation.challenge_id, func.count(ChallengeParticipation.id))
             .filter(
-                ChallengeParticipation.challenge_id == c.id,
+                ChallengeParticipation.challenge_id.in_(ids),
                 ChallengeParticipation.completed_at != None,  # noqa: E711
             )
-            .scalar()
-            or 0
+            .group_by(ChallengeParticipation.challenge_id)
+            .all()
         )
-        schema = _to_schema(c, current_user.id, db)
+        completed_counts = {cid: cnt for cid, cnt in rows}
+
+    result = []
+    for c in challenges:
+        schema = _to_schema(c, current_user.id, db, participant_counts=participant_counts,
+                            my_participations=my_participations, creator_map=creator_map)
         result.append({
             **schema.model_dump(),
-            "participant_count": participant_count,
-            "completed_count": completed_count,
+            "participant_count": participant_counts.get(c.id, 0),
+            "completed_count": completed_counts.get(c.id, 0),
         })
     return {"data": {"challenges": result}}
 
@@ -224,13 +293,17 @@ def my_challenges(
     participations = (
         db.query(ChallengeParticipation)
         .filter(ChallengeParticipation.user_id == current_user.id)
+        .options(selectinload(ChallengeParticipation.challenge))
         .order_by(ChallengeParticipation.joined_at.desc())
         .all()
     )
-    result = []
-    for p in participations:
-        schema = _to_schema(p.challenge, current_user.id, db)
-        result.append(schema)
+    challenges = [p.challenge for p in participations]
+    participant_counts, my_participations, creator_map = _build_batch_maps(challenges, current_user.id, db)
+    result = [
+        _to_schema(p.challenge, current_user.id, db, participant_counts=participant_counts,
+                   my_participations=my_participations, creator_map=creator_map)
+        for p in participations
+    ]
     return {"data": {"challenges": result}}
 
 
@@ -331,6 +404,7 @@ def challenge_participants(
     participations = (
         db.query(ChallengeParticipation)
         .filter(ChallengeParticipation.challenge_id == challenge_id)
+        .options(selectinload(ChallengeParticipation.user))
         .order_by(
             ChallengeParticipation.completed_at.desc().nulls_last(),
             ChallengeParticipation.upload_count.desc(),
@@ -339,7 +413,7 @@ def challenge_participants(
     )
     result = []
     for p in participations:
-        user = db.query(User).filter(User.id == p.user_id).first()
+        user = p.user
         progress = (
             min(100, round((p.upload_count / challenge.condition_value) * 100))
             if challenge.condition_value > 0

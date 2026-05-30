@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, func as sqlfunc, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload, joinedload
 
 from app.database import get_db
 from app.models.challenge import ChallengeParticipation
@@ -260,6 +260,7 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
         db.query(Post)
         .join(Post.video)
         .filter(Post.user_id == user_id, Video.status == "active")
+        .options(selectinload(Post.video))
         .order_by(Post.created_at.desc())
         .limit(50)
         .all()
@@ -290,6 +291,7 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
     participations = (
         db.query(ChallengeParticipation)
         .filter(ChallengeParticipation.user_id == user_id)
+        .options(joinedload(ChallengeParticipation.challenge))
         .all()
     )
 

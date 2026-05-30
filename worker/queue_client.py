@@ -42,9 +42,22 @@ def enqueue_job(r: redis.Redis, payload: dict) -> str:
     return job_id
 
 
+PROCESSING_QUEUE = f"{QUEUE_NAME}:processing"
+
+
 def dequeue_job(r: redis.Redis, timeout: int = 5) -> dict | None:
-    result = r.brpop(QUEUE_NAME, timeout=timeout)
-    if result is None:
+    """LMOVE(brpoplpush)로 잡을 processing 리스트로 원자적 이동.
+
+    워커가 처리 중 크래시해도 잡이 processing에 남아 재처리할 수 있다.
+    완료 후 ack_job()으로 processing에서 제거한다.
+    """
+    raw = r.blmove(QUEUE_NAME, PROCESSING_QUEUE, timeout=timeout, src="RIGHT", dest="LEFT")
+    if raw is None:
         return None
-    _, raw = result
     return json.loads(raw)
+
+
+def ack_job(r: redis.Redis, payload: dict) -> None:
+    """처리 완료된 잡을 processing 리스트에서 제거."""
+    raw = json.dumps(payload)
+    r.lrem(PROCESSING_QUEUE, 1, raw)
