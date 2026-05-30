@@ -130,6 +130,7 @@ def settle_queued_rewards(db: Session, user_id: int | None = None) -> int:
     rewards = query.all()
     for reward in rewards:
         reward.status = REWARD_STATUS_FIXED
+        reward.week_label = current_week_label
     if rewards:
         db.flush()
     return len(rewards)

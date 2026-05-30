@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -26,9 +25,9 @@ def _upload(client: TestClient, token: str, user_id: int, filename: str = "v.mp4
 
 
 def _age_queued_rewards(db: Session) -> None:
-    cutoff = datetime.utcnow() - timedelta(days=1, seconds=1)
+    """Simulate rewards belonging to a past week so settle_queued_rewards fixes them."""
     for reward in db.query(RewardPoint).filter(RewardPoint.status == "queued").all():
-        reward.created_at = cutoff
+        reward.week_label = "2000-W01"
     db.commit()
 
 
@@ -54,7 +53,7 @@ def test_summary_points_after_upload(client: TestClient) -> None:
     assert data["claimable"] is True  # no minimum, not claimed yet
 
 
-def test_summary_moves_queued_upload_reward_to_fixed_after_one_day(client: TestClient, db: Session) -> None:
+def test_summary_moves_queued_upload_reward_to_fixed_after_week(client: TestClient, db: Session) -> None:
     token, user = _reg(client, "settle@x.com", "settleuser")
     _upload(client, token, user["id"], "settle.mp4")
     _age_queued_rewards(db)
