@@ -467,9 +467,7 @@ export default function ProfilePage() {
                   )}
                   <div className="absolute inset-0 bg-black/30" />
                   {isPending && (
-                    <div className="absolute top-1.5 left-1.5 rounded-full bg-yellow-400 px-1.5 py-0.5">
-                      <span className="text-[9px] font-bold text-black leading-none">대기</span>
-                    </div>
+                    <div className="absolute top-1.5 left-1.5 h-2 w-2 rounded-full bg-yellow-400" />
                   )}
                   <div className="absolute bottom-1.5 right-1 flex items-center gap-2 text-white/90">
                     <div className="flex items-center gap-0.5">
