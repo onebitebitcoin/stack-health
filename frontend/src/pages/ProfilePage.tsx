@@ -45,9 +45,17 @@ export default function ProfilePage() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const weeklyHistoryRef = useRef<HTMLDivElement>(null)
+  const pendingScrollToHistory = useRef(false)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   const videoItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const pendingScrollIdx = useRef<number>(0)
+
+  useEffect(() => {
+    if (showWeeklyHistory && pendingScrollToHistory.current) {
+      pendingScrollToHistory.current = false
+      weeklyHistoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [showWeeklyHistory])
 
   useEffect(() => {
     videoRefs.current = videoRefs.current.slice(0, selectedPosts.length)
@@ -257,8 +265,8 @@ export default function ProfilePage() {
         {weekQueuedPoints > 0 && (
           <button
             onClick={() => {
+              pendingScrollToHistory.current = true
               setShowWeeklyHistory(true)
-              setTimeout(() => weeklyHistoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
             }}
             className="flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1 active:opacity-70"
           >
