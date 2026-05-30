@@ -5,6 +5,9 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from contextlib import asynccontextmanager
+
+import anyio
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,7 +26,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="운동하고 비트코인 받자", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):  # type: ignore[type-arg]
+    await anyio.to_thread.run_sync(ensure_r2_cors)
+    yield
+
+
+app = FastAPI(title="운동하고 비트코인 받자", version="0.1.0", lifespan=lifespan)
 app.router.redirect_slashes = False
 
 app.add_middleware(
@@ -59,10 +68,6 @@ async def add_coop_coep_headers(request: Request, call_next) -> Response:
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Embedder-Policy"] = "credentialless"
     return response
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    ensure_r2_cors()
 
 
 app.include_router(auth.router)
@@ -181,7 +186,6 @@ if _static_dir.exists():
     def spa_fallback(
         full_path: str,
         request: Request,
-        db: Session = Depends(get_db),
     ) -> FileResponse | HTMLResponse:
         # Serve static files first
         file_path = _static_dir / full_path
@@ -194,29 +198,33 @@ if _static_dir.exists():
                 )
             return FileResponse(str(file_path))
 
-        # OG tag injection for share pages (crawler only)
+        # OG tag injection for share pages (crawler only) — DB session opened only here
         m = _SHORTS_RE.match(full_path)
         if m and _is_crawler(request):
             share_token = m.group(1)
             from sqlalchemy.orm import selectinload as _sil
-            post = (
-                db.query(Post)
-                .options(_sil(Post.user), _sil(Post.video))
-                .filter(Post.share_token == share_token)
-                .first()
-            )
-            if post:
-                from app.config import settings as app_settings
-
-                base = app_settings.app_base_url.rstrip("/")
-                image = post.thumbnail_url or f"{base}/og-image.png"
-                video_url = post.video.cdn_url if post.video else None
-                page_url = f"{base}/shorts/{share_token}"
-                og_title, og_desc = _build_og_meta(post)
-                return HTMLResponse(
-                    content=_og_html(og_title, og_desc, image, page_url, video_url),
-                    headers={"Cache-Control": "public, max-age=3600"},
+            from app.database import SessionLocal
+            db = SessionLocal()
+            try:
+                post = (
+                    db.query(Post)
+                    .options(_sil(Post.user), _sil(Post.video))
+                    .filter(Post.share_token == share_token)
+                    .first()
                 )
+                if post:
+                    from app.config import settings as app_settings
+                    base = app_settings.app_base_url.rstrip("/")
+                    image = post.thumbnail_url or f"{base}/og-image.png"
+                    video_url = post.video.cdn_url if post.video else None
+                    page_url = f"{base}/shorts/{share_token}"
+                    og_title, og_desc = _build_og_meta(post)
+                    return HTMLResponse(
+                        content=_og_html(og_title, og_desc, image, page_url, video_url),
+                        headers={"Cache-Control": "public, max-age=3600"},
+                    )
+            finally:
+                db.close()
 
         return FileResponse(
             str(_static_dir / "index.html"),

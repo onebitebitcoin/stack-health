@@ -213,13 +213,22 @@ export default function HistoryPage() {
                       ${isToday ? 'ring-2 ring-accent ring-offset-1 ring-offset-[--bg-page]' : ''}
                     `}
                   >
-                    <video
-                      src={posts[0].cdn_url}
-                      className="absolute inset-0 h-full w-full object-cover"
-                      muted
-                      playsInline
-                      preload="metadata"
-                    />
+                    {posts[0].thumbnail_url ? (
+                      <img
+                        src={posts[0].thumbnail_url}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading="lazy"
+                        alt=""
+                      />
+                    ) : (
+                      <video
+                        src={posts[0].cdn_url}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                    )}
                     {/* 날짜 오버레이 */}
                     <div className="absolute inset-0 bg-black/30" />
                     <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white leading-none">

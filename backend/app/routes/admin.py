@@ -571,6 +571,45 @@ def run_mining_lottery(
     return {"data": result}
 
 
+@router.post("/mining/retry-failed")
+def retry_failed_claims(
+    req: CloseWeekRequest,
+    db: Session = Depends(get_db),
+    _: User | None = Depends(require_admin),
+) -> dict:
+    """failed 상태 클레임을 pending으로 되돌려 다음 run-lottery에서 재처리 가능하게 함."""
+    from app.services import blink as blink_service
+    from app.config import settings
+
+    failed_claims = (
+        db.query(LightningClaim)
+        .filter(
+            LightningClaim.week_label == req.week_label,
+            LightningClaim.status == "failed",
+        )
+        .all()
+    )
+    if not failed_claims:
+        return {"data": {"retried": 0, "results": []}}
+
+    results = []
+    for claim in failed_claims:
+        if settings.blink_api_key:
+            result = blink_service.pay_lightning_address(claim.ln_address, claim.satoshi_amount)
+            if result["success"]:
+                claim.status = "paid"
+                results.append({"claim_id": claim.id, "status": "paid"})
+            else:
+                results.append({"claim_id": claim.id, "status": "failed", "error": result.get("error")})
+        else:
+            claim.status = "pending"
+            results.append({"claim_id": claim.id, "status": "pending"})
+
+    db.commit()
+    paid = sum(1 for r in results if r["status"] == "paid")
+    return {"data": {"retried": len(failed_claims), "paid": paid, "results": results}}
+
+
 @router.post("/mining/close-week")
 def close_mining_week(
     req: CloseWeekRequest,

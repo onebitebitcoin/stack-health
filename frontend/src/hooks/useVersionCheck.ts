@@ -20,14 +20,18 @@ export function useVersionCheck() {
       }
     }
 
-    const id = setInterval(check, POLL_INTERVAL)
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') check()
+    }, POLL_INTERVAL)
 
-    function onFocus() { check() }
-    document.addEventListener('visibilitychange', onFocus)
+    function onVisibility() {
+      if (document.visibilityState === 'visible') check()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
       clearInterval(id)
-      document.removeEventListener('visibilitychange', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [])
 

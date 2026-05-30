@@ -94,7 +94,7 @@ export default function ProfilePage() {
     refetchInterval: 60_000,
   })
 
-  type MyPost = { id: number; cdn_url: string; caption: string | null; created_at: string; like_count: number; view_count: number; comment_count: number }
+  type MyPost = { id: number; cdn_url: string; thumbnail_url?: string | null; caption: string | null; created_at: string; like_count: number; view_count: number; comment_count: number }
   type MyPostsPage = { posts: MyPost[]; has_more: boolean; week_offset: number }
 
   const {
@@ -320,7 +320,7 @@ export default function ProfilePage() {
                         src={posts[0].thumbnail_url}
                         alt=""
                         className="absolute inset-0 h-full w-full object-cover"
-                        loading="eager"
+                        loading="lazy"
                         decoding="async"
                       />
                     ) : (
@@ -385,13 +385,22 @@ export default function ProfilePage() {
                 style={{ width: '28vw', aspectRatio: '9/16' }}
                 onClick={() => openMyPosts(idx)}
               >
-                <video
-                  src={post.cdn_url}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  muted
-                  playsInline
-                  preload="metadata"
-                />
+                {post.thumbnail_url ? (
+                  <img
+                    src={post.thumbnail_url}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                    alt=""
+                  />
+                ) : (
+                  <video
+                    src={post.cdn_url}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                )}
                 <div className="absolute inset-0 bg-black/30" />
                 <div className="absolute bottom-1.5 left-1 right-1 flex items-center justify-between text-white/90">
                   <div className="flex items-center gap-1">

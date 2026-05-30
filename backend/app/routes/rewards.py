@@ -1,4 +1,5 @@
 import logging
+from sqlalchemy.exc import IntegrityError
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -90,7 +91,11 @@ def create_claim(
         status="pending",
     )
     db.add(claim)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="이번 주에 이미 청구하셨습니다")
     db.refresh(claim)
 
     return {"data": {"claim": ClaimSchema.model_validate(claim)}}
