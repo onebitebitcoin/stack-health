@@ -22,6 +22,7 @@ export default function LeaderboardPage() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [period, setPeriod] = useState<'week' | 'month' | 'all'>('week')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -34,9 +35,9 @@ export default function LeaderboardPage() {
   }, [searchInput])
 
   const { data, isLoading, isError } = useQuery<LeaderboardResponse>({
-    queryKey: ['leaderboard-week', page, search],
+    queryKey: ['leaderboard', period, page, search],
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(page), limit: '20', period: 'week' })
+      const params = new URLSearchParams({ page: String(page), limit: '20', period })
       if (search) params.set('search', search)
       const res = await client.get<{ data: LeaderboardEntry[]; total: number; page: number; limit: number; has_next: boolean }>(
         `/users/leaderboard?${params}`
@@ -69,7 +70,19 @@ export default function LeaderboardPage() {
         <div className="flex items-center gap-2 mb-3">
           <Users size={20} strokeWidth={1.5} className="text-theme-primary" />
           <h1 className="text-lg font-bold text-theme-primary">사용자</h1>
-          <span className="ml-auto text-xs text-theme-muted">이번 주 기준</span>
+        </div>
+        <div className="flex rounded-xl bg-theme-surface overflow-hidden mb-3">
+          {(['week', 'month', 'all'] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => { setPeriod(p); setPage(1) }}
+              className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+                period === p ? 'bg-accent text-accent-fg' : 'text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              {p === 'week' ? '이번 주' : p === 'month' ? '이번 달' : '전체'}
+            </button>
+          ))}
         </div>
 
         {/* 검색 */}

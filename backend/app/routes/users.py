@@ -17,6 +17,7 @@ from app.services.reward import (
     REWARD_STATUS_FIXED,
     REWARD_STATUS_QUEUED,
     _parse_tz,
+    get_month_range,
     get_week_range,
     get_weekly_points,
     get_weekly_queued_points,
@@ -244,6 +245,10 @@ def get_leaderboard(
         week_start_utc, week_end_utc = get_week_range(client_tz)
         point_join_cond.append(RewardPoint.created_at >= week_start_utc)
         point_join_cond.append(RewardPoint.created_at < week_end_utc)
+    elif period == "month":
+        month_start_utc, month_end_utc = get_month_range(client_tz)
+        point_join_cond.append(RewardPoint.created_at >= month_start_utc)
+        point_join_cond.append(RewardPoint.created_at < month_end_utc)
 
     base_query = (
         db.query(

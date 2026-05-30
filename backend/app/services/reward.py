@@ -35,6 +35,17 @@ def get_week_range(tz: ZoneInfo) -> tuple[datetime, datetime]:
     return week_start_utc, week_end_utc
 
 
+def get_month_range(tz: ZoneInfo) -> tuple[datetime, datetime]:
+    """Return (month_start_utc, month_end_utc) for the current calendar month in the given timezone."""
+    now_client = datetime.now(tz)
+    month_start_client = now_client.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if now_client.month == 12:
+        next_month_client = month_start_client.replace(year=now_client.year + 1, month=1)
+    else:
+        next_month_client = month_start_client.replace(month=now_client.month + 1)
+    return month_start_client.astimezone(timezone.utc), next_month_client.astimezone(timezone.utc)
+
+
 def points_to_sats(points: float) -> int:
     return int(points * SATS_PER_POINT)
 
