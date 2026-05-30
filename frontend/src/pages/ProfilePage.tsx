@@ -140,6 +140,7 @@ export default function ProfilePage() {
       )
       queryClient.invalidateQueries({ queryKey: ['history'] })
       queryClient.invalidateQueries({ queryKey: ['my-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
       setDeleteConfirmId(null)
     },
   })

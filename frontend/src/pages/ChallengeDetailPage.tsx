@@ -91,6 +91,7 @@ export default function ChallengeDetailPage() {
         { queryKey: ['challenges'] },
         (old) => old?.map((c) => c.id === Number(id) ? { ...c, joined: true, participant_count: c.participant_count + 1 } : c)
       )
+      qc.invalidateQueries({ queryKey: ['my-challenges'] }).catch(() => undefined)
       setActionError('')
     },
     onError: (e: unknown) => setActionError(getApiErrorMessage(e, '참여에 실패했습니다')),
@@ -106,6 +107,7 @@ export default function ChallengeDetailPage() {
         { queryKey: ['challenges'] },
         (old) => old?.map((c) => c.id === Number(id) ? { ...c, joined: false, completed: false, my_upload_count: 0, participant_count: c.participant_count - 1 } : c)
       )
+      qc.invalidateQueries({ queryKey: ['my-challenges'] }).catch(() => undefined)
       setShowLeaveConfirm(false)
       setActionError('')
     },

@@ -152,6 +152,7 @@ export default function UploadPage() {
     qc.invalidateQueries({ queryKey: ['leaderboard-week'] }).catch(() => undefined)
     qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
     qc.invalidateQueries({ queryKey: ['my-challenges-upload'] }).catch(() => undefined)
+    qc.invalidateQueries({ queryKey: ['feed'] }).catch(() => undefined)
   }, [stopPolling, qc])
 
   const abortJob = useCallback((msg: string) => {
