@@ -66,6 +66,7 @@ export default function UploadPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectedTags, setSelectedTags] = useState<Tag[]>([])
   const [caption, setCaption] = useState('')
+  const [hasChallenge, setHasChallenge] = useState<boolean | null>(null)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [challengeSearch, setChallengeSearch] = useState('')
   const [workoutStart, setWorkoutStart] = useState('')
@@ -346,13 +347,25 @@ export default function UploadPage() {
     setStep((prev) => prev - 1)
   }
 
-  const { data: myChallenges = [] } = useQuery<Challenge[]>({
-    queryKey: ['my-challenges-upload'],
+  const { data: allChallenges = [] } = useQuery<Challenge[]>({
+    queryKey: ['challenges-upload-top10'],
     queryFn: async () => {
-      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges/my')
-      return res.data.data.challenges.filter((c) => c.is_active && !c.completed)
+      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params: { limit: 10 } })
+      return res.data.data.challenges
     },
+    enabled: hasChallenge === true,
   })
+
+  const { data: searchChallenges = [] } = useQuery<Challenge[]>({
+    queryKey: ['challenges-upload-search', challengeSearch],
+    queryFn: async () => {
+      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params: { q: challengeSearch, limit: 10 } })
+      return res.data.data.challenges
+    },
+    enabled: hasChallenge === true && challengeSearch.length > 0,
+  })
+
+  const displayedChallenges = challengeSearch ? searchChallenges : allChallenges
 
   async function handleUpload() {
     if (!file) return
@@ -578,77 +591,89 @@ export default function UploadPage() {
               </button>
             ))}
           </div>
-          <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지 선택 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+          <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지</p>
 
-          {/* 선택된 챌린지 표시 */}
-          {selectedChallengeId !== null && (() => {
-            const sel = myChallenges.find((c) => c.id === selectedChallengeId)
-            return sel ? (
-              <div className="flex items-center gap-2 mb-2 rounded-xl bg-accent/15 px-3 py-2">
-                <Trophy size={13} className="text-accent flex-shrink-0" />
-                <span className="text-sm font-medium text-accent flex-1 truncate">{sel.title}</span>
-                <button onClick={() => setSelectedChallengeId(null)} className="text-accent/60 flex-shrink-0">
-                  <X size={14} />
-                </button>
-              </div>
-            ) : null
-          })()}
-
-          {/* 검색 입력 */}
-          <div className="relative mb-2">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted pointer-events-none" />
-            <input
-              type="text"
-              value={challengeSearch}
-              onChange={(e) => setChallengeSearch(e.target.value)}
-              placeholder="챌린지 검색..."
-              className="w-full rounded-xl bg-theme-surface pl-8 pr-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
-            />
-            {challengeSearch && (
-              <button onClick={() => setChallengeSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted">
-                <X size={14} />
-              </button>
-            )}
+          {/* 있음/없음 토글 */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => { setHasChallenge(false); setSelectedChallengeId(null); setChallengeSearch('') }}
+              className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
+                hasChallenge === false ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
+              }`}
+            >
+              없음
+            </button>
+            <button
+              onClick={() => setHasChallenge(true)}
+              className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
+                hasChallenge === true ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
+              }`}
+            >
+              있음
+            </button>
           </div>
 
-          {/* 챌린지 목록 */}
-          <div className="flex flex-col gap-1.5 mb-4 max-h-52 overflow-y-auto">
-            {/* 챌린지 없음 — 검색어 없을 때만 표시 */}
-            {!challengeSearch && (
-              <button
-                onClick={() => setSelectedChallengeId(null)}
-                className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
-                  selectedChallengeId === null ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
-                }`}
-              >
-                <Trophy size={16} strokeWidth={1.5} />
-                <span className="text-sm font-medium">챌린지 없음</span>
-              </button>
-            )}
-            {myChallenges
-              .filter((c) => !challengeSearch || c.title.toLowerCase().includes(challengeSearch.toLowerCase()))
-              .map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => { setSelectedChallengeId(c.id); setChallengeSearch('') }}
-                  className={`flex items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
-                    selectedChallengeId === c.id ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
-                  }`}
-                >
-                  <Trophy size={16} strokeWidth={1.5} className="mt-0.5 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{c.title}</p>
-                    <p className={`text-xs mt-0.5 ${selectedChallengeId === c.id ? 'text-accent-fg/70' : 'text-theme-muted'}`}>
-                      {c.my_upload_count}/{c.condition_value}회 · {c.reward_title}
-                    </p>
+          {/* 챌린지 있음 선택 시 */}
+          {hasChallenge === true && (
+            <>
+              {/* 선택된 챌린지 표시 */}
+              {selectedChallengeId !== null && (() => {
+                const sel = displayedChallenges.find((c) => c.id === selectedChallengeId)
+                  ?? allChallenges.find((c) => c.id === selectedChallengeId)
+                return sel ? (
+                  <div className="flex items-center gap-2 mb-2 rounded-xl bg-accent/15 px-3 py-2">
+                    <Trophy size={13} className="text-accent flex-shrink-0" />
+                    <span className="text-sm font-medium text-accent flex-1 truncate">{sel.title}</span>
+                    <button onClick={() => setSelectedChallengeId(null)} className="text-accent/60 flex-shrink-0">
+                      <X size={14} />
+                    </button>
                   </div>
-                </button>
-              ))
-            }
-            {challengeSearch && myChallenges.filter((c) => c.title.toLowerCase().includes(challengeSearch.toLowerCase())).length === 0 && (
-              <p className="text-sm text-theme-muted text-center py-4">검색 결과가 없습니다</p>
-            )}
-          </div>
+                ) : null
+              })()}
+
+              {/* 검색 입력 */}
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted pointer-events-none" />
+                <input
+                  type="text"
+                  value={challengeSearch}
+                  onChange={(e) => setChallengeSearch(e.target.value)}
+                  placeholder="챌린지 검색..."
+                  className="w-full rounded-xl bg-theme-surface pl-8 pr-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
+                />
+                {challengeSearch && (
+                  <button onClick={() => setChallengeSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* 챌린지 목록 */}
+              <div className="flex flex-col gap-1.5 mb-4 max-h-52 overflow-y-auto">
+                {!challengeSearch && <p className="text-[10px] text-theme-subtle px-1 mb-0.5">인기 챌린지 top 10</p>}
+                {displayedChallenges.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setSelectedChallengeId(c.id); setChallengeSearch('') }}
+                    className={`flex items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                      selectedChallengeId === c.id ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
+                    }`}
+                  >
+                    <Trophy size={16} strokeWidth={1.5} className="mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{c.title}</p>
+                      <p className={`text-xs mt-0.5 ${selectedChallengeId === c.id ? 'text-accent-fg/70' : 'text-theme-muted'}`}>
+                        {c.participant_count}명 참여 · {c.reward_title}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+                {challengeSearch && searchChallenges.length === 0 && (
+                  <p className="text-sm text-theme-muted text-center py-4">검색 결과가 없습니다</p>
+                )}
+              </div>
+            </>
+          )}
           {limitError && (
             <p className="mb-2 text-sm text-red-400 flex-shrink-0">{limitError}</p>
           )}
