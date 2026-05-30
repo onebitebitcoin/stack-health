@@ -34,9 +34,6 @@ class User(Base):
     reward_points: Mapped[list["RewardPoint"]] = relationship(  # noqa: F821
         "RewardPoint", back_populates="user"
     )
-    claims: Mapped[list["LightningClaim"]] = relationship(  # noqa: F821
-        "LightningClaim", back_populates="user"
-    )
     comments: Mapped[list["Comment"]] = relationship("Comment", back_populates="user")  # noqa: F821
     challenge_participations: Mapped[list["ChallengeParticipation"]] = relationship(  # noqa: F821
         "ChallengeParticipation", back_populates="user"

@@ -13,7 +13,6 @@ class RewardPoint(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    week_label: Mapped[str] = mapped_column(String, nullable=False)  # e.g. "2026-W21"
     points: Mapped[float] = mapped_column(Float, nullable=False)
     reason: Mapped[str] = mapped_column(String, nullable=False)  # upload | comment
     reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

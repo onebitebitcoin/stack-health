@@ -17,12 +17,14 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("posts", sa.Column("challenge_id", sa.Integer(), nullable=True))
-    op.create_foreign_key("fk_posts_challenge_id", "posts", "challenges", ["challenge_id"], ["id"])
-    op.create_index("ix_posts_challenge_id", "posts", ["challenge_id"])
+    with op.batch_alter_table("posts", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("challenge_id", sa.Integer(), nullable=True))
+        batch_op.create_foreign_key("fk_posts_challenge_id", "challenges", ["challenge_id"], ["id"])
+        batch_op.create_index("ix_posts_challenge_id", ["challenge_id"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_posts_challenge_id", table_name="posts")
-    op.drop_constraint("fk_posts_challenge_id", "posts", type_="foreignkey")
-    op.drop_column("posts", "challenge_id")
+    with op.batch_alter_table("posts", schema=None) as batch_op:
+        batch_op.drop_index("ix_posts_challenge_id")
+        batch_op.drop_constraint("fk_posts_challenge_id", type_="foreignkey")
+        batch_op.drop_column("challenge_id")

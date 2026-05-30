@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
@@ -10,9 +10,7 @@ from app.database import get_db
 from app.models.admin_log import AdminLog
 from app.models.app_links import AppLinks
 from app.models.challenge import Challenge, ChallengeParticipation
-from app.models.claim import LightningClaim
 from app.models.comment import Comment
-from app.models.mining import MiningRound
 from app.models.post import Post
 from app.models.post_like import PostLike
 from app.models.post_view import PostView
@@ -21,12 +19,11 @@ from app.models.video import Video
 from app.models.user import User
 from app.config import settings
 from app.services import r2 as r2_service
-from app.schemas.reward import ClaimSchema, ClaimWithUserSchema
 from app.schemas.video import VideoSchema
-from app.services import mining as mining_service
 from app.services.reward import (
     REWARD_STATUS_FIXED,
-    get_week_label,
+    _parse_tz,
+    get_week_range,
     points_to_sats,
     revoke_queued_upload_reward,
     settle_queued_rewards,
@@ -57,56 +54,6 @@ def require_admin(
     if user is None or not user.is_admin:
         raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
     return user
-
-
-@router.get("/claims")
-def list_claims(
-    status: Optional[str] = None,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
-) -> dict:
-    query = db.query(LightningClaim)
-    if status:
-        query = query.filter(LightningClaim.status == status)
-    claims = query.order_by(LightningClaim.created_at.desc()).limit(limit).all()
-
-    user_ids = [c.user_id for c in claims]
-    users_map = {
-        u.id: u
-        for u in db.query(User).filter(User.id.in_(user_ids)).all()
-    } if user_ids else {}
-
-    result = []
-    for c in claims:
-        user = users_map.get(c.user_id)
-        schema = ClaimWithUserSchema(
-            **ClaimSchema.model_validate(c).model_dump(),
-            username=user.username if user else "",
-            email=user.email if user else "",
-        )
-        result.append(schema)
-
-    return {"data": {"claims": result}}
-
-
-@router.patch("/claims/{claim_id}/mark-paid")
-def mark_paid(
-    claim_id: int,
-    payment_memo: Optional[str] = None,
-    db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
-) -> dict:
-    claim = db.query(LightningClaim).filter(LightningClaim.id == claim_id).first()
-    if claim is None:
-        raise HTTPException(status_code=404, detail="청구 내역을 찾을 수 없습니다")
-
-    claim.status = "paid"
-    if payment_memo is not None:
-        claim.payment_memo = payment_memo
-    db.commit()
-    db.refresh(claim)
-    return {"data": {"claim": ClaimSchema.model_validate(claim)}}
 
 
 @router.get("/videos")
@@ -335,7 +282,6 @@ def delete_user(
 
     db.query(Comment).filter(Comment.user_id == user_id).delete(synchronize_session=False)
     db.query(RewardPoint).filter(RewardPoint.user_id == user_id).delete(synchronize_session=False)
-    db.query(LightningClaim).filter(LightningClaim.user_id == user_id).delete(synchronize_session=False)
     db.query(ChallengeParticipation).filter(ChallengeParticipation.user_id == user_id).delete(synchronize_session=False)
     # 타 게시물에 누른 좋아요/조회 행 삭제 (FK: post_like.user_id, post_view.user_id)
     db.query(PostLike).filter(PostLike.user_id == user_id).delete(synchronize_session=False)
@@ -393,24 +339,14 @@ def get_user_detail(
         .all()
     )
 
-    points_by_week = (
-        db.query(RewardPoint.week_label, func.sum(RewardPoint.points).label("pts"))
+    total_points = (
+        db.query(func.sum(RewardPoint.points))
         .filter(
             RewardPoint.user_id == user_id,
             RewardPoint.status == REWARD_STATUS_FIXED,
         )
-        .group_by(RewardPoint.week_label)
-        .order_by(RewardPoint.week_label.desc())
-        .limit(10)
-        .all()
-    )
-
-    claims = (
-        db.query(LightningClaim)
-        .filter(LightningClaim.user_id == user_id)
-        .order_by(LightningClaim.created_at.desc())
-        .limit(10)
-        .all()
+        .scalar()
+        or 0
     )
 
     return {
@@ -444,35 +380,22 @@ def get_user_detail(
                 }
                 for p in participations
             ],
-            "points_by_week": [
-                {"week_label": row.week_label, "points": row.pts}
-                for row in points_by_week
-            ],
-            "claims": [
-                {
-                    "id": c.id,
-                    "week_label": c.week_label,
-                    "points_used": c.points_used,
-                    "satoshi_amount": c.satoshi_amount,
-                    "ln_address": c.ln_address,
-                    "status": c.status,
-                    "created_at": c.created_at.isoformat(),
-                }
-                for c in claims
-            ],
+            "total_points": round(float(total_points), 2),
         }
     }
 
 
 @router.get("/weekly-summary")
 def weekly_summary(
-    week_label: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     db: Session = Depends(get_db),
     _: User | None = Depends(require_admin),
+    x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
-    wlabel = week_label or get_week_label()
+    client_tz = _parse_tz(x_client_timezone)
+    week_start_utc, week_end_utc = get_week_range(client_tz)
+
     settled_count = settle_queued_rewards(db)
     if settled_count:
         db.commit()
@@ -485,7 +408,8 @@ def weekly_summary(
         )
         .join(User, User.id == RewardPoint.user_id)
         .filter(
-            RewardPoint.week_label == wlabel,
+            RewardPoint.created_at >= week_start_utc,
+            RewardPoint.created_at < week_end_utc,
             RewardPoint.status == REWARD_STATUS_FIXED,
             User.is_banned.is_(False),
         )
@@ -519,106 +443,12 @@ def weekly_summary(
 
     return {
         "data": {
-            "week_label": wlabel,
             "items": items,
             "page": page,
             "has_next": has_next,
             "total_users": total_users,
         }
     }
-
-
-# ─── Mining Distribution ───────────────────────────────────────────────────────
-
-class LotteryRequest(BaseModel):
-    week_label: str
-    n: int = 1008
-
-
-class CloseWeekRequest(BaseModel):
-    week_label: str
-
-
-@router.get("/mining/participants")
-def get_mining_participants(
-    week_label: Optional[str] = None,
-    db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
-) -> dict:
-    wlabel = week_label or get_week_label()
-    participants = mining_service.get_hash_power_distribution(db, wlabel)
-    total_pool = sum(p["sats_bid"] for p in participants)
-    return {
-        "data": {
-            "week_label": wlabel,
-            "participants": participants,
-            "total_pool_sats": total_pool,
-            "participant_count": len(participants),
-        }
-    }
-
-
-@router.post("/mining/run-lottery")
-def run_mining_lottery(
-    req: LotteryRequest,
-    db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
-) -> dict:
-    result = mining_service.run_lottery(db, req.week_label, req.n)
-    if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
-    db.commit()
-    return {"data": result}
-
-
-@router.post("/mining/retry-failed")
-def retry_failed_claims(
-    req: CloseWeekRequest,
-    db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
-) -> dict:
-    """failed 상태 클레임을 pending으로 되돌려 다음 run-lottery에서 재처리 가능하게 함."""
-    from app.services import blink as blink_service
-    from app.config import settings
-
-    failed_claims = (
-        db.query(LightningClaim)
-        .filter(
-            LightningClaim.week_label == req.week_label,
-            LightningClaim.status == "failed",
-        )
-        .all()
-    )
-    if not failed_claims:
-        return {"data": {"retried": 0, "results": []}}
-
-    results = []
-    for claim in failed_claims:
-        if settings.blink_api_key:
-            result = blink_service.pay_lightning_address(claim.ln_address, claim.satoshi_amount)
-            if result["success"]:
-                claim.status = "paid"
-                results.append({"claim_id": claim.id, "status": "paid"})
-            else:
-                results.append({"claim_id": claim.id, "status": "failed", "error": result.get("error")})
-        else:
-            claim.status = "pending"
-            results.append({"claim_id": claim.id, "status": "pending"})
-
-    db.commit()
-    paid = sum(1 for r in results if r["status"] == "paid")
-    return {"data": {"retried": len(failed_claims), "paid": paid, "results": results}}
-
-
-@router.post("/mining/close-week")
-def close_mining_week(
-    req: CloseWeekRequest,
-    db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
-) -> dict:
-    result = mining_service.close_week(db, req.week_label)
-    db.commit()
-    return {"data": result}
 
 
 class AppLinksRequest(BaseModel):
@@ -711,37 +541,3 @@ def confirm_app_upload(
     db.commit()
     db.refresh(links)
     return {"data": _app_links_data(links)}
-
-
-@router.get("/mining/rounds")
-def list_mining_rounds(
-    limit: int = 20,
-    db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
-) -> dict:
-    rounds = (
-        db.query(MiningRound)
-        .order_by(MiningRound.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-    return {
-        "data": {
-            "rounds": [
-                {
-                    "id": r.id,
-                    "week_label": r.week_label,
-                    "total_pool_sats": r.total_pool_sats,
-                    "sats_per_block": r.sats_per_block,
-                    "total_blocks": r.total_blocks,
-                    "participant_count": r.participant_count,
-                    "winner_count": r.winner_count,
-                    "status": r.status,
-                    "created_at": r.created_at.isoformat(),
-                    "distributed_at": r.distributed_at.isoformat() if r.distributed_at else None,
-                    "closed_at": r.closed_at.isoformat() if r.closed_at else None,
-                }
-                for r in rounds
-            ]
-        }
-    }

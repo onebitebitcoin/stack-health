@@ -8,14 +8,12 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 import anyio
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
 
-from app.database import get_db
 from app.models.post import Post
 from app.routes import admin, auth, challenges, comments, feed, history, rewards, users, videos
 from app.services.r2 import ensure_r2_cors

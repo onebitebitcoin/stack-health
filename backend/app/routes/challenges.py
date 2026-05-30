@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models.challenge import Challenge, ChallengeParticipation
-from app.models.claim import LightningClaim
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, ChallengeUpdateRequest, EarnedTitleSchema

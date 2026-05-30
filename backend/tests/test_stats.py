@@ -61,7 +61,7 @@ def test_weekly_points_empty(client: TestClient) -> None:
     data = res.json()["data"]
     assert data["total_points"] == 0.0
     assert data["items"] == []
-    assert "week_label" in data
+    assert "week_number" in data
     assert "start_date" in data
     assert "end_date" in data
 
