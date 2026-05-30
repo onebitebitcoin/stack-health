@@ -115,20 +115,20 @@ function Layout() {
         <Route path="/login/register" element={<RegisterPage />} />
         <Route path="/" element={<RequireAuth><FeedPage /></RequireAuth>} />
         <Route path="/upload" element={<RequireAuth><UploadPage /></RequireAuth>} />
-        <Route path="/challenges" element={<ChallengePage />} />
-        <Route path="/challenges/create" element={<ChallengeCreatePage />} />
-        <Route path="/challenges/:id" element={<ChallengeDetailPage />} />
+        <Route path="/challenges" element={<RequireAuth><ChallengePage /></RequireAuth>} />
+        <Route path="/challenges/create" element={<RequireAuth><ChallengeCreatePage /></RequireAuth>} />
+        <Route path="/challenges/:id" element={<RequireAuth><ChallengeDetailPage /></RequireAuth>} />
         <Route path="/challenges/:id/edit" element={<RequireAuth><ChallengeEditPage /></RequireAuth>} />
         <Route path="/my-challenges" element={<RequireAuth><MyChallengeDashboardPage /></RequireAuth>} />
         <Route path="/challenges/:id/dashboard" element={<RequireAuth><ChallengeDashboardPage /></RequireAuth>} />
         <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
         <Route path="/setup-username" element={<SetupUsernamePage />} />
-        <Route path="/users/:userId" element={<UserProfilePage />} />
+        <Route path="/users/:userId" element={<RequireAuth><UserProfilePage /></RequireAuth>} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
         <Route path="/team" element={<TeamPage />} />
-        <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/leaderboard" element={<RequireAuth><LeaderboardPage /></RequireAuth>} />
         <Route path="/shorts/:shareToken" element={<SharedVideoPage />} />
         <Route path="/lightning-guide" element={<LightningWalletGuidePage />} />
       </Routes>
