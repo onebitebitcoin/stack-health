@@ -98,7 +98,7 @@ export default function ClaimBottomSheet({
           </button>
         </form>
         <p className="mt-3 text-center text-xs text-theme-subtle">
-          해당 주차가 완료된 후 1주일 이내 지급됩니다
+          해당 주차가 완료된 후 Claim하면 지급됩니다
         </p>
       </div>
     </div>
