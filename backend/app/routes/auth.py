@@ -1,7 +1,7 @@
 import io
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse
@@ -35,6 +35,13 @@ from app.services.rate_limit import check_rate_limit
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 LNAUTH_CHALLENGE_TTL = timedelta(minutes=10)
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Return dt as UTC-aware. SQLite returns naive; Postgres returns aware."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 PROFILE_COLORS = [
     "#6366f1", "#8b5cf6", "#ec4899", "#f97316",
@@ -215,8 +222,9 @@ async def google_callback(code: str | None = None, error: str | None = None, db:
     name = user_info.get("name") or user_info.get("given_name") or "user"
     avatar = user_info.get("picture")
 
+    email_verified = user_info.get("email_verified", False)
     user = db.query(User).filter(User.oauth_sub == google_sub, User.oauth_provider == "google").first()
-    if user is None and email:
+    if user is None and email and email_verified:
         user = db.query(User).filter(User.email == email).first()
 
     is_new = user is None
@@ -259,7 +267,7 @@ async def google_callback(code: str | None = None, error: str | None = None, db:
 @router.get("/lnauth/challenge")
 def lnauth_challenge(db: Session = Depends(get_db)) -> dict:
     # Cleanup stale challenges (older than 30 minutes)
-    cutoff = datetime.utcnow() - timedelta(minutes=30)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
     db.query(LNAuthChallenge).filter(LNAuthChallenge.created_at < cutoff).delete()
 
     k1 = generate_k1()
@@ -281,7 +289,7 @@ def lnauth_callback(
     challenge = db.query(LNAuthChallenge).filter(LNAuthChallenge.k1 == k1).first()
     if not challenge:
         raise HTTPException(status_code=400, detail="유효하지 않은 챌린지입니다")
-    if datetime.utcnow() - challenge.created_at > LNAUTH_CHALLENGE_TTL:
+    if datetime.now(timezone.utc) - _as_utc(challenge.created_at) > LNAUTH_CHALLENGE_TTL:
         db.delete(challenge)
         db.commit()
         raise HTTPException(status_code=400, detail="챌린지가 만료되었습니다. 다시 시도해주세요")
@@ -327,7 +335,7 @@ def lnauth_verify(k1: str, db: Session = Depends(get_db)) -> dict:
     challenge = db.query(LNAuthChallenge).filter(LNAuthChallenge.k1 == k1).first()
     if not challenge or not challenge.verified:
         return {"data": {"verified": False}}
-    if datetime.utcnow() - challenge.created_at > LNAUTH_CHALLENGE_TTL:
+    if datetime.now(timezone.utc) - _as_utc(challenge.created_at) > LNAUTH_CHALLENGE_TTL:
         db.delete(challenge)
         db.commit()
         return {"data": {"verified": False}}

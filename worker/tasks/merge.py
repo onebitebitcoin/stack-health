@@ -187,6 +187,7 @@ def run_merge(job: dict) -> dict:
                 Key=merged_key,
                 Body=f,
                 ContentType="video/mp4",
+                CacheControl="public, max-age=31536000, immutable",
             )
 
         cdn_url = f"{R2_PUBLIC_URL}/{merged_key}"

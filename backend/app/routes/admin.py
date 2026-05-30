@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.admin_log import AdminLog
 from app.models.app_links import AppLinks
-from app.models.challenge import ChallengeParticipation
+from app.models.challenge import Challenge, ChallengeParticipation
 from app.models.claim import LightningClaim
 from app.models.comment import Comment
 from app.models.mining import MiningRound
@@ -337,6 +337,13 @@ def delete_user(
     db.query(RewardPoint).filter(RewardPoint.user_id == user_id).delete(synchronize_session=False)
     db.query(LightningClaim).filter(LightningClaim.user_id == user_id).delete(synchronize_session=False)
     db.query(ChallengeParticipation).filter(ChallengeParticipation.user_id == user_id).delete(synchronize_session=False)
+    # 타 게시물에 누른 좋아요/조회 행 삭제 (FK: post_like.user_id, post_view.user_id)
+    db.query(PostLike).filter(PostLike.user_id == user_id).delete(synchronize_session=False)
+    db.query(PostView).filter(PostView.user_id == user_id).delete(synchronize_session=False)
+    # 생성한 챌린지 creator_id NULL 처리 (챌린지 자체는 보존)
+    db.query(Challenge).filter(Challenge.creator_id == user_id).update(
+        {"creator_id": None}, synchronize_session=False
+    )
 
     log = AdminLog(
         action="user_delete",

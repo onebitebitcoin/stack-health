@@ -23,15 +23,21 @@ ALLOWED_CONTENT_TYPES = {
 }
 
 
+_r2_client = None
+
+
 def get_r2_client():
-    return boto3.client(
-        "s3",
-        endpoint_url=f"https://{settings.r2_account_id}.r2.cloudflarestorage.com",
-        aws_access_key_id=settings.r2_access_key_id,
-        aws_secret_access_key=settings.r2_secret_access_key,
-        config=Config(signature_version="s3v4"),
-        region_name="auto",
-    )
+    global _r2_client
+    if _r2_client is None:
+        _r2_client = boto3.client(
+            "s3",
+            endpoint_url=f"https://{settings.r2_account_id}.r2.cloudflarestorage.com",
+            aws_access_key_id=settings.r2_access_key_id,
+            aws_secret_access_key=settings.r2_secret_access_key,
+            config=Config(signature_version="s3v4"),
+            region_name="auto",
+        )
+    return _r2_client
 
 
 def generate_presigned_url(content_type: str, filename: str, user_id: int | None = None) -> tuple[str, str]:
@@ -102,7 +108,10 @@ def upload_fileobj(fileobj: object, content_type: str, filename: str, user_id: i
         fileobj,
         settings.r2_bucket_name,
         r2_key,
-        ExtraArgs={"ContentType": content_type},
+        ExtraArgs={
+            "ContentType": content_type,
+            "CacheControl": "public, max-age=31536000, immutable",
+        },
     )
     return r2_key, get_cdn_url(r2_key)
 

@@ -12,8 +12,9 @@ initTheme(savedUser?.app_settings?.theme as string | null)
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 0,
+      staleTime: 30_000,
       retry: 1,
+      refetchOnWindowFocus: false,
     },
   },
 })

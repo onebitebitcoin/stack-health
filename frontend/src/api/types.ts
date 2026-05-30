@@ -1,6 +1,6 @@
 export interface User {
   id: number
-  email: string
+  email: string | null
   username: string
   lightning_address: string | null
   avatar_url: string | null

@@ -429,6 +429,7 @@ async def merge_audio(
             Key=audio_r2_key,
             Body=audio_bytes,
             ContentType=content_type,
+            CacheControl="public, max-age=31536000, immutable",
         )
     except Exception as e:
         logger.error("오디오 R2 업로드 실패: %s", e)
@@ -502,6 +503,7 @@ async def upload_proof_image(
             Key=proof_r2_key,
             Body=image_bytes,
             ContentType=content_type,
+            CacheControl="public, max-age=31536000, immutable",
         )
     except Exception as e:
         logger.error("증거 이미지 R2 업로드 실패: %s", e)
@@ -578,6 +580,7 @@ def _r2_upload_and_enqueue(
                 Key=proof_r2_key,
                 Body=proof_bytes,
                 ContentType=proof_content_type,
+                CacheControl="public, max-age=31536000, immutable",
             )
             proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
 

@@ -56,15 +56,15 @@ def pay_lightning_address(ln_address: str, sats: int) -> dict:
             if not payment_request:
                 return {"success": False, "error": "No invoice (pr) in callback response"}
 
-            # Step 3: Pay via Blink GraphQL
+            # Step 3: Pay via Blink GraphQL (use variables to prevent injection)
             mutation = (
-                "mutation { lnInvoicePaymentSend(input: { "
-                f'paymentRequest: "{payment_request}", memo: "workout reward"'
-                " }) { status errors { message } } }"
+                "mutation SendPayment($pr: String!) { "
+                "lnInvoicePaymentSend(input: { paymentRequest: $pr, memo: \"workout reward\" }) "
+                "{ status errors { message } } }"
             )
             gql_resp = client.post(
                 BLINK_GRAPHQL_URL,
-                json={"query": mutation},
+                json={"query": mutation, "variables": {"pr": payment_request}},
                 headers={"X-Api-Key": settings.blink_api_key},
             )
             gql_resp.raise_for_status()

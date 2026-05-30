@@ -178,7 +178,8 @@ def _audio_merge(r2, video_key: str, audio_key: str, duration: float, audio_suff
 
         merged_key = f"videos/merged-{uuid.uuid4()}.mp4"
         with open(tmp_output, "rb") as f:
-            r2.put_object(Bucket=R2_BUCKET_NAME, Key=merged_key, Body=f, ContentType="video/mp4")
+            r2.put_object(Bucket=R2_BUCKET_NAME, Key=merged_key, Body=f, ContentType="video/mp4",
+                          CacheControl="public, max-age=31536000, immutable")
         return merged_key
     except Exception as e:
         logger.warning("Audio merge failed: %s", e)
@@ -322,7 +323,8 @@ def _compress_video(r2, video_key: str) -> tuple[str, int, int, dict] | None:
 
         compressed_key = f"videos/c-{uuid.uuid4()}.mp4"
         with open(tmp_output, "rb") as f:
-            r2.put_object(Bucket=R2_BUCKET_NAME, Key=compressed_key, Body=f, ContentType="video/mp4")
+            r2.put_object(Bucket=R2_BUCKET_NAME, Key=compressed_key, Body=f, ContentType="video/mp4",
+                          CacheControl="public, max-age=31536000, immutable")
         return compressed_key, pre_bytes, post_bytes, video_meta
     except Exception as e:
         logger.warning("Video compression failed (using original): %s", e)

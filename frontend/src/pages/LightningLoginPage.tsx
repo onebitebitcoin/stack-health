@@ -102,7 +102,7 @@ export default function LightningLoginPage() {
       <p className="mb-8 text-sm text-theme-muted">Lightning 로그인</p>
 
       <div className="w-full max-w-sm flex flex-col gap-4">
-        {lnLoading && <p className="text-center text-sm text-theme-muted">챌린지 생성 중...</p>}
+        {lnLoading && <p className="text-center text-sm text-theme-muted">QR 코드 생성 중...</p>}
         {lnError && <p className="text-center text-sm text-red-400">{lnError}</p>}
         {lnExpired && (
           <div className="text-center">

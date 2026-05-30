@@ -2,7 +2,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import case, func, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models.comment import Comment
@@ -62,6 +62,7 @@ def get_feed(
         db.query(Post)
         .join(Post.video)
         .filter(Video.status == "active")
+        .options(selectinload(Post.video), selectinload(Post.user))
         .order_by(Post.id.desc())
     )
     if cursor is not None:
