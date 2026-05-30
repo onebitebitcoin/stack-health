@@ -250,12 +250,37 @@ export default function ChallengeDetailPage() {
                 {formatDate(challenge.start_date)} ~ {formatDate(challenge.end_date)}
               </span>
             </div>
+            {challenge.recruit_end && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-theme-muted flex items-center gap-1.5">
+                  <CalendarDays size={14} />
+                  모집 기간
+                </span>
+                <span className="text-theme-primary font-medium">
+                  {challenge.recruit_start ? formatDate(challenge.recruit_start) + ' ~ ' : '~ '}
+                  {formatDate(challenge.recruit_end)}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-theme-muted flex items-center gap-1.5">
                 <Users size={14} />
                 참여자
               </span>
-              <span className="text-theme-primary font-medium">{challenge.participant_count}명</span>
+              <span className="text-theme-primary font-medium">
+                {challenge.participant_count}명
+                {challenge.max_participants ? ` / ${challenge.max_participants}명` : ''}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-theme-muted">모집 상태</span>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                challenge.is_recruiting !== false
+                  ? 'bg-accent/15 text-accent'
+                  : 'bg-theme-surface2 text-theme-muted'
+              }`}>
+                {challenge.is_recruiting !== false ? '모집 중' : '마감'}
+              </span>
             </div>
             {challenge.goal_description && (
               <div className="flex items-start justify-between text-sm gap-4">
@@ -302,7 +327,7 @@ export default function ChallengeDetailPage() {
           {actionError && <p className="text-xs text-red-400">{actionError}</p>}
 
           {/* 액션 버튼 */}
-          {!challenge.joined && challenge.is_active && (
+          {!challenge.joined && challenge.is_active && challenge.is_recruiting !== false && (
             <button
               onClick={() => {
                 if (!user) { navigate('/login'); return }
@@ -314,6 +339,11 @@ export default function ChallengeDetailPage() {
             >
               {joinMutation.isPending ? '참여 중...' : '챌린지 참여하기'}
             </button>
+          )}
+          {!challenge.joined && challenge.is_active && challenge.is_recruiting === false && (
+            <div className="rounded-2xl bg-theme-surface py-3 text-sm font-medium text-theme-muted text-center">
+              모집 마감
+            </div>
           )}
 
           {challenge.joined && !challenge.completed && (

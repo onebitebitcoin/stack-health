@@ -68,14 +68,28 @@ def _to_schema(
             creator = db.get(User, challenge.creator_id)
         creator_username = creator.username if creator else None
 
+    now = datetime.now(timezone.utc)
+    recruit_end = challenge.recruit_end
+    if recruit_end and recruit_end.tzinfo is None:
+        recruit_end = recruit_end.replace(tzinfo=timezone.utc)
+    is_recruiting = (
+        (recruit_end is None or now <= recruit_end)
+        and (challenge.max_participants is None or participant_count < challenge.max_participants)
+    )
+
     return ChallengeSchema(
         id=challenge.id,
         title=challenge.title,
         description=challenge.description,
         reward_title=challenge.reward_title,
         condition_value=challenge.condition_value,
+        goal_description=challenge.goal_description,
         start_date=challenge.start_date,
         end_date=challenge.end_date,
+        recruit_start=challenge.recruit_start,
+        recruit_end=challenge.recruit_end,
+        max_participants=challenge.max_participants,
+        is_recruiting=is_recruiting,
         is_active=challenge.is_active,
         categories=challenge.categories or [],
         participant_count=participant_count,
@@ -131,8 +145,8 @@ def _build_batch_maps(
 @router.get("")
 def list_challenges(
     q: str | None = Query(None),
-    category: str | None = Query(None),
     joined: bool | None = Query(None),
+    available: bool | None = Query(None),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -141,32 +155,36 @@ def list_challenges(
     query = db.query(Challenge).filter(Challenge.is_active == True)  # noqa: E712
     if q:
         query = query.filter(Challenge.title.ilike(f"%{q}%"))
-    if category:
-        query = query.filter(cast(Challenge.categories, String).contains(f'"{category}"'))
     challenges = query.order_by(Challenge.start_date.desc()).offset(offset).limit(limit).all()
     uid = current_user.id if current_user else None
-    if joined is not None and uid:
+
+    if uid:
         joined_ids = set(
             db.query(ChallengeParticipation.challenge_id)
             .filter(ChallengeParticipation.user_id == uid)
             .scalars()
             .all()
         )
-        if joined:
-            challenges = [c for c in challenges if c.id in joined_ids]
-        else:
-            challenges = [c for c in challenges if c.id not in joined_ids]
+    else:
+        joined_ids = set()
 
     participant_counts, my_participations, creator_map = _build_batch_maps(challenges, uid, db)
-    return {
-        "data": {
-            "challenges": [
-                _to_schema(c, uid, db, participant_counts=participant_counts,
-                           my_participations=my_participations, creator_map=creator_map)
-                for c in challenges
-            ]
-        }
-    }
+    schemas = [
+        _to_schema(c, uid, db, participant_counts=participant_counts,
+                   my_participations=my_participations, creator_map=creator_map)
+        for c in challenges
+    ]
+
+    if joined is not None and uid:
+        if joined:
+            schemas = [s for s in schemas if s.joined]
+        else:
+            schemas = [s for s in schemas if not s.joined]
+
+    if available and uid:
+        schemas = [s for s in schemas if not s.joined and s.is_recruiting]
+
+    return {"data": {"challenges": schemas}}
 
 
 def _assert_reward_title_unique(db: Session, reward_title: str, exclude_id: int | None = None) -> None:
@@ -194,6 +212,9 @@ def create_challenge(
             goal_description=body.goal_description,
             start_date=body.start_date,
             end_date=body.end_date,
+            recruit_start=body.recruit_start,
+            recruit_end=body.recruit_end,
+            max_participants=body.max_participants,
             categories=body.categories,
             is_active=True,
             creator_id=current_user.id,
@@ -381,6 +402,23 @@ def join_challenge(
     if not challenge.is_active:
         raise HTTPException(status_code=400, detail="종료된 챌린지입니다")
 
+    now = datetime.now(timezone.utc)
+    recruit_end = challenge.recruit_end
+    if recruit_end:
+        if recruit_end.tzinfo is None:
+            recruit_end = recruit_end.replace(tzinfo=timezone.utc)
+        if now > recruit_end:
+            raise HTTPException(status_code=400, detail="모집이 마감되었습니다")
+
+    if challenge.max_participants is not None:
+        count = (
+            db.query(func.count(ChallengeParticipation.id))
+            .filter(ChallengeParticipation.challenge_id == challenge_id)
+            .scalar()
+        ) or 0
+        if count >= challenge.max_participants:
+            raise HTTPException(status_code=400, detail="모집 인원이 가득 찼습니다")
+
     existing = (
         db.query(ChallengeParticipation)
         .filter(
@@ -532,6 +570,12 @@ def update_challenge(
         challenge.categories = body.categories
     if body.goal_description is not None:
         challenge.goal_description = body.goal_description
+    if body.recruit_start is not None:
+        challenge.recruit_start = body.recruit_start
+    if body.recruit_end is not None:
+        challenge.recruit_end = body.recruit_end
+    if body.max_participants is not None:
+        challenge.max_participants = body.max_participants
     db.commit()
     db.refresh(challenge)
     uid = current_user.id

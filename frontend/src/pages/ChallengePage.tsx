@@ -96,14 +96,15 @@ export default function ChallengePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const [q, setQ] = useState('')
-  const [joinedOnly, setJoinedOnly] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'joined' | 'available'>('all')
 
   const { data: challenges = [], isLoading } = useQuery<Challenge[]>({
-    queryKey: ['challenges', q, joinedOnly],
+    queryKey: ['challenges', q, filter],
     queryFn: async () => {
       const params: Record<string, string | boolean> = {}
       if (q) params.q = q
-      if (joinedOnly) params.joined = true
+      if (filter === 'joined') params.joined = true
+      if (filter === 'available') params.available = true
       const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params })
       return res.data.data.challenges
     },
@@ -127,17 +128,23 @@ export default function ChallengePage() {
         )}
       </div>
 
-      {/* 참여중 필터 */}
+      {/* 필터 */}
       {user && (
-        <div className="px-4 mb-3">
-          <button
-            onClick={() => setJoinedOnly((v) => !v)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              joinedOnly ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
-            }`}
-          >
-            참여중
-          </button>
+        <div className="px-4 mb-3 flex gap-2">
+          {(['all', 'joined', 'available'] as const).map((f) => {
+            const label = f === 'all' ? '전체' : f === 'joined' ? '참여중' : '참여 가능'
+            return (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  filter === f ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -163,7 +170,7 @@ export default function ChallengePage() {
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center px-6">
           <Dumbbell size={40} className="text-theme-surface2" strokeWidth={1} />
           <p className="text-sm text-theme-muted">
-            {joinedOnly ? '참여 중인 챌린지가 없어요' : q ? '검색 결과가 없어요' : '현재 진행 중인 챌린지가 없어요'}
+            {filter === 'joined' ? '참여 중인 챌린지가 없어요' : filter === 'available' ? '참여 가능한 챌린지가 없어요' : q ? '검색 결과가 없어요' : '현재 진행 중인 챌린지가 없어요'}
           </p>
         </div>
       ) : (

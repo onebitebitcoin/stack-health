@@ -17,8 +17,11 @@ export default function ChallengeCreatePage() {
     description: '',
     reward_title: '',
     goal_description: '',
+    recruit_start: '',
+    recruit_end: '',
     start_date: '',
     end_date: '',
+    max_participants: '',
   })
   const [error, setError] = useState('')
 
@@ -125,8 +128,11 @@ export default function ChallengeCreatePage() {
         reward_title: form.reward_title,
         goal_description: form.goal_description || null,
         condition_value: 30,
+        recruit_start: form.recruit_start || null,
+        recruit_end: form.recruit_end || null,
         start_date: form.start_date,
         end_date: form.end_date,
+        max_participants: form.max_participants ? Number(form.max_participants) : null,
         categories: [],
       })
       const challengeId = res.data.data.challenge.id
@@ -288,19 +294,35 @@ export default function ChallengeCreatePage() {
           />
         </div>
 
-        {/* 날짜 */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-theme-muted mb-1">시작일</label>
+        {/* 모집 기간 */}
+        <div>
+          <label className="block text-xs text-theme-muted mb-1">모집 기간 <span className="text-theme-subtle">(선택 — 미입력 시 상시 모집)</span></label>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="date"
+              value={form.recruit_start}
+              onChange={(e) => setForm((f) => ({ ...f, recruit_start: e.target.value }))}
+              className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
+            />
+            <input
+              type="date"
+              value={form.recruit_end}
+              onChange={(e) => setForm((f) => ({ ...f, recruit_end: e.target.value }))}
+              className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
+            />
+          </div>
+        </div>
+
+        {/* 진행 기간 */}
+        <div>
+          <label className="block text-xs text-theme-muted mb-1">진행 기간</label>
+          <div className="grid grid-cols-2 gap-3">
             <input
               type="date"
               value={form.start_date}
               onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
               className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
             />
-          </div>
-          <div>
-            <label className="block text-xs text-theme-muted mb-1">종료일</label>
             <input
               type="date"
               value={form.end_date}
@@ -308,6 +330,19 @@ export default function ChallengeCreatePage() {
               className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
             />
           </div>
+        </div>
+
+        {/* 모집 인원 */}
+        <div>
+          <label className="block text-xs text-theme-muted mb-1">모집 인원 <span className="text-theme-subtle">(선택 — 미입력 시 무제한)</span></label>
+          <input
+            type="number"
+            min={1}
+            value={form.max_participants}
+            onChange={(e) => setForm((f) => ({ ...f, max_participants: e.target.value }))}
+            placeholder="예: 30"
+            className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
+          />
         </div>
 
         {error && <p className="text-xs text-red-400">{error}</p>}

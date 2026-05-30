@@ -12,6 +12,10 @@ class ChallengeSchema(BaseModel):
     goal_description: str | None = None
     start_date: datetime
     end_date: datetime
+    recruit_start: datetime | None = None
+    recruit_end: datetime | None = None
+    max_participants: int | None = None
+    is_recruiting: bool = True
     is_active: bool
     categories: list[str] = []
     participant_count: int = 0
@@ -34,6 +38,9 @@ class ChallengeCreateRequest(BaseModel):
     goal_description: str | None = None
     start_date: datetime
     end_date: datetime
+    recruit_start: datetime | None = None
+    recruit_end: datetime | None = None
+    max_participants: int | None = None
     categories: list[str] = []
 
 
@@ -45,6 +52,9 @@ class ChallengeUpdateRequest(BaseModel):
     goal_description: str | None = None
     start_date: datetime | None = None
     end_date: datetime | None = None
+    recruit_start: datetime | None = None
+    recruit_end: datetime | None = None
+    max_participants: int | None = None
     categories: list[str] | None = None
 
 

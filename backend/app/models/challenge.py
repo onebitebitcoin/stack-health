@@ -17,6 +17,9 @@ class Challenge(Base):
     reward_title: Mapped[str] = mapped_column(String(80), nullable=False)
     condition_value: Mapped[int] = mapped_column(Integer, nullable=False)  # uploads required
     goal_description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    recruit_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    recruit_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    max_participants: Mapped[int | None] = mapped_column(Integer, nullable=True)
     start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     categories: Mapped[list] = mapped_column(JSON, default=list, nullable=False, server_default="[]")

@@ -115,6 +115,10 @@ export interface Challenge {
   image_url?: string | null
   image_thumb_url?: string | null
   goal_description?: string | null
+  recruit_start?: string | null
+  recruit_end?: string | null
+  max_participants?: number | null
+  is_recruiting?: boolean
 }
 
 export interface ChallengeParticipant {
