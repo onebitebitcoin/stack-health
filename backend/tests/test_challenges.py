@@ -44,6 +44,20 @@ def _confirm_upload(client: TestClient, token: str, user_id: int, filename: str 
         client.post("/api/v1/videos/confirm", json=payload, headers=_auth(token))
 
 
+def _make_admin(db: Session, client: TestClient) -> str:
+    from app.models.user import User
+    res = client.post("/api/v1/auth/register", json={"email": "admin_test@x.com", "username": "admin_test", "password": "pw"})
+    user_id = res.json()["data"]["user"]["id"]
+    token = res.json()["data"]["access_token"]
+    db.query(User).filter(User.id == user_id).update({"is_admin": True})
+    db.commit()
+    return token
+
+
+def _admin_complete(client: TestClient, admin_token: str, challenge_id: int, user_id: int) -> None:
+    client.patch(f"/api/v1/challenges/{challenge_id}/participants/{user_id}/complete", headers=_auth(admin_token))
+
+
 # ── list_challenges ──────────────────────────────────────────────────
 
 def test_list_challenges_empty(client: TestClient) -> None:
@@ -157,9 +171,11 @@ def test_my_titles_empty(client: TestClient) -> None:
 
 def test_my_titles_after_completion(client: TestClient, db: Session) -> None:
     token, user = _register(client, "t2@x.com", "titleuser2")
+    admin_token = _make_admin(db, client)
     challenge = _make_challenge(db, condition_value=1)
     client.post(f"/api/v1/challenges/{challenge.id}/join", headers=_auth(token))
     _confirm_upload(client, token, user["id"], challenge_id=challenge.id)
+    _admin_complete(client, admin_token, challenge.id, user["id"])
     res = client.get("/api/v1/challenges/titles", headers=_auth(token))
     titles = res.json()["data"]["titles"]
     assert len(titles) == 1
@@ -181,6 +197,7 @@ def test_upload_increments_challenge_count(client: TestClient, db: Session) -> N
 
 def test_upload_completes_challenge(client: TestClient, db: Session) -> None:
     token, user = _register(client, "comp@x.com", "completer")
+    admin_token = _make_admin(db, client)
     challenge = _make_challenge(db, condition_value=2)
     client.post(f"/api/v1/challenges/{challenge.id}/join", headers=_auth(token))
     for i in range(2):
@@ -188,7 +205,10 @@ def test_upload_completes_challenge(client: TestClient, db: Session) -> None:
     res = client.get("/api/v1/challenges/my", headers=_auth(token))
     c = res.json()["data"]["challenges"][0]
     assert c["my_upload_count"] == 2
-    assert c["completed"] is True
+    assert c["completed"] is False  # 어드민 확정 전엔 미완료
+    _admin_complete(client, admin_token, challenge.id, user["id"])
+    res2 = client.get("/api/v1/challenges/my", headers=_auth(token))
+    assert res2.json()["data"]["challenges"][0]["completed"] is True
 
 
 def test_upload_with_challenge_not_joined_fails(client: TestClient, db: Session) -> None:
@@ -377,10 +397,12 @@ def test_delete_post_decrements_challenge_count(client: TestClient, db: Session)
 
 def test_delete_post_clears_completed_at_if_below_threshold(client: TestClient, db: Session) -> None:
     token, user = _register(client, "del_comp@x.com", "del_comp_user")
+    admin_token = _make_admin(db, client)
     challenge = _make_challenge(db, condition_value=2)
     client.post(f"/api/v1/challenges/{challenge.id}/join", headers=_auth(token))
     _confirm_upload(client, token, user["id"], "c1.mp4", challenge_id=challenge.id)
     _confirm_upload(client, token, user["id"], "c2.mp4", challenge_id=challenge.id)
+    _admin_complete(client, admin_token, challenge.id, user["id"])
 
     res = client.get("/api/v1/challenges/my", headers=_auth(token))
     assert res.json()["data"]["challenges"][0]["completed"] is True

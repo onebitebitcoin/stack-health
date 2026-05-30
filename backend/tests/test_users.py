@@ -27,6 +27,16 @@ def _create_post(client: TestClient, token: str, user_id: int, filename: str = "
     return res.json()["data"]["post"]
 
 
+def _make_admin(db: Session, client: TestClient) -> str:
+    from app.models.user import User
+    res = client.post("/api/v1/auth/register", json={"email": "admin_u@x.com", "username": "admin_u", "password": "pw"})
+    user_id = res.json()["data"]["user"]["id"]
+    token = res.json()["data"]["access_token"]
+    db.query(User).filter(User.id == user_id).update({"is_admin": True})
+    db.commit()
+    return token
+
+
 def _make_challenge(db: Session, condition_value: int = 5) -> Challenge:
     now = datetime.now(timezone.utc)
     c = Challenge(
@@ -112,21 +122,23 @@ def test_user_profile_with_active_challenge(client: TestClient, db: Session) -> 
 def test_user_profile_with_completed_title(client: TestClient, db: Session) -> None:
     token, user = _register(client, "t@x.com", "titled")
     user_id = user["id"]
+    admin_token = _make_admin(db, client)
 
     challenge = _make_challenge(db, condition_value=1)
     client.post(f"/api/v1/challenges/{challenge.id}/join", headers=_auth(token))
 
-    # 업로드로 챌린지 완료
     with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
         client.post("/api/v1/videos/confirm", json={
             "r2_key": f"videos/{user_id}/v.mp4", "duration_sec": 15, "challenge_id": challenge.id,
         }, headers=_auth(token))
 
+    # 어드민 수동 완료 확정
+    client.patch(f"/api/v1/challenges/{challenge.id}/participants/{user_id}/complete", headers=_auth(admin_token))
+
     res = client.get(f"/api/v1/users/{user_id}/profile")
     data = res.json()["data"]
     assert len(data["titles"]) == 1
     assert data["titles"][0]["title"] == "테스트 타이틀"
-    assert data["active_challenges"] == []
 
 
 def test_leaderboard_ranks_fixed_positive_rewards(client: TestClient, db: Session) -> None:

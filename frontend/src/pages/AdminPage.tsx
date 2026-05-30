@@ -212,52 +212,51 @@ export default function AdminPage() {
         <div className="space-y-3">
           <div className="sticky top-0 z-10 -mx-4 bg-theme-page px-4 pb-2">
             <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted" />
-              <input
-                value={userSearchInput}
-                onChange={(e) => setUserSearchInput(e.target.value)}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                placeholder="닉네임, 이메일, ID 검색"
-                className="w-full rounded-xl border border-theme-border bg-theme-surface py-3 pl-9 pr-9 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
-              />
-              {userSearchInput && (
-                <button
-                  type="button"
-                  onClick={() => { setUserSearchInput(''); setUserSearch('') }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-primary"
-                  aria-label="검색어 지우기"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => refetchUsers()}
-              disabled={usersFetching}
-              className="shrink-0 rounded-xl border border-theme-border bg-theme-surface p-3 text-theme-muted hover:text-theme-primary disabled:opacity-40"
-              aria-label="새로고침"
-            >
-              <RefreshCw size={14} className={usersFetching ? 'animate-spin' : ''} />
-            </button>
-            </div>
-              {showSuggestions && users.length > 0 && userSearchInput && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border border-theme-border bg-theme-surface shadow-lg overflow-hidden">
-                  {users.slice(0, 5).map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onMouseDown={() => { setUserSearchInput(u.username); setShowSuggestions(false) }}
-                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-theme-surface2 flex items-center gap-2"
-                    >
-                      <span className="font-semibold text-theme-primary">@{u.username}</span>
-                      {u.email && <span className="text-xs text-theme-muted truncate">{u.email}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="relative flex-1">
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted" />
+                <input
+                  value={userSearchInput}
+                  onChange={(e) => setUserSearchInput(e.target.value)}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  placeholder="닉네임, 이메일, ID 검색"
+                  className="w-full rounded-xl border border-theme-border bg-theme-surface py-3 pl-9 pr-9 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
+                />
+                {userSearchInput && (
+                  <button
+                    type="button"
+                    onClick={() => { setUserSearchInput(''); setUserSearch('') }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-primary"
+                    aria-label="검색어 지우기"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                {showSuggestions && users.length > 0 && userSearchInput && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border border-theme-border bg-theme-surface shadow-lg overflow-hidden">
+                    {users.slice(0, 5).map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onMouseDown={() => { setUserSearchInput(u.username); setShowSuggestions(false) }}
+                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-theme-surface2 flex items-center gap-2"
+                      >
+                        <span className="font-semibold text-theme-primary">@{u.username}</span>
+                        {u.email && <span className="text-xs text-theme-muted truncate">{u.email}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => refetchUsers()}
+                disabled={usersFetching}
+                className="shrink-0 rounded-xl border border-theme-border bg-theme-surface p-3 text-theme-muted hover:text-theme-primary disabled:opacity-40"
+                aria-label="새로고침"
+              >
+                <RefreshCw size={14} className={usersFetching ? 'animate-spin' : ''} />
+              </button>
             </div>
             {!usersLoading && !usersError && usersData && (
               <p className="mt-2 text-xs text-theme-muted">
