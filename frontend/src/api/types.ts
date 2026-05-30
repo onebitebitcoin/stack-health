@@ -131,6 +131,17 @@ export interface ChallengeParticipant {
   progress: number
 }
 
+export interface ChallengeVideo {
+  post_id: number
+  user_id: number
+  username: string
+  avatar_url: string | null
+  cdn_url: string
+  thumbnail_url: string | null
+  caption: string | null
+  created_at: string
+}
+
 export interface EarnedTitle {
   title: string
   challenge_title: string

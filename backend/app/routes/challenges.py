@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models.challenge import Challenge, ChallengeParticipation
+from app.models.post import Post
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, ChallengeUpdateRequest, EarnedTitleSchema
@@ -436,6 +437,47 @@ def challenge_participants(
             "participants": result,
         }
     }
+
+
+@router.get("/{challenge_id}/videos")
+def challenge_videos(
+    challenge_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+    if challenge.creator_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="챌린지 생성자만 접근할 수 있습니다")
+
+    posts = (
+        db.query(Post)
+        .filter(Post.challenge_id == challenge_id)
+        .options(
+            selectinload(Post.user),
+            selectinload(Post.video),
+        )
+        .order_by(Post.created_at.desc())
+        .all()
+    )
+
+    result = []
+    for post in posts:
+        u = post.user
+        v = post.video
+        result.append({
+            "post_id": post.id,
+            "user_id": post.user_id,
+            "username": u.username if u else "",
+            "avatar_url": u.avatar_url if u else None,
+            "cdn_url": v.cdn_url if v else "",
+            "thumbnail_url": post.thumbnail_url,
+            "caption": post.caption,
+            "created_at": post.created_at.isoformat(),
+        })
+
+    return {"data": {"videos": result}}
 
 
 @router.get("/{challenge_id}")

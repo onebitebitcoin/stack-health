@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Dumbbell, Users, CheckCircle, Plus } from 'lucide-react'
+import { Search, Dumbbell, Users, CheckCircle, Plus, Droplets } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
+import { toSweatL } from '../utils/sweat'
 import type { Challenge } from '../api/types'
 import { useAuthStore } from '../store/auth'
 import LoadingScreen from '../components/LoadingScreen'
@@ -79,7 +80,10 @@ function ChallengeCard({
         {challenge.joined && (
           <div>
             <div className="flex justify-between text-[10px] text-theme-muted mb-0.5">
-              <span>{challenge.my_upload_count}/{challenge.condition_value}회</span>
+              <span className="flex items-center gap-0.5">
+                <Droplets size={10} className="text-accent" />
+                {toSweatL(challenge.my_upload_count)} / {toSweatL(challenge.condition_value)}
+              </span>
               <span>{progress}%</span>
             </div>
             <div className="h-1 w-full rounded-full bg-theme-surface2">

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, Users, CheckCircle, TrendingUp } from 'lucide-react'
+import { ChevronLeft, Users, CheckCircle, TrendingUp, Droplets } from 'lucide-react'
+import { toSweatL } from '../utils/sweat'
 import { useNavigate, useParams } from 'react-router-dom'
 import client from '../api/client'
 import type { Challenge, ChallengeParticipant } from '../api/types'
@@ -93,8 +94,9 @@ export default function ChallengeDashboardPage() {
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-sm font-medium text-theme-primary">{p.username}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-theme-muted">
-                      {p.upload_count}/{p.condition_value}회
+                    <span className="flex items-center gap-0.5 text-xs text-theme-muted">
+                      <Droplets size={11} className="text-accent" />
+                      {toSweatL(p.upload_count)} / {toSweatL(p.condition_value)}
                     </span>
                     {p.completed_at !== null && (
                       <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">

@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays, Edit2, UserCircle } from 'lucide-react'
+import {
+  ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays,
+  Edit2, UserCircle, Droplets, Play, TrendingUp,
+} from 'lucide-react'
 import client from '../api/client'
-import type { Challenge, ChallengeUpdateRequest } from '../api/types'
+import type { Challenge, ChallengeParticipant, ChallengeVideo, ChallengeUpdateRequest } from '../api/types'
+import { toSweatL } from '../utils/sweat'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 import LoadingScreen from '../components/LoadingScreen'
@@ -33,6 +37,15 @@ function formatDate(dateStr: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
 
+function SweatCount({ count, total }: { count: number; total: number }) {
+  return (
+    <span className="flex items-center gap-0.5 text-xs text-theme-muted">
+      <Droplets size={11} className="text-accent" />
+      {toSweatL(count)} / {toSweatL(total)}
+    </span>
+  )
+}
+
 export default function ChallengeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -44,6 +57,7 @@ export default function ChallengeDetailPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [editDesc, setEditDesc] = useState('')
   const [editCategories, setEditCategories] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<'info' | 'manager'>('info')
 
   const { data: challenge, isLoading, isError } = useQuery<Challenge>({
     queryKey: ['challenge', id],
@@ -52,6 +66,27 @@ export default function ChallengeDetailPage() {
       return res.data.data.challenge
     },
     enabled: !!id,
+  })
+
+  const isCreator = !!user && !!challenge && (user.id === challenge.creator_id || user.is_admin)
+  const managerEnabled = isCreator && activeTab === 'manager'
+
+  const { data: participants = [], isLoading: participantsLoading } = useQuery<ChallengeParticipant[]>({
+    queryKey: ['challenge-participants', id],
+    queryFn: async () => {
+      const res = await client.get<{ data: { participants: ChallengeParticipant[] } }>(`/challenges/${id}/participants`)
+      return res.data.data.participants
+    },
+    enabled: managerEnabled,
+  })
+
+  const { data: challengeVideos = [], isLoading: videosLoading } = useQuery<ChallengeVideo[]>({
+    queryKey: ['challenge-videos', id],
+    queryFn: async () => {
+      const res = await client.get<{ data: { videos: ChallengeVideo[] } }>(`/challenges/${id}/videos`)
+      return res.data.data.videos
+    },
+    enabled: managerEnabled,
   })
 
   const joinMutation = useMutation({
@@ -144,8 +179,11 @@ export default function ChallengeDetailPage() {
     )
   }
 
-  const isCreator = user && (user.id === challenge.creator_id || user.is_admin)
   const progress = Math.min(100, Math.round((challenge.my_upload_count / challenge.condition_value) * 100))
+  const completedCount = participants.filter((p) => p.completed_at !== null).length
+  const avgProgress = participants.length > 0
+    ? Math.round(participants.reduce((sum, p) => sum + p.progress, 0) / participants.length)
+    : 0
 
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
@@ -178,194 +216,332 @@ export default function ChallengeDetailPage() {
         )}
       </div>
 
-      {/* 이미지 */}
-      {challenge.image_url && (
-        <div className="mx-4 mb-4 rounded-2xl overflow-hidden bg-theme-surface2 aspect-square">
-          <img
-            src={challenge.image_url}
-            alt=""
-            loading="eager"
-            decoding="async"
-            className="w-full h-full object-cover"
-          />
+      {/* 탭 (매니저만) */}
+      {isCreator && (
+        <div className="px-4 mb-2 flex gap-1">
+          <button
+            onClick={() => setActiveTab('info')}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+              activeTab === 'info'
+                ? 'bg-accent text-accent-fg'
+                : 'bg-theme-surface text-theme-muted'
+            }`}
+          >
+            정보
+          </button>
+          <button
+            onClick={() => setActiveTab('manager')}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
+              activeTab === 'manager'
+                ? 'bg-accent text-accent-fg'
+                : 'bg-theme-surface text-theme-muted'
+            }`}
+          >
+            매니저
+          </button>
         </div>
       )}
 
-      <div className="px-4 flex flex-col gap-4 pb-4">
-        {/* 획득 타이틀 */}
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-theme-muted">획득 타이틀</span>
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 self-start">
-            <Dumbbell size={13} className="text-accent" />
-            <span className="text-sm font-semibold text-accent">{challenge.reward_title}</span>
-          </div>
-        </div>
-
-        {/* 설명 */}
-        {challenge.description && (
-          <p className="text-sm text-theme-muted leading-relaxed">{challenge.description}</p>
-        )}
-
-        {/* 카테고리 */}
-        {challenge.categories?.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {challenge.categories.map((cat) => (
-              <span key={cat} className="rounded-full bg-theme-surface px-2.5 py-1 text-xs text-theme-muted">
-                {CATEGORY_LABELS[cat] ?? cat}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* 챌린지 정보 */}
-        <div className="rounded-2xl bg-theme-surface p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-theme-muted flex items-center gap-1.5">
-              <CalendarDays size={14} />
-              기간
-            </span>
-            <span className="text-theme-primary font-medium">
-              {formatDate(challenge.start_date)} ~ {formatDate(challenge.end_date)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-theme-muted flex items-center gap-1.5">
-              <Users size={14} />
-              참여자
-            </span>
-            <span className="text-theme-primary font-medium">{challenge.participant_count}명</span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-theme-muted">목표</span>
-            <span className="text-theme-primary font-medium">업로드 {challenge.condition_value}회</span>
-          </div>
-          {challenge.creator_username && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-theme-muted flex items-center gap-1.5">
-                <UserCircle size={14} />
-                매니저
-              </span>
-              <span className="text-theme-primary font-medium">@{challenge.creator_username}</span>
-            </div>
-          )}
-        </div>
-
-        {/* 내 진행 상황 */}
-        {challenge.joined && (
-          <div className="rounded-2xl bg-theme-surface p-4">
-            <div className="flex justify-between text-xs text-theme-muted mb-2">
-              <span>내 진행 상황</span>
-              <span>{challenge.my_upload_count} / {challenge.condition_value}회 ({progress}%)</span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-theme-surface2">
-              <div
-                className="h-2 rounded-full bg-accent transition-all"
-                style={{ width: `${progress}%` }}
+      {/* ─── 정보 탭 ─── */}
+      {activeTab === 'info' && (
+        <div className="flex flex-col gap-4 px-4 pb-4">
+          {/* 이미지 */}
+          {challenge.image_url && (
+            <div className="rounded-2xl overflow-hidden bg-theme-surface2 aspect-square">
+              <img
+                src={challenge.image_url}
+                alt=""
+                loading="eager"
+                decoding="async"
+                className="w-full h-full object-cover"
               />
             </div>
-            {challenge.completed && (
-              <div className="mt-2.5 flex items-center gap-1.5 text-xs text-accent">
-                <CheckCircle size={13} />
-                <span>타이틀 '{challenge.reward_title}' 획득!</span>
+          )}
+
+          {/* 획득 타이틀 */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-theme-muted">획득 타이틀</span>
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 self-start">
+              <Dumbbell size={13} className="text-accent" />
+              <span className="text-sm font-semibold text-accent">{challenge.reward_title}</span>
+            </div>
+          </div>
+
+          {/* 설명 */}
+          {challenge.description && (
+            <p className="text-sm text-theme-muted leading-relaxed">{challenge.description}</p>
+          )}
+
+          {/* 카테고리 */}
+          {challenge.categories?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {challenge.categories.map((cat) => (
+                <span key={cat} className="rounded-full bg-theme-surface px-2.5 py-1 text-xs text-theme-muted">
+                  {CATEGORY_LABELS[cat] ?? cat}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* 챌린지 정보 */}
+          <div className="rounded-2xl bg-theme-surface p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-theme-muted flex items-center gap-1.5">
+                <CalendarDays size={14} />
+                기간
+              </span>
+              <span className="text-theme-primary font-medium">
+                {formatDate(challenge.start_date)} ~ {formatDate(challenge.end_date)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-theme-muted flex items-center gap-1.5">
+                <Users size={14} />
+                참여자
+              </span>
+              <span className="text-theme-primary font-medium">{challenge.participant_count}명</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-theme-muted flex items-center gap-1.5">
+                <Droplets size={14} />
+                목표
+              </span>
+              <span className="text-theme-primary font-medium">{toSweatL(challenge.condition_value)}</span>
+            </div>
+            {challenge.creator_username && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-theme-muted flex items-center gap-1.5">
+                  <UserCircle size={14} />
+                  매니저
+                </span>
+                <span className="text-theme-primary font-medium">@{challenge.creator_username}</span>
               </div>
             )}
           </div>
-        )}
 
-        {actionError && <p className="text-xs text-red-400">{actionError}</p>}
-
-        {/* 액션 영역 */}
-        {!challenge.joined && challenge.is_active && (
-          <button
-            onClick={() => {
-              if (!user) { navigate('/login'); return }
-              setActionError('')
-              joinMutation.mutate()
-            }}
-            disabled={joinMutation.isPending}
-            className="rounded-2xl bg-accent py-3 text-sm font-semibold text-accent-fg disabled:opacity-50"
-          >
-            {joinMutation.isPending ? '참여 중...' : '챌린지 참여하기'}
-          </button>
-        )}
-
-        {challenge.joined && !challenge.completed && (
-          <div className="flex gap-2">
-            <div className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-accent/10 py-3">
-              <Dumbbell size={15} className="text-accent" />
-              <span className="text-sm font-semibold text-accent">참여 중</span>
+          {/* 내 진행 상황 */}
+          {challenge.joined && (
+            <div className="rounded-2xl bg-theme-surface p-4">
+              <div className="flex justify-between text-xs text-theme-muted mb-2">
+                <span className="flex items-center gap-1">
+                  <Droplets size={11} className="text-accent" />
+                  내 땀의 양
+                </span>
+                <span>{toSweatL(challenge.my_upload_count)} / {toSweatL(challenge.condition_value)} ({progress}%)</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-theme-surface2">
+                <div
+                  className="h-2 rounded-full bg-accent transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              {challenge.completed && (
+                <div className="mt-2.5 flex items-center gap-1.5 text-xs text-accent">
+                  <CheckCircle size={13} />
+                  <span>타이틀 '{challenge.reward_title}' 획득!</span>
+                </div>
+              )}
             </div>
+          )}
+
+          {actionError && <p className="text-xs text-red-400">{actionError}</p>}
+
+          {/* 액션 버튼 */}
+          {!challenge.joined && challenge.is_active && (
             <button
-              onClick={() => setShowLeaveConfirm(true)}
-              className="flex-1 rounded-2xl border border-red-400/30 py-3 text-sm text-red-400"
+              onClick={() => {
+                if (!user) { navigate('/login'); return }
+                setActionError('')
+                joinMutation.mutate()
+              }}
+              disabled={joinMutation.isPending}
+              className="rounded-2xl bg-accent py-3 text-sm font-semibold text-accent-fg disabled:opacity-50"
             >
-              참여 취소
+              {joinMutation.isPending ? '참여 중...' : '챌린지 참여하기'}
             </button>
-          </div>
-        )}
+          )}
 
-        {challenge.completed && (
-          <div className="flex items-center justify-center gap-1.5 rounded-2xl bg-accent/10 py-3">
-            <CheckCircle size={15} className="text-accent" />
-            <span className="text-sm font-medium text-accent">완료한 챌린지</span>
-          </div>
-        )}
-
-        {/* 수정 폼 (생성자/관리자, 수정 모드) */}
-        {isCreator && isEditing && (
-          <div className="rounded-2xl bg-theme-surface p-4 flex flex-col gap-3 mt-2">
-            <p className="text-sm font-semibold text-theme-primary">챌린지 수정</p>
-            <div>
-              <label className="text-xs text-theme-muted mb-1 block">설명</label>
-              <textarea
-                value={editDesc}
-                onChange={(e) => setEditDesc(e.target.value)}
-                rows={3}
-                className="w-full rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none resize-none"
-                placeholder="챌린지 설명을 입력하세요"
-              />
+          {challenge.joined && !challenge.completed && (
+            <div className="flex gap-2">
+              <div className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-accent/10 py-3">
+                <Dumbbell size={15} className="text-accent" />
+                <span className="text-sm font-semibold text-accent">참여 중</span>
+              </div>
+              <button
+                onClick={() => setShowLeaveConfirm(true)}
+                className="flex-1 rounded-2xl border border-red-400/30 py-3 text-sm text-red-400"
+              >
+                참여 취소
+              </button>
             </div>
-            <div>
-              <label className="text-xs text-theme-muted mb-1.5 block">카테고리</label>
-              <div className="flex flex-wrap gap-1.5">
-                {CATEGORIES.map((cat) => (
-                  <button
-                    key={cat.value}
-                    type="button"
-                    onClick={() => toggleEditCategory(cat.value)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                      editCategories.includes(cat.value)
-                        ? 'bg-accent text-accent-fg'
-                        : 'bg-theme-surface2 text-theme-muted'
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
+          )}
+
+          {challenge.completed && (
+            <div className="flex items-center justify-center gap-1.5 rounded-2xl bg-accent/10 py-3">
+              <CheckCircle size={15} className="text-accent" />
+              <span className="text-sm font-medium text-accent">완료한 챌린지</span>
+            </div>
+          )}
+
+          {/* 수정 폼 */}
+          {isCreator && isEditing && (
+            <div className="rounded-2xl bg-theme-surface p-4 flex flex-col gap-3 mt-2">
+              <p className="text-sm font-semibold text-theme-primary">챌린지 수정</p>
+              <div>
+                <label className="text-xs text-theme-muted mb-1 block">설명</label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none resize-none"
+                  placeholder="챌린지 설명을 입력하세요"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-theme-muted mb-1.5 block">카테고리</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() => toggleEditCategory(cat.value)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        editCategories.includes(cat.value)
+                          ? 'bg-accent text-accent-fg'
+                          : 'bg-theme-surface2 text-theme-muted'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={() =>
+                    updateMutation.mutate({ description: editDesc, categories: editCategories })
+                  }
+                  disabled={updateMutation.isPending}
+                  className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+                >
+                  {updateMutation.isPending ? '저장 중...' : '저장'}
+                </button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setIsEditing(false)}
-                className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted"
-              >
-                취소
-              </button>
-              <button
-                onClick={() =>
-                  updateMutation.mutate({ description: editDesc, categories: editCategories })
-                }
-                disabled={updateMutation.isPending}
-                className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-semibold text-accent-fg disabled:opacity-50"
-              >
-                {updateMutation.isPending ? '저장 중...' : '저장'}
-              </button>
+          )}
+        </div>
+      )}
+
+      {/* ─── 매니저 탭 ─── */}
+      {activeTab === 'manager' && isCreator && (
+        <div className="flex flex-col gap-5 pb-6">
+          {/* 통계 */}
+          <div className="px-4 grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-theme-surface p-3 text-center">
+              <Users size={16} className="text-accent mx-auto mb-1" />
+              <p className="text-lg font-bold text-theme-primary">{participants.length}</p>
+              <p className="text-[10px] text-theme-muted">참여자</p>
+            </div>
+            <div className="rounded-xl bg-theme-surface p-3 text-center">
+              <CheckCircle size={16} className="text-accent mx-auto mb-1" />
+              <p className="text-lg font-bold text-theme-primary">{completedCount}</p>
+              <p className="text-[10px] text-theme-muted">완료</p>
+            </div>
+            <div className="rounded-xl bg-theme-surface p-3 text-center">
+              <TrendingUp size={16} className="text-accent mx-auto mb-1" />
+              <p className="text-lg font-bold text-theme-primary">{avgProgress}%</p>
+              <p className="text-[10px] text-theme-muted">평균 달성</p>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* 삭제 확인 시트 */}
+          {/* 참여자 목록 */}
+          <div className="px-4">
+            <h2 className="text-sm font-semibold text-theme-primary mb-2">참여자 목록</h2>
+            {participantsLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : participants.length === 0 ? (
+              <p className="text-sm text-theme-muted py-6 text-center">아직 참여자가 없어요.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {participants.map((p) => (
+                  <div key={p.user_id} className="rounded-xl bg-theme-surface px-4 py-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-medium text-theme-primary">{p.username}</span>
+                      <div className="flex items-center gap-2">
+                        <SweatCount count={p.upload_count} total={p.condition_value} />
+                        {p.completed_at !== null && (
+                          <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
+                            완료
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-theme-surface2">
+                      <div
+                        className="h-1.5 rounded-full bg-accent transition-all"
+                        style={{ width: `${p.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 업로드된 영상 */}
+          <div className="px-4">
+            <h2 className="text-sm font-semibold text-theme-primary mb-2">
+              업로드된 영상
+              {challengeVideos.length > 0 && (
+                <span className="ml-1.5 text-xs font-normal text-theme-muted">{challengeVideos.length}개</span>
+              )}
+            </h2>
+            {videosLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : challengeVideos.length === 0 ? (
+              <p className="text-sm text-theme-muted py-6 text-center">아직 업로드된 영상이 없어요.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-1.5">
+                {challengeVideos.map((v) => (
+                  <div
+                    key={v.post_id}
+                    className="relative aspect-square rounded-xl overflow-hidden bg-theme-surface2"
+                  >
+                    {v.thumbnail_url ? (
+                      <img
+                        src={v.thumbnail_url}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Play size={18} className="text-theme-muted" />
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 py-1">
+                      <p className="text-[10px] text-white truncate">@{v.username}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 삭제 확인 */}
       {showDeleteConfirm && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
@@ -398,6 +574,7 @@ export default function ChallengeDetailPage() {
         </div>
       )}
 
+      {/* 참여 취소 확인 */}
       {showLeaveConfirm && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
