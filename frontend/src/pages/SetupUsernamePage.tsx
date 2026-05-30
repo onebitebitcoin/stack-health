@@ -48,8 +48,10 @@ export default function SetupUsernamePage() {
     setChecking(true)
     debounceRef.current = setTimeout(async () => {
       try {
+        const params = new URLSearchParams({ username })
+        if (token) params.set('token', token)
         const res = await client.get<{ data: { available: boolean } }>(
-          `/auth/check-username?username=${encodeURIComponent(username)}`,
+          `/auth/check-username?${params.toString()}`,
         )
         setAvailable(res.data.data.available)
       } catch {

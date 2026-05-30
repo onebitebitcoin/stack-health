@@ -134,11 +134,24 @@ def get_me(current_user: User = Depends(get_current_user)) -> dict:
 
 
 @router.get("/check-username")
-def check_username(username: str, db: Session = Depends(get_db)) -> dict:
+def check_username(
+    username: str,
+    token: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
     if len(username) < 2 or len(username) > 30:
         return {"data": {"available": False}}
-    existing = db.query(User).filter(User.username == username).first()
-    return {"data": {"available": existing is None}}
+    exclude_id: int | None = None
+    if token:
+        try:
+            from app.services.auth import decode_token
+            exclude_id = decode_token(token)
+        except Exception:
+            pass
+    query = db.query(User).filter(User.username == username)
+    if exclude_id:
+        query = query.filter(User.id != exclude_id)
+    return {"data": {"available": query.first() is None}}
 
 
 @router.patch("/me")
