@@ -10,11 +10,14 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models.challenge import Challenge, ChallengeParticipation
+from app.models.claim import LightningClaim
 from app.models.user import User
-from app.routes.auth import get_current_user, get_optional_user
+from app.routes.auth import get_active_user, get_current_user, get_optional_user
 from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, ChallengeUpdateRequest, EarnedTitleSchema
+from app.schemas.reward import ClaimRequest, ClaimSchema
 from app.config import settings as app_settings
 from app.services import r2 as r2_service
+from app.services.reward import get_week_label
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/challenges", tags=["challenges"])
@@ -28,6 +31,7 @@ def _to_schema(
     participant_counts: dict[int, int] | None = None,
     my_participations: dict[int, ChallengeParticipation] | None = None,
     creator_map: dict[int, User] | None = None,
+    bitcoin_claimed_ids: set[int] | None = None,
 ) -> ChallengeSchema:
     if participant_counts is not None:
         participant_count = participant_counts.get(challenge.id, 0)
@@ -67,6 +71,22 @@ def _to_schema(
             creator = db.get(User, challenge.creator_id)
         creator_username = creator.username if creator else None
 
+    bitcoin_claimed = False
+    if user_id and challenge.bitcoin_reward_sats:
+        if bitcoin_claimed_ids is not None:
+            bitcoin_claimed = challenge.id in bitcoin_claimed_ids
+        else:
+            bitcoin_claimed = (
+                db.query(LightningClaim)
+                .filter(
+                    LightningClaim.user_id == user_id,
+                    LightningClaim.challenge_id == challenge.id,
+                    LightningClaim.status != "cancelled",
+                )
+                .first()
+                is not None
+            )
+
     return ChallengeSchema(
         id=challenge.id,
         title=challenge.title,
@@ -81,6 +101,8 @@ def _to_schema(
         my_upload_count=my_upload_count,
         joined=joined,
         completed=completed,
+        bitcoin_reward_sats=challenge.bitcoin_reward_sats,
+        bitcoin_claimed=bitcoin_claimed,
         creator_id=challenge.creator_id,
         creator_username=creator_username,
         image_url=challenge.image_url,
@@ -186,6 +208,7 @@ def create_challenge(
             categories=body.categories,
             is_active=True,
             creator_id=current_user.id,
+            bitcoin_reward_sats=body.bitcoin_reward_sats if body.bitcoin_reward_sats and body.bitcoin_reward_sats > 0 else None,
         )
         db.add(challenge)
         db.commit()
@@ -488,6 +511,59 @@ def delete_challenge(
     db.commit()
     logger.info("Challenge deleted: id=%s by user_id=%s", challenge_id, current_user.id)
     return {"data": {"deleted": True}}
+
+
+@router.post("/{challenge_id}/claim-bitcoin")
+def claim_bitcoin_reward(
+    challenge_id: int,
+    req: ClaimRequest,
+    current_user: User = Depends(get_active_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    from sqlalchemy.exc import IntegrityError
+
+    challenge = db.get(Challenge, challenge_id)
+    if not challenge or not challenge.is_active:
+        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+    if not challenge.bitcoin_reward_sats:
+        raise HTTPException(status_code=400, detail="이 챌린지는 Bitcoin 보상이 없습니다")
+
+    participation = (
+        db.query(ChallengeParticipation)
+        .filter(
+            ChallengeParticipation.challenge_id == challenge_id,
+            ChallengeParticipation.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not participation or not participation.completed_at:
+        raise HTTPException(status_code=400, detail="챌린지를 먼저 완료해야 합니다")
+
+    ln_address = req.ln_address or current_user.lightning_address
+    if not ln_address:
+        raise HTTPException(status_code=400, detail="Lightning 주소를 먼저 등록해주세요")
+
+    claim = LightningClaim(
+        user_id=current_user.id,
+        challenge_id=challenge_id,
+        week_label=get_week_label(),
+        points_used=0,
+        satoshi_amount=challenge.bitcoin_reward_sats,
+        ln_address=ln_address,
+        status="pending",
+    )
+    db.add(claim)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="이미 이 챌린지의 Bitcoin 보상을 신청했습니다")
+    db.refresh(claim)
+    logger.info(
+        "Bitcoin claim created: challenge_id=%s user_id=%s sats=%s",
+        challenge_id, current_user.id, challenge.bitcoin_reward_sats,
+    )
+    return {"data": {"claim": ClaimSchema.model_validate(claim)}}
 
 
 def increment_challenge_upload(db: Session, user_id: int, challenge_id: int) -> None:

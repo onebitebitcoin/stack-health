@@ -25,9 +25,11 @@ def _upload(client: TestClient, token: str, user_id: int, filename: str = "v.mp4
 
 
 def _age_queued_rewards(db: Session) -> None:
-    """Simulate rewards belonging to a past week so settle_queued_rewards fixes them."""
+    """Backdate queued rewards past the 24h cutoff so settle_queued_rewards fixes them."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=25)
     for reward in db.query(RewardPoint).filter(RewardPoint.status == "queued").all():
-        reward.week_label = "2000-W01"
+        reward.created_at = cutoff
     db.commit()
 
 
@@ -45,27 +47,21 @@ def test_summary_points_after_upload(client: TestClient) -> None:
     _upload(client, token, user["id"])
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     data = res.json()["data"]
-    # 0.5pt queued, not yet settled
     assert data["current_week_points"] == 0
     assert data["fixed_week_points"] == 0
     assert data["queued_week_points"] == 0.5
-    assert data["satoshi_amount"] == 0
-    assert data["claimable"] is True  # no minimum, not claimed yet
 
 
-def test_summary_moves_queued_upload_reward_to_fixed_after_week(client: TestClient, db: Session) -> None:
+def test_summary_moves_queued_upload_reward_to_fixed_after_24h(client: TestClient, db: Session) -> None:
     token, user = _reg(client, "settle@x.com", "settleuser")
     _upload(client, token, user["id"], "settle.mp4")
     _age_queued_rewards(db)
 
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     data = res.json()["data"]
-    # 0.5pt fixed, 0.5 * 10 sats/pt = 5 sats
     assert data["current_week_points"] == 0.5
     assert data["fixed_week_points"] == 0.5
     assert data["queued_week_points"] == 0
-    assert data["satoshi_amount"] == 5
-    assert data["claimable"] is True  # not claimed yet
 
 
 def test_delete_retrieves_queued_upload_reward(client: TestClient) -> None:
@@ -86,61 +82,93 @@ def test_delete_retrieves_queued_upload_reward(client: TestClient) -> None:
     data = summary_res.json()["data"]
     assert data["current_week_points"] == 0
     assert data["queued_week_points"] == 0
-    assert data["satoshi_amount"] == 0
 
 
-def test_claim_requires_lightning_address(client: TestClient) -> None:
-    token, _ = _reg(client)
-    # No lightning address → 400
-    res = client.post("/api/v1/rewards/claim", json={}, headers=_auth(token))
+def test_claim_list_empty(client: TestClient) -> None:
+    token, _ = _reg(client, "list@x.com", "listuser")
+    res = client.get("/api/v1/rewards/claims", headers=_auth(token))
+    assert res.status_code == 200
+    assert res.json()["data"]["claims"] == []
+
+
+# ── Bitcoin challenge claim tests ─────────────────────────────────────────────
+
+def _create_bitcoin_challenge(client: TestClient, token: str, sats: int = 1000) -> int:
+    res = client.post(
+        "/api/v1/challenges",
+        json={
+            "title": "BTC 챌린지",
+            "description": "완료하면 비트코인!",
+            "reward_title": "Bitcoin 보상",
+            "condition_value": 1,
+            "start_date": "2026-01-01T00:00:00Z",
+            "end_date": "2026-12-31T23:59:59Z",
+            "bitcoin_reward_sats": sats,
+        },
+        headers=_auth(token),
+    )
+    assert res.status_code == 200
+    return res.json()["data"]["challenge"]["id"]
+
+
+def test_bitcoin_claim_requires_completion(client: TestClient) -> None:
+    token, user = _reg(client, "btc1@x.com", "btcuser1")
+    challenge_id = _create_bitcoin_challenge(client, token)
+
+    client.post(f"/api/v1/challenges/{challenge_id}/join", headers=_auth(token))
+    client.patch("/api/v1/auth/me", json={"lightning_address": "u@wallet.com"}, headers=_auth(token))
+
+    res = client.post(f"/api/v1/challenges/{challenge_id}/claim-bitcoin", json={}, headers=_auth(token))
     assert res.status_code == 400
 
 
-def test_claim_success(client: TestClient, db: Session) -> None:
-    token, user = _reg(client)
-    _upload(client, token, user["id"])
-    _age_queued_rewards(db)
+def test_bitcoin_claim_success(client: TestClient) -> None:
+    token, user = _reg(client, "btc2@x.com", "btcuser2")
+    challenge_id = _create_bitcoin_challenge(client, token, sats=5000)
 
-    client.patch("/api/v1/auth/me", json={"lightning_address": "user@walletofsatoshi.com"}, headers=_auth(token))
+    client.post(f"/api/v1/challenges/{challenge_id}/join", headers=_auth(token))
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
+        client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/{user['id']}/c.mp4", "duration_sec": 10, "challenge_id": challenge_id}, headers=_auth(token))
 
-    res = client.post("/api/v1/rewards/claim", json={}, headers=_auth(token))
+    client.patch("/api/v1/auth/me", json={"lightning_address": "u@wallet.com"}, headers=_auth(token))
+    res = client.post(f"/api/v1/challenges/{challenge_id}/claim-bitcoin", json={}, headers=_auth(token))
     assert res.status_code == 200
     claim = res.json()["data"]["claim"]
+    assert claim["satoshi_amount"] == 5000
     assert claim["status"] == "pending"
-    assert claim["satoshi_amount"] == 5
+    assert claim["challenge_id"] == challenge_id
 
 
-def test_claim_duplicate_same_week(client: TestClient, db: Session) -> None:
-    token, user = _reg(client)
-    _upload(client, token, user["id"], "v1.mp4")
-    _upload(client, token, user["id"], "v2.mp4")
-    _age_queued_rewards(db)
-    client.patch("/api/v1/auth/me", json={"lightning_address": "u@w.com"}, headers=_auth(token))
+def test_bitcoin_claim_duplicate(client: TestClient) -> None:
+    token, user = _reg(client, "btc3@x.com", "btcuser3")
+    challenge_id = _create_bitcoin_challenge(client, token)
 
-    client.post("/api/v1/rewards/claim", json={}, headers=_auth(token))
-    res = client.post("/api/v1/rewards/claim", json={}, headers=_auth(token))
+    client.post(f"/api/v1/challenges/{challenge_id}/join", headers=_auth(token))
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4"):
+        client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/{user['id']}/d.mp4", "duration_sec": 10, "challenge_id": challenge_id}, headers=_auth(token))
+
+    client.patch("/api/v1/auth/me", json={"lightning_address": "u@wallet.com"}, headers=_auth(token))
+    client.post(f"/api/v1/challenges/{challenge_id}/claim-bitcoin", json={}, headers=_auth(token))
+    res = client.post(f"/api/v1/challenges/{challenge_id}/claim-bitcoin", json={}, headers=_auth(token))
     assert res.status_code == 409
 
 
-def test_claim_list(client: TestClient, db: Session) -> None:
-    token, user = _reg(client)
-    _upload(client, token, user["id"], "v1.mp4")
-    _upload(client, token, user["id"], "v2.mp4")
-    _age_queued_rewards(db)
-    client.patch("/api/v1/auth/me", json={"lightning_address": "u@w.com"}, headers=_auth(token))
-    client.post("/api/v1/rewards/claim", json={}, headers=_auth(token))
+def test_no_bitcoin_reward_challenge_claim_rejected(client: TestClient) -> None:
+    token, _ = _reg(client, "btc4@x.com", "btcuser4")
+    res = client.post(
+        "/api/v1/challenges",
+        json={
+            "title": "일반 챌린지",
+            "description": "비트코인 없음",
+            "reward_title": "타이틀만",
+            "condition_value": 1,
+            "start_date": "2026-01-01T00:00:00Z",
+            "end_date": "2026-12-31T23:59:59Z",
+        },
+        headers=_auth(token),
+    )
+    challenge_id = res.json()["data"]["challenge"]["id"]
 
-    res = client.get("/api/v1/rewards/claims", headers=_auth(token))
-    assert res.status_code == 200
-    assert len(res.json()["data"]["claims"]) == 1
-
-
-def test_satoshi_calculation(client: TestClient, db: Session) -> None:
-    """0.5pt upload = 0.5 * 10 sats/pt = 5 sats."""
-    token, user = _reg(client)
-    _upload(client, token, user["id"])
-    _age_queued_rewards(db)
-    res = client.get("/api/v1/rewards/summary", headers=_auth(token))
-    data = res.json()["data"]
-    assert data["satoshi_amount"] == 5
-    assert data["claimable"] is True  # no minimum required
+    client.patch("/api/v1/auth/me", json={"lightning_address": "u@wallet.com"}, headers=_auth(token))
+    res = client.post(f"/api/v1/challenges/{challenge_id}/claim-bitcoin", json={}, headers=_auth(token))
+    assert res.status_code == 400

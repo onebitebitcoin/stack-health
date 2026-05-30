@@ -17,6 +17,8 @@ class ChallengeSchema(BaseModel):
     my_upload_count: int = 0
     joined: bool = False
     completed: bool = False
+    bitcoin_reward_sats: int | None = None
+    bitcoin_claimed: bool = False
     creator_id: int | None = None
     creator_username: str | None = None
     image_url: str | None = None
@@ -33,6 +35,7 @@ class ChallengeCreateRequest(BaseModel):
     start_date: datetime
     end_date: datetime
     categories: list[str] = []
+    bitcoin_reward_sats: int | None = None
 
 
 class ChallengeUpdateRequest(BaseModel):

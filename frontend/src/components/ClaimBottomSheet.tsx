@@ -5,18 +5,18 @@ import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 
 interface ClaimBottomSheetProps {
+  challengeId: number
+  challengeTitle: string
   satoshiAmount: number
-  weekLabel: string
-  contributionPct: number
   savedAddress: string | null
   onClose: () => void
   onSuccess: () => void
 }
 
 export default function ClaimBottomSheet({
+  challengeId,
+  challengeTitle,
   satoshiAmount,
-  weekLabel,
-  contributionPct,
   savedAddress,
   onClose,
   onSuccess,
@@ -38,7 +38,7 @@ export default function ClaimBottomSheet({
         })
         setUser(meRes.data.data)
       }
-      await client.post('/rewards/claim', { week_label: weekLabel, ln_address: lnAddress })
+      await client.post(`/challenges/${challengeId}/claim-bitcoin`, { ln_address: lnAddress })
       onSuccess()
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Claim 실패'))
@@ -58,22 +58,18 @@ export default function ClaimBottomSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-theme-primary">보상 받기</h2>
+          <h2 className="text-lg font-bold text-theme-primary">Bitcoin 받기</h2>
           <button onClick={onClose}>
             <X size={20} className="text-theme-muted" />
           </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="flex flex-col items-center justify-center rounded-xl bg-theme-surface2 py-4">
-            <Zap size={20} className="text-accent mb-1" fill="currentColor" />
-            <span className="text-xl font-bold text-accent">{satoshiAmount.toLocaleString()}</span>
-            <span className="text-xs text-theme-muted">sats</span>
-          </div>
-          <div className="flex flex-col items-center justify-center rounded-xl bg-theme-surface2 py-4">
-            <span className="text-xl font-bold text-theme-primary">{contributionPct.toFixed(1)}%</span>
-            <span className="text-xs text-theme-muted">기여율</span>
-          </div>
+        <p className="mt-1 text-sm text-theme-muted truncate">{challengeTitle}</p>
+
+        <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-theme-surface2 py-5">
+          <Zap size={22} className="text-accent" fill="currentColor" />
+          <span className="text-3xl font-bold text-accent">{satoshiAmount.toLocaleString()}</span>
+          <span className="text-sm text-theme-muted">sats</span>
         </div>
 
         <form onSubmit={handleClaim} className="mt-4 space-y-3">
@@ -94,11 +90,11 @@ export default function ClaimBottomSheet({
             disabled={loading || !lnAddress}
             className="w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
           >
-            {loading ? '처리 중...' : 'Claim하기'}
+            {loading ? '처리 중...' : 'Bitcoin 받기'}
           </button>
         </form>
         <p className="mt-3 text-center text-xs text-theme-subtle">
-          해당 주차가 완료된 후 Claim하면 지급됩니다
+          챌린지를 완료했을 때 Claim하면 지급됩니다
         </p>
       </div>
     </div>

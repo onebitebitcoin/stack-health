@@ -39,17 +39,11 @@ export interface RewardSummary {
   current_week_points: number
   fixed_week_points: number
   queued_week_points: number
-  satoshi_amount: number
-  claimable: boolean
-  deadline: string
-  already_claimed: boolean
-  claim_deadline: string
-  next_claim_date: string
-  contribution_pct: number
 }
 
 export interface Claim {
   id: number
+  challenge_id: number | null
   week_label: string
   points_used: number
   satoshi_amount: number
@@ -156,6 +150,8 @@ export interface Challenge {
   joined: boolean
   completed: boolean
   categories: string[]
+  bitcoin_reward_sats?: number | null
+  bitcoin_claimed?: boolean
   creator_id?: number | null
   creator_username?: string | null
   completed_count?: number

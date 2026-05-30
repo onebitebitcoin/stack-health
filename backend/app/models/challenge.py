@@ -23,6 +23,7 @@ class Challenge(Base):
     creator_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     image_thumb_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    bitcoin_reward_sats: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

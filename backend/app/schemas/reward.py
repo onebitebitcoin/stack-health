@@ -8,22 +8,17 @@ class RewardSummarySchema(BaseModel):
     current_week_points: float
     fixed_week_points: float = 0.0
     queued_week_points: float = 0.0
-    satoshi_amount: int
-    claimable: bool
-    deadline: datetime
-    already_claimed: bool = False
-    claim_deadline: datetime
-    next_claim_date: datetime
-    contribution_pct: float = 0.0
 
 
 class ClaimRequest(BaseModel):
     ln_address: str | None = None
+    challenge_id: int | None = None
 
 
 class ClaimSchema(BaseModel):
     id: int
     user_id: int
+    challenge_id: int | None = None
     week_label: str
     points_used: float
     satoshi_amount: int

@@ -10,10 +10,11 @@ from app.database import Base
 
 class LightningClaim(Base):
     __tablename__ = "lightning_claims"
-    __table_args__ = (UniqueConstraint("user_id", "week_label", name="uq_claim_user_week"),)
+    __table_args__ = (UniqueConstraint("user_id", "challenge_id", name="uq_claim_user_challenge"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    challenge_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("challenges.id"), nullable=True)
     week_label: Mapped[str] = mapped_column(String, nullable=False)
     points_used: Mapped[float] = mapped_column(Float, nullable=False)
     satoshi_amount: Mapped[int] = mapped_column(Integer, nullable=False)
