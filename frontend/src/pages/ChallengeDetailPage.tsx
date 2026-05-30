@@ -415,8 +415,11 @@ export default function ChallengeDetailPage() {
                 {participants.map((p) => (
                   <div key={p.user_id} className="rounded-xl bg-theme-surface px-4 py-3">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-sm font-medium text-theme-primary">{p.username}</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-medium text-theme-primary truncate">{p.username}</span>
+                        <span className="text-[10px] text-theme-muted flex-shrink-0">인증 {p.post_count}회</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <SweatCount count={p.upload_count} total={p.condition_value} />
                         <button
                           onClick={() => completeMutation.mutate(p.user_id)}

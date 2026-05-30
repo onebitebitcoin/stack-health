@@ -125,6 +125,7 @@ export interface ChallengeParticipant {
   user_id: number
   username: string
   upload_count: number
+  post_count: number
   condition_value: number
   completed_at: string | null
   joined_at: string

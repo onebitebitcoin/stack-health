@@ -575,21 +575,21 @@ export default function ProfilePage() {
                   playsInline
                   loop
                 />
-                <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 pt-16 bg-gradient-to-t from-black/70 to-transparent">
-                  <div className="flex items-center gap-4 mb-2">
-                    <div className="flex items-center gap-1.5 text-white/80">
-                      <Heart size={14} strokeWidth={1.5} />
-                      <span className="text-sm">{post.like_count}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-white/80">
-                      <Eye size={14} strokeWidth={1.5} />
-                      <span className="text-sm">{post.view_count}</span>
-                    </div>
+                <div className="absolute top-safe top-16 right-4 z-10 flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-1.5 text-white/90 drop-shadow">
+                    <Heart size={14} strokeWidth={1.5} />
+                    <span className="text-sm font-medium">{post.like_count}</span>
                   </div>
-                  {post.caption && (
-                    <p className="text-sm text-white/90 line-clamp-2">{post.caption}</p>
-                  )}
+                  <div className="flex items-center gap-1.5 text-white/90 drop-shadow">
+                    <Eye size={14} strokeWidth={1.5} />
+                    <span className="text-sm font-medium">{post.view_count}</span>
+                  </div>
                 </div>
+                {post.caption && (
+                  <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 pt-8 bg-gradient-to-t from-black/70 to-transparent">
+                    <p className="text-sm text-white/90 line-clamp-2">{post.caption}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>

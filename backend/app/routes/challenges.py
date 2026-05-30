@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.challenge import Challenge, ChallengeParticipation
 from app.models.post import Post
 from app.models.user import User
+from app.models.video import Video
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, ChallengeUpdateRequest, EarnedTitleSchema
 from app.config import settings as app_settings
@@ -465,6 +466,25 @@ def challenge_participants(
         )
         .all()
     )
+    # 챌린지 기간 내 실제 인증 포스트 수 배치 조회
+    participant_ids = [p.user_id for p in participations]
+    post_counts: dict[int, int] = {}
+    if participant_ids:
+        rows = (
+            db.query(Post.user_id, func.count(Post.id))
+            .join(Post.video)
+            .filter(
+                Post.user_id.in_(participant_ids),
+                Post.challenge_id == challenge_id,
+                Post.created_at >= challenge.start_date,
+                Post.created_at <= challenge.end_date,
+                Video.status == "active",
+            )
+            .group_by(Post.user_id)
+            .all()
+        )
+        post_counts = {uid: cnt for uid, cnt in rows}
+
     result = []
     for p in participations:
         user = p.user
@@ -477,6 +497,7 @@ def challenge_participants(
             "user_id": p.user_id,
             "username": user.username if user else "",
             "upload_count": p.upload_count,
+            "post_count": post_counts.get(p.user_id, 0),
             "condition_value": challenge.condition_value,
             "completed_at": p.completed_at.isoformat() if p.completed_at else None,
             "joined_at": p.joined_at.isoformat(),
