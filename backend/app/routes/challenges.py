@@ -531,6 +531,39 @@ def challenge_videos(
     return {"data": {"videos": result}}
 
 
+@router.patch("/{challenge_id}/participants/{user_id}/complete")
+def toggle_participant_complete(
+    challenge_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+    if not challenge:
+        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+    if challenge.creator_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="매니저만 완료 처리할 수 있습니다")
+
+    participation = (
+        db.query(ChallengeParticipation)
+        .filter(
+            ChallengeParticipation.challenge_id == challenge_id,
+            ChallengeParticipation.user_id == user_id,
+        )
+        .first()
+    )
+    if not participation:
+        raise HTTPException(status_code=404, detail="참여 정보를 찾을 수 없습니다")
+
+    if participation.completed_at is None:
+        participation.completed_at = datetime.now(timezone.utc)
+    else:
+        participation.completed_at = None
+
+    db.commit()
+    return {"data": {"user_id": user_id, "completed_at": participation.completed_at.isoformat() if participation.completed_at else None}}
+
+
 @router.get("/{challenge_id}")
 def get_challenge(
     challenge_id: int,

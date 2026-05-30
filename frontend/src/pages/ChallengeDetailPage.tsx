@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays,
-  Edit2, UserCircle, Droplets, Play, TrendingUp,
+  Edit2, UserCircle, Droplets, Play, TrendingUp, CircleCheck,
 } from 'lucide-react'
 import client from '../api/client'
 import type { Challenge, ChallengeParticipant, ChallengeVideo } from '../api/types'
@@ -79,6 +79,14 @@ export default function ChallengeDetailPage() {
       return res.data.data.videos
     },
     enabled: managerEnabled,
+  })
+
+  const completeMutation = useMutation({
+    mutationFn: (userId: number) =>
+      client.patch(`/challenges/${id}/participants/${userId}/complete`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['challenge-participants', id] }).catch(() => undefined)
+    },
   })
 
   const joinMutation = useMutation({
@@ -410,11 +418,18 @@ export default function ChallengeDetailPage() {
                       <span className="text-sm font-medium text-theme-primary">{p.username}</span>
                       <div className="flex items-center gap-2">
                         <SweatCount count={p.upload_count} total={p.condition_value} />
-                        {p.completed_at !== null && (
-                          <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
-                            완료
-                          </span>
-                        )}
+                        <button
+                          onClick={() => completeMutation.mutate(p.user_id)}
+                          disabled={completeMutation.isPending}
+                          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-50 ${
+                            p.completed_at !== null
+                              ? 'bg-accent/15 text-accent'
+                              : 'bg-theme-surface2 text-theme-muted hover:bg-accent/10 hover:text-accent'
+                          }`}
+                        >
+                          <CircleCheck size={11} strokeWidth={2} />
+                          {p.completed_at !== null ? '완료' : '완료 처리'}
+                        </button>
                       </div>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-theme-surface2">
