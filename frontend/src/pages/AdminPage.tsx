@@ -111,7 +111,7 @@ function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => v
                   {data.points_by_week.map((w) => (
                     <div key={w.week_label} className="flex justify-between text-xs rounded-lg bg-theme-surface px-3 py-2">
                       <span className="text-theme-muted">{w.week_label}</span>
-                      <span className="font-semibold text-theme-primary">{w.points}L</span>
+                      <span className="font-semibold text-theme-primary">{Number(w.points).toFixed(2)}L</span>
                     </div>
                   ))}
                 </div>
@@ -398,7 +398,7 @@ export default function AdminPage() {
                   <div className="flex items-center gap-3 mt-1 text-xs text-theme-subtle">
                     <span>영상 {u.video_count}개</span>
                     <span>챌린지 {u.challenge_count}개</span>
-                    <span>{u.total_points}L</span>
+                    <span>{Number(u.total_points).toFixed(2)}L</span>
                   </div>
                 </div>
               </div>
@@ -866,7 +866,7 @@ function MiningPanel() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-theme-primary">@{p.username}</span>
                   <span className="text-theme-muted">
-                    {p.points.toFixed(1)}L · {p.hash_power_pct}%
+                    {p.points.toFixed(2)}L · {p.hash_power_pct}%
                   </span>
                 </div>
                 <div className="h-1.5 rounded-full bg-theme-surface2 overflow-hidden">
