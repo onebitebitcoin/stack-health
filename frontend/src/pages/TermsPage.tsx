@@ -27,8 +27,8 @@ export default function TermsPage() {
           <p>본인이 직접 촬영한 운동 영상만 업로드 가능합니다. 부적절한 콘텐츠는 즉시 삭제되고 계정이 정지됩니다.</p>
         </section>
         <section>
-          <h2 className="font-semibold text-theme-primary mb-2">땀 정산</h2>
-          <p>업로드 후 24시간이 지나야 땀이 확정됩니다. 확정 전 영상을 삭제하면 해당 땀은 회수됩니다.</p>
+          <h2 className="font-semibold text-theme-primary mb-2">땀 확정</h2>
+          <p>업로드 후 24시간이 지나야 땀이 확정됩니다. 확정 전 영상을 삭제하면 해당 땀은 회수됩니다. 땀은 서비스 내 활동 포인트이며, Bitcoin으로 자동 전환되지 않습니다.</p>
         </section>
         <div className="h-px bg-theme-border" />
         <p className="text-xs font-semibold uppercase tracking-widest text-theme-muted">이용약관</p>

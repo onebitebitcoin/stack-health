@@ -150,8 +150,6 @@ export interface Challenge {
   joined: boolean
   completed: boolean
   categories: string[]
-  bitcoin_reward_sats?: number | null
-  bitcoin_claimed?: boolean
   creator_id?: number | null
   creator_username?: string | null
   completed_count?: number

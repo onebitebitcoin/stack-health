@@ -192,24 +192,13 @@ export default function ChallengeDetailPage() {
       )}
 
       <div className="px-4 flex flex-col gap-4 pb-4">
-        {/* 보상 */}
-        <div className="flex flex-wrap gap-2">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-theme-muted">획득 타이틀</span>
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5">
-              <Dumbbell size={13} className="text-accent" />
-              <span className="text-sm font-semibold text-accent">{challenge.reward_title}</span>
-            </div>
+        {/* 획득 타이틀 */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-theme-muted">획득 타이틀</span>
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 self-start">
+            <Dumbbell size={13} className="text-accent" />
+            <span className="text-sm font-semibold text-accent">{challenge.reward_title}</span>
           </div>
-          {!!challenge.bitcoin_reward_sats && (
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-theme-muted">Bitcoin 보상</span>
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-yellow-500/15 px-3 py-1.5">
-                <Zap size={13} className="text-yellow-500" fill="currentColor" />
-                <span className="text-sm font-semibold text-yellow-500">{challenge.bitcoin_reward_sats.toLocaleString()} sats</span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* 설명 */}
