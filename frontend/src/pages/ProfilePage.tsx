@@ -90,7 +90,7 @@ export default function ProfilePage() {
       const res = await client.get<{ data: WeeklyPointsHistory }>('/users/me/weekly-points')
       return res.data.data
     },
-    enabled: !!user && showWeeklyHistory,
+    enabled: !!user,
     refetchInterval: 60_000,
   })
 
