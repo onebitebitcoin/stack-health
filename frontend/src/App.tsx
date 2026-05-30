@@ -6,6 +6,7 @@ import type { User } from './api/types'
 import { useVersionCheck } from './hooks/useVersionCheck'
 import UpdateBanner from './components/UpdateBanner'
 import BottomNav from './components/BottomNav'
+import SideNav from './components/SideNav'
 import LoadingScreen from './components/LoadingScreen'
 import { isFlutterWebView } from './lib/platform'
 
@@ -100,10 +101,13 @@ function Layout() {
   const isFlutter = isFlutterWebView()
   const { updateAvailable, serverVersion } = useVersionCheck()
 
+  const showNav = !hideNav && !isFlutter
+
   return (
     <div className="relative h-full">
+      {showNav && <SideNav />}
       {updateAvailable && !isFlutter && <UpdateBanner serverVersion={serverVersion} />}
-      <div key={location.key} className="absolute inset-0 page-enter">
+      <div key={location.key} className={`absolute inset-0 page-enter${showNav ? ' lg:left-60' : ''}`}>
       <Suspense fallback={<LoadingScreen />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -152,7 +156,7 @@ function Layout() {
       </Routes>
       </Suspense>
       </div>
-      {!hideNav && !isFlutter && <BottomNav />}
+      {showNav && <BottomNav />}
     </div>
   )
 }
