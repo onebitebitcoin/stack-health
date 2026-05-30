@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -10,6 +10,9 @@ from app.database import Base
 
 class RewardPoint(Base):
     __tablename__ = "reward_points"
+    __table_args__ = (
+        Index("ix_reward_points_user_status_created", "user_id", "status", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)

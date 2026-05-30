@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, func as sqlfunc, or_
 from sqlalchemy.orm import Session, selectinload, joinedload
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models.challenge import ChallengeParticipation
 from app.models.comment import Comment
 from app.models.post import Post
@@ -26,6 +26,16 @@ from app.services.reward import (
 )
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
+
+
+def _settle_rewards_background(user_id: int) -> None:
+    db = SessionLocal()
+    try:
+        settled = settle_queued_rewards(db, user_id)
+        if settled:
+            db.commit()
+    finally:
+        db.close()
 
 
 class PublicUserSchema(BaseModel):
@@ -62,14 +72,13 @@ class ActiveChallengeSchema(BaseModel):
 
 @router.get("/me/stats")
 def get_my_stats(
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     client_tz = _parse_tz(x_client_timezone)
-    settled_count = settle_queued_rewards(db, current_user.id)
-    if settled_count:
-        db.commit()
+    background_tasks.add_task(_settle_rewards_background, current_user.id)
 
     total_posts = (
         db.query(Post)
@@ -263,7 +272,11 @@ def get_leaderboard(
     if search:
         base_query = base_query.filter(User.username.ilike(f"%{search}%"))
 
-    total: int = base_query.count()
+    count_query = db.query(sqlfunc.count(User.id)).filter(User.is_banned.is_(False))
+    if search:
+        count_query = count_query.filter(User.username.ilike(f"%{search}%"))
+    total: int = count_query.scalar() or 0
+
     offset = (page - 1) * limit
 
     rows = (
