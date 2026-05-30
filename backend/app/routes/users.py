@@ -16,8 +16,8 @@ from app.routes.auth import get_current_user as get_required_user
 from app.services.reward import (
     REWARD_STATUS_FIXED,
     REWARD_STATUS_QUEUED,
-    SETTLEMENT_WINDOW,
     _parse_tz,
+    get_week_claim_deadline,
     get_week_label,
     get_weekly_points,
     get_weekly_queued_points,
@@ -161,7 +161,7 @@ def get_my_weekly_points(
     items = [
         {
             "date": to_client_date(r.created_at),
-            "settles_at": to_utc_iso(r.created_at + SETTLEMENT_WINDOW) if r.status == REWARD_STATUS_QUEUED else None,
+            "settles_at": to_utc_iso(get_week_claim_deadline(r.week_label)) if r.status == REWARD_STATUS_QUEUED else None,
             "points": round(float(r.points), 2),
             "source": r.reason,
             "post_id": r.reference_id,
