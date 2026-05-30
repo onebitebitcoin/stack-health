@@ -68,6 +68,8 @@ export default function UploadPage() {
   const [caption, setCaption] = useState('')
   const [hasChallenge, setHasChallenge] = useState<boolean | null>(null)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
+  const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
+  const [showChallengeModal, setShowChallengeModal] = useState(false)
   const [challengeSearch, setChallengeSearch] = useState('')
   const [workoutStart, setWorkoutStart] = useState(() => {
     const d = new Date()
@@ -117,18 +119,9 @@ export default function UploadPage() {
       setPipelineStatus('pending')
     }
 
-    // Samsung/mobile browsers use BFCache: when navigating away, the XHR is killed
-    // causing a "Network Error" on return. We abort the upload proactively on pagehide
-    // so Axios throws ERR_CANCELED (which we ignore) instead of Network Error.
-    const handlePageHide = () => {
-      uploadAbortRef.current?.abort()
-    }
-    // On BFCache restore (persisted=true), reset any stale uploading state
+    const handlePageHide = () => { uploadAbortRef.current?.abort() }
     const handlePageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) {
-        setUploading(false)
-        setError('')
-      }
+      if (e.persisted) { setUploading(false); setError('') }
     }
     window.addEventListener('pagehide', handlePageHide)
     window.addEventListener('pageshow', handlePageShow)
@@ -187,17 +180,13 @@ export default function UploadPage() {
       } else if (status === 'failed') {
         abortJob(jobError || '처리 중 오류가 발생했습니다')
       }
-      // pending / processing / retrying → keep polling
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 404) {
-        // Job expired or unknown — stop polling, clear storage
         abortJob('업로드 결과를 확인할 수 없습니다. 피드에서 영상을 확인해주세요.')
       }
-      // Other network errors → retry silently on next interval
     }
   }, [handleJobCompleted, abortJob])
 
-  // 단계별 상한까지 느리게 진행 (image_merge는 5초 간격, 나머지는 1.5초)
   useEffect(() => {
     if (!pipelineJobId || uploading || done) return
     const cfg = STEP_CONFIG[pipelineStep]
@@ -209,14 +198,12 @@ export default function UploadPage() {
     return () => clearInterval(timer)
   }, [pipelineJobId, uploading, done, pipelineStep])
 
-  // Start/restart polling when pipelineJobId is set
   useEffect(() => {
     if (!pipelineJobId || done) return
 
     pollJob(pipelineJobId)
     pollTimerRef.current = setInterval(() => pollJob(pipelineJobId), MERGE_POLL_INTERVAL_MS)
 
-    // Immediate re-poll on tab focus
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') pollJob(pipelineJobId)
     }
@@ -353,25 +340,44 @@ export default function UploadPage() {
     setStep((prev) => prev - 1)
   }
 
+  // Challenge modal queries
   const { data: allChallenges = [] } = useQuery<Challenge[]>({
     queryKey: ['challenges-upload-top10'],
     queryFn: async () => {
-      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params: { limit: 10 } })
+      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params: { limit: 20 } })
       return res.data.data.challenges
     },
-    enabled: hasChallenge === true,
+    enabled: showChallengeModal,
   })
 
   const { data: searchChallenges = [] } = useQuery<Challenge[]>({
     queryKey: ['challenges-upload-search', challengeSearch],
     queryFn: async () => {
-      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params: { q: challengeSearch, limit: 10 } })
+      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params: { q: challengeSearch, limit: 20 } })
       return res.data.data.challenges
     },
-    enabled: hasChallenge === true && challengeSearch.length > 0,
+    enabled: showChallengeModal && challengeSearch.length > 0,
   })
 
   const displayedChallenges = challengeSearch ? searchChallenges : allChallenges
+
+  function openChallengeModal() {
+    setChallengeSearch('')
+    setShowChallengeModal(true)
+  }
+
+  function selectChallenge(c: Challenge) {
+    setSelectedChallengeId(c.id)
+    setSelectedChallenge(c)
+    setShowChallengeModal(false)
+    setChallengeSearch('')
+  }
+
+  function clearChallenge() {
+    setSelectedChallengeId(null)
+    setSelectedChallenge(null)
+    setHasChallenge(false)
+  }
 
   async function handleUpload() {
     if (!file) return
@@ -383,7 +389,6 @@ export default function UploadPage() {
     uploadAbortRef.current = abortController
 
     try {
-      // Get video duration
       let duration = 15
       if (previewUrl) {
         const videoEl = document.createElement('video')
@@ -394,7 +399,6 @@ export default function UploadPage() {
         })
       }
 
-      // Build single multipart request: video + audio + proof + metadata
       const form = new FormData()
       form.append('file', file, file.name)
       form.append('duration_sec', String(Math.min(60, Math.max(5, duration))))
@@ -432,7 +436,6 @@ export default function UploadPage() {
       setPipelineStatus('pending')
       setUploadProgress(70)
     } catch (err: unknown) {
-      // Ignore cancellations caused by navigating away (pagehide aborts the controller)
       if (isAxiosError(err) && err.code === 'ERR_CANCELED') return
       setError(getApiErrorMessage(err, '업로드 실패'))
     } finally {
@@ -597,12 +600,13 @@ export default function UploadPage() {
               </button>
             ))}
           </div>
+
           <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지</p>
 
-          {/* 있음/없음 토글 */}
+          {/* 없음 / 있음 토글 */}
           <div className="flex gap-2 mb-4">
             <button
-              onClick={() => { setHasChallenge(false); setSelectedChallengeId(null); setChallengeSearch('') }}
+              onClick={() => { setHasChallenge(false); clearChallenge() }}
               className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
                 hasChallenge === false ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
               }`}
@@ -610,7 +614,7 @@ export default function UploadPage() {
               없음
             </button>
             <button
-              onClick={() => setHasChallenge(true)}
+              onClick={() => { setHasChallenge(true); openChallengeModal() }}
               className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
                 hasChallenge === true ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
               }`}
@@ -619,67 +623,36 @@ export default function UploadPage() {
             </button>
           </div>
 
-          {/* 챌린지 있음 선택 시 */}
-          {hasChallenge === true && (
-            <>
-              {/* 선택된 챌린지 표시 */}
-              {selectedChallengeId !== null && (() => {
-                const sel = displayedChallenges.find((c) => c.id === selectedChallengeId)
-                  ?? allChallenges.find((c) => c.id === selectedChallengeId)
-                return sel ? (
-                  <div className="flex items-center gap-2 mb-2 rounded-xl bg-accent/15 px-3 py-2">
-                    <Trophy size={13} className="text-accent flex-shrink-0" />
-                    <span className="text-sm font-medium text-accent flex-1 truncate">{sel.title}</span>
-                    <button onClick={() => setSelectedChallengeId(null)} className="text-accent/60 flex-shrink-0">
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : null
-              })()}
-
-              {/* 검색 입력 */}
-              <div className="relative mb-2">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted pointer-events-none" />
-                <input
-                  type="text"
-                  value={challengeSearch}
-                  onChange={(e) => setChallengeSearch(e.target.value)}
-                  placeholder="챌린지 검색..."
-                  className="w-full rounded-xl bg-theme-surface pl-8 pr-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
-                />
-                {challengeSearch && (
-                  <button onClick={() => setChallengeSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted">
-                    <X size={14} />
-                  </button>
-                )}
+          {/* 선택된 챌린지 표시 */}
+          {hasChallenge === true && selectedChallenge && (
+            <button
+              onClick={openChallengeModal}
+              className="flex items-center gap-2 mb-4 rounded-xl bg-accent/10 px-4 py-3 text-left w-full"
+            >
+              <Trophy size={14} className="text-accent flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-accent truncate">{selectedChallenge.title}</p>
+                <p className="text-xs text-accent/70 mt-0.5">{selectedChallenge.participant_count}명 참여 · {selectedChallenge.reward_title}</p>
               </div>
-
-              {/* 챌린지 목록 */}
-              <div className="flex flex-col gap-1.5 mb-4 max-h-52 overflow-y-auto">
-                {!challengeSearch && <p className="text-[10px] text-theme-subtle px-1 mb-0.5">인기 챌린지 top 10</p>}
-                {displayedChallenges.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => { setSelectedChallengeId(c.id); setChallengeSearch('') }}
-                    className={`flex items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
-                      selectedChallengeId === c.id ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-primary'
-                    }`}
-                  >
-                    <Trophy size={16} strokeWidth={1.5} className="mt-0.5 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{c.title}</p>
-                      <p className={`text-xs mt-0.5 ${selectedChallengeId === c.id ? 'text-accent-fg/70' : 'text-theme-muted'}`}>
-                        {c.participant_count}명 참여 · {c.reward_title}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-                {challengeSearch && searchChallenges.length === 0 && (
-                  <p className="text-sm text-theme-muted text-center py-4">검색 결과가 없습니다</p>
-                )}
-              </div>
-            </>
+              <X
+                size={15}
+                className="text-accent/60 flex-shrink-0"
+                onClick={(e) => { e.stopPropagation(); clearChallenge() }}
+              />
+            </button>
           )}
+
+          {/* 챌린지 미선택 상태에서 "있음" 선택 시 */}
+          {hasChallenge === true && !selectedChallenge && (
+            <button
+              onClick={openChallengeModal}
+              className="flex items-center justify-between mb-4 rounded-xl bg-theme-surface px-4 py-3 w-full"
+            >
+              <span className="text-sm text-theme-muted">챌린지를 선택하세요</span>
+              <ChevronRight size={16} className="text-theme-muted" />
+            </button>
+          )}
+
           {limitError && (
             <p className="mb-2 text-sm text-red-400 flex-shrink-0">{limitError}</p>
           )}
@@ -700,7 +673,7 @@ export default function UploadPage() {
               }
               setStep(2)
             }}
-            className="mt-auto mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg flex-shrink-0"
+            className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
             다음 <ChevronRight size={18} />
           </button>
@@ -854,6 +827,96 @@ export default function UploadPage() {
           >
             업로드 시작
           </button>
+        </div>
+      )}
+
+      {/* ── 챌린지 선택 모달 ── */}
+      {showChallengeModal && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-theme-page lg:max-w-2xl lg:mx-auto">
+          {/* 모달 헤더 */}
+          <div className="flex items-center gap-3 px-4 pt-5 pb-3 flex-shrink-0">
+            <button
+              onClick={() => {
+                setShowChallengeModal(false)
+                setChallengeSearch('')
+                if (!selectedChallenge) setHasChallenge(null)
+              }}
+              className="text-theme-muted"
+            >
+              <X size={20} />
+            </button>
+            <h2 className="text-base font-semibold text-theme-primary flex-1">챌린지 선택</h2>
+          </div>
+
+          {/* 검색 입력 */}
+          <div className="px-4 mb-3 flex-shrink-0">
+            <div className="flex items-center gap-2 rounded-xl bg-theme-surface px-3 py-2.5">
+              <Search size={15} className="text-theme-subtle flex-shrink-0" />
+              <input
+                type="text"
+                value={challengeSearch}
+                onChange={(e) => setChallengeSearch(e.target.value)}
+                placeholder="챌린지 이름 검색..."
+                autoFocus
+                className="flex-1 bg-transparent text-sm text-theme-primary placeholder-theme-subtle outline-none"
+              />
+              {challengeSearch && (
+                <button onClick={() => setChallengeSearch('')} className="text-theme-muted flex-shrink-0">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 목록 */}
+          <div className="flex-1 overflow-y-auto px-4 pb-6">
+            {!challengeSearch && (
+              <p className="text-[10px] text-theme-subtle mb-2">진행 중인 챌린지</p>
+            )}
+            {displayedChallenges.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Trophy size={32} className="text-theme-surface2 mb-3" strokeWidth={1} />
+                <p className="text-sm text-theme-muted">
+                  {challengeSearch ? '검색 결과가 없어요' : '진행 중인 챌린지가 없어요'}
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {displayedChallenges.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => selectChallenge(c)}
+                    className={`flex items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
+                      selectedChallengeId === c.id
+                        ? 'bg-accent text-accent-fg'
+                        : 'bg-theme-surface text-theme-primary'
+                    }`}
+                  >
+                    {c.image_thumb_url ? (
+                      <img
+                        src={c.image_thumb_url}
+                        alt=""
+                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-theme-surface2 flex items-center justify-center flex-shrink-0">
+                        <Trophy size={16} strokeWidth={1.5} className={selectedChallengeId === c.id ? 'text-accent-fg' : 'text-theme-muted'} />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{c.title}</p>
+                      <p className={`text-xs mt-0.5 ${selectedChallengeId === c.id ? 'text-accent-fg/70' : 'text-theme-muted'}`}>
+                        {c.participant_count}명 참여 · {c.reward_title}
+                      </p>
+                    </div>
+                    {selectedChallengeId === c.id && (
+                      <Check size={16} className="text-accent-fg flex-shrink-0 mt-0.5" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
