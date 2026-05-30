@@ -145,6 +145,7 @@ def _build_batch_maps(
 @router.get("")
 def list_challenges(
     q: str | None = Query(None),
+    category: str | None = Query(None),
     joined: bool | None = Query(None),
     available: bool | None = Query(None),
     limit: int = Query(50, ge=1, le=100),
@@ -155,16 +156,18 @@ def list_challenges(
     query = db.query(Challenge).filter(Challenge.is_active == True)  # noqa: E712
     if q:
         query = query.filter(Challenge.title.ilike(f"%{q}%"))
+    if category:
+        query = query.filter(cast(Challenge.categories, String).contains(f'"{category}"'))
     challenges = query.order_by(Challenge.start_date.desc()).offset(offset).limit(limit).all()
     uid = current_user.id if current_user else None
 
     if uid:
-        joined_ids = set(
+        rows = (
             db.query(ChallengeParticipation.challenge_id)
             .filter(ChallengeParticipation.user_id == uid)
-            .scalars()
             .all()
         )
+        joined_ids = {row[0] for row in rows}
     else:
         joined_ids = set()
 
