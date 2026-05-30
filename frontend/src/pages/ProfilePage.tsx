@@ -470,7 +470,7 @@ export default function ProfilePage() {
                   {isPending && (
                     <div className="absolute top-1.5 left-1.5 h-2 w-2 rounded-full bg-yellow-400" />
                   )}
-                  <div className="absolute bottom-1.5 right-1 flex items-center gap-2 text-white/90">
+                  <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 text-white/90">
                     <div className="flex items-center gap-0.5">
                       <Heart size={9} strokeWidth={2} />
                       <span className="text-[9px] font-medium">{post.like_count}</span>
@@ -486,7 +486,7 @@ export default function ProfilePage() {
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(post.id) }}
-                    className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity active:opacity-100"
+                    className="absolute bottom-1.5 left-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity active:opacity-100"
                     aria-label="삭제"
                   >
                     <Trash2 size={13} strokeWidth={2} />
