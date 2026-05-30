@@ -163,7 +163,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
                 <span className="text-xs font-semibold text-zinc-300">@{c.username}</span>
                 <p className="text-sm text-white mt-0.5 break-words">{c.content}</p>
               </div>
-              {user && user.id === c.user_id && (
+              {user && (user.id === c.user_id || user.is_admin) && (
                 <button
                   onClick={() => deleteComment.mutate(c.id)}
                   className="text-zinc-600 hover:text-red-400 mt-1 shrink-0"
