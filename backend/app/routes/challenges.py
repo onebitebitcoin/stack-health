@@ -169,12 +169,21 @@ def list_challenges(
     }
 
 
+def _assert_reward_title_unique(db: Session, reward_title: str, exclude_id: int | None = None) -> None:
+    q = db.query(Challenge).filter(Challenge.reward_title == reward_title, Challenge.is_active == True)  # noqa: E712
+    if exclude_id is not None:
+        q = q.filter(Challenge.id != exclude_id)
+    if q.first():
+        raise HTTPException(status_code=409, detail=f"이미 사용 중인 타이틀입니다: '{reward_title}'")
+
+
 @router.post("")
 def create_challenge(
     body: ChallengeCreateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    _assert_reward_title_unique(db, body.reward_title)
     # 모든 인증된 사용자가 챌린지 생성 가능
     try:
         challenge = Challenge(
@@ -510,6 +519,7 @@ def update_challenge(
     if body.description is not None:
         challenge.description = body.description
     if body.reward_title is not None:
+        _assert_reward_title_unique(db, body.reward_title, exclude_id=challenge_id)
         challenge.reward_title = body.reward_title
     if body.condition_value is not None:
         challenge.condition_value = body.condition_value

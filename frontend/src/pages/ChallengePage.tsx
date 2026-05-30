@@ -8,16 +8,6 @@ import type { Challenge } from '../api/types'
 import { useAuthStore } from '../store/auth'
 import LoadingScreen from '../components/LoadingScreen'
 
-const CATEGORIES = [
-  { value: 'strength', label: '근력' },
-  { value: 'cardio', label: '유산소' },
-  { value: 'flexibility', label: '유연성' },
-  { value: 'diet', label: '식단' },
-  { value: 'challenge', label: '도전' },
-  { value: 'social', label: '소셜' },
-  { value: 'beginner', label: '입문' },
-]
-
 function formatMonthDay(dateStr: string) {
   const d = new Date(dateStr)
   return `${d.getMonth() + 1}/${d.getDate()}`
@@ -64,18 +54,6 @@ function ChallengeCard({
           <p className="text-[11px] text-theme-muted leading-snug line-clamp-1">{challenge.description}</p>
         )}
 
-        {/* 카테고리 */}
-        {challenge.categories?.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {challenge.categories.map((cat) => {
-              const label = CATEGORIES.find((c) => c.value === cat)?.label ?? cat
-              return (
-                <span key={cat} className="rounded-full bg-theme-surface2 px-2 py-0.5 text-[10px] text-theme-muted">{label}</span>
-              )
-            })}
-          </div>
-        )}
-
         {/* 진행 바 */}
         {challenge.joined && (
           <div>
@@ -119,15 +97,13 @@ export default function ChallengePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const [q, setQ] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('')
   const [joinedOnly, setJoinedOnly] = useState(false)
 
   const { data: challenges = [], isLoading } = useQuery<Challenge[]>({
-    queryKey: ['challenges', q, selectedCategory, joinedOnly],
+    queryKey: ['challenges', q, joinedOnly],
     queryFn: async () => {
       const params: Record<string, string | boolean> = {}
       if (q) params.q = q
-      if (selectedCategory) params.category = selectedCategory
       if (joinedOnly) params.joined = true
       const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params })
       return res.data.data.challenges
@@ -154,46 +130,19 @@ export default function ChallengePage() {
         )}
       </div>
 
-      {/* 카테고리 + 참여중 필터 */}
-      <div className="px-4 mb-3">
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {/* 참여중 필터 */}
+      {user && (
+        <div className="px-4 mb-3">
           <button
-            onClick={() => setSelectedCategory('')}
-            className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              selectedCategory === ''
-                ? 'bg-accent text-accent-fg'
-                : 'bg-theme-surface text-theme-muted'
+            onClick={() => setJoinedOnly((v) => !v)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              joinedOnly ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
             }`}
           >
-            전체
+            참여중
           </button>
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat.value}
-              onClick={() => setSelectedCategory(cat.value)}
-              className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                selectedCategory === cat.value
-                  ? 'bg-accent text-accent-fg'
-                  : 'bg-theme-surface text-theme-muted'
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
-          {user && (
-            <button
-              onClick={() => setJoinedOnly((v) => !v)}
-              className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                joinedOnly
-                  ? 'bg-accent text-accent-fg'
-                  : 'bg-theme-surface text-theme-muted'
-              }`}
-            >
-              참여중
-            </button>
-          )}
         </div>
-      </div>
+      )}
 
       {/* 검색 */}
       <div className="px-4 mb-4">

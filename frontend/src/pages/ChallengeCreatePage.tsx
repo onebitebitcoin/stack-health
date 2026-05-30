@@ -6,16 +6,6 @@ import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 
-const CATEGORIES = [
-  { value: 'strength', label: '근력' },
-  { value: 'cardio', label: '유산소' },
-  { value: 'flexibility', label: '유연성' },
-  { value: 'diet', label: '식단' },
-  { value: 'challenge', label: '도전' },
-  { value: 'social', label: '소셜' },
-  { value: 'beginner', label: '입문' },
-]
-
 const CROP_INSET = 24
 
 export default function ChallengeCreatePage() {
@@ -30,7 +20,6 @@ export default function ChallengeCreatePage() {
     start_date: '',
     end_date: '',
   })
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [error, setError] = useState('')
 
   const [imageSrc, setImageSrc] = useState<string | null>(null)
@@ -133,7 +122,7 @@ export default function ChallengeCreatePage() {
       const res = await client.post('/challenges', {
         ...form,
         condition_value: Number(form.condition_value),
-        categories: selectedCategories,
+        categories: [],
       })
       const challengeId = res.data.data.challenge.id
       if (imageSrc) await cropAndUpload(challengeId)
@@ -148,12 +137,6 @@ export default function ChallengeCreatePage() {
       setError(getApiErrorMessage(e, '생성에 실패했습니다'))
     },
   })
-
-  function toggleCategory(value: string) {
-    setSelectedCategories((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
-    )
-  }
 
   if (!user) {
     return (
@@ -320,26 +303,6 @@ export default function ChallengeCreatePage() {
               onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))}
               className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
             />
-          </div>
-        </div>
-
-        {/* 카테고리 선택 */}
-        <div>
-          <label className="block text-xs text-theme-muted mb-2">카테고리 (복수 선택 가능)</label>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.value}
-                onClick={() => toggleCategory(cat.value)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedCategories.includes(cat.value)
-                    ? 'bg-accent text-accent-fg'
-                    : 'bg-theme-surface text-theme-muted'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
           </div>
         </div>
 

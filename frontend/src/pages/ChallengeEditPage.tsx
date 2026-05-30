@@ -1,24 +1,12 @@
 import { useRef, useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Trophy, ImagePlus, Move } from 'lucide-react'
+import { ArrowLeft, Trophy, ImagePlus } from 'lucide-react'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 import type { Challenge } from '../api/types'
 import LoadingScreen from '../components/LoadingScreen'
-
-const CATEGORIES = [
-  { value: 'strength', label: '근력' },
-  { value: 'cardio', label: '유산소' },
-  { value: 'flexibility', label: '유연성' },
-  { value: 'diet', label: '식단' },
-  { value: 'challenge', label: '도전' },
-  { value: 'social', label: '소셜' },
-  { value: 'beginner', label: '입문' },
-]
-
-const CROP_INSET = 24
 
 export default function ChallengeEditPage() {
   const { id } = useParams<{ id: string }>()
@@ -34,20 +22,13 @@ export default function ChallengeEditPage() {
     start_date: '',
     end_date: '',
   })
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [error, setError] = useState('')
   const [initialized, setInitialized] = useState(false)
 
   const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [isExistingImage, setIsExistingImage] = useState(false)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const [imgReady, setImgReady] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
-  const dragRef = useRef({ startX: 0, startY: 0, ox: 0, oy: 0 })
-  const previewRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const renderedRef = useRef({ w: 0, h: 0 })
 
   const { data: challenge, isLoading, isError } = useQuery<Challenge>({
     queryKey: ['challenge', id],
@@ -70,7 +51,6 @@ export default function ChallengeEditPage() {
       start_date: start,
       end_date: end,
     })
-    setSelectedCategories(challenge.categories ?? [])
     if (challenge.image_url) {
       setImageSrc(challenge.image_url)
       setIsExistingImage(true)
@@ -86,73 +66,20 @@ export default function ChallengeEditPage() {
     if (!f) return
     setImageSrc(URL.createObjectURL(f))
     setIsExistingImage(false)
-    setOffset({ x: 0, y: 0 })
-    setImgReady(false)
-    renderedRef.current = { w: 0, h: 0 }
-  }
-
-  function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
-    if (isExistingImage) return
-    const img = e.currentTarget
-    const container = previewRef.current
-    if (!container) return
-    const containerSize = container.getBoundingClientRect().width
-    if (!containerSize) return
-    const cropSize = containerSize - CROP_INSET * 2
-    const scale = Math.max(cropSize / img.naturalWidth, cropSize / img.naturalHeight)
-    const w = img.naturalWidth * scale
-    const h = img.naturalHeight * scale
-    renderedRef.current = { w, h }
-    setOffset({
-      x: CROP_INSET + (cropSize - w) / 2,
-      y: CROP_INSET + (cropSize - h) / 2,
-    })
-    setImgReady(true)
-  }
-
-  function onPointerDown(e: React.PointerEvent) {
-    if (isExistingImage) return
-    e.currentTarget.setPointerCapture(e.pointerId)
-    setIsDragging(true)
-    dragRef.current = { startX: e.clientX, startY: e.clientY, ox: offset.x, oy: offset.y }
-  }
-
-  function onPointerMove(e: React.PointerEvent) {
-    if (!isDragging || isExistingImage) return
-    const container = previewRef.current
-    if (!container) return
-    const { w, h } = renderedRef.current
-    if (!w || !h) return
-    const { startX, startY, ox, oy } = dragRef.current
-    const containerSize = container.getBoundingClientRect().width
-    const cropSize = containerSize - CROP_INSET * 2
-    const newX = Math.min(CROP_INSET, Math.max(CROP_INSET + cropSize - w, ox + (e.clientX - startX)))
-    const newY = Math.min(CROP_INSET, Math.max(CROP_INSET + cropSize - h, oy + (e.clientY - startY)))
-    setOffset({ x: newX, y: newY })
-  }
-
-  function onPointerUp() {
-    setIsDragging(false)
   }
 
   async function cropAndUpload(): Promise<void> {
     if (isExistingImage) return
     const img = imgRef.current
-    const container = previewRef.current
-    if (!img || !container || !imageSrc) return
-    const containerSize = container.getBoundingClientRect().width
-    const cropSize = containerSize - CROP_INSET * 2
-    const scale = Math.max(cropSize / img.naturalWidth, cropSize / img.naturalHeight)
-    const srcX = (CROP_INSET - offset.x) / scale
-    const srcY = (CROP_INSET - offset.y) / scale
-    const srcSize = cropSize / scale
-
+    if (!img || !imageSrc) return
+    const size = Math.min(img.naturalWidth, img.naturalHeight)
+    const srcX = (img.naturalWidth - size) / 2
+    const srcY = (img.naturalHeight - size) / 2
     const canvas = document.createElement('canvas')
     canvas.width = 400
     canvas.height = 400
     const ctx = canvas.getContext('2d')!
-    ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, 400, 400)
-
+    ctx.drawImage(img, srcX, srcY, size, size, 0, 0, 400, 400)
     await new Promise<void>((resolve) => {
       canvas.toBlob(async (blob) => {
         if (!blob) { resolve(); return }
@@ -175,7 +102,7 @@ export default function ChallengeEditPage() {
       await client.patch(`/challenges/${id}`, {
         ...form,
         condition_value: Number(form.condition_value),
-        categories: selectedCategories,
+        categories: [],
       })
       if (imageSrc && !isExistingImage) await cropAndUpload()
     },
@@ -189,12 +116,6 @@ export default function ChallengeEditPage() {
       setError(getApiErrorMessage(e, '수정에 실패했습니다'))
     },
   })
-
-  function toggleCategory(value: string) {
-    setSelectedCategories((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
-    )
-  }
 
   if (isLoading) return <LoadingScreen />
 
@@ -229,67 +150,30 @@ export default function ChallengeEditPage() {
 
       <div className="px-4 flex flex-col gap-4">
 
-        {/* 이미지 업로드 */}
-        <div>
-          <label className="block text-xs text-theme-muted mb-2">챌린지 이미지</label>
-          {imageSrc ? (
-            <div className="flex flex-col gap-2">
-              <div
-                ref={previewRef}
-                className={`relative w-full aspect-square overflow-hidden rounded-2xl bg-black ${isExistingImage ? '' : 'cursor-grab active:cursor-grabbing touch-none'}`}
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={onPointerUp}
-              >
-                <img
-                  ref={imgRef}
-                  src={imageSrc}
-                  alt=""
-                  draggable={false}
-                  onLoad={onImageLoad}
-                  className={`${isExistingImage ? 'w-full h-full object-cover' : 'absolute max-w-none select-none'} transition-opacity duration-200 ${imgReady ? 'opacity-100' : 'opacity-0'}`}
-                  style={isExistingImage ? {} : {
-                    width: renderedRef.current.w ? `${renderedRef.current.w}px` : '100%',
-                    height: renderedRef.current.h ? `${renderedRef.current.h}px` : 'auto',
-                    transform: `translate(${offset.x}px, ${offset.y}px)`,
-                  }}
-                />
-
-                {!isExistingImage && (
-                  <>
-                    <div className="absolute top-0 left-0 right-0 bg-black/50 pointer-events-none" style={{ height: CROP_INSET }} />
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 pointer-events-none" style={{ height: CROP_INSET }} />
-                    <div className="absolute bg-black/50 pointer-events-none" style={{ top: CROP_INSET, bottom: CROP_INSET, left: 0, width: CROP_INSET }} />
-                    <div className="absolute bg-black/50 pointer-events-none" style={{ top: CROP_INSET, bottom: CROP_INSET, right: 0, width: CROP_INSET }} />
-                    <div className="absolute border border-white/60 pointer-events-none" style={{ inset: CROP_INSET }} />
-                    <div className="absolute pointer-events-none flex items-center justify-center" style={{ inset: CROP_INSET }}>
-                      <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1">
-                        <Move size={12} className="text-white/80" />
-                        <span className="text-xs text-white/80">드래그해서 위치 조정</span>
-                      </div>
-                    </div>
-                  </>
-                )}
+        {/* 이미지 */}
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="relative h-24 w-24 rounded-full overflow-hidden bg-theme-surface2 ring-2 ring-theme-border group"
+          >
+            {imageSrc ? (
+              <img
+                ref={imgRef}
+                src={imageSrc}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-1">
+                <ImagePlus size={20} strokeWidth={1.5} className="text-theme-muted" />
+                <span className="text-[10px] text-theme-muted">이미지</span>
               </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-xs text-theme-muted text-center py-1"
-              >
-                다른 이미지 선택
-              </button>
+            )}
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
+              <ImagePlus size={18} className="text-white" />
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full aspect-square rounded-2xl bg-theme-surface flex flex-col items-center justify-center gap-2 text-theme-muted border-2 border-dashed border-theme-border"
-            >
-              <ImagePlus size={28} strokeWidth={1.5} />
-              <span className="text-xs">이미지 선택</span>
-            </button>
-          )}
+          </button>
           <input
             ref={fileInputRef}
             type="file"
@@ -367,26 +251,6 @@ export default function ChallengeEditPage() {
               onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))}
               className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
             />
-          </div>
-        </div>
-
-        {/* 카테고리 선택 */}
-        <div>
-          <label className="block text-xs text-theme-muted mb-2">카테고리 (복수 선택 가능)</label>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.value}
-                onClick={() => toggleCategory(cat.value)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedCategories.includes(cat.value)
-                    ? 'bg-accent text-accent-fg'
-                    : 'bg-theme-surface text-theme-muted'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
           </div>
         </div>
 

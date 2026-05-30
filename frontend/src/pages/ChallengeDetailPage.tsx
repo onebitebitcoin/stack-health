@@ -12,19 +12,24 @@ import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
 import LoadingScreen from '../components/LoadingScreen'
 
-const CATEGORY_LABELS: Record<string, string> = {
-  strength: '근력',
-  cardio: '유산소',
-  flexibility: '유연성',
-  diet: '식단',
-  challenge: '도전',
-  social: '소셜',
-  beginner: '입문',
-}
-
 function formatDate(dateStr: string) {
   const d = new Date(dateStr)
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
+}
+
+function DescriptionText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/)
+  return (
+    <p className="text-sm text-theme-muted leading-relaxed whitespace-pre-wrap break-words select-text">
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-accent underline break-all">
+            {part}
+          </a>
+        ) : part
+      )}
+    </p>
+  )
 }
 
 function SweatCount({ count, total }: { count: number; total: number }) {
@@ -204,14 +209,16 @@ export default function ChallengeDetailPage() {
         <div className="flex flex-col gap-4 px-4 pb-4">
           {/* 이미지 */}
           {challenge.image_url && (
-            <div className="rounded-2xl overflow-hidden bg-theme-surface2 aspect-square">
-              <img
-                src={challenge.image_url}
-                alt=""
-                loading="eager"
-                decoding="async"
-                className="w-full h-full object-cover"
-              />
+            <div className="flex justify-center pt-1">
+              <div className="h-20 w-20 rounded-full overflow-hidden bg-theme-surface2 ring-2 ring-theme-border">
+                <img
+                  src={challenge.image_url}
+                  alt=""
+                  loading="eager"
+                  decoding="async"
+                  className="w-full h-full object-cover"
+                />
+              </div>
             </div>
           )}
 
@@ -226,19 +233,9 @@ export default function ChallengeDetailPage() {
 
           {/* 설명 */}
           {challenge.description && (
-            <p className="text-sm text-theme-muted leading-relaxed">{challenge.description}</p>
+            <DescriptionText text={challenge.description} />
           )}
 
-          {/* 카테고리 */}
-          {challenge.categories?.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {challenge.categories.map((cat) => (
-                <span key={cat} className="rounded-full bg-theme-surface px-2.5 py-1 text-xs text-theme-muted">
-                  {CATEGORY_LABELS[cat] ?? cat}
-                </span>
-              ))}
-            </div>
-          )}
 
           {/* 챌린지 정보 */}
           <div className="rounded-2xl bg-theme-surface p-4 flex flex-col gap-3">
