@@ -96,17 +96,21 @@ def get_optional_user(
 
 
 @router.post("/register")
-def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+async def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    import asyncio
     check_rate_limit(request, "auth:register", max_calls=5, period_seconds=3600)
     if get_user_by_email(db, req.email):
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다")
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 닉네임입니다")
 
+    loop = asyncio.get_event_loop()
+    password_hash = await loop.run_in_executor(None, hash_password, req.password)
+
     user = User(
         email=req.email,
         username=req.username,
-        password_hash=hash_password(req.password),
+        password_hash=password_hash,
         app_settings={"profile_color": _random_profile_color()},
     )
     db.add(user)
@@ -118,10 +122,16 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
 
 
 @router.post("/login")
-def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+async def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    import asyncio
     check_rate_limit(request, "auth:login", max_calls=10, period_seconds=900)
     user = get_user_by_email(db, req.email)
-    if user is None or not verify_password(req.password, user.password_hash):
+    if user is None:
+        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다")
+
+    loop = asyncio.get_event_loop()
+    ok = await loop.run_in_executor(None, verify_password, req.password, user.password_hash)
+    if not ok:
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다")
 
     token = create_access_token(user.id)
