@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from PIL import Image
-from sqlalchemy import func
+from sqlalchemy import cast, func, String
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -132,15 +132,17 @@ def list_challenges(
     q: str | None = Query(None),
     category: str | None = Query(None),
     joined: bool | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ) -> dict:
     query = db.query(Challenge).filter(Challenge.is_active == True)  # noqa: E712
     if q:
         query = query.filter(Challenge.title.ilike(f"%{q}%"))
-    challenges = query.order_by(Challenge.start_date.desc()).all()
     if category:
-        challenges = [c for c in challenges if category in (c.categories or [])]
+        query = query.filter(cast(Challenge.categories, String).contains(f'"{category}"'))
+    challenges = query.order_by(Challenge.start_date.desc()).offset(offset).limit(limit).all()
     uid = current_user.id if current_user else None
     if joined is not None and uid:
         joined_ids = set(

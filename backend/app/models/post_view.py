@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, func
+from sqlalchemy import DateTime, ForeignKey, Integer, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -10,6 +10,7 @@ from app.database import Base
 
 class PostView(Base):
     __tablename__ = "post_views"
+    __table_args__ = (UniqueConstraint("user_id", "post_id", name="uq_post_view_user_post"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)

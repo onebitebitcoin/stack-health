@@ -2,6 +2,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import case, func, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -157,8 +158,14 @@ def view_post(
     )
 
     if not already_viewed:
-        db.add(PostView(user_id=current_user.id, post_id=post_id))
-        db.execute(update(Post).where(Post.id == post_id).values(view_count=Post.view_count + 1))
+        try:
+            db.add(PostView(user_id=current_user.id, post_id=post_id))
+            db.flush()
+            db.execute(update(Post).where(Post.id == post_id).values(view_count=Post.view_count + 1))
+        except IntegrityError:
+            db.rollback()
+            db.refresh(post)
+            return {"data": {"view_count": post.view_count}}
 
     db.commit()
     db.refresh(post)

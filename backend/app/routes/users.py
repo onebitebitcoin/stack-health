@@ -172,7 +172,7 @@ def get_my_weekly_points(
 
     return {
         "data": {
-            "week_label": f"{year}년 {week}주차",
+            "week_label": week_label,
             "week_number": week,
             "start_date": start_date,
             "end_date": end_date,

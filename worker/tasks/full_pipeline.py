@@ -404,6 +404,21 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         current_key = compressed_key
         logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
 
+    # 일일 한도 체크 — 썸네일 추출 전에 검사해 orphan 방지
+    tags_list = job.get("tags", [])
+    if isinstance(tags_list, str):
+        import json as _json2
+        tags_list = _json2.loads(tags_list)
+
+    if status_callback:
+        status_callback("db_save")
+    db = SessionLocal()
+    try:
+        if is_workout_upload(tags_list) and get_daily_workout_upload_count(db, user_id) >= DAILY_MAX_UPLOADS:
+            raise RuntimeError("운동 영상 하루 업로드 한도 초과")
+    finally:
+        db.close()
+
     if status_callback:
         status_callback("thumbnail")
     thumb_key = _extract_thumbnail(r2, current_key)
@@ -415,14 +430,6 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         status_callback("db_save")
     db = SessionLocal()
     try:
-
-        tags_list = job.get("tags", [])
-        if isinstance(tags_list, str):
-            import json as _json2
-            tags_list = _json2.loads(tags_list)
-        if is_workout_upload(tags_list) and get_daily_workout_upload_count(db, user_id) >= DAILY_MAX_UPLOADS:
-            raise RuntimeError("운동 영상 하루 업로드 한도 초과")
-
         cdn_url = f"{R2_PUBLIC_URL}/{current_key}"
 
         video = Video(
