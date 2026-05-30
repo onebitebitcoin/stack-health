@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
-import type { MyStats, HistoryResponse, HistoryWorkoutPost, WeeklyPointsHistory } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost, WeeklyPointsHistory, MonthlyPointsResponse } from '../api/types'
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
@@ -42,6 +42,9 @@ export default function ProfilePage() {
   const [showWeeklyHistory, setShowWeeklyHistory] = useState(false)
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+
+  type SweatPeriod = 'week' | 'month' | 'all'
+  const [sweatPeriod, setSweatPeriod] = useState<SweatPeriod>('week')
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const weeklyHistoryRef = useRef<HTMLDivElement>(null)
@@ -113,6 +116,20 @@ export default function ProfilePage() {
       return res.data.data
     },
     enabled: !!user && showWeeklyHistory,
+    refetchInterval: 60_000,
+  })
+
+  const {
+    data: monthlyPointsData,
+    isLoading: monthlyPointsLoading,
+    isError: monthlyPointsError,
+  } = useQuery<MonthlyPointsResponse>({
+    queryKey: ['my-monthly-points'],
+    queryFn: async () => {
+      const res = await client.get<{ data: MonthlyPointsResponse }>('/users/me/monthly-points')
+      return res.data.data
+    },
+    enabled: !!user && sweatPeriod === 'month',
     refetchInterval: 60_000,
   })
 
@@ -205,6 +222,17 @@ export default function ProfilePage() {
   const weekPoints = myStats?.week_points ?? 0
   const weekQueuedPoints = myStats?.week_queued_points ?? 0
 
+  const sweatDisplayLoading =
+    sweatPeriod === 'month' && monthlyPointsLoading
+  const sweatDisplayError =
+    sweatPeriod === 'month' && monthlyPointsError
+  const sweatDisplayValue: number | null =
+    sweatPeriod === 'week'
+      ? weekPoints
+      : sweatPeriod === 'all'
+        ? confirmedSweatPoints
+        : monthlyPointsData?.month_points ?? null
+
 
   const cells: Array<{ day: number | null; dateStr: string | null }> = []
   for (let i = 0; i < firstIdx; i++) cells.push({ day: null, dateStr: null })
@@ -255,14 +283,43 @@ export default function ProfilePage() {
       )}
 
       {/* ── 땀 카드 ── */}
-      <div className="mx-4 mb-4 rounded-2xl bg-theme-surface px-6 py-6 flex flex-col items-center gap-2">
-        <span className="text-xs text-theme-muted">이번 주 흘린 땀</span>
+      <div className="mx-4 mb-4 rounded-2xl bg-theme-surface px-6 py-5 flex flex-col items-center gap-2">
+        {/* 기간 필터 탭 */}
+        <div className="flex gap-1 rounded-full bg-theme-surface2 p-0.5 self-center">
+          {(['week', 'month', 'all'] as const).map((period) => {
+            const label = period === 'week' ? '이번 주' : period === 'month' ? '이번 달' : '전체'
+            return (
+              <button
+                key={period}
+                onClick={() => setSweatPeriod(period)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  sweatPeriod === period
+                    ? 'bg-accent text-accent-fg'
+                    : 'text-theme-muted hover:text-theme-primary'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
         <Droplets size={30} className="text-blue-400" strokeWidth={1.5} />
-        <span className="text-5xl font-bold font-mono text-theme-primary">
-          {weekPoints.toFixed(2)}
-          <span className="text-xl font-medium text-theme-muted ml-1">L</span>
-        </span>
-        {weekQueuedPoints > 0 && (
+
+        {/* 수치 표시 */}
+        {sweatDisplayError ? (
+          <span className="text-sm text-red-400">불러오기 실패</span>
+        ) : sweatDisplayLoading ? (
+          <span className="text-5xl font-bold font-mono text-theme-muted">...</span>
+        ) : (
+          <span className="text-5xl font-bold font-mono text-theme-primary">
+            {sweatDisplayValue !== null ? sweatDisplayValue.toFixed(2) : '—'}
+            <span className="text-xl font-medium text-theme-muted ml-1">L</span>
+          </span>
+        )}
+
+        {/* 이번 주 전용 요소 */}
+        {sweatPeriod === 'week' && weekQueuedPoints > 0 && (
           <button
             onClick={() => {
               pendingScrollToHistory.current = true
@@ -274,9 +331,15 @@ export default function ProfilePage() {
             <span className="text-xs text-theme-muted">+{weekQueuedPoints.toFixed(2)}L 대기 중</span>
           </button>
         )}
-        {(() => { const { weekNo, range } = getCurrentWeekInfo(); return (
-          <span className="text-xs text-theme-subtle mt-1">{weekNo}주차 {range}</span>
-        ) })()}
+        {sweatPeriod === 'week' && (() => {
+          const { weekNo, range } = getCurrentWeekInfo()
+          return <span className="text-xs text-theme-subtle">{weekNo}주차 {range}</span>
+        })()}
+
+        {/* 누적 총 땀 — 항상 노출 */}
+        <span className="text-xs text-theme-subtle mt-1">
+          누적 {displayedSweatPoints.toFixed(1)}L
+        </span>
       </div>
 
 

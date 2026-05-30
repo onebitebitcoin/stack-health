@@ -301,3 +301,7 @@ export interface WeeklyPointsHistory {
   total_points: number
   items: WeeklyPointsItem[]
 }
+
+export interface MonthlyPointsResponse {
+  month_points: number
+}
