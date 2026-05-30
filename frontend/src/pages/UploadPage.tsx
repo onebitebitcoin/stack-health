@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, Check, ImagePlus, X, Search } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, Check, ImagePlus, X, Search, Plus } from 'lucide-react'
 import LogoMark from '../components/LogoMark'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import client from '../api/client'
@@ -9,9 +9,8 @@ import { MERGE_POLL_INTERVAL_MS } from '../lib/constants'
 import type { Challenge } from '../api/types'
 import { isAxiosError } from 'axios'
 
-const WORKOUT_TAGS = ['홈트', '러닝', '요가', '웨이트'] as const
-const ALLOWED_TAGS = ['홈트', '러닝', '요가', '웨이트', '일상', '식단', '기타'] as const
-type Tag = (typeof ALLOWED_TAGS)[number]
+const WORKOUT_TAGS = ['홈트', '러닝', '요가', '웨이트']
+const QUICK_TAGS = ['홈트', '러닝', '요가', '웨이트', '일상', '식단', '기타']
 
 const STEPS = ['영상 선택', '태그·챌린지', '음성 녹음', '설명·사진'] as const
 const MAX_RECORD_SECONDS = 30
@@ -64,7 +63,8 @@ export default function UploadPage() {
   const [step, setStep] = useState(0)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [selectedTags, setSelectedTags] = useState<Tag[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
   const [caption, setCaption] = useState('')
   const [hasChallenge, setHasChallenge] = useState<boolean | null>(null)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
@@ -245,10 +245,17 @@ export default function UploadPage() {
     }
   }
 
-  function toggleTag(tag: Tag) {
+  function toggleTag(tag: string) {
     setSelectedTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     )
+  }
+
+  function addTagFromInput() {
+    const trimmed = tagInput.trim()
+    if (!trimmed || selectedTags.includes(trimmed)) { setTagInput(''); return }
+    setSelectedTags((prev) => [...prev, trimmed])
+    setTagInput('')
   }
 
   async function startRecording() {
@@ -587,18 +594,53 @@ export default function UploadPage() {
             <video src={previewUrl} className="mb-4 h-36 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
           )}
           <p className="mb-2 text-sm font-semibold text-theme-primary">카테고리</p>
-          <div className="flex flex-wrap gap-2 mb-5">
-            {ALLOWED_TAGS.map((tag) => (
+
+          {/* 선택된 태그 */}
+          {selectedTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {selectedTags.map((tag) => (
+                <div key={tag} className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-fg">
+                  {tag}
+                  <button onClick={() => toggleTag(tag)} className="flex-shrink-0">
+                    <X size={11} strokeWidth={2.5} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 자주 쓰는 태그 */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {QUICK_TAGS.map((tag) => (
               <button
                 key={tag}
                 onClick={() => toggleTag(tag)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  selectedTags.includes(tag) ? 'bg-accent text-accent-fg' : 'bg-theme-surface2 text-theme-muted'
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  selectedTags.includes(tag) ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-theme-surface2 text-theme-muted'
                 }`}
               >
                 {tag}
               </button>
             ))}
+          </div>
+
+          {/* 직접 입력 */}
+          <div className="flex gap-2 mb-5">
+            <input
+              type="text"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTagFromInput() } }}
+              placeholder="직접 입력 후 Enter"
+              className="flex-1 rounded-xl bg-theme-surface px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none"
+            />
+            <button
+              onClick={addTagFromInput}
+              disabled={!tagInput.trim()}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-theme-surface text-theme-muted disabled:opacity-40"
+            >
+              <Plus size={16} />
+            </button>
           </div>
 
           <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지</p>
@@ -659,7 +701,7 @@ export default function UploadPage() {
           <button
             onClick={async () => {
               setLimitError('')
-              const hasWorkout = selectedTags.some((t) => (WORKOUT_TAGS as readonly string[]).includes(t))
+              const hasWorkout = selectedTags.some((t) => WORKOUT_TAGS.includes(t))
               if (hasWorkout) {
                 try {
                   const res = await client.get<{ data: { reached: boolean } }>('/videos/daily-limit')
