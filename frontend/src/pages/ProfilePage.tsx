@@ -15,6 +15,19 @@ import { getDaysInMonth, getFirstDayIndex, pad2 } from '../utils/calendar'
 
 const DAYS_KO = ['월', '화', '수', '목', '금', '토', '일']
 
+function getCurrentWeekInfo() {
+  const now = new Date()
+  const day = now.getDay() || 7
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - day + 1)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  const jan4 = new Date(monday.getFullYear(), 0, 4)
+  const weekNo = Math.ceil(((monday.getTime() - jan4.getTime()) / 86400000 + jan4.getDay() + 1) / 7)
+  const fmt = (d: Date) => `${d.getMonth() + 1}/${String(d.getDate()).padStart(2, '0')}`
+  return { weekNo, range: `${fmt(monday)}~${fmt(sunday)}` }
+}
+
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user)
   const navigate = useNavigate()
@@ -31,6 +44,7 @@ export default function ProfilePage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const weeklyHistoryRef = useRef<HTMLDivElement>(null)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   const videoItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const pendingScrollIdx = useRef<number>(0)
@@ -90,7 +104,7 @@ export default function ProfilePage() {
       const res = await client.get<{ data: WeeklyPointsHistory }>('/users/me/weekly-points')
       return res.data.data
     },
-    enabled: !!user,
+    enabled: !!user && showWeeklyHistory,
     refetchInterval: 60_000,
   })
 
@@ -241,16 +255,20 @@ export default function ProfilePage() {
           <span className="text-xl font-medium text-theme-muted ml-1">L</span>
         </span>
         {weekQueuedPoints > 0 && (
-          <div className="flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1">
+          <button
+            onClick={() => {
+              setShowWeeklyHistory(true)
+              setTimeout(() => weeklyHistoryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+            }}
+            className="flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1 active:opacity-70"
+          >
             <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
             <span className="text-xs text-theme-muted">+{weekQueuedPoints.toFixed(2)}L 대기 중</span>
-          </div>
+          </button>
         )}
-        {weeklyPointsData && (
-          <span className="text-xs text-theme-subtle mt-1">
-            {weeklyPointsData.week_number}주차 {weeklyPointsData.start_date.slice(5).replace('-', '/')}~{weeklyPointsData.end_date.slice(5).replace('-', '/')}
-          </span>
-        )}
+        {(() => { const { weekNo, range } = getCurrentWeekInfo(); return (
+          <span className="text-xs text-theme-subtle mt-1">{weekNo}주차 {range}</span>
+        ) })()}
       </div>
 
 
@@ -430,7 +448,7 @@ export default function ProfilePage() {
       </div>
 
       {/* ── 주간 이력 ── */}
-      <div className="mx-4 mb-6 rounded-2xl bg-theme-surface overflow-hidden">
+      <div ref={weeklyHistoryRef} className="mx-4 mb-6 rounded-2xl bg-theme-surface overflow-hidden">
         <button
           onClick={() => setShowWeeklyHistory((v) => !v)}
           className="w-full flex items-center justify-between px-4 py-3"
