@@ -36,13 +36,17 @@ export default function BottomNav() {
 
         {/* FAB — 업로드 */}
         <div className="relative flex flex-col items-center">
-          <button
-            onClick={handleUpload}
-            className="absolute -top-7 flex h-14 w-14 items-center justify-center rounded-full bg-accent shadow-lg transition-transform active:scale-95"
-            aria-label="운동 영상 올리기"
-          >
-            <Plus size={24} strokeWidth={2} color="var(--accent-fg)" />
-          </button>
+          <div className="relative -top-7">
+            {/* pulse ring */}
+            <div className="absolute inset-0 rounded-full bg-accent opacity-30 animate-fab-pulse pointer-events-none" />
+            <button
+              onClick={handleUpload}
+              className="relative flex h-14 w-14 items-center justify-center rounded-full bg-accent shadow-lg shadow-accent/30 transition-all active:scale-90 hover:shadow-accent/50 hover:shadow-xl"
+              aria-label="운동 영상 올리기"
+            >
+              <Plus size={24} strokeWidth={2} color="var(--accent-fg)" />
+            </button>
+          </div>
           <span className="mt-1 text-xs text-transparent select-none">업로드</span>
         </div>
 

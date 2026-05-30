@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronLeft, Trophy, Flame, Share2, Mic, MicOff, Check, ImagePlus, X, Search, Plus } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { ChevronLeft, Flame, Share2, Check } from 'lucide-react'
 import LogoMark from '../components/LogoMark'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import client from '../api/client'
@@ -8,16 +9,42 @@ import { getApiErrorMessage } from '../api/errors'
 import { MERGE_POLL_INTERVAL_MS } from '../lib/constants'
 import type { Challenge } from '../api/types'
 import { isAxiosError } from 'axios'
+import StepSelectVideo from './upload/StepSelectVideo'
+import StepTagChallenge from './upload/StepTagChallenge'
+import StepRecord from './upload/StepRecord'
+import StepCaption from './upload/StepCaption'
 
-const WORKOUT_TAGS = ['홈트', '러닝', '요가', '웨이트']
-const QUICK_TAGS = ['홈트', '러닝', '요가', '웨이트', '일상', '식단', '기타']
+function useCountUp(target: number, duration = 800) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (target === 0) { setVal(0); return }
+    const start = performance.now()
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1)
+      setVal(target * progress)
+      if (progress < 1) requestAnimationFrame(tick)
+      else setVal(target)
+    }
+    requestAnimationFrame(tick)
+  }, [target, duration])
+  return val
+}
 
 const STEPS = ['영상 선택', '태그·챌린지', '음성 녹음', '설명·사진'] as const
 const MAX_RECORD_SECONDS = 30
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
 const PIPELINE_JOB_KEY = 'upload_pipeline_job'
-const PIPELINE_JOB_MAX_AGE_MS = 23 * 60 * 60 * 1000 // 23h (Redis TTL is 24h)
+const PIPELINE_JOB_MAX_AGE_MS = 23 * 60 * 60 * 1000
+
+const CONFETTI_COLORS = ['#B5FF2E', '#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FF9FF3']
+
+const STEP_CONFIG: Record<string, { start: number; ceiling: number; interval: number }> = {
+  audio_merge: { start: 73, ceiling: 75,  interval: 1500 },
+  image_merge: { start: 76, ceiling: 88,  interval: 5000 },
+  compress:    { start: 90, ceiling: 93,  interval: 1500 },
+  db_save:     { start: 95, ceiling: 98,  interval: 1500 },
+}
 
 function saveJob(jobId: string) {
   localStorage.setItem(PIPELINE_JOB_KEY, JSON.stringify({ jobId, savedAt: Date.now() }))
@@ -39,16 +66,7 @@ function loadJob(): string | null {
   }
 }
 
-function clearJob() {
-  localStorage.removeItem(PIPELINE_JOB_KEY)
-}
-
-const STEP_CONFIG: Record<string, { start: number; ceiling: number; interval: number }> = {
-  audio_merge: { start: 73, ceiling: 75,  interval: 1500 },
-  image_merge: { start: 76, ceiling: 88,  interval: 5000 },
-  compress:    { start: 90, ceiling: 93,  interval: 1500 },
-  db_save:     { start: 95, ceiling: 98,  interval: 1500 },
-}
+function clearJob() { localStorage.removeItem(PIPELINE_JOB_KEY) }
 
 function getSupportedAudioMimeType(): string {
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return ''
@@ -84,22 +102,20 @@ export default function UploadPage() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [done, setDone] = useState(false)
   const [pointsEarned, setPointsEarned] = useState(0)
+  const displayPoints = useCountUp(pointsEarned)
   const [error, setError] = useState('')
   const [limitError, setLimitError] = useState('')
 
-  // Pipeline job polling state
   const [pipelineJobId, setPipelineJobId] = useState<string | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<string | null>(null)
   const [pipelineStep, setPipelineStep] = useState<string>('')
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const uploadAbortRef = useRef<AbortController | null>(null)
 
-  // Proof image
   const proofImageRef = useRef<HTMLInputElement>(null)
   const proofFileRef = useRef<File | null>(null)
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null)
 
-  // Audio recording
   const audioBlobRef = useRef<Blob | null>(null)
   const audioMimeTypeRef = useRef('audio/webm')
   const [recording, setRecording] = useState(false)
@@ -111,21 +127,15 @@ export default function UploadPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const recordedSecondsRef = useRef(0)
 
-  // On mount: resume pending job from localStorage (checks TTL)
   useEffect(() => {
     const savedJobId = loadJob()
-    if (savedJobId) {
-      setPipelineJobId(savedJobId)
-      setPipelineStatus('pending')
-    }
-
+    if (savedJobId) { setPipelineJobId(savedJobId); setPipelineStatus('pending') }
     const handlePageHide = () => { uploadAbortRef.current?.abort() }
     const handlePageShow = (e: PageTransitionEvent) => {
       if (e.persisted) { setUploading(false); setError('') }
     }
     window.addEventListener('pagehide', handlePageHide)
     window.addEventListener('pageshow', handlePageShow)
-
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (pollTimerRef.current) clearInterval(pollTimerRef.current)
@@ -141,26 +151,13 @@ export default function UploadPage() {
   }, [])
 
   const handleJobCompleted = useCallback((pts: number) => {
-    stopPolling()
-    clearJob()
-    setPointsEarned(pts)
-    setDone(true)
-    qc.invalidateQueries({ queryKey: ['my-stats'] }).catch(() => undefined)
-    qc.invalidateQueries({ queryKey: ['my-posts'] }).catch(() => undefined)
-    qc.invalidateQueries({ queryKey: ['my-weekly-points'] }).catch(() => undefined)
-    qc.invalidateQueries({ queryKey: ['history'] }).catch(() => undefined)
-    qc.invalidateQueries({ queryKey: ['leaderboard-week'] }).catch(() => undefined)
-    qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
-    qc.invalidateQueries({ queryKey: ['my-challenges-upload'] }).catch(() => undefined)
-    qc.invalidateQueries({ queryKey: ['feed'] }).catch(() => undefined)
+    stopPolling(); clearJob(); setPointsEarned(pts); setDone(true)
+    for (const key of ['my-stats','my-posts','my-weekly-points','history','leaderboard-week','challenges','my-challenges-upload','feed'])
+      qc.invalidateQueries({ queryKey: [key] }).catch(() => undefined)
   }, [stopPolling, qc])
 
   const abortJob = useCallback((msg: string) => {
-    stopPolling()
-    clearJob()
-    setPipelineJobId(null)
-    setPipelineStatus(null)
-    setError(msg)
+    stopPolling(); clearJob(); setPipelineJobId(null); setPipelineStatus(null); setError(msg)
   }, [stopPolling])
 
   const pollJob = useCallback(async (jobId: string) => {
@@ -175,16 +172,11 @@ export default function UploadPage() {
         const cfg = STEP_CONFIG[pipeline_step]
         if (cfg) setUploadProgress((p) => Math.max(p, cfg.start))
       }
-      if (status === 'completed') {
-        setUploadProgress(100)
-        handleJobCompleted(points_earned ?? 0)
-      } else if (status === 'failed') {
-        abortJob(jobError || '처리 중 오류가 발생했습니다')
-      }
+      if (status === 'completed') { setUploadProgress(100); handleJobCompleted(points_earned ?? 0) }
+      else if (status === 'failed') abortJob(jobError || '처리 중 오류가 발생했습니다')
     } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 404) {
+      if (isAxiosError(err) && err.response?.status === 404)
         abortJob('업로드 결과를 확인할 수 없습니다. 피드에서 영상을 확인해주세요.')
-      }
     }
   }, [handleJobCompleted, abortJob])
 
@@ -193,23 +185,16 @@ export default function UploadPage() {
     const cfg = STEP_CONFIG[pipelineStep]
     const ceiling = cfg?.ceiling ?? 88
     const interval = cfg?.interval ?? 1500
-    const timer = setInterval(() => {
-      setUploadProgress((p) => (p < ceiling ? p + 1 : p))
-    }, interval)
+    const timer = setInterval(() => setUploadProgress((p) => (p < ceiling ? p + 1 : p)), interval)
     return () => clearInterval(timer)
   }, [pipelineJobId, uploading, done, pipelineStep])
 
   useEffect(() => {
     if (!pipelineJobId || done) return
-
     pollJob(pipelineJobId)
     pollTimerRef.current = setInterval(() => pollJob(pipelineJobId), MERGE_POLL_INTERVAL_MS)
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') pollJob(pipelineJobId)
-    }
+    const handleVisibility = () => { if (document.visibilityState === 'visible') pollJob(pipelineJobId) }
     document.addEventListener('visibilitychange', handleVisibility)
-
     return () => {
       if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null }
       document.removeEventListener('visibilitychange', handleVisibility)
@@ -225,94 +210,60 @@ export default function UploadPage() {
     videoEl.src = url
     videoEl.onloadedmetadata = () => {
       if (videoEl.duration < 5 || videoEl.duration > 60) {
-        URL.revokeObjectURL(url)
-        e.target.value = ''
+        URL.revokeObjectURL(url); e.target.value = ''
         const secs = Math.round(videoEl.duration)
         setError(secs < 5
           ? `영상 길이가 ${secs}초입니다. 5초 이상 영상만 업로드할 수 있습니다.`
-          : `영상 길이가 ${secs}초입니다. 60초 이하 영상만 업로드할 수 있습니다.`
-        )
+          : `영상 길이가 ${secs}초입니다. 60초 이하 영상만 업로드할 수 있습니다.`)
         return
       }
-      setError('')
-      setFile(f)
-      setPreviewUrl(url)
-      setStep(1)
+      setError(''); setFile(f); setPreviewUrl(url); setStep(1)
     }
-    videoEl.onerror = () => {
-      setFile(f)
-      setPreviewUrl(url)
-      setStep(1)
-    }
+    videoEl.onerror = () => { setFile(f); setPreviewUrl(url); setStep(1) }
   }
 
   function toggleTag(tag: string) {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
-    )
+    setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])
   }
 
   function addTagFromInput() {
     const trimmed = tagInput.trim()
     if (!trimmed || selectedTags.includes(trimmed)) { setTagInput(''); return }
-    setSelectedTags((prev) => [...prev, trimmed])
-    setTagInput('')
+    setSelectedTags((prev) => [...prev, trimmed]); setTagInput('')
   }
 
   async function startRecording() {
-    if (typeof MediaRecorder === 'undefined') {
-      setError('이 브라우저에서는 음성 녹음을 지원하지 않습니다.')
-      return
-    }
+    if (typeof MediaRecorder === 'undefined') { setError('이 브라우저에서는 음성 녹음을 지원하지 않습니다.'); return }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48_000 },
       })
-      streamRef.current = stream
-      audioChunksRef.current = []
-      recordedSecondsRef.current = 0
-      setRecordedSeconds(0)
-      setRecordingDone(false)
-
+      streamRef.current = stream; audioChunksRef.current = []; recordedSecondsRef.current = 0
+      setRecordedSeconds(0); setRecordingDone(false)
       const mimeType = getSupportedAudioMimeType()
       audioMimeTypeRef.current = mimeType || 'audio/webm'
-      const mr = new MediaRecorder(stream, {
-        ...(mimeType ? { mimeType } : {}),
-        audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
-      })
+      const mr = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: AUDIO_BITS_PER_SECOND })
       mediaRecorderRef.current = mr
-
       mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       mr.onstop = async () => {
-        streamRef.current?.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
+        streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null
         audioBlobRef.current = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current })
-        setRecording(false)
-        setRecordingDone(true)
+        setRecording(false); setRecordingDone(true)
       }
-
-      mr.start()
-      setRecording(true)
-
+      mr.start(); setRecording(true)
       intervalRef.current = setInterval(() => {
         setRecordedSeconds((prev) => {
-          const next = prev + 1
-          recordedSecondsRef.current = next
-          if (next >= MAX_RECORD_SECONDS) {
-            if (intervalRef.current) clearInterval(intervalRef.current)
-            mediaRecorderRef.current?.stop()
-          }
+          const next = prev + 1; recordedSecondsRef.current = next
+          if (next >= MAX_RECORD_SECONDS) { if (intervalRef.current) clearInterval(intervalRef.current); mediaRecorderRef.current?.stop() }
           return next
         })
       }, 1000)
     } catch (err) {
-      if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
+      if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'))
         setError('마이크 접근이 거부되었습니다. 브라우저 주소창 옆 자물쇠 아이콘을 눌러 마이크를 허용해주세요.')
-      } else if (err instanceof DOMException && err.name === 'NotFoundError') {
+      else if (err instanceof DOMException && err.name === 'NotFoundError')
         setError('마이크를 찾을 수 없습니다. 장치를 확인해주세요.')
-      } else {
-        setError('마이크 접근 권한이 필요합니다.')
-      }
+      else setError('마이크 접근 권한이 필요합니다.')
     }
   }
 
@@ -325,30 +276,33 @@ export default function UploadPage() {
     if (recording) {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
       mediaRecorderRef.current?.stop()
-      streamRef.current?.getTracks().forEach((t) => t.stop())
-      streamRef.current = null
-      setRecording(false)
+      streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; setRecording(false)
     }
-    audioBlobRef.current = null
-    setRecordingDone(false)
-    setError('')
-    setStep(3)
+    audioBlobRef.current = null; setRecordingDone(false); setError(''); setStep(3)
   }
 
   function handleBack() {
     if (step === 0) return
     if (recording) {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
-      streamRef.current?.getTracks().forEach((t) => t.stop())
-      streamRef.current = null
-      setRecording(false)
-      audioBlobRef.current = null
-      setRecordingDone(false)
+      streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null
+      setRecording(false); audioBlobRef.current = null; setRecordingDone(false)
     }
     setStep((prev) => prev - 1)
   }
 
-  // Challenge modal queries
+  function clearChallenge() {
+    setSelectedChallengeId(null); setSelectedChallenge(null); setHasChallenge(false)
+  }
+
+  function openChallengeModal() {
+    setChallengeSearch(''); setShowChallengeModal(true)
+  }
+
+  function selectChallenge(c: Challenge) {
+    setSelectedChallengeId(c.id); setSelectedChallenge(c); setShowChallengeModal(false); setChallengeSearch('')
+  }
+
   const { data: allChallenges = [] } = useQuery<Challenge[]>({
     queryKey: ['challenges-upload-top10'],
     queryFn: async () => {
@@ -369,44 +323,16 @@ export default function UploadPage() {
 
   const displayedChallenges = challengeSearch ? searchChallenges : allChallenges
 
-  function openChallengeModal() {
-    setChallengeSearch('')
-    setShowChallengeModal(true)
-  }
-
-  function selectChallenge(c: Challenge) {
-    setSelectedChallengeId(c.id)
-    setSelectedChallenge(c)
-    setShowChallengeModal(false)
-    setChallengeSearch('')
-  }
-
-  function clearChallenge() {
-    setSelectedChallengeId(null)
-    setSelectedChallenge(null)
-    setHasChallenge(false)
-  }
-
   async function handleUpload() {
     if (!file) return
-    setError('')
-    setUploading(true)
-    setUploadProgress(0)
-
-    const abortController = new AbortController()
-    uploadAbortRef.current = abortController
-
+    setError(''); setUploading(true); setUploadProgress(0)
+    const ctrl = new AbortController(); uploadAbortRef.current = ctrl
     try {
       let duration = 15
       if (previewUrl) {
-        const videoEl = document.createElement('video')
-        videoEl.src = previewUrl
-        duration = await new Promise<number>((resolve) => {
-          videoEl.onloadedmetadata = () => resolve(Math.round(videoEl.duration))
-          videoEl.onerror = () => resolve(15)
-        })
+        const v = document.createElement('video'); v.src = previewUrl
+        duration = await new Promise<number>((res) => { v.onloadedmetadata = () => res(Math.round(v.duration)); v.onerror = () => res(15) })
       }
-
       const form = new FormData()
       form.append('file', file, file.name)
       form.append('duration_sec', String(Math.min(60, Math.max(5, duration))))
@@ -415,48 +341,47 @@ export default function UploadPage() {
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       if (workoutStart) form.append('workout_start', workoutStart)
       if (workoutEnd) form.append('workout_end', workoutEnd)
-
-      const audioBlob = audioBlobRef.current
-      if (audioBlob && audioBlob.size > 0) {
-        const audioMimeType = audioBlob.type || audioMimeTypeRef.current || 'audio/webm'
-        const audioExt = audioMimeType.includes('mp4') ? 'mp4' : 'webm'
-        form.append('audio', new File([audioBlob], `audio.${audioExt}`, { type: audioMimeType }))
+      const ab = audioBlobRef.current
+      if (ab && ab.size > 0) {
+        const mime = ab.type || audioMimeTypeRef.current || 'audio/webm'
+        form.append('audio', new File([ab], `audio.${mime.includes('mp4') ? 'mp4' : 'webm'}`, { type: mime }))
         form.append('audio_duration_sec', String(recordedSecondsRef.current))
       }
-
-      if (proofFileRef.current) {
-        form.append('proof_image', proofFileRef.current, proofFileRef.current.name)
-      }
-
-      const res = await client.post<{ data: { job_id: string } }>(
-        '/videos/upload-pipeline',
-        form,
-        {
-          signal: abortController.signal,
-          timeout: 300_000,
-          onUploadProgress: (e) => { if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 70)) },
-        },
+      if (proofFileRef.current) form.append('proof_image', proofFileRef.current, proofFileRef.current.name)
+      const { data: { data: { job_id } } } = await client.post<{ data: { job_id: string } }>(
+        '/videos/upload-pipeline', form,
+        { signal: ctrl.signal, timeout: 300_000, onUploadProgress: (e) => { if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 70)) } },
       )
-
-      const { job_id } = res.data.data
-      saveJob(job_id)
-      setPipelineJobId(job_id)
-      setPipelineStatus('pending')
-      setUploadProgress(70)
+      saveJob(job_id); setPipelineJobId(job_id); setPipelineStatus('pending'); setUploadProgress(70)
     } catch (err: unknown) {
       if (isAxiosError(err) && err.code === 'ERR_CANCELED') return
       setError(getApiErrorMessage(err, '업로드 실패'))
-    } finally {
-      setUploading(false)
-    }
+    } finally { setUploading(false) }
   }
 
   // ── Done screen ──
   if (done) {
     const shareText = '나의 운동을 기록하자'
+    const confettiItems = Array.from({ length: 20 }, (_, i) => ({
+      id: i,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      left: `${(i / 20) * 100}%`,
+      delay: `${(i * 0.1) % 1.5}s`,
+      duration: `${1.5 + (i % 5) * 0.3}s`,
+      size: i % 3 === 0 ? 10 : 6,
+    }))
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6 lg:max-w-2xl lg:mx-auto">
-        <div className="w-full max-w-sm rounded-2xl bg-theme-surface p-6">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6 lg:max-w-2xl lg:mx-auto overflow-hidden relative">
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-10">
+          {confettiItems.map((c) => (
+            <span
+              key={c.id}
+              className="absolute top-0 rounded-sm animate-confetti-fall"
+              style={{ left: c.left, width: c.size, height: c.size, backgroundColor: c.color, animationDuration: c.duration, animationDelay: c.delay }}
+            />
+          ))}
+        </div>
+        <div className="w-full max-w-sm rounded-2xl bg-theme-surface p-6 relative z-20">
           <div className="flex items-center gap-2 mb-4">
             <Flame size={20} className="text-orange-400" />
             <span className="text-sm font-semibold text-theme-primary">오늘 운동 완료</span>
@@ -464,19 +389,19 @@ export default function UploadPage() {
           {caption && <p className="text-sm text-theme-muted mb-4">"{caption}"</p>}
           <div className="flex items-center justify-between rounded-xl bg-theme-surface2 px-4 py-3">
             <span className="text-xs text-theme-muted">흘린 땀</span>
-            <span className="text-lg font-bold text-accent">+{pointsEarned.toFixed(1)} L</span>
+            <span className="text-lg font-bold text-accent">+{displayPoints.toFixed(1)} L</span>
           </div>
           <p className="text-xs text-theme-subtle mt-3 leading-relaxed">
             업로드 후 24시간이 지나면 땀이 확정돼요. 그 전에 영상을 삭제하면 취소됩니다.
           </p>
         </div>
-        <div className="flex w-full max-w-sm flex-col gap-3">
+        <div className="flex w-full max-w-sm flex-col gap-3 relative z-20">
           <button
             onClick={() => {
               if (typeof navigator !== 'undefined' && 'share' in navigator) {
                 navigator.share({ title: '오늘 운동 완료', text: shareText }).catch(() => undefined)
               } else {
-                window.navigator.clipboard?.writeText(shareText).then(() => alert('클립보드에 복사됐어요!')).catch(() => undefined)
+                window.navigator.clipboard?.writeText(shareText).then(() => toast.success('클립보드에 복사됐어요!')).catch(() => undefined)
               }
             }}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
@@ -491,14 +416,9 @@ export default function UploadPage() {
     )
   }
 
-  // ── Upload / Processing screen ──
+  // ── Processing screen ──
   if (uploading || pipelineJobId) {
-    const statusLabel = uploading
-      ? '업로드 중...'
-      : pipelineStatus === 'processing'
-      ? '영상 처리 중...'
-      : '잠시만 기다려주세요...'
-
+    const statusLabel = uploading ? '업로드 중...' : pipelineStatus === 'processing' ? '영상 처리 중...' : '잠시만 기다려주세요...'
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-theme-page px-6 lg:max-w-2xl lg:mx-auto">
         <LogoMark size={48} className="animate-bounce text-accent" />
@@ -515,9 +435,7 @@ export default function UploadPage() {
             <button
               onClick={() => { clearJob(); setError(''); setPipelineJobId(null); setPipelineStatus(null) }}
               className="block mx-auto mt-2 text-xs text-theme-muted underline"
-            >
-              처음으로
-            </button>
+            >처음으로</button>
           </div>
         )}
       </div>
@@ -528,7 +446,6 @@ export default function UploadPage() {
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
-
       {/* 헤더 + 스텝 바 */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-2 mb-3">
@@ -541,7 +458,6 @@ export default function UploadPage() {
           )}
           <span className="text-sm font-semibold text-theme-primary">영상 업로드</span>
         </div>
-
         <div data-testid="step-bar" className="flex items-start">
           {STEPS.flatMap((label, i) => {
             const isCompleted = i < step
@@ -559,408 +475,49 @@ export default function UploadPage() {
               </div>,
             ]
             if (i < STEPS.length - 1) {
-              nodes.push(
-                <div key={`line-${i}`} className={`flex-1 h-0.5 mt-3.5 transition-colors ${isCompleted ? 'bg-accent' : 'bg-theme-surface2'}`} />,
-              )
+              nodes.push(<div key={`line-${i}`} className={`flex-1 h-0.5 mt-3.5 transition-colors ${isCompleted ? 'bg-accent' : 'bg-theme-surface2'}`} />)
             }
             return nodes
           })}
         </div>
       </div>
 
-      {/* Step 0: 영상 선택 */}
       {step === 0 && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
-          <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileChange} />
-          <button
-            onClick={() => { setError(''); fileInputRef.current?.click() }}
-            className={`flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-12 transition-colors ${
-              error ? 'border-red-500 text-red-400' : 'border-theme-border text-theme-muted hover:border-accent hover:text-accent'
-            }`}
-          >
-            <LogoMark size={48} />
-            <span>영상을 선택하세요</span>
-            <span className="text-xs">5~60초, 최대 50MB</span>
-          </button>
-          {error && (
-            <p className="text-sm text-red-400 text-center">{error}</p>
-          )}
-        </div>
+        <StepSelectVideo fileInputRef={fileInputRef} error={error} setError={setError} onFileChange={handleFileChange} />
       )}
-
-      {/* Step 1: 태그 + 챌린지 */}
       {step === 1 && (
-        <div className="flex flex-1 flex-col px-6 pt-2 overflow-y-auto">
-          {previewUrl && (
-            <video src={previewUrl} className="mb-4 h-36 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
-          )}
-          <p className="mb-2 text-sm font-semibold text-theme-primary">카테고리</p>
-
-          {/* 선택된 태그 */}
-          {selectedTags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {selectedTags.map((tag) => (
-                <div key={tag} className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-fg">
-                  {tag}
-                  <button onClick={() => toggleTag(tag)} className="flex-shrink-0">
-                    <X size={11} strokeWidth={2.5} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* 자주 쓰는 태그 */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            {QUICK_TAGS.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => toggleTag(tag)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedTags.includes(tag) ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-theme-surface2 text-theme-muted'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-
-          {/* 직접 입력 */}
-          <div className="flex gap-2 mb-5">
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTagFromInput() } }}
-              placeholder="직접 입력 후 Enter"
-              className="flex-1 rounded-xl bg-theme-surface px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none"
-            />
-            <button
-              onClick={addTagFromInput}
-              disabled={!tagInput.trim()}
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-theme-surface text-theme-muted disabled:opacity-40"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-
-          <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지</p>
-
-          {/* 없음 / 있음 토글 */}
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => { setHasChallenge(false); clearChallenge() }}
-              className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
-                hasChallenge === false ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
-              }`}
-            >
-              없음
-            </button>
-            <button
-              onClick={() => { setHasChallenge(true); openChallengeModal() }}
-              className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
-                hasChallenge === true ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
-              }`}
-            >
-              있음
-            </button>
-          </div>
-
-          {/* 선택된 챌린지 표시 */}
-          {hasChallenge === true && selectedChallenge && (
-            <button
-              onClick={openChallengeModal}
-              className="flex items-center gap-2 mb-4 rounded-xl bg-accent/10 px-4 py-3 text-left w-full"
-            >
-              <Trophy size={14} className="text-accent flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-accent truncate">{selectedChallenge.title}</p>
-                <p className="text-xs text-accent/70 mt-0.5">{selectedChallenge.participant_count}명 참여 · {selectedChallenge.reward_title}</p>
-              </div>
-              <X
-                size={15}
-                className="text-accent/60 flex-shrink-0"
-                onClick={(e) => { e.stopPropagation(); clearChallenge() }}
-              />
-            </button>
-          )}
-
-          {/* 챌린지 미선택 상태에서 "있음" 선택 시 */}
-          {hasChallenge === true && !selectedChallenge && (
-            <button
-              onClick={openChallengeModal}
-              className="flex items-center justify-between mb-4 rounded-xl bg-theme-surface px-4 py-3 w-full"
-            >
-              <span className="text-sm text-theme-muted">챌린지를 선택하세요</span>
-              <ChevronRight size={16} className="text-theme-muted" />
-            </button>
-          )}
-
-          {limitError && (
-            <p className="mb-2 text-sm text-red-400 flex-shrink-0">{limitError}</p>
-          )}
-          <button
-            onClick={async () => {
-              setLimitError('')
-              const hasWorkout = selectedTags.some((t) => WORKOUT_TAGS.includes(t))
-              if (hasWorkout) {
-                try {
-                  const res = await client.get<{ data: { reached: boolean } }>('/videos/daily-limit')
-                  if (res.data.data.reached) {
-                    setLimitError('오늘 운동 영상 업로드 한도(3개)에 도달했습니다.')
-                    return
-                  }
-                } catch {
-                  // 네트워크 오류 시 통과 (서버에서 재검사)
-                }
-              }
-              setStep(2)
-            }}
-            className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
-          >
-            다음 <ChevronRight size={18} />
-          </button>
-        </div>
+        <StepTagChallenge
+          previewUrl={previewUrl}
+          selectedTags={selectedTags} tagInput={tagInput} setTagInput={setTagInput}
+          toggleTag={toggleTag} addTagFromInput={addTagFromInput}
+          hasChallenge={hasChallenge} setHasChallenge={setHasChallenge}
+          selectedChallenge={selectedChallenge} selectedChallengeId={selectedChallengeId}
+          limitError={limitError} setLimitError={setLimitError}
+          clearChallenge={clearChallenge} onNext={() => setStep(2)}
+          openChallengeModal={openChallengeModal}
+          showChallengeModal={showChallengeModal} setShowChallengeModal={setShowChallengeModal}
+          challengeSearch={challengeSearch} setChallengeSearch={setChallengeSearch}
+          displayedChallenges={displayedChallenges} selectChallenge={selectChallenge}
+        />
       )}
-
-      {/* Step 2: 음성 녹음 */}
       {step === 2 && (
-        <div className="flex flex-1 flex-col px-6 pt-4 gap-4">
-          {previewUrl && (
-            <video src={previewUrl} className="h-40 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
-          )}
-          <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-4">
-            <div>
-              <p className="font-semibold text-theme-primary">음성 녹음 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-              <p className="text-xs text-theme-muted mt-1 leading-relaxed">
-                영상에 입힐 음성이 있으면 녹음하세요. 최대 {MAX_RECORD_SECONDS}초.
-              </p>
-            </div>
-            <div className="flex flex-col items-center gap-3">
-              {recordingDone ? (
-                <div className="flex flex-col items-center gap-2">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/20">
-                    <Mic size={26} strokeWidth={1.5} className="text-accent" />
-                  </div>
-                  <span className="text-xs text-accent font-medium">
-                    {String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:{String(recordedSeconds % 60).padStart(2, '0')} 녹음 완료
-                  </span>
-                  <button
-                    onClick={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0) }}
-                    className="flex items-center gap-1 text-xs text-theme-muted"
-                  >
-                    <X size={12} /> 다시 녹음
-                  </button>
-                </div>
-              ) : !recording ? (
-                <button onClick={startRecording} className="flex h-16 w-16 items-center justify-center rounded-full bg-accent">
-                  <Mic size={26} strokeWidth={1.5} className="text-black" />
-                </button>
-              ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <button onClick={stopRecording} className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
-                    <MicOff size={26} strokeWidth={1.5} className="text-black" />
-                  </button>
-                  <span className="text-sm font-mono text-red-400">
-                    {String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:{String(recordedSeconds % 60).padStart(2, '0')}
-                  </span>
-                </div>
-              )}
-              <div className="w-full h-1.5 rounded-full bg-theme-surface2 overflow-hidden">
-                <div className="h-full rounded-full bg-red-500 transition-all duration-1000" style={{ width: `${progressPct}%` }} />
-              </div>
-              {recording && <p className="text-xs text-theme-muted">{MAX_RECORD_SECONDS - recordedSeconds}초 남음</p>}
-            </div>
-          </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          <div className="mt-auto flex flex-col items-center gap-3 pb-2">
-            {recordingDone && (
-              <button
-                onClick={() => setStep(3)}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
-              >
-                다음 <ChevronRight size={18} />
-              </button>
-            )}
-            <button
-              onClick={skipRecording}
-              className="text-sm text-theme-muted underline underline-offset-2 py-1"
-            >
-              건너뛰기
-            </button>
-          </div>
-        </div>
+        <StepRecord
+          previewUrl={previewUrl} recording={recording} recordedSeconds={recordedSeconds}
+          recordingDone={recordingDone} progressPct={progressPct} error={error}
+          maxSeconds={MAX_RECORD_SECONDS}
+          startRecording={startRecording} stopRecording={stopRecording} skipRecording={skipRecording}
+          onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0) }}
+          onNext={() => setStep(3)}
+        />
       )}
-
-      {/* Step 3: 설명 + 사진 */}
       {step === 3 && (
-        <div className="flex flex-1 flex-col px-6 pt-4 overflow-y-auto">
-          <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-4">
-            <p className="text-xs font-medium text-theme-muted">운동 시간대 <span className="text-theme-subtle">(선택)</span></p>
-            <div className="flex items-center gap-2">
-              <input
-                type="time"
-                value={workoutStart}
-                onChange={(e) => setWorkoutStart(e.target.value)}
-                className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent"
-              />
-              <span className="text-theme-muted text-sm">~</span>
-              <input
-                type="time"
-                value={workoutEnd}
-                onChange={(e) => setWorkoutEnd(e.target.value)}
-                className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
-          </div>
-
-          <p className="mb-2 text-sm font-semibold text-theme-primary">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-          <textarea
-            value={caption}
-            onChange={(e) => setCaption(e.target.value.slice(0, 140))}
-            maxLength={140}
-            placeholder="오늘의 운동을 간략하게 요약해주세요. #3km #런닝 #오운완"
-            rows={3}
-            className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent mb-1"
-          />
-          <p className="text-right text-xs text-theme-subtle mb-4">{caption.length}/140</p>
-
-          <p className="mb-1 text-sm font-semibold text-theme-primary">인증 사진 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-          <p className="mb-3 text-xs text-theme-muted leading-relaxed">
-            사진을 영상 뒷부분에 붙여서 운동 인증을 강화하세요. 업로드 후 영상 끝에 3초간 표시됩니다.
-          </p>
-          <input
-            ref={proofImageRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (!f) return
-              proofFileRef.current = f
-              setProofPreviewUrl(URL.createObjectURL(f))
-            }}
-          />
-          {proofPreviewUrl ? (
-            <div className="relative mb-4">
-              <img src={proofPreviewUrl} alt="사진 미리보기" className="w-full rounded-xl object-cover max-h-48" />
-              <button
-                onClick={() => { proofFileRef.current = null; setProofPreviewUrl(null); if (proofImageRef.current) proofImageRef.current.value = '' }}
-                className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => proofImageRef.current?.click()}
-              className="mb-4 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-theme-border p-4 text-theme-muted hover:border-accent hover:text-accent transition-colors"
-            >
-              <ImagePlus size={20} strokeWidth={1.5} />
-              <span className="text-sm">사진 추가</span>
-            </button>
-          )}
-
-          {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
-
-          <button
-            onClick={handleUpload}
-            disabled={uploading}
-            className="mb-4 w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
-          >
-            업로드 시작
-          </button>
-        </div>
-      )}
-
-      {/* ── 챌린지 선택 모달 ── */}
-      {showChallengeModal && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-theme-page lg:max-w-2xl lg:mx-auto">
-          {/* 모달 헤더 */}
-          <div className="flex items-center gap-3 px-4 pt-5 pb-3 flex-shrink-0">
-            <button
-              onClick={() => {
-                setShowChallengeModal(false)
-                setChallengeSearch('')
-                if (!selectedChallenge) setHasChallenge(null)
-              }}
-              className="text-theme-muted"
-            >
-              <X size={20} />
-            </button>
-            <h2 className="text-base font-semibold text-theme-primary flex-1">챌린지 선택</h2>
-          </div>
-
-          {/* 검색 입력 */}
-          <div className="px-4 mb-3 flex-shrink-0">
-            <div className="flex items-center gap-2 rounded-xl bg-theme-surface px-3 py-2.5">
-              <Search size={15} className="text-theme-subtle flex-shrink-0" />
-              <input
-                type="text"
-                value={challengeSearch}
-                onChange={(e) => setChallengeSearch(e.target.value)}
-                placeholder="챌린지 이름 검색..."
-                autoFocus
-                className="flex-1 bg-transparent text-sm text-theme-primary placeholder-theme-subtle outline-none"
-              />
-              {challengeSearch && (
-                <button onClick={() => setChallengeSearch('')} className="text-theme-muted flex-shrink-0">
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* 목록 */}
-          <div className="flex-1 overflow-y-auto px-4 pb-6">
-            {!challengeSearch && (
-              <p className="text-[10px] text-theme-subtle mb-2">진행 중인 챌린지</p>
-            )}
-            {displayedChallenges.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Trophy size={32} className="text-theme-surface2 mb-3" strokeWidth={1} />
-                <p className="text-sm text-theme-muted">
-                  {challengeSearch ? '검색 결과가 없어요' : '진행 중인 챌린지가 없어요'}
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {displayedChallenges.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => selectChallenge(c)}
-                    className={`flex items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors ${
-                      selectedChallengeId === c.id
-                        ? 'bg-accent text-accent-fg'
-                        : 'bg-theme-surface text-theme-primary'
-                    }`}
-                  >
-                    {c.image_thumb_url ? (
-                      <img
-                        src={c.image_thumb_url}
-                        alt=""
-                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-theme-surface2 flex items-center justify-center flex-shrink-0">
-                        <Trophy size={16} strokeWidth={1.5} className={selectedChallengeId === c.id ? 'text-accent-fg' : 'text-theme-muted'} />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{c.title}</p>
-                      <p className={`text-xs mt-0.5 ${selectedChallengeId === c.id ? 'text-accent-fg/70' : 'text-theme-muted'}`}>
-                        {c.participant_count}명 참여 · {c.reward_title}
-                      </p>
-                    </div>
-                    {selectedChallengeId === c.id && (
-                      <Check size={16} className="text-accent-fg flex-shrink-0 mt-0.5" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <StepCaption
+          proofImageRef={proofImageRef} proofPreviewUrl={proofPreviewUrl} setProofPreviewUrl={setProofPreviewUrl}
+          proofFileRef={proofFileRef} caption={caption} setCaption={setCaption}
+          workoutStart={workoutStart} setWorkoutStart={setWorkoutStart}
+          workoutEnd={workoutEnd} setWorkoutEnd={setWorkoutEnd}
+          error={error} uploading={uploading} onUpload={handleUpload}
+        />
       )}
     </div>
   )

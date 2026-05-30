@@ -10,6 +10,7 @@ import type { MyStats, HistoryResponse, HistoryWorkoutPost, MonthlyPointsRespons
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
+import { SkeletonCalendarGrid } from '../components/Skeleton'
 
 import { getDaysInMonth, getFirstDayIndex, pad2 } from '../utils/calendar'
 
@@ -43,6 +44,7 @@ export default function ProfilePage() {
 
   type SweatPeriod = 'week' | 'month' | 'all'
   const [sweatPeriod, setSweatPeriod] = useState<SweatPeriod>('week')
+  const [displayedSweat, setDisplayedSweat] = useState<number>(0)
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
@@ -211,6 +213,22 @@ export default function ProfilePage() {
         ? confirmedSweatPoints
         : monthlyPointsData?.month_points ?? null
 
+  useEffect(() => {
+    if (sweatDisplayLoading || sweatDisplayValue === null) return
+    const target = sweatDisplayValue
+    const duration = 800
+    const start = performance.now()
+    let raf: number
+    function step(now: number) {
+      const elapsed = Math.min(now - start, duration)
+      const progress = elapsed / duration
+      setDisplayedSweat(target * progress)
+      if (elapsed < duration) raf = requestAnimationFrame(step)
+      else setDisplayedSweat(target)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [sweatDisplayValue, sweatDisplayLoading])
 
   const cells: Array<{ day: number | null; dateStr: string | null }> = []
   for (let i = 0; i < firstIdx; i++) cells.push({ day: null, dateStr: null })
@@ -282,7 +300,7 @@ export default function ProfilePage() {
           })}
         </div>
 
-        <Droplets size={30} className="text-blue-400" strokeWidth={1.5} />
+        <Droplets size={30} className="text-blue-400 animate-drip" strokeWidth={1.5} />
 
         {/* 수치 표시 */}
         {sweatDisplayError ? (
@@ -291,7 +309,7 @@ export default function ProfilePage() {
           <span className="text-5xl font-bold font-mono text-theme-muted">...</span>
         ) : (
           <span className="text-5xl font-bold font-mono text-theme-primary">
-            {sweatDisplayValue !== null ? sweatDisplayValue.toFixed(2) : '—'}
+            {sweatDisplayValue !== null ? displayedSweat.toFixed(2) : '—'}
             <span className="text-xl font-medium text-theme-muted ml-1">L</span>
           </span>
         )}
@@ -354,9 +372,7 @@ export default function ProfilePage() {
         </div>
 
         {historyLoading ? (
-          <div className="flex h-48 items-center justify-center text-theme-muted text-sm">
-            불러오는 중...
-          </div>
+          <SkeletonCalendarGrid />
         ) : (
           <div className="grid grid-cols-7 gap-1">
             {cells.map((cell, idx) => {

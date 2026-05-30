@@ -10,6 +10,7 @@
   --bg-surface: #161616;
   --bg-surface-2: #1F1F1F;
   --accent: #B5FF2E;
+  --accent-rgb: 181, 255, 46;
   --accent-fg: #0D0D0D;
   --accent-text: #B5FF2E;       /* lime on dark bg: 7:1+ contrast */
   --text-primary: #F5F5F5;
@@ -25,6 +26,7 @@
   --bg-surface: #141414;
   --bg-surface-2: #1E1E1E;
   --accent: #1E6FFF;
+  --accent-rgb: 30, 111, 255;
   --accent-fg: #FFFFFF;
   --accent-text: #1E6FFF;
   --text-primary: #F5F5F5;
@@ -40,6 +42,7 @@
   --bg-surface: #FFFFFF;
   --bg-surface-2: #F1F3F5;
   --accent: #5A8A00;            /* dark lime — readable on white, WCAG AA */
+  --accent-rgb: 90, 138, 0;
   --accent-fg: #FFFFFF;
   --accent-text: #5A8A00;
   --text-primary: #111827;
@@ -55,6 +58,7 @@
   --bg-surface: #181820;
   --bg-surface-2: #1E1E2A;
   --accent: #7C3AED;
+  --accent-rgb: 124, 58, 237;
   --accent-fg: #FFFFFF;
   --accent-text: #9B6FFF;
   --text-primary: #F5F5F5;
@@ -70,6 +74,7 @@
   --bg-surface: #FFFFFF;
   --bg-surface-2: #F1F5F9;
   --accent: #2563EB;
+  --accent-rgb: 37, 99, 235;
   --accent-fg: #FFFFFF;
   --accent-text: #2563EB;
   --text-primary: #0F172A;
@@ -85,6 +90,7 @@
   --bg-surface: #FFFFFF;
   --bg-surface-2: #F0FDF4;
   --accent: #059669;
+  --accent-rgb: 5, 150, 105;
   --accent-fg: #FFFFFF;
   --accent-text: #059669;
   --text-primary: #0F172A;

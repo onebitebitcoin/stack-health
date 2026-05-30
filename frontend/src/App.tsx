@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, lazy, Suspense } from 'react'
+import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './store/auth'
 import client from './api/client'
 import type { User } from './api/types'
@@ -134,6 +135,19 @@ function Layout() {
       </Suspense>
       </div>
       {showNav && <BottomNav />}
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 2000,
+          style: {
+            background: 'var(--bg-surface)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border)',
+            fontSize: '14px',
+            fontFamily: 'DM Sans, sans-serif',
+          },
+        }}
+      />
     </div>
   )
 }

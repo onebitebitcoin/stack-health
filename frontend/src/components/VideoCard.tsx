@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock, Share2 } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { clsx } from 'clsx'
 import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import type { Post, FeedResponse } from '../api/types'
 import TagChip from './TagChip'
@@ -23,6 +25,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   const queryClient = useQueryClient()
   const [liked, setLiked] = useState(post.is_liked ?? false)
   const [likeCount, setLikeCount] = useState(post.like_count)
+  const [likeAnim, setLikeAnim] = useState<'burst' | 'shrink' | null>(null)
   const viewSent = useRef(false)
 
   // Sync local state when feed data is refetched (SPA navigation stale cache fix)
@@ -151,6 +154,8 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       const { liked: newLiked, like_count: newCount } = res.data.data
       setLiked(newLiked)
       setLikeCount(newCount)
+      setLikeAnim(newLiked ? 'burst' : 'shrink')
+      setTimeout(() => setLikeAnim(null), 400)
       // Update feed cache so navigating away and back shows correct liked state
       queryClient.setQueryData<InfiniteData<FeedResponse>>(['feed'], (old) => {
         if (!old) return old
@@ -244,7 +249,11 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
           <Heart
             size={32}
             strokeWidth={1.5}
-            className={liked ? 'fill-red-500 text-red-500' : 'text-white'}
+            className={clsx(
+              liked ? 'fill-red-500 text-red-500' : 'text-white',
+              likeAnim === 'burst' && 'animate-heart-burst',
+              likeAnim === 'shrink' && 'animate-heart-shrink',
+            )}
           />
           <span className="text-xs font-semibold text-white drop-shadow">{likeCount}</span>
         </button>
@@ -264,19 +273,15 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
           onClick={(e) => {
             e.stopPropagation()
             const shareUrl = `${window.location.origin}/shorts/${post.share_token}`
-            const shareTitle = 'Stack Health'
-            const shareText = '나의 운동을 기록하자'
-            if (typeof navigator !== 'undefined' && 'share' in navigator) {
-              navigator.share({ title: shareTitle, text: shareText, url: shareUrl }).catch((err) => {
-                if (err instanceof DOMException && err.name === 'AbortError') return
-                window.navigator.clipboard?.writeText(shareUrl)
-                  .then(() => alert('링크가 복사됐어요!'))
-                  .catch(() => alert(`공유 링크: ${shareUrl}`))
-              })
-            } else {
+            const copyToClipboard = () =>
               window.navigator.clipboard?.writeText(shareUrl)
-                .then(() => alert('링크가 복사됐어요!'))
-                .catch(() => alert(`공유 링크: ${shareUrl}`))
+                .then(() => toast.success('링크가 복사됐어요!'))
+                .catch(() => toast('공유 링크: ' + shareUrl))
+            if (typeof navigator !== 'undefined' && 'share' in navigator) {
+              navigator.share({ title: 'Stack Health', text: '나의 운동을 기록하자', url: shareUrl })
+                .catch((err) => { if (!(err instanceof DOMException && err.name === 'AbortError')) copyToClipboard() })
+            } else {
+              copyToClipboard()
             }
           }}
           className="flex flex-col items-center gap-1"

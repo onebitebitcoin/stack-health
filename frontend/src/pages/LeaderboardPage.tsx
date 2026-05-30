@@ -7,6 +7,13 @@ import client from '../api/client'
 import type { LeaderboardEntry, LeaderboardResponse } from '../api/types'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
+import { SkeletonLeaderboardItem } from '../components/Skeleton'
+
+const RANK_COLORS: Record<number, { bg: string; text: string }> = {
+  1: { bg: 'rgba(255,215,0,0.10)', text: '#FFD700' },
+  2: { bg: 'rgba(192,192,192,0.10)', text: '#C0C0C0' },
+  3: { bg: 'rgba(205,127,50,0.10)', text: '#CD7F32' },
+}
 
 export default function LeaderboardPage() {
   const navigate = useNavigate()
@@ -117,23 +124,40 @@ export default function LeaderboardPage() {
 
       {/* 유저 목록 */}
       {isLoading ? (
-        <div className="flex flex-1 items-center justify-center py-8">
-          <div className="text-sm text-theme-muted">불러오는 중...</div>
+        <div className="mx-4 rounded-2xl bg-theme-surface overflow-hidden divide-y divide-theme-border">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonLeaderboardItem key={i} />
+          ))}
         </div>
       ) : entries.length > 0 ? (
         <div className="mx-4 rounded-2xl bg-theme-surface overflow-hidden divide-y divide-theme-border">
-          {entries.map((entry) => {
+          {entries.map((entry, idx) => {
             const isMe = currentUser?.id === entry.user_id
+            const rank = (page - 1) * 20 + idx + 1
+            const rankColor = RANK_COLORS[rank]
             return (
               <button
                 key={entry.user_id}
                 onClick={() => navigate(`/users/${entry.user_id}`)}
-                className={`w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-theme-surface2 ${isMe ? 'bg-accent/5' : ''}`}
+                className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-theme-surface2 opacity-0 animate-fade-in-up"
+                style={{
+                  animationDelay: `${idx * 0.04}s`,
+                  backgroundColor: rankColor ? rankColor.bg : isMe ? 'rgba(var(--accent-rgb, 181,255,46), 0.05)' : undefined,
+                }}
               >
+                <span
+                  className="w-5 text-center text-xs font-bold flex-shrink-0"
+                  style={{ color: rankColor ? rankColor.text : 'var(--text-muted)' }}
+                >
+                  {rank}
+                </span>
                 <UserAvatar username={entry.username} avatarUrl={entry.avatar_url} size={32} />
-                <span className={`flex-1 text-sm text-left truncate ${isMe ? 'font-semibold text-accent' : 'text-theme-primary'}`}>
+                <span
+                  className={`flex-1 text-sm text-left truncate ${isMe ? 'font-semibold' : ''}`}
+                  style={{ color: rankColor ? rankColor.text : isMe ? 'var(--accent)' : 'var(--text-primary)' }}
+                >
                   {entry.username}
-                  {isMe && <span className="ml-1 text-xs font-normal text-accent/70">(나)</span>}
+                  {isMe && <span className="ml-1 text-xs font-normal opacity-70">(나)</span>}
                 </span>
                 <div className="flex items-center gap-1 text-sm text-theme-muted">
                   <Droplets size={12} className="text-blue-400" />
