@@ -208,7 +208,7 @@ export default function StepTagChallenge({
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Trophy size={32} className="text-theme-surface2 mb-3" strokeWidth={1} />
                 <p className="text-sm text-theme-muted">
-                  {challengeSearch ? '검색 결과가 없어요' : '진행 중인 챌린지가 없어요'}
+                  {challengeSearch ? '참여 중인 챌린지 중 검색 결과가 없어요' : '참여 중인 챌린지가 없어요'}
                 </p>
               </div>
             ) : (

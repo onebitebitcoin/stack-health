@@ -321,7 +321,7 @@ export default function UploadPage() {
     enabled: showChallengeModal && challengeSearch.length > 0,
   })
 
-  const displayedChallenges = challengeSearch ? searchChallenges : allChallenges
+  const displayedChallenges = (challengeSearch ? searchChallenges : allChallenges).filter(c => c.joined)
 
   async function handleUpload() {
     if (!file) return
