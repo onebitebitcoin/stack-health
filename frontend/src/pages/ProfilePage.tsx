@@ -428,16 +428,16 @@ export default function ProfilePage() {
                   />
                 )}
                 <div className="absolute inset-0 bg-black/30" />
-                <div className="absolute bottom-1.5 left-1 right-1 flex items-center justify-between text-white/90">
-                  <div className="flex items-center gap-1">
+                <div className="absolute bottom-1.5 right-1 flex items-center gap-2 text-white/90">
+                  <div className="flex items-center gap-0.5">
                     <Heart size={9} strokeWidth={2} />
                     <span className="text-[9px] font-medium">{post.like_count}</span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <MessageCircle size={9} strokeWidth={2} />
                     <span className="text-[9px] font-medium">{post.comment_count}</span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <Eye size={9} strokeWidth={2} />
                     <span className="text-[9px] font-medium">{post.view_count}</span>
                   </div>

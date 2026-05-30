@@ -69,8 +69,15 @@ export default function UploadPage() {
   const [hasChallenge, setHasChallenge] = useState<boolean | null>(null)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [challengeSearch, setChallengeSearch] = useState('')
-  const [workoutStart, setWorkoutStart] = useState('')
-  const [workoutEnd, setWorkoutEnd] = useState('')
+  const [workoutStart, setWorkoutStart] = useState(() => {
+    const d = new Date()
+    d.setMinutes(d.getMinutes() - 30)
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  })
+  const [workoutEnd, setWorkoutEnd] = useState(() => {
+    const d = new Date()
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  })
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [done, setDone] = useState(false)
@@ -773,17 +780,6 @@ export default function UploadPage() {
       {/* Step 3: 설명 + 사진 */}
       {step === 3 && (
         <div className="flex flex-1 flex-col px-6 pt-4 overflow-y-auto">
-          <p className="mb-2 text-sm font-semibold text-theme-primary">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-          <textarea
-            value={caption}
-            onChange={(e) => setCaption(e.target.value.slice(0, 140))}
-            maxLength={140}
-            placeholder="오늘의 운동을 소개해보세요..."
-            rows={3}
-            className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent mb-1"
-          />
-          <p className="text-right text-xs text-theme-subtle mb-4">{caption.length}/140</p>
-
           <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-4">
             <p className="text-xs font-medium text-theme-muted">운동 시간대 <span className="text-theme-subtle">(선택)</span></p>
             <div className="flex items-center gap-2">
@@ -803,9 +799,20 @@ export default function UploadPage() {
             </div>
           </div>
 
+          <p className="mb-2 text-sm font-semibold text-theme-primary">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+          <textarea
+            value={caption}
+            onChange={(e) => setCaption(e.target.value.slice(0, 140))}
+            maxLength={140}
+            placeholder="오늘의 운동을 간략하게 요약해주세요. #3km #런닝 #오운완"
+            rows={3}
+            className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent mb-1"
+          />
+          <p className="text-right text-xs text-theme-subtle mb-4">{caption.length}/140</p>
+
           <p className="mb-1 text-sm font-semibold text-theme-primary">인증 사진 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
           <p className="mb-3 text-xs text-theme-muted leading-relaxed">
-            사진을 영상 뒷부분에 붙여서 운동 인증을 하세요. 업로드 후 영상 끝에 3초간 표시됩니다.
+            사진을 영상 뒷부분에 붙여서 운동 인증을 강화하세요. 업로드 후 영상 끝에 3초간 표시됩니다.
           </p>
           <input
             ref={proofImageRef}
