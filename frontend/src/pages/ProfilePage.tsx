@@ -197,8 +197,6 @@ export default function ProfilePage() {
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
   const todayNum = isCurrentMonth ? now.getDate() : -1
   const confirmedSweatPoints = myStats?.total_points ?? 0
-  const pendingSweatPoints = myStats?.queued_points ?? 0
-  const displayedSweatPoints = confirmedSweatPoints + pendingSweatPoints
   const weekPoints = myStats?.week_points ?? 0
   const weekQueuedPoints = myStats?.week_queued_points ?? 0
 
@@ -310,10 +308,6 @@ export default function ProfilePage() {
           return <span className="text-xs text-theme-subtle">{weekNo}주차 {range}</span>
         })()}
 
-        {/* 누적 총 땀 — 항상 노출 */}
-        <span className="text-xs text-theme-subtle mt-1">
-          누적 {displayedSweatPoints.toFixed(1)}L
-        </span>
       </div>
 
 
