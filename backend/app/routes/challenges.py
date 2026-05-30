@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from PIL import Image
 from sqlalchemy import cast, func, String
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -228,10 +229,10 @@ def create_challenge(
         db.refresh(challenge)
         logger.info("Challenge created: id=%s title=%r by user_id=%s", challenge.id, challenge.title, current_user.id)
         return {"data": {"challenge": _to_schema(challenge, current_user.id, db)}}
-    except Exception as e:
+    except SQLAlchemyError as e:
         db.rollback()
         logger.exception("Failed to create challenge for user_id=%s: %s", current_user.id, e)
-        raise HTTPException(status_code=500, detail=f"챌린지 생성 실패: {e}")
+        raise HTTPException(status_code=500, detail="챌린지 생성에 실패했습니다")
 
 
 @router.post("/{challenge_id}/image")

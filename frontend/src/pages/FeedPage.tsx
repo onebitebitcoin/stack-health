@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import client from '../api/client'
 import type { FeedResponse } from '../api/types'
@@ -29,7 +29,7 @@ export default function FeedPage() {
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   })
 
-  const posts = data?.pages.flatMap((p) => p.posts) ?? []
+  const posts = useMemo(() => data?.pages.flatMap((p) => p.posts) ?? [], [data])
 
   const goTo = useCallback(
     (idx: number) => {

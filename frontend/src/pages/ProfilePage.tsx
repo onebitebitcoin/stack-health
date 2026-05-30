@@ -103,7 +103,7 @@ export default function ProfilePage() {
     isLoading: monthlyPointsLoading,
     isError: monthlyPointsError,
   } = useQuery<MonthlyPointsResponse>({
-    queryKey: ['my-monthly-points'],
+    queryKey: ['my-monthly-points', year, month],
     queryFn: async () => {
       const res = await client.get<{ data: MonthlyPointsResponse }>('/users/me/monthly-points')
       return res.data.data

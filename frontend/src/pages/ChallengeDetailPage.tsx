@@ -151,7 +151,6 @@ export default function ChallengeDetailPage() {
     )
   }
 
-  const progress = Math.min(100, Math.round((challenge.my_upload_count / challenge.condition_value) * 100))
   const completedCount = participants.filter((p) => p.completed_at !== null).length
   const avgProgress = participants.length > 0
     ? Math.round(participants.reduce((sum, p) => sum + p.progress, 0) / participants.length)
@@ -310,18 +309,12 @@ export default function ChallengeDetailPage() {
           {/* 내 진행 상황 */}
           {challenge.joined && (
             <div className="rounded-2xl bg-theme-surface p-4">
-              <div className="flex justify-between text-xs text-theme-muted mb-2">
+              <div className="flex items-center justify-between text-xs text-theme-muted mb-2">
                 <span className="flex items-center gap-1">
-                  <Droplets size={11} className="text-accent" />
-                  내 땀의 양
+                  <CheckCircle size={11} className="text-accent" />
+                  운동 인증
                 </span>
-                <span>{toSweatL(challenge.my_upload_count)} / {toSweatL(challenge.condition_value)} ({progress}%)</span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-theme-surface2">
-                <div
-                  className="h-2 rounded-full bg-accent transition-all"
-                  style={{ width: `${progress}%` }}
-                />
+                <span className="font-medium text-theme-primary">{challenge.my_upload_count}회</span>
               </div>
               {challenge.completed && (
                 <div className="mt-2.5 flex items-center gap-1.5 text-xs text-accent">

@@ -42,6 +42,13 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_TAGS = {"홈트", "러닝", "요가", "웨이트", "일상", "식단", "기타"}
 
+
+def _parse_tags(raw: str | None) -> list[str]:
+    try:
+        return json.loads(raw or "[]")
+    except (json.JSONDecodeError, TypeError):
+        return []
+
 router = APIRouter(prefix="/api/v1/videos", tags=["videos"])
 
 
@@ -238,11 +245,7 @@ def my_posts(
 
     result = []
     for post in posts:
-        tags_raw = post.tags or "[]"
-        try:
-            tags = json.loads(tags_raw)
-        except (json.JSONDecodeError, TypeError):
-            tags = []
+        tags = _parse_tags(post.tags)
         result.append(
             PostSchema(
                 id=post.id,
@@ -283,10 +286,7 @@ def get_post_by_share_token(
     user = db.query(User).filter(User.id == post.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    try:
-        tags = json.loads(post.tags or "[]")
-    except (json.JSONDecodeError, TypeError):
-        tags = []
+    tags = _parse_tags(post.tags)
     comment_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
     is_liked = False
     if current_user:
@@ -330,10 +330,7 @@ def get_post(
     user = db.query(User).filter(User.id == post.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    try:
-        tags = json.loads(post.tags or "[]")
-    except (json.JSONDecodeError, TypeError):
-        tags = []
+    tags = _parse_tags(post.tags)
     comment_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
     post_schema = PostSchema(
         id=post.id,
@@ -634,10 +631,7 @@ async def upload_pipeline(
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식: {content_type}")
 
-    try:
-        tags_list: list[str] = json.loads(tags)
-    except (json.JSONDecodeError, TypeError):
-        tags_list = []
+    tags_list = _parse_tags(tags)
 
     invalid_tags = [t for t in tags_list if t not in ALLOWED_TAGS]
     if invalid_tags:

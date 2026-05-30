@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Dumbbell, Users, CheckCircle, Plus, Droplets } from 'lucide-react'
+import { Search, Dumbbell, Users, CheckCircle, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import client from '../api/client'
-import { toSweatL } from '../utils/sweat'
 import type { Challenge } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
@@ -19,11 +18,6 @@ function ChallengeCard({
   challenge: Challenge
   onNavigate: (id: number) => void
 }) {
-  const progress = Math.min(
-    100,
-    Math.round((challenge.my_upload_count / challenge.condition_value) * 100),
-  )
-
   return (
     <div
       className="rounded-xl bg-theme-surface cursor-pointer active:opacity-80 overflow-hidden flex"
@@ -55,17 +49,9 @@ function ChallengeCard({
 
         {/* 진행 바 */}
         {challenge.joined && (
-          <div>
-            <div className="flex justify-between text-[10px] text-theme-muted mb-0.5">
-              <span className="flex items-center gap-0.5">
-                <Droplets size={10} className="text-accent" />
-                {toSweatL(challenge.my_upload_count)} / {toSweatL(challenge.condition_value)}
-              </span>
-              <span>{progress}%</span>
-            </div>
-            <div className="h-1 w-full rounded-full bg-theme-surface2">
-              <div className="h-1 rounded-full bg-accent transition-all" style={{ width: `${progress}%` }} />
-            </div>
+          <div className="flex items-center gap-1 text-[10px] text-accent font-medium">
+            <CheckCircle size={10} strokeWidth={2} />
+            {challenge.my_upload_count}회 인증
           </div>
         )}
 
