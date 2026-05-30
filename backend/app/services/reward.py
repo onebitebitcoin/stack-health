@@ -17,7 +17,6 @@ SATS_PER_POINT = 10  # TBD
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
 REWARD_STATUS_REVOKED = "revoked"
-SETTLEMENT_WINDOW = timedelta(hours=24)
 
 KST = timezone(timedelta(hours=9))
 
@@ -114,13 +113,16 @@ def is_workout_upload(tags: list[str]) -> bool:
 
 
 def settle_queued_rewards(db: Session, user_id: int | None = None) -> int:
-    """Move upload rewards from queued to fixed after 24 hours (UTC). Not timezone-dependent."""
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    settlement_week_label = get_week_label(datetime.now(KST))
+    """Move upload rewards from queued to fixed at the end of the week they were created.
+
+    Points earned this week stay queued until the week ends (Monday 00:00 KST).
+    Deleting a video before settlement revokes its points; after settlement they are kept.
+    """
+    current_week_label = get_week_label(datetime.now(KST))
 
     query = db.query(RewardPoint).filter(
         RewardPoint.status == REWARD_STATUS_QUEUED,
-        RewardPoint.created_at <= cutoff,
+        RewardPoint.week_label < current_week_label,
     )
     if user_id is not None:
         query = query.filter(RewardPoint.user_id == user_id)
@@ -128,7 +130,6 @@ def settle_queued_rewards(db: Session, user_id: int | None = None) -> int:
     rewards = query.all()
     for reward in rewards:
         reward.status = REWARD_STATUS_FIXED
-        reward.week_label = settlement_week_label
     if rewards:
         db.flush()
     return len(rewards)
