@@ -67,7 +67,7 @@ export default function RewardsPage() {
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-nav-safe bg-theme-page">
         <CheckCircle size={72} className="text-accent" />
         <p className="text-2xl font-bold text-theme-primary">Claim 완료!</p>
-        <p className="text-theme-muted">24시간 내 지급됩니다</p>
+        <p className="text-theme-muted">해당 주차가 완료된 후 1주일 이내 지급됩니다</p>
         <button
           onClick={() => setClaimSuccess(false)}
           className="mt-4 rounded-xl bg-theme-surface2 px-6 py-3 text-sm text-theme-primary"
