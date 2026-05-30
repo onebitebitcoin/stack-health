@@ -674,8 +674,3 @@ def increment_challenge_upload(db: Session, user_id: int, challenge_id: int) -> 
         raise HTTPException(status_code=400, detail="유효하지 않은 챌린지입니다")
 
     participation.upload_count += 1
-    if (
-        participation.completed_at is None
-        and participation.upload_count >= challenge.condition_value
-    ):
-        participation.completed_at = datetime.now(timezone.utc)

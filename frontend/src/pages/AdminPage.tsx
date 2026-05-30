@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft } from 'lucide-react'
+import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft, RefreshCw } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import client from '../api/client'
 import type { AdminVideo, AdminUsersResponse } from '../api/types'
@@ -117,7 +117,7 @@ export default function AdminPage() {
     return () => clearTimeout(t)
   }, [userSearchInput])
 
-  const { data: usersData, isLoading: usersLoading, isError: usersError } = useQuery<AdminUsersResponse>({
+  const { data: usersData, isLoading: usersLoading, isError: usersError, refetch: refetchUsers, isFetching: usersFetching } = useQuery<AdminUsersResponse>({
     queryKey: ['admin-users', userPage, userSearch],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(userPage), limit: '20' })
@@ -211,7 +211,8 @@ export default function AdminPage() {
       {activeTab === 'users' && (
         <div className="space-y-3">
           <div className="sticky top-0 z-10 -mx-4 bg-theme-page px-4 pb-2">
-            <div className="relative">
+            <div className="flex items-center gap-2">
+            <div className="relative flex-1">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-theme-muted" />
               <input
                 value={userSearchInput}
@@ -231,6 +232,17 @@ export default function AdminPage() {
                   <X size={14} />
                 </button>
               )}
+            </div>
+            <button
+              type="button"
+              onClick={() => refetchUsers()}
+              disabled={usersFetching}
+              className="shrink-0 rounded-xl border border-theme-border bg-theme-surface p-3 text-theme-muted hover:text-theme-primary disabled:opacity-40"
+              aria-label="새로고침"
+            >
+              <RefreshCw size={14} className={usersFetching ? 'animate-spin' : ''} />
+            </button>
+            </div>
               {showSuggestions && users.length > 0 && userSearchInput && (
                 <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl border border-theme-border bg-theme-surface shadow-lg overflow-hidden">
                   {users.slice(0, 5).map((u) => (
@@ -334,19 +346,28 @@ export default function AdminPage() {
             {videos.map((v) => (
               <div key={v.id} className="rounded-xl bg-theme-surface overflow-hidden">
                 <div className="relative aspect-[9/16] bg-black">
-                  <video
-                    src={v.cdn_url}
-                    className="w-full h-full object-cover"
-                    preload="metadata"
-                    muted
-                    playsInline
-                    onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play()}
-                    onMouseLeave={(e) => {
-                      const el = e.currentTarget as HTMLVideoElement
-                      el.pause()
-                      el.currentTime = 0
-                    }}
-                  />
+                  {v.thumbnail_url ? (
+                    <img
+                      src={v.thumbnail_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <video
+                      src={v.cdn_url}
+                      className="w-full h-full object-cover"
+                      preload="none"
+                      muted
+                      playsInline
+                      onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play()}
+                      onMouseLeave={(e) => {
+                        const el = e.currentTarget as HTMLVideoElement
+                        el.pause()
+                        el.currentTime = 0
+                      }}
+                    />
+                  )}
                   {v.duration_sec != null && (
                     <span className="absolute bottom-2 right-2 text-[10px] font-semibold bg-black/70 text-white px-1.5 py-0.5 rounded">
                       {Math.floor(v.duration_sec / 60)}:{String(v.duration_sec % 60).padStart(2, '0')}

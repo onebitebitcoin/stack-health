@@ -104,7 +104,7 @@ export default function UserProfilePage() {
                     className="h-full w-full object-cover"
                     muted
                     playsInline
-                    preload="metadata"
+                    preload="none"
                   />
                 )}
                 <div className="absolute inset-0 bg-black/30" />

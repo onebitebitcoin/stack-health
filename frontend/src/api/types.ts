@@ -40,6 +40,7 @@ export interface AdminVideo {
   username: string
   r2_key: string
   cdn_url: string
+  thumbnail_url: string | null
   duration_sec: number | null
   status: string
   created_at: string

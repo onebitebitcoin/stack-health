@@ -169,7 +169,7 @@ export default function LeaderboardPage() {
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center text-theme-muted text-sm">
-          {isSearching ? '검색 결과가 없습니다' : '이번 주 운동 기록이 없습니다'}
+          {isSearching ? '검색 결과가 없습니다' : '사용자가 없습니다'}
         </div>
       )}
 

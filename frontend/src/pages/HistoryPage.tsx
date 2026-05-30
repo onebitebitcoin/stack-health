@@ -226,7 +226,7 @@ export default function HistoryPage() {
                         className="absolute inset-0 h-full w-full object-cover"
                         muted
                         playsInline
-                        preload="metadata"
+                        preload="none"
                       />
                     )}
                     {/* 날짜 오버레이 */}

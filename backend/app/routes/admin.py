@@ -75,11 +75,17 @@ def list_videos(
         .limit(limit)
         .all()
     )
+    video_ids = [v.id for v in videos]
     video_user_ids = [v.user_id for v in videos]
     video_users_map = {
         u.id: u
         for u in db.query(User).filter(User.id.in_(video_user_ids)).all()
     } if video_user_ids else {}
+    thumbnail_map: dict[int, str | None] = dict(
+        db.query(Post.video_id, Post.thumbnail_url)
+        .filter(Post.video_id.in_(video_ids))
+        .all()
+    ) if video_ids else {}
 
     result = [
         {
@@ -88,6 +94,7 @@ def list_videos(
             "username": video_users_map[v.user_id].username if v.user_id in video_users_map else "",
             "r2_key": v.r2_key,
             "cdn_url": v.cdn_url,
+            "thumbnail_url": thumbnail_map.get(v.id),
             "duration_sec": v.duration_sec,
             "status": v.status,
             "created_at": v.created_at.isoformat(),

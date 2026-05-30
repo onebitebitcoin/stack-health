@@ -400,7 +400,7 @@ export default function ProfilePage() {
                       <video
                         src={posts[0].cdn_url}
                         className="absolute inset-0 h-full w-full object-cover"
-                        muted playsInline preload="metadata"
+                        muted playsInline preload="none"
                       />
                     )}
                     <div className="absolute inset-0 bg-black/30" />
@@ -473,7 +473,7 @@ export default function ProfilePage() {
                       className="absolute inset-0 h-full w-full object-cover"
                       muted
                       playsInline
-                      preload="metadata"
+                      preload="none"
                     />
                   )}
                   <div className="absolute inset-0 bg-black/30" />

@@ -217,11 +217,11 @@ export default function ChallengeDetailPage() {
       {activeTab === 'info' && (
         <div className="flex flex-col gap-4 px-4 pb-4">
           {/* 이미지 */}
-          {challenge.image_url && (
+          {(challenge.image_thumb_url ?? challenge.image_url) && (
             <div className="flex justify-center pt-1">
               <div className="h-20 w-20 rounded-full overflow-hidden bg-theme-surface2 ring-2 ring-theme-border">
                 <img
-                  src={challenge.image_url}
+                  src={challenge.image_thumb_url ?? challenge.image_url ?? ''}
                   alt=""
                   loading="eager"
                   decoding="async"
