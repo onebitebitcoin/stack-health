@@ -12,7 +12,11 @@ export default function UpdateBanner({ serverVersion }: Props) {
           v{__APP_VERSION__} → v{serverVersion ?? '?'}
         </span>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            const url = new URL(window.location.href)
+            url.searchParams.set('_v', Date.now().toString())
+            window.location.replace(url.toString())
+          }}
           className="flex items-center gap-1.5 rounded-xl bg-accent-fg/20 px-3 py-1.5 text-xs font-bold text-accent-fg active:opacity-70"
         >
           <RefreshCw size={12} />

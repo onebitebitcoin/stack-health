@@ -23,7 +23,6 @@ export default function LogoMark({ size = 48, className = '', ...props }: LogoMa
       <rect x="29" y="21" width="10" height="6" rx="1.5" fill="currentColor" />
       {/* Right weight plate */}
       <rect x="39" y="16" width="6" height="16" rx="2" fill="currentColor" />
-      {/* Centered lightning bolt (bitcoin energy) */}
       <path
         d="M26 9L18 25h6l-3 14 9-17h-6l2-13z"
         fill="currentColor"

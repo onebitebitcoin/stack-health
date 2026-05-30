@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     yield
 
 
-app = FastAPI(title="운동하고 비트코인 받자", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Stack Health", version="0.1.0", lifespan=lifespan)
 app.router.redirect_slashes = False
 
 app.add_middleware(

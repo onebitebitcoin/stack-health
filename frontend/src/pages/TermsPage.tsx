@@ -37,9 +37,8 @@ export default function TermsPage() {
           <p>Stack Health(이하 "서비스")는 사용자가 운동 영상을 업로드하고 커뮤니티와 공유하며 운동 기록을 관리하는 플랫폼입니다.</p>
         </section>
         <section>
-          <h2 className="font-semibold text-theme-primary mb-2">제2조 (리워드)</h2>
-          <p className="mb-2">서비스 내 땀은 운동 활동에 대한 서비스 내부 단위입니다. 법정화폐나 가상자산이 아니며, 현금으로 환전되지 않습니다.</p>
-          <p>리워드 지급 기준(배율, 활동 종류, 지급 방식 등)은 운영 상황에 따라 변경될 수 있으며, 변경 시 앱 내 공지를 통해 안내합니다.</p>
+          <h2 className="font-semibold text-theme-primary mb-2">제2조 (땀 포인트)</h2>
+          <p>서비스 내 땀은 운동 활동에 대한 증명입니다.</p>
         </section>
         <section>
           <h2 className="font-semibold text-theme-primary mb-2">제3조 (콘텐츠 정책)</h2>

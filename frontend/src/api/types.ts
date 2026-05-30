@@ -34,31 +34,6 @@ export interface FeedResponse {
   next_cursor: number | null
 }
 
-export interface RewardSummary {
-  week_label: string
-  current_week_points: number
-  fixed_week_points: number
-  queued_week_points: number
-}
-
-export interface Claim {
-  id: number
-  challenge_id: number | null
-  week_label: string
-  points_used: number
-  satoshi_amount: number
-  ln_address: string
-  status: 'pending' | 'paid' | 'failed' | 'cancelled'
-  payment_memo: string | null
-  created_at: string
-}
-
-export interface AdminClaim extends Claim {
-  user_id: number
-  username: string
-  email: string
-}
-
 export interface AdminVideo {
   id: number
   user_id: number
@@ -118,22 +93,6 @@ export interface HistoryResponse {
   streak: number
   total_days: number
   workout_days: Record<string, HistoryWorkoutPost[]>
-}
-
-export interface AdminWeeklySummaryItem {
-  rank: number
-  user_id: number
-  username: string
-  weekly_points: number
-  satoshi_amount: number
-}
-
-export interface AdminWeeklySummaryResponse {
-  week_label: string
-  items: AdminWeeklySummaryItem[]
-  page: number
-  has_next: boolean
-  total_users: number
 }
 
 export interface Challenge {
@@ -224,7 +183,6 @@ export interface MyStats {
   queued_points: number
   week_points: number
   week_queued_points: number
-  week_sats: number
 }
 
 export interface LeaderboardEntry {
@@ -241,47 +199,6 @@ export interface LeaderboardResponse {
   page: number
   limit: number
   has_next: boolean
-}
-
-export interface MiningParticipant {
-  claim_id: number
-  user_id: number
-  username: string
-  ln_address: string
-  points: number
-  sats_bid: number
-  hash_power_pct: number
-}
-
-export interface MiningParticipantsResponse {
-  week_label: string
-  participants: MiningParticipant[]
-  total_pool_sats: number
-  participant_count: number
-}
-
-export interface MiningRound {
-  id: number
-  week_label: string
-  total_pool_sats: number
-  sats_per_block: number
-  total_blocks: number
-  participant_count: number
-  winner_count: number
-  status: 'open' | 'distributed' | 'closed'
-  created_at: string
-  distributed_at: string | null
-  closed_at: string | null
-}
-
-export interface LotteryResult {
-  week_label: string
-  total_pool_sats: number
-  total_blocks: number
-  sats_per_block: number
-  participant_count: number
-  winner_count: number
-  results: { user_id: number; sats_won: number; status: string }[]
 }
 
 export interface WeeklyPointsItem {
