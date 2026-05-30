@@ -30,6 +30,7 @@ const ChallengeDetailPage = lazy(() => import('./pages/ChallengeDetailPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
 const SharedVideoPage = lazy(() => import('./pages/SharedVideoPage'))
+const LightningWalletGuidePage = lazy(() => import('./pages/LightningWalletGuidePage'))
 const LightningLoginPage = lazy(() => import('./pages/LightningLoginPage'))
 const EmailLoginPage = lazy(() => import('./pages/EmailLoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
@@ -39,11 +40,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return token ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-const HIDE_NAV = ['/login', '/login/lightning', '/login/email', '/login/register', '/admin', '/terms', '/team', '/setup-username']
+const HIDE_NAV = ['/login', '/login/lightning', '/login/email', '/login/register', '/admin', '/terms', '/team', '/setup-username', '/lightning-guide']
 const KNOWN_ROUTE_SEGMENTS = new Set([
   'login', 'upload', 'challenges', 'my-challenges',
   'profile', 'setup-username', 'users', 'admin', 'terms',
-  'settings', 'team', 'leaderboard', 'share', 'register',
+  'settings', 'team', 'leaderboard', 'share', 'register', 'lightning-guide',
 ])
 
 function Layout() {
@@ -126,6 +127,7 @@ function Layout() {
         <Route path="/team" element={<TeamPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/shorts/:shareToken" element={<SharedVideoPage />} />
+        <Route path="/lightning-guide" element={<LightningWalletGuidePage />} />
       </Routes>
       </Suspense>
       </div>

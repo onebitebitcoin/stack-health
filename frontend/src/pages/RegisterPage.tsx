@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
@@ -88,6 +88,11 @@ export default function RegisterPage() {
             onChange={(e) => setLightningAddress(e.target.value)}
             className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
           />
+          <div className="flex justify-end -mt-2">
+            <Link to="/lightning-guide" className="text-xs text-accent underline underline-offset-2">
+              지갑 만드는 법
+            </Link>
+          </div>
           <input
             type="password"
             placeholder="비밀번호"

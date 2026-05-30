@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { CheckCircle, XCircle, Camera, Zap } from 'lucide-react'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
@@ -227,6 +227,9 @@ export default function SetupUsernamePage() {
           <div>
             <div className="flex items-center justify-between mb-1.5 ml-1">
               <p className="text-xs text-theme-muted">라이트닝 주소 <span className="text-theme-subtle">(선택)</span></p>
+              <Link to="/lightning-guide" className="text-xs text-accent underline underline-offset-2">
+                지갑 만드는 법
+              </Link>
             </div>
             <div className="relative">
               <Zap size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-yellow-500 pointer-events-none" />
