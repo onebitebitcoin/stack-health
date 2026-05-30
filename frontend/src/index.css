@@ -15,6 +15,7 @@
   body {
     background-color: var(--bg-page);
     color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
     touch-action: pan-y;
