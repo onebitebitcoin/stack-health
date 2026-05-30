@@ -48,6 +48,7 @@ def _post_to_schema(
         thumbnail_url=post.thumbnail_url,
         avatar_url=post.user.avatar_url,
         profile_color=(post.user.app_settings or {}).get("profile_color"),
+        challenge_id=post.challenge_id,
     )
 
 

@@ -442,6 +442,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         db.add(video)
         db.flush()
 
+        challenge_id = job.get("challenge_id")
         post = Post(
             video_id=video.id,
             user_id=user_id,
@@ -452,11 +453,11 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             proof_image_url=final_proof_url,
             thumbnail_url=thumbnail_cdn_url,
             share_token=_generate_share_token(user_id),
+            challenge_id=int(challenge_id) if challenge_id is not None else None,
         )
         db.add(post)
         db.flush()
 
-        challenge_id = job.get("challenge_id")
         if challenge_id is not None:
             increment_challenge_upload(db, user_id, int(challenge_id))
 

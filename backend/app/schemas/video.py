@@ -56,5 +56,6 @@ class PostSchema(BaseModel):
     thumbnail_url: str | None = None
     avatar_url: str | None = None
     profile_color: str | None = None
+    challenge_id: int | None = None
 
     model_config = {"from_attributes": True}
