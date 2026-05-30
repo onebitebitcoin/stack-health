@@ -54,7 +54,6 @@ export default function ChallengeEditPage() {
     if (challenge.image_url) {
       setImageSrc(challenge.image_url)
       setIsExistingImage(true)
-      setImgReady(true)
     }
     setInitialized(true)
   }, [challenge, initialized])

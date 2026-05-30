@@ -162,7 +162,7 @@ export default function ChallengePage() {
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center px-6">
           <Dumbbell size={40} className="text-theme-surface2" strokeWidth={1} />
           <p className="text-sm text-theme-muted">
-            {joinedOnly ? '참여 중인 챌린지가 없어요' : q || selectedCategory ? '검색 결과가 없어요' : '현재 진행 중인 챌린지가 없어요'}
+            {joinedOnly ? '참여 중인 챌린지가 없어요' : q ? '검색 결과가 없어요' : '현재 진행 중인 챌린지가 없어요'}
           </p>
         </div>
       ) : (
