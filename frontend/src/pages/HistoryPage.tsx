@@ -80,7 +80,7 @@ export default function HistoryPage() {
   while (cells.length % 7 !== 0) cells.push({ day: null, dateStr: null })
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-theme-page overflow-y-auto pb-nav-safe">
+    <div className="flex flex-col h-[100dvh] bg-theme-page overflow-y-auto pb-nav-safe lg:max-w-2xl lg:mx-auto">
       {/* Header */}
       <div className="px-4 pt-6 pb-3">
         <h1 className="text-xl font-bold text-theme-primary">운동 기록</h1>

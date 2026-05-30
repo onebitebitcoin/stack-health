@@ -23,7 +23,7 @@ export default function MyChallengeDashboardPage() {
   })
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
       <div className="px-4 pt-5 pb-3 flex items-center justify-between">
         <h1 className="text-lg font-bold text-theme-primary">내 챌린지</h1>
         {isAdmin && (

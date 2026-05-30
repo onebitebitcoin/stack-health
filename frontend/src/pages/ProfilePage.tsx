@@ -214,7 +214,7 @@ export default function ProfilePage() {
   if (isLoading) return <LoadingScreen />
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
 
       {/* ── 헤더 ── */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-4">

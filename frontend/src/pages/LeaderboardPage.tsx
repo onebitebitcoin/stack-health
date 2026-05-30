@@ -49,14 +49,14 @@ export default function LeaderboardPage() {
 
   if (isError) {
     return (
-      <div className="flex h-[100dvh] items-center justify-center text-theme-muted text-sm">
+      <div className="flex h-[100dvh] items-center justify-center text-theme-muted text-sm lg:max-w-2xl lg:mx-auto">
         데이터를 불러오지 못했습니다
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
       {/* 헤더 */}
       <div className="px-4 pt-5 pb-3">
         <div className="flex items-center gap-2 mb-3">
