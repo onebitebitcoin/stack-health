@@ -16,7 +16,6 @@ import LoginPage from './pages/LoginPage'
 
 // 나머지는 lazy load
 const UploadPage = lazy(() => import('./pages/UploadPage'))
-const RewardsPage = lazy(() => import('./pages/RewardsPage'))
 const ChallengePage = lazy(() => import('./pages/ChallengePage'))
 const ChallengeCreatePage = lazy(() => import('./pages/ChallengeCreatePage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
@@ -31,7 +30,6 @@ const ChallengeDetailPage = lazy(() => import('./pages/ChallengeDetailPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
 const SharedVideoPage = lazy(() => import('./pages/SharedVideoPage'))
-const LightningWalletGuidePage = lazy(() => import('./pages/LightningWalletGuidePage'))
 const LightningLoginPage = lazy(() => import('./pages/LightningLoginPage'))
 const EmailLoginPage = lazy(() => import('./pages/EmailLoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
@@ -41,11 +39,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return token ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-const HIDE_NAV = ['/login', '/login/lightning', '/login/email', '/login/register', '/admin', '/terms', '/team', '/setup-username', '/lightning-guide']
+const HIDE_NAV = ['/login', '/login/lightning', '/login/email', '/login/register', '/admin', '/terms', '/team', '/setup-username']
 const KNOWN_ROUTE_SEGMENTS = new Set([
-  'login', 'upload', 'rewards', 'challenges', 'my-challenges',
+  'login', 'upload', 'challenges', 'my-challenges',
   'profile', 'setup-username', 'users', 'admin', 'terms',
-  'settings', 'team', 'leaderboard', 'share', 'lightning-guide', 'register',
+  'settings', 'team', 'leaderboard', 'share', 'register',
 ])
 
 function Layout() {
@@ -58,7 +56,6 @@ function Layout() {
   const login = useAuthStore((s) => s.login)
   const { token, setUser } = useAuthStore()
 
-  // 앱 시작 시 저장된 토큰으로 유저 정보 최신화 (is_admin 등 DB 변경사항 반영)
   useEffect(() => {
     if (!token) return
     client
@@ -71,7 +68,6 @@ function Layout() {
   }, [])
 
   useEffect(() => {
-    // JWT is passed via URL fragment (#) to keep it out of server logs and referrer headers
     const hash = location.hash.slice(1)
     const params = new URLSearchParams(hash)
     const googleToken = params.get('google_token')
@@ -115,35 +111,13 @@ function Layout() {
         <Route path="/login/email" element={<EmailLoginPage />} />
         <Route path="/login/register" element={<RegisterPage />} />
         <Route path="/" element={<RequireAuth><FeedPage /></RequireAuth>} />
-        <Route
-          path="/upload"
-          element={
-            <RequireAuth>
-              <UploadPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/rewards"
-          element={
-            <RequireAuth>
-              <RewardsPage />
-            </RequireAuth>
-          }
-        />
+        <Route path="/upload" element={<RequireAuth><UploadPage /></RequireAuth>} />
         <Route path="/challenges" element={<ChallengePage />} />
         <Route path="/challenges/create" element={<ChallengeCreatePage />} />
         <Route path="/challenges/:id" element={<ChallengeDetailPage />} />
         <Route path="/my-challenges" element={<RequireAuth><MyChallengeDashboardPage /></RequireAuth>} />
         <Route path="/challenges/:id/dashboard" element={<RequireAuth><ChallengeDashboardPage /></RequireAuth>} />
-        <Route
-          path="/profile"
-          element={
-            <RequireAuth>
-              <ProfilePage />
-            </RequireAuth>
-          }
-        />
+        <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
         <Route path="/setup-username" element={<SetupUsernamePage />} />
         <Route path="/users/:userId" element={<UserProfilePage />} />
         <Route path="/admin" element={<AdminPage />} />
@@ -152,7 +126,6 @@ function Layout() {
         <Route path="/team" element={<TeamPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/shorts/:shareToken" element={<SharedVideoPage />} />
-        <Route path="/lightning-guide" element={<LightningWalletGuidePage />} />
       </Routes>
       </Suspense>
       </div>
