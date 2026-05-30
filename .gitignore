@@ -92,3 +92,4 @@ mobile/ios/Flutter/Flutter.podspec
 playwright-report-prod/
 **/playwright-report-prod/
 /*.png
+.worktrees/
