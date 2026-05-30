@@ -294,11 +294,11 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       {/* 재생 진행 바 — 드래그로 위치 조정 가능 */}
       <div
         ref={progressBarRef}
-        className={`absolute left-0 right-0 flex items-end cursor-pointer bottom-nav-safe touch-none ${isScrubbing ? 'h-12' : 'h-8'}`}
+        className={`absolute left-0 right-0 flex items-end cursor-pointer bottom-nav-safe ${isScrubbing ? 'h-12' : 'h-8'}`}
         style={{ zIndex: 5 }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => { e.stopPropagation(); isDragging.current = true; setIsScrubbing(true); seekToRatio(e.clientX) }}
-        onTouchStart={(e) => { e.stopPropagation(); isDragging.current = true; setIsScrubbing(true); seekToRatio(e.touches[0].clientX) }}
+        onTouchStart={(e) => { isDragging.current = true; setIsScrubbing(true); seekToRatio(e.touches[0].clientX) }}
       >
         <div className={`w-full bg-white/30 transition-all ${isScrubbing ? 'h-1.5' : 'h-0.5'}`}>
           <div
