@@ -234,23 +234,24 @@ def get_leaderboard(
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     client_tz = _parse_tz(x_client_timezone)
-    filters = [
-        User.is_banned.is_(False),
+
+    point_join_cond = [
+        RewardPoint.user_id == User.id,
         RewardPoint.points > 0,
         RewardPoint.status == REWARD_STATUS_FIXED,
     ]
     if period == "week":
         week_start_utc, week_end_utc = get_week_range(client_tz)
-        filters.append(RewardPoint.created_at >= week_start_utc)
-        filters.append(RewardPoint.created_at < week_end_utc)
+        point_join_cond.append(RewardPoint.created_at >= week_start_utc)
+        point_join_cond.append(RewardPoint.created_at < week_end_utc)
 
     base_query = (
         db.query(
             User,
-            sqlfunc.sum(RewardPoint.points).label("total_points"),
+            sqlfunc.coalesce(sqlfunc.sum(RewardPoint.points), 0).label("total_points"),
         )
-        .join(RewardPoint, RewardPoint.user_id == User.id)
-        .filter(*filters)
+        .outerjoin(RewardPoint, and_(*point_join_cond))
+        .filter(User.is_banned.is_(False))
         .group_by(User.id)
     )
 
@@ -262,7 +263,7 @@ def get_leaderboard(
 
     rows = (
         base_query
-        .order_by(sqlfunc.sum(RewardPoint.points).desc(), User.id.asc())
+        .order_by(sqlfunc.coalesce(sqlfunc.sum(RewardPoint.points), 0).desc(), User.id.asc())
         .offset(offset)
         .limit(limit + 1)
         .all()

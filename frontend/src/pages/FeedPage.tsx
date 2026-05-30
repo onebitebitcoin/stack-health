@@ -49,7 +49,7 @@ export default function FeedPage() {
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
       const delta = touchStartY.current - e.changedTouches[0].clientY
-      if (Math.abs(delta) < 50) return
+      if (Math.abs(delta) < 30) return
       if (delta > 0) goTo(activeIndex + 1)
       else goTo(activeIndex - 1)
     },
