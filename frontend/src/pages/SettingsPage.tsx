@@ -1,4 +1,4 @@
-import { ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2 } from 'lucide-react'
+import { ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2, RefreshCw } from 'lucide-react'
 import { useState, useRef, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -346,7 +346,16 @@ export default function SettingsPage() {
             </button>
             <div className={ROW}>
               <span className={LABEL}>버전</span>
-              <span className="text-sm text-theme-subtle font-mono">v{__APP_VERSION__}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-theme-subtle font-mono">v{__APP_VERSION__}</span>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="text-theme-subtle hover:text-theme-muted transition-colors active:opacity-50"
+                  aria-label="새로고침"
+                >
+                  <RefreshCw size={12} />
+                </button>
+              </div>
             </div>
           </div>
         </div>

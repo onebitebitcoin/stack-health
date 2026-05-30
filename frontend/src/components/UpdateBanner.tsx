@@ -12,10 +12,21 @@ export default function UpdateBanner({ serverVersion }: Props) {
           v{__APP_VERSION__} → v{serverVersion ?? '?'}
         </span>
         <button
-          onClick={() => {
-            const url = new URL(window.location.href)
-            url.searchParams.set('_v', Date.now().toString())
-            window.location.replace(url.toString())
+          onClick={async () => {
+            try {
+              if ('serviceWorker' in navigator) {
+                const reg = await navigator.serviceWorker.getRegistration()
+                if (reg?.waiting) {
+                  reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+                  await new Promise(r => setTimeout(r, 100))
+                }
+                const keys = await caches.keys()
+                await Promise.all(keys.map(k => caches.delete(k)))
+              }
+            } catch {
+              // ignore
+            }
+            window.location.replace('/?_v=' + Date.now())
           }}
           className="flex items-center gap-1.5 rounded-xl bg-accent-fg/20 px-3 py-1.5 text-xs font-bold text-accent-fg active:opacity-70"
         >
