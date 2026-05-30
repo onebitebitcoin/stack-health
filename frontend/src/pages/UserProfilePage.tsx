@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Trophy, ArrowLeft, Dumbbell, Heart, Eye, MessageCircle } from 'lucide-react'
 import client from '../api/client'
-import type { UserProfile } from '../api/types'
+import type { UserProfile, PublicPost } from '../api/types'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
 
@@ -13,6 +13,11 @@ export default function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tab>('videos')
+  const [viewerIdx, setViewerIdx] = useState<number | null>(null)
+  const [activeVideoIdx, setActiveVideoIdx] = useState(0)
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
+  const videoItemRefs = useRef<(HTMLDivElement | null)[]>([])
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading, isError } = useQuery<UserProfile>({
     queryKey: ['user-profile', userId],
@@ -22,6 +27,47 @@ export default function UserProfilePage() {
     },
     enabled: !!userId,
   })
+
+  const posts: PublicPost[] = data?.posts ?? []
+
+  useEffect(() => {
+    if (viewerIdx === null) return
+    videoRefs.current = videoRefs.current.slice(0, posts.length)
+    videoItemRefs.current = videoItemRefs.current.slice(0, posts.length)
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const idx = videoItemRefs.current.indexOf(entry.target as HTMLDivElement)
+          if (idx === -1) return
+          const video = videoRefs.current[idx]
+          if (entry.isIntersecting) {
+            setActiveVideoIdx(idx)
+            video?.play().catch(() => {})
+          } else {
+            video?.pause()
+          }
+        })
+      },
+      { threshold: 0.5 },
+    )
+    videoItemRefs.current.forEach((el) => { if (el) observer.observe(el) })
+    return () => observer.disconnect()
+  }, [viewerIdx, posts.length])
+
+  const openViewer = useCallback((idx: number) => {
+    setViewerIdx(idx)
+    setActiveVideoIdx(idx)
+    setTimeout(() => {
+      videoItemRefs.current[idx]?.scrollIntoView()
+      videoRefs.current[0]?.play().catch(() => {})
+    }, 50)
+  }, [])
+
+  const closeViewer = useCallback(() => {
+    videoRefs.current.forEach((v) => v?.pause())
+    setViewerIdx(null)
+  }, [])
 
   if (isLoading) return <LoadingScreen />
 
@@ -33,7 +79,7 @@ export default function UserProfilePage() {
     )
   }
 
-  const { user, post_count, posts, titles, active_challenges } = data
+  const { user, post_count, titles, active_challenges } = data
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'videos', label: '영상', count: post_count },
@@ -48,11 +94,7 @@ export default function UserProfilePage() {
         <button onClick={() => navigate(-1)} className="text-theme-muted flex-shrink-0">
           <ArrowLeft size={20} />
         </button>
-        <UserAvatar
-          username={user.username}
-          avatarUrl={user.avatar_url}
-          size={40}
-        />
+        <UserAvatar username={user.username} avatarUrl={user.avatar_url} size={40} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-theme-primary leading-tight">@{user.username}</p>
           <p className="text-xs text-theme-muted">{post_count}개 업로드</p>
@@ -85,10 +127,11 @@ export default function UserProfilePage() {
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-px mx-px">
-            {posts.map((post) => (
+            {posts.map((post, idx) => (
               <div
                 key={post.id}
-                className="relative aspect-[9/16] overflow-hidden bg-theme-surface"
+                className="relative aspect-[9/16] overflow-hidden bg-theme-surface cursor-pointer active:opacity-80"
+                onClick={() => openViewer(idx)}
               >
                 {post.thumbnail_url ? (
                   <img
@@ -108,16 +151,16 @@ export default function UserProfilePage() {
                   />
                 )}
                 <div className="absolute inset-0 bg-black/30" />
-                <div className="absolute bottom-1.5 left-1 right-1 flex items-center justify-between text-white/90">
-                  <div className="flex items-center gap-1">
+                <div className="absolute bottom-1.5 right-1 flex flex-col items-end gap-0.5 text-white/90">
+                  <div className="flex items-center gap-0.5">
                     <Heart size={9} strokeWidth={2} />
                     <span className="text-[9px] font-medium">{post.like_count}</span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <MessageCircle size={9} strokeWidth={2} />
                     <span className="text-[9px] font-medium">{post.comment_count}</span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <Eye size={9} strokeWidth={2} />
                     <span className="text-[9px] font-medium">{post.view_count}</span>
                   </div>
@@ -196,6 +239,68 @@ export default function UserProfilePage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 풀스크린 영상 뷰어 */}
+      {viewerIdx !== null && posts.length > 0 && (
+        <div className="fixed inset-0 z-[70] bg-black">
+          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
+            <button
+              onClick={closeViewer}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/30 pointer-events-auto"
+            >
+              <ArrowLeft size={20} strokeWidth={2} color="white" />
+            </button>
+            <span className="text-sm font-semibold text-white">@{user.username}</span>
+            {posts.length > 1 ? (
+              <span className="text-xs text-white/70">{activeVideoIdx + 1} / {posts.length}</span>
+            ) : (
+              <div className="w-9" />
+            )}
+          </div>
+
+          <div
+            ref={scrollContainerRef}
+            className="h-full w-full overflow-y-scroll"
+            style={{ scrollSnapType: 'y mandatory', scrollbarWidth: 'none' }}
+          >
+            {posts.map((post, i) => (
+              <div
+                key={post.cdn_url}
+                ref={(el) => { videoItemRefs.current[i] = el }}
+                className="relative h-full w-full flex-shrink-0"
+                style={{ scrollSnapAlign: 'start' }}
+              >
+                <video
+                  ref={(el) => { videoRefs.current[i] = el }}
+                  src={post.cdn_url}
+                  className="h-full w-full object-contain"
+                  playsInline
+                  loop
+                />
+                <div className="absolute top-safe top-16 right-4 z-10 flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-1.5 text-white/90 drop-shadow">
+                    <Heart size={14} strokeWidth={1.5} />
+                    <span className="text-sm font-medium">{post.like_count}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-white/90 drop-shadow">
+                    <MessageCircle size={14} strokeWidth={1.5} />
+                    <span className="text-sm font-medium">{post.comment_count}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-white/90 drop-shadow">
+                    <Eye size={14} strokeWidth={1.5} />
+                    <span className="text-sm font-medium">{post.view_count}</span>
+                  </div>
+                </div>
+                {post.caption && (
+                  <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 pt-8 bg-gradient-to-t from-black/70 to-transparent">
+                    <p className="text-sm text-white/90 line-clamp-2">{post.caption}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
