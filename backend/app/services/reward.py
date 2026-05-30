@@ -25,7 +25,7 @@ def _parse_tz(tz_str: str) -> ZoneInfo:
     try:
         return ZoneInfo(tz_str)
     except (ZoneInfoNotFoundError, Exception):
-        return ZoneInfo("Asia/Seoul")
+        return ZoneInfo("UTC")
 
 
 def get_week_label(dt: datetime | None = None) -> str:

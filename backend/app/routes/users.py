@@ -122,7 +122,7 @@ def get_my_stats(
 def get_my_weekly_points(
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
-    x_client_timezone: str = Header(default="Asia/Seoul"),
+    x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     client_tz = _parse_tz(x_client_timezone)
     week_label = get_week_label()
@@ -186,7 +186,7 @@ def get_my_weekly_points(
 def get_my_monthly_points(
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
-    x_client_timezone: str = Header(default="Asia/Seoul"),
+    x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     client_tz = _parse_tz(x_client_timezone)
     now_client = datetime.now(client_tz)
