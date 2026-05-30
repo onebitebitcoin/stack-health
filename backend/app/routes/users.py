@@ -182,6 +182,40 @@ def get_my_weekly_points(
     }
 
 
+@router.get("/me/monthly-points")
+def get_my_monthly_points(
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
+    x_client_timezone: str = Header(default="Asia/Seoul"),
+) -> dict:
+    client_tz = _parse_tz(x_client_timezone)
+    now_client = datetime.now(client_tz)
+    month_start = now_client.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if now_client.month == 12:
+        month_end = month_start.replace(year=now_client.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=now_client.month + 1)
+
+    month_points = (
+        db.query(sqlfunc.sum(RewardPoint.points))
+        .filter(
+            RewardPoint.user_id == current_user.id,
+            RewardPoint.points > 0,
+            RewardPoint.status == REWARD_STATUS_FIXED,
+            RewardPoint.created_at >= month_start,
+            RewardPoint.created_at < month_end,
+        )
+        .scalar()
+        or 0
+    )
+
+    return {
+        "data": {
+            "month_points": round(float(month_points), 2),
+        }
+    }
+
+
 @router.get("/leaderboard")
 def get_leaderboard(
     db: Session = Depends(get_db),
