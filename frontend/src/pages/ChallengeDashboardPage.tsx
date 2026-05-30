@@ -29,7 +29,7 @@ export default function ChallengeDashboardPage() {
     const status = axiosError?.response?.status
     const is403or404 = status === 403 || status === 404
     return (
-      <div className="flex flex-col h-[100dvh] bg-theme-page">
+      <div className="flex flex-col h-[100dvh] bg-theme-page lg:max-w-2xl lg:mx-auto">
         <div className="px-4 pt-5 pb-3 flex items-center gap-3">
           <button onClick={() => navigate('/my-challenges')} className="text-theme-muted">
             <ChevronLeft size={20} />
@@ -54,7 +54,7 @@ export default function ChallengeDashboardPage() {
       : 0
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
       <div className="px-4 pt-5 pb-3 flex items-center gap-3">
         <button onClick={() => navigate('/my-challenges')} className="text-theme-muted">
           <ChevronLeft size={20} />

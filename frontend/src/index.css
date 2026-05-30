@@ -36,6 +36,15 @@
   .scroll-momentum {
     -webkit-overflow-scrolling: touch;
   }
+
+  /* 데스크탑에서 텍스트 선택 허용 */
+  @media (min-width: 1024px) {
+    body {
+      touch-action: auto;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+  }
 }
 
 /* 페이지 전환 */
@@ -59,5 +68,18 @@
   }
   .bottom-nav-safe {
     bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  /* 데스크탑: BottomNav 없으므로 하단 패딩 초기화 */
+  @media (min-width: 1024px) {
+    .pb-safe {
+      padding-bottom: 0;
+    }
+    .pb-nav-safe {
+      padding-bottom: 2rem;
+    }
+    .bottom-nav-safe {
+      bottom: 0;
+    }
   }
 }

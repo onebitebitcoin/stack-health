@@ -56,7 +56,7 @@ export default function RewardsPage() {
 
   if (!user) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-nav-safe bg-theme-page">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 pb-nav-safe bg-theme-page lg:max-w-2xl lg:mx-auto">
         <p className="text-theme-muted">로그인이 필요합니다</p>
       </div>
     )
@@ -79,7 +79,7 @@ export default function RewardsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 overflow-y-auto px-4 pb-nav-safe pt-6 h-[100dvh] bg-theme-page">
+    <div className="flex flex-col gap-6 overflow-y-auto px-4 pb-nav-safe pt-6 h-[100dvh] bg-theme-page lg:max-w-2xl lg:mx-auto">
       <h1 className="text-xl font-bold text-theme-primary">리워드</h1>
 
       <div className="rounded-2xl bg-theme-surface p-5">

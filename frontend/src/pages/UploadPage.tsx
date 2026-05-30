@@ -445,7 +445,7 @@ export default function UploadPage() {
   if (done) {
     const shareText = '나의 운동을 기록하자'
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6 lg:max-w-2xl lg:mx-auto">
         <div className="w-full max-w-sm rounded-2xl bg-theme-surface p-6">
           <div className="flex items-center gap-2 mb-4">
             <Flame size={20} className="text-orange-400" />
@@ -490,7 +490,7 @@ export default function UploadPage() {
       : '잠시만 기다려주세요...'
 
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-theme-page px-6">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-theme-page px-6 lg:max-w-2xl lg:mx-auto">
         <LogoMark size={48} className="animate-bounce text-accent" />
         <p className="text-base font-semibold text-theme-primary">{statusLabel}</p>
         <div className="w-64 flex flex-col items-center gap-1.5">
@@ -517,7 +517,7 @@ export default function UploadPage() {
   const progressPct = (recordedSeconds / MAX_RECORD_SECONDS) * 100
 
   return (
-    <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-nav-safe">
+    <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
 
       {/* 헤더 + 스텝 바 */}
       <div className="px-4 pt-4 pb-3">

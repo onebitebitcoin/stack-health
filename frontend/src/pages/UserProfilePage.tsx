@@ -27,7 +27,7 @@ export default function UserProfilePage() {
 
   if (isError || !data) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-2 bg-theme-page">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-2 bg-theme-page lg:max-w-2xl lg:mx-auto">
         <p className="text-sm text-theme-muted">존재하지 않는 사용자예요</p>
       </div>
     )
@@ -42,7 +42,7 @@ export default function UserProfilePage() {
   ]
 
   return (
-    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe">
+    <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
       {/* 헤더 */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-4">
         <button onClick={() => navigate(-1)} className="text-theme-muted flex-shrink-0">

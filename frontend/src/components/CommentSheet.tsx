@@ -112,18 +112,23 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-[55]"
+          className="fixed inset-0 z-[55] lg:bg-black/50"
           onClick={onClose}
         />
       )}
 
-      {/* Sheet */}
+      {/* Sheet — 모바일: 하단 슬라이드업 / 데스크탑: 중앙 모달 */}
       <div
         ref={sheetRef}
         data-testid="comment-sheet"
-        className={`fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-zinc-900/95 backdrop-blur transition-transform duration-300 ${
-          open ? 'translate-y-0' : 'translate-y-full'
-        }`}
+        className={[
+          'fixed z-[60] flex flex-col bg-zinc-900/95 backdrop-blur duration-300',
+          'bottom-0 left-0 right-0 rounded-t-2xl transition-transform',
+          'lg:bottom-auto lg:right-auto lg:top-1/2 lg:left-1/2 lg:w-full lg:max-w-md lg:rounded-2xl',
+          open
+            ? 'translate-y-0 lg:-translate-x-1/2 lg:-translate-y-1/2'
+            : 'translate-y-full lg:-translate-x-1/2 lg:opacity-0 lg:pointer-events-none',
+        ].join(' ')}
         style={{ maxHeight: '70dvh' }}
       >
         {/* Header */}
