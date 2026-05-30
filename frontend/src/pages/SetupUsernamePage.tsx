@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { CheckCircle, XCircle, Camera, Zap } from 'lucide-react'
+import { CheckCircle, XCircle, Camera } from 'lucide-react'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
@@ -232,13 +232,12 @@ export default function SetupUsernamePage() {
               </Link>
             </div>
             <div className="relative">
-              <Zap size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-yellow-500 pointer-events-none" />
               <input
                 type="text"
                 placeholder="user@walletofsatoshi.com"
                 value={lightningAddress}
                 onChange={(e) => setLightningAddress(e.target.value)}
-                className="w-full rounded-lg bg-theme-surface py-3 pl-8 pr-4 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+                className="w-full rounded-lg bg-theme-surface py-3 px-4 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
           </div>

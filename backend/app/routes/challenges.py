@@ -163,16 +163,6 @@ def list_challenges(
     challenges = query.order_by(Challenge.start_date.desc()).offset(offset).limit(limit).all()
     uid = current_user.id if current_user else None
 
-    if uid:
-        rows = (
-            db.query(ChallengeParticipation.challenge_id)
-            .filter(ChallengeParticipation.user_id == uid)
-            .all()
-        )
-        joined_ids = {row[0] for row in rows}
-    else:
-        joined_ids = set()
-
     participant_counts, my_participations, creator_map = _build_batch_maps(challenges, uid, db)
     schemas = [
         _to_schema(c, uid, db, participant_counts=participant_counts,

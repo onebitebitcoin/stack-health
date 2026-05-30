@@ -38,7 +38,6 @@ from app.services.reward import (
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_TAGS = {"홈트", "러닝", "요가", "웨이트", "일상", "식단", "기타"}
 
 
 def _parse_tags(raw: str | None) -> list[str]:
@@ -105,11 +104,7 @@ def confirm_upload(
     if not req.r2_key.startswith(expected_prefix):
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
 
-    # Validate tags
     tags = req.tags or []
-    invalid = [t for t in tags if t not in ALLOWED_TAGS]
-    if invalid:
-        raise HTTPException(status_code=400, detail=f"허용되지 않는 태그입니다: {invalid}")
 
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
         raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
@@ -630,10 +625,6 @@ async def upload_pipeline(
         raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식: {content_type}")
 
     tags_list = _parse_tags(tags)
-
-    invalid_tags = [t for t in tags_list if t not in ALLOWED_TAGS]
-    if invalid_tags:
-        raise HTTPException(status_code=400, detail=f"Invalid tags: {invalid_tags}")
 
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
         raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
