@@ -98,11 +98,11 @@ function Layout() {
   }, [])
 
   const isFlutter = isFlutterWebView()
-  const updateAvailable = useVersionCheck()
+  const { updateAvailable, serverVersion } = useVersionCheck()
 
   return (
     <div className="relative h-full">
-      {updateAvailable && !isFlutter && <UpdateBanner />}
+      {updateAvailable && !isFlutter && <UpdateBanner serverVersion={serverVersion} />}
       <div key={location.key} className="absolute inset-0 page-enter">
       <Suspense fallback={<LoadingScreen />}>
       <Routes>

@@ -4,6 +4,7 @@ const POLL_INTERVAL = 60_000
 
 export function useVersionCheck() {
   const [updateAvailable, setUpdateAvailable] = useState(false)
+  const [serverVersion, setServerVersion] = useState<string | null>(null)
 
   useEffect(() => {
     async function check() {
@@ -11,8 +12,9 @@ export function useVersionCheck() {
         const res = await fetch('/health', { cache: 'no-store' })
         if (!res.ok) return
         const json = await res.json()
-        const serverVersion: string = json.version
-        if (serverVersion && serverVersion !== __APP_VERSION__) {
+        const sv: string = json.version
+        if (sv && sv !== __APP_VERSION__) {
+          setServerVersion(sv)
           setUpdateAvailable(true)
         }
       } catch {
@@ -35,5 +37,5 @@ export function useVersionCheck() {
     }
   }, [])
 
-  return updateAvailable
+  return { updateAvailable, serverVersion }
 }
