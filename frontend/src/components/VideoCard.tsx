@@ -164,6 +164,12 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
           })),
         }
       })
+      // Sync my-posts cache (profile page)
+      queryClient.setQueryData(['my-posts'], (old: unknown) => {
+        if (!old || typeof old !== 'object') return old
+        const data = old as { posts: Array<{ id: number; like_count: number }> }
+        return { ...data, posts: data.posts.map((p) => p.id === post.id ? { ...p, like_count: newCount } : p) }
+      })
     } catch {
       // ignore
     } finally {

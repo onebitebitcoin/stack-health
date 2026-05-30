@@ -69,6 +69,12 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
         }
       }
     )
+    // Sync my-posts cache (profile page)
+    qc.setQueryData(['my-posts'], (old: unknown) => {
+      if (!old || typeof old !== 'object') return old
+      const data = old as { posts: Array<{ id: number; comment_count: number }> }
+      return { ...data, posts: data.posts.map((p) => p.id === postId ? { ...p, comment_count: p.comment_count + delta } : p) }
+    })
   }
 
   const addComment = useMutation({
