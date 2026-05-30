@@ -6,7 +6,6 @@ import client from '../api/client'
 import { toSweatL } from '../utils/sweat'
 import type { Challenge } from '../api/types'
 import { useAuthStore } from '../store/auth'
-import LoadingScreen from '../components/LoadingScreen'
 
 function formatMonthDay(dateStr: string) {
   const d = new Date(dateStr)
@@ -110,8 +109,6 @@ export default function ChallengePage() {
     },
   })
 
-  if (isLoading) return <LoadingScreen />
-
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
       <div className="px-4 pt-5 pb-3 flex items-center justify-between">
@@ -158,7 +155,11 @@ export default function ChallengePage() {
         </div>
       </div>
 
-      {challenges.length === 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : challenges.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center px-6">
           <Dumbbell size={40} className="text-theme-surface2" strokeWidth={1} />
           <p className="text-sm text-theme-muted">
