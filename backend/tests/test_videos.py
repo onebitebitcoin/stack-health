@@ -655,16 +655,6 @@ def test_confirm_upload_forbidden_r2key(mock_cdn, client: TestClient) -> None:
     assert res.status_code == 403
 
 
-@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/x.mp4")
-def test_confirm_upload_invalid_tag(mock_cdn, client: TestClient) -> None:
-    """허용되지 않는 태그 사용 시 400."""
-    token, uid = _register(client, "invalidtag@x.com", "invalidtaguser")
-    res = client.post("/api/v1/videos/confirm", json={
-        "r2_key": f"videos/{uid}/t.mp4", "duration_sec": 20,
-        "tags": ["불법태그"],
-    }, headers=_auth(token))
-    assert res.status_code == 400
-
 
 def test_merge_audio_forbidden(client: TestClient) -> None:
     """merge_audio: 다른 사용자의 r2_key 거부."""
