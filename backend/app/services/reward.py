@@ -1,17 +1,15 @@
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.post import Post
 from app.models.reward import RewardPoint
 from app.models.video import Video
 
 POINTS_PER_UPLOAD = 0.5
 POINTS_PER_COMMENT = 0.01
 DAILY_MAX_UPLOADS = 3
-WORKOUT_TAGS = frozenset({"홈트", "러닝", "요가", "웨이트"})
 SATS_PER_POINT = 10  # TBD
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
@@ -85,26 +83,6 @@ def get_daily_upload_count(db: Session, user_id: int) -> int:
         .count()
     )
 
-
-def get_daily_workout_upload_count(db: Session, user_id: int) -> int:
-    """운동 태그가 포함된 오늘의 업로드 수만 카운트."""
-    today_start = _utc_today_start()
-    workout_filter = or_(*[Post.tags.contains(tag) for tag in WORKOUT_TAGS])
-    return (
-        db.query(Video)
-        .join(Post, Post.video_id == Video.id)
-        .filter(
-            Video.user_id == user_id,
-            Video.status == "active",
-            Video.created_at >= today_start,
-            workout_filter,
-        )
-        .count()
-    )
-
-
-def is_workout_upload(tags: list[str]) -> bool:
-    return any(t in WORKOUT_TAGS for t in tags)
 
 
 def settle_queued_rewards(db: Session, user_id: int | None = None) -> int:

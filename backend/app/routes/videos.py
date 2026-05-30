@@ -33,8 +33,6 @@ from app.services.reward import (
     POINTS_PER_UPLOAD,
     add_points,
     get_daily_upload_count,
-    get_daily_workout_upload_count,
-    is_workout_upload,
     revoke_queued_upload_reward,
 )
 
@@ -113,8 +111,8 @@ def confirm_upload(
     if invalid:
         raise HTTPException(status_code=400, detail=f"허용되지 않는 태그입니다: {invalid}")
 
-    if is_workout_upload(tags) and get_daily_workout_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
-        raise HTTPException(status_code=429, detail=f"운동 영상 하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
+    if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
+        raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
 
     cdn_url = r2_service.get_cdn_url(req.r2_key)
 
@@ -180,8 +178,8 @@ def get_daily_limit(
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    """오늘 운동 업로드 횟수 및 한도 조회."""
-    count = get_daily_workout_upload_count(db, current_user.id)
+    """오늘 업로드 횟수 및 한도 조회."""
+    count = get_daily_upload_count(db, current_user.id)
     return {
         "data": {
             "count": count,
@@ -637,8 +635,8 @@ async def upload_pipeline(
     if invalid_tags:
         raise HTTPException(status_code=400, detail=f"Invalid tags: {invalid_tags}")
 
-    if is_workout_upload(tags_list) and get_daily_workout_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
-        raise HTTPException(status_code=429, detail=f"운동 영상 하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
+    if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
+        raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
 
     # 파일 바이트를 모두 읽어둠 (HTTP 전송 완료 — 이후 연결 불필요)
     video_bytes = await file.read()

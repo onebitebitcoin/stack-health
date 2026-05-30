@@ -341,7 +341,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     from app.models.user import User
     from app.models.video import Video
     from app.routes.challenges import increment_challenge_upload
-    from app.services.reward import DAILY_MAX_UPLOADS, POINTS_PER_UPLOAD, add_points, get_daily_workout_upload_count, is_workout_upload
+    from app.services.reward import DAILY_MAX_UPLOADS, POINTS_PER_UPLOAD, add_points, get_daily_upload_count
 
     start_time = time.time()
     r2 = _get_r2_client()
@@ -405,17 +405,12 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
 
     # 일일 한도 체크 — 썸네일 추출 전에 검사해 orphan 방지
-    tags_list = job.get("tags", [])
-    if isinstance(tags_list, str):
-        import json as _json2
-        tags_list = _json2.loads(tags_list)
-
     if status_callback:
         status_callback("db_save")
     db = SessionLocal()
     try:
-        if is_workout_upload(tags_list) and get_daily_workout_upload_count(db, user_id) >= DAILY_MAX_UPLOADS:
-            raise RuntimeError("운동 영상 하루 업로드 한도 초과")
+        if get_daily_upload_count(db, user_id) >= DAILY_MAX_UPLOADS:
+            raise RuntimeError("하루 업로드 한도 초과")
     finally:
         db.close()
 

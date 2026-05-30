@@ -55,16 +55,21 @@ def test_workout_upload_daily_limit(mock_cdn, client: TestClient) -> None:
 
 
 @patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4")
-def test_non_workout_upload_no_limit(mock_cdn, client: TestClient) -> None:
-    """비운동 태그(일상/식단/기타)는 하루 한도 없음."""
+def test_all_tags_subject_to_daily_limit(mock_cdn, client: TestClient) -> None:
+    """모든 태그(운동/비운동)가 동일한 일일 한도 적용."""
     token, uid = _register(client, "nolimit@x.com", "nolimituser")
     headers = _auth(token)
-    for i in range(4):
+    for i in range(3):
         res = client.post("/api/v1/videos/confirm", json={
             "r2_key": f"videos/{uid}/v{i}.mp4", "duration_sec": 20,
             "tags": ["일상"],
         }, headers=headers)
         assert res.status_code == 200
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/v3.mp4", "duration_sec": 20,
+        "tags": ["일상"],
+    }, headers=headers)
+    assert res.status_code == 429
 
 
 @patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/delete-v.mp4")
@@ -625,9 +630,9 @@ def test_upload_video_endpoint(mock_upload, client: TestClient) -> None:
 
 
 @patch("app.routes.videos.reserve_job_id", return_value="limit-job-456")
-@patch("app.routes.videos.get_daily_workout_upload_count", return_value=3)
-def test_upload_pipeline_workout_limit(mock_count, mock_reserve, client: TestClient) -> None:
-    """upload_pipeline: 운동 태그 한도 초과 시 429."""
+@patch("app.routes.videos.get_daily_upload_count", return_value=3)
+def test_upload_pipeline_daily_limit(mock_count, mock_reserve, client: TestClient) -> None:
+    """upload_pipeline: 일일 한도 초과 시 429."""
     import json
     token = _register_and_token(client, "pipelimit@x.com", "pipelimituser")
     headers = _auth(token)
