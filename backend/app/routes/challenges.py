@@ -191,6 +191,7 @@ def create_challenge(
             description=body.description,
             reward_title=body.reward_title,
             condition_value=body.condition_value,
+            goal_description=body.goal_description,
             start_date=body.start_date,
             end_date=body.end_date,
             categories=body.categories,
@@ -529,6 +530,8 @@ def update_challenge(
         challenge.end_date = body.end_date
     if body.categories is not None:
         challenge.categories = body.categories
+    if body.goal_description is not None:
+        challenge.goal_description = body.goal_description
     db.commit()
     db.refresh(challenge)
     uid = current_user.id

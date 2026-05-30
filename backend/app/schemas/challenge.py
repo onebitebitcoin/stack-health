@@ -9,6 +9,7 @@ class ChallengeSchema(BaseModel):
     description: str
     reward_title: str
     condition_value: int
+    goal_description: str | None = None
     start_date: datetime
     end_date: datetime
     is_active: bool
@@ -29,7 +30,8 @@ class ChallengeCreateRequest(BaseModel):
     title: str
     description: str
     reward_title: str
-    condition_value: int
+    condition_value: int = 30
+    goal_description: str | None = None
     start_date: datetime
     end_date: datetime
     categories: list[str] = []
@@ -40,6 +42,7 @@ class ChallengeUpdateRequest(BaseModel):
     description: str | None = None
     reward_title: str | None = None
     condition_value: int | None = None
+    goal_description: str | None = None
     start_date: datetime | None = None
     end_date: datetime | None = None
     categories: list[str] | None = None

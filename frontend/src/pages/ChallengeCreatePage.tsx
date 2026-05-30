@@ -16,7 +16,7 @@ export default function ChallengeCreatePage() {
     title: '',
     description: '',
     reward_title: '',
-    condition_value: 10,
+    goal_description: '',
     start_date: '',
     end_date: '',
   })
@@ -120,8 +120,13 @@ export default function ChallengeCreatePage() {
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await client.post('/challenges', {
-        ...form,
-        condition_value: Number(form.condition_value),
+        title: form.title,
+        description: form.description,
+        reward_title: form.reward_title,
+        goal_description: form.goal_description || null,
+        condition_value: 30,
+        start_date: form.start_date,
+        end_date: form.end_date,
         categories: [],
       })
       const challengeId = res.data.data.challenge.id
@@ -272,15 +277,14 @@ export default function ChallengeCreatePage() {
           </div>
         </div>
 
-        {/* 업로드 목표 횟수 */}
+        {/* 목표 */}
         <div>
-          <label className="block text-xs text-theme-muted mb-1">목표 업로드 횟수</label>
+          <label className="block text-xs text-theme-muted mb-1">목표 <span className="text-theme-subtle">(선택)</span></label>
           <input
-            type="number"
-            min={1}
-            value={form.condition_value}
-            onChange={(e) => setForm((f) => ({ ...f, condition_value: Number(e.target.value) }))}
-            className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none"
+            value={form.goal_description}
+            onChange={(e) => setForm((f) => ({ ...f, goal_description: e.target.value }))}
+            placeholder="예: 30일 동안 매일 운동하기"
+            className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
           />
         </div>
 

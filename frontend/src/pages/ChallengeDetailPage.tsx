@@ -257,13 +257,12 @@ export default function ChallengeDetailPage() {
               </span>
               <span className="text-theme-primary font-medium">{challenge.participant_count}명</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-theme-muted flex items-center gap-1.5">
-                <Droplets size={14} />
-                목표
-              </span>
-              <span className="text-theme-primary font-medium">{toSweatL(challenge.condition_value)}</span>
-            </div>
+            {challenge.goal_description && (
+              <div className="flex items-start justify-between text-sm gap-4">
+                <span className="text-theme-muted flex-shrink-0">목표</span>
+                <span className="text-theme-primary font-medium text-right">{challenge.goal_description}</span>
+              </div>
+            )}
             {challenge.creator_username && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-theme-muted flex items-center gap-1.5">

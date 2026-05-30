@@ -114,6 +114,7 @@ export interface Challenge {
   completed_count?: number
   image_url?: string | null
   image_thumb_url?: string | null
+  goal_description?: string | null
 }
 
 export interface ChallengeParticipant {
