@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Droplets, ShieldCheck, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2,
+  ChevronLeft, ChevronRight, ChevronDown, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2, RefreshCw,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
@@ -535,6 +535,18 @@ export default function ProfilePage() {
             </div>
           </>
         )}
+      </div>
+
+      {/* ── 버전 정보 ── */}
+      <div className="mx-4 mb-6 flex items-center justify-center gap-2">
+        <span className="text-xs text-theme-subtle">v{__APP_VERSION__}</span>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-theme-subtle hover:text-theme-muted transition-colors active:opacity-50"
+          aria-label="새로고침"
+        >
+          <RefreshCw size={12} />
+        </button>
       </div>
 
       {/* ── 삭제 확인 다이얼로그 ── */}
