@@ -33,13 +33,14 @@ def _age_queued_rewards(db: Session) -> None:
     db.commit()
 
 
-def test_summary_returns_week_label(client: TestClient) -> None:
+def test_summary_returns_points(client: TestClient) -> None:
     token, _ = _reg(client)
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
-    assert "week_label" in data
-    assert data["week_label"].startswith("20")
+    assert "current_week_points" in data
+    assert "fixed_week_points" in data
+    assert "queued_week_points" in data
 
 
 def test_summary_no_sats_field(client: TestClient) -> None:

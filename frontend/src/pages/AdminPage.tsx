@@ -34,7 +34,7 @@ interface AdminUserDetail {
     completed: boolean
     joined_at: string
   }[]
-  points_by_week: { week_label: string; points: number }[]
+  total_points: number
 }
 
 function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => void }) {
@@ -63,19 +63,10 @@ function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => v
               <button onClick={onClose} className="text-theme-muted text-sm px-2 py-1">닫기</button>
             </div>
 
-            {data.points_by_week.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-theme-muted mb-2">주간 포인트</p>
-                <div className="space-y-1">
-                  {data.points_by_week.map((w) => (
-                    <div key={w.week_label} className="flex justify-between text-xs rounded-lg bg-theme-surface px-3 py-2">
-                      <span className="text-theme-muted">{w.week_label}</span>
-                      <span className="font-semibold text-theme-primary">{Number(w.points).toFixed(2)}L</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="flex justify-between text-xs rounded-lg bg-theme-surface px-3 py-2">
+              <span className="text-theme-muted">누적 포인트</span>
+              <span className="font-semibold text-theme-primary">{Number(data.total_points).toFixed(2)}P</span>
+            </div>
 
             {data.challenges.length > 0 && (
               <div>

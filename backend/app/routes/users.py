@@ -17,8 +17,7 @@ from app.services.reward import (
     REWARD_STATUS_FIXED,
     REWARD_STATUS_QUEUED,
     _parse_tz,
-    get_week_claim_deadline,
-    get_week_label,
+    get_week_range,
     get_weekly_points,
     get_weekly_queued_points,
     points_to_sats,
@@ -64,7 +63,9 @@ class ActiveChallengeSchema(BaseModel):
 def get_my_stats(
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
+    x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
+    client_tz = _parse_tz(x_client_timezone)
     settled_count = settle_queued_rewards(db, current_user.id)
     if settled_count:
         db.commit()
@@ -101,8 +102,7 @@ def get_my_stats(
         or 0
     )
 
-    week_label = get_week_label()
-    week_points = get_weekly_points(db, current_user.id, week_label)
+    week_points = get_weekly_points(db, current_user.id, client_tz)
     week_queued = get_weekly_queued_points(db, current_user.id)
     week_sats = points_to_sats(week_points)
 
@@ -125,19 +125,28 @@ def get_my_weekly_points(
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     client_tz = _parse_tz(x_client_timezone)
-    week_label = get_week_label()
-    year, week = int(week_label[:4]), int(week_label[6:])
-    monday = datetime.fromisocalendar(year, week, 1).replace(tzinfo=client_tz)
-    sunday = monday + timedelta(days=6)
-    start_date = monday.date().isoformat()
-    end_date = sunday.date().isoformat()
+    week_start_utc, week_end_utc = get_week_range(client_tz)
+
+    # 클라이언트 타임존 기준 주 시작/종료 날짜 계산
+    now_client = datetime.now(client_tz)
+    iso = now_client.isocalendar()
+    monday = datetime.fromisocalendar(iso.year, iso.week, 1)
+    monday_client = monday.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=client_tz)
+    sunday_client = monday_client + timedelta(days=6)
+    start_date = monday_client.date().isoformat()
+    end_date = sunday_client.date().isoformat()
+    week_number = iso.week
 
     records = (
         db.query(RewardPoint)
         .filter(
             RewardPoint.user_id == current_user.id,
             or_(
-                and_(RewardPoint.week_label == week_label, RewardPoint.status == REWARD_STATUS_FIXED),
+                and_(
+                    RewardPoint.created_at >= week_start_utc,
+                    RewardPoint.created_at < week_end_utc,
+                    RewardPoint.status == REWARD_STATUS_FIXED,
+                ),
                 RewardPoint.status == REWARD_STATUS_QUEUED,
             ),
             RewardPoint.points > 0,
@@ -161,7 +170,7 @@ def get_my_weekly_points(
     items = [
         {
             "date": to_client_date(r.created_at),
-            "settles_at": to_utc_iso(get_week_claim_deadline(r.week_label)) if r.status == REWARD_STATUS_QUEUED else None,
+            "settles_at": to_utc_iso(r.created_at + timedelta(hours=24)) if r.status == REWARD_STATUS_QUEUED else None,
             "points": round(float(r.points), 2),
             "source": r.reason,
             "post_id": r.reference_id,
@@ -172,8 +181,7 @@ def get_my_weekly_points(
 
     return {
         "data": {
-            "week_label": week_label,
-            "week_number": week,
+            "week_number": week_number,
             "start_date": start_date,
             "end_date": end_date,
             "total_points": round(float(total_points), 2),
@@ -223,14 +231,18 @@ def get_leaderboard(
     limit: int = Query(20, ge=1, le=50),
     search: str = Query(""),
     period: str = Query("week"),  # "week" | "all"
+    x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
+    client_tz = _parse_tz(x_client_timezone)
     filters = [
         User.is_banned.is_(False),
         RewardPoint.points > 0,
         RewardPoint.status == REWARD_STATUS_FIXED,
     ]
     if period == "week":
-        filters.append(RewardPoint.week_label == get_week_label())
+        week_start_utc, week_end_utc = get_week_range(client_tz)
+        filters.append(RewardPoint.created_at >= week_start_utc)
+        filters.append(RewardPoint.created_at < week_end_utc)
 
     base_query = (
         db.query(
