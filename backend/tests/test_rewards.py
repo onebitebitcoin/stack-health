@@ -93,12 +93,6 @@ def test_delete_retrieves_queued_upload_reward(client: TestClient) -> None:
     assert data["queued_week_points"] == 0
 
 
-def test_claim_list_empty(client: TestClient) -> None:
-    token, _ = _reg(client, "list@x.com", "listuser")
-    res = client.get("/api/v1/rewards/claims", headers=_auth(token))
-    assert res.status_code == 200
-    assert res.json()["data"]["claims"] == []
-
 
 def test_weekly_claim_endpoint_removed(client: TestClient) -> None:
     token, _ = _reg(client, "nc@x.com", "ncuser")

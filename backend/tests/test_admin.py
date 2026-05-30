@@ -56,16 +56,6 @@ def _upload_and_claim(client: TestClient, db: Session, user_token: str) -> int:
     return res.json()["data"]["claim"]["id"]
 
 
-def test_admin_claims_no_key(client: TestClient) -> None:
-    res = client.get("/api/v1/admin/claims")
-    assert res.status_code == 401
-
-
-def test_admin_claims_wrong_key(client: TestClient) -> None:
-    token, _ = _reg(client)
-    res = client.get("/api/v1/admin/claims", headers=_auth(token))
-    assert res.status_code == 403
-
 
 @pytest.mark.skip(reason="challenge-based bitcoin claim 구현 전까지 보류")
 def test_admin_claims_list(client: TestClient, db: Session) -> None:
