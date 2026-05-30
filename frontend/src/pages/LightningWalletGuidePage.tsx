@@ -1,23 +1,18 @@
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Smartphone, Download, Zap, CheckCircle, MapPin } from 'lucide-react'
+import { Smartphone, Download, CheckCircle, MapPin } from 'lucide-react'
 
 const ANDROID_INSTALL_STEPS = [
   'Google Play 스토어 열기',
   '"Wallet of Satoshi" 검색 후 설치',
-  '앱 실행 → "Create New Wallet" 탭',
+  '앱 실행',
 ]
 
 const IOS_INSTALL_STEPS = [
   'App Store 열기',
   '"Wallet of Satoshi" 검색 후 설치',
-  '앱 실행 → "Create New Wallet" 탭',
+  '앱 실행',
 ]
 
 const FIND_ADDRESS_STEPS = [
-  {
-    step: '홈 화면 상단 확인',
-    desc: '지갑이 생성되면 홈 화면 상단에 라이트닝 주소가 바로 표시돼요.',
-  },
   {
     step: '"Receive" 탭',
     desc: '하단 메뉴에서 "Receive"를 누르면 라이트닝 주소와 QR 코드가 나타나요.',
@@ -55,30 +50,12 @@ function StepList({ steps }: { steps: string[] }) {
 }
 
 export default function LightningWalletGuidePage() {
-  const navigate = useNavigate()
-
   return (
     <div className="min-h-screen bg-theme-page px-5 py-6 max-w-lg mx-auto">
-      <button
-        onClick={() => navigate(-1)}
-        className="mb-6 flex items-center gap-2 text-sm text-theme-muted hover:text-theme-primary"
-      >
-        <ArrowLeft size={16} />
-        돌아가기
-      </button>
-
-      <div className="flex items-center gap-3 mb-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-500/10">
-          <Zap size={22} className="text-yellow-500" />
-        </div>
-        <div>
-          <p className="font-bold text-theme-primary text-lg">라이트닝 지갑 만들기</p>
-          <p className="text-xs text-theme-muted">Wallet of Satoshi — 무료, 2분이면 완료</p>
-        </div>
+<div className="mb-2">
+        <p className="font-bold text-theme-primary text-lg">라이트닝 지갑 만들기</p>
+        <p className="text-xs text-theme-muted">Wallet of Satoshi — 무료, 2분이면 완료</p>
       </div>
-      <p className="text-sm text-theme-muted mb-8 leading-relaxed">
-        라이트닝 주소를 등록하면 Stack Health 포인트를 비트코인으로 받을 수 있어요.
-      </p>
 
       {/* ── 설치 ─────────────────────────────── */}
       <p className="text-xs font-semibold uppercase tracking-wider text-theme-subtle mb-3">1단계 — 앱 설치</p>
@@ -156,12 +133,6 @@ export default function LightningWalletGuidePage() {
         </p>
       </div>
 
-      <button
-        onClick={() => navigate(-1)}
-        className="w-full rounded-xl bg-accent py-3 text-sm font-semibold text-accent-fg"
-      >
-        돌아가서 주소 입력하기
-      </button>
     </div>
   )
 }

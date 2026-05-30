@@ -26,17 +26,20 @@ import SettingsPage from './pages/SettingsPage'
 import LeaderboardPage from './pages/LeaderboardPage'
 import SharedVideoPage from './pages/SharedVideoPage'
 import LightningWalletGuidePage from './pages/LightningWalletGuidePage'
+import LightningLoginPage from './pages/LightningLoginPage'
+import EmailLoginPage from './pages/EmailLoginPage'
+import RegisterPage from './pages/RegisterPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
   return token ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-const HIDE_NAV = ['/login', '/admin', '/terms', '/team', '/setup-username', '/lightning-guide']
+const HIDE_NAV = ['/login', '/login/lightning', '/login/email', '/login/register', '/admin', '/terms', '/team', '/setup-username', '/lightning-guide']
 const KNOWN_ROUTE_SEGMENTS = new Set([
   'login', 'upload', 'rewards', 'challenges', 'my-challenges',
   'profile', 'setup-username', 'users', 'admin', 'terms',
-  'settings', 'team', 'leaderboard', 'share', 'lightning-guide',
+  'settings', 'team', 'leaderboard', 'share', 'lightning-guide', 'register',
 ])
 
 function Layout() {
@@ -98,6 +101,9 @@ function Layout() {
       <div key={location.key} className="absolute inset-0 page-enter">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/login/lightning" element={<LightningLoginPage />} />
+        <Route path="/login/email" element={<EmailLoginPage />} />
+        <Route path="/login/register" element={<RegisterPage />} />
         <Route path="/" element={<RequireAuth><FeedPage /></RequireAuth>} />
         <Route
           path="/upload"

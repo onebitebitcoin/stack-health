@@ -1,44 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { QRCodeSVG } from 'qrcode.react'
-import { Zap, Mail, AlertCircle, Copy, Check, ArrowLeft } from 'lucide-react'
-import client from '../api/client'
-import { getApiErrorMessage } from '../api/errors'
-import { LN_POLL_INTERVAL_MS, LN_LOGIN_EXPIRE_MS } from '../lib/constants'
-import { useAuthStore } from '../store/auth'
-import type { User } from '../api/types'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Zap, Mail, AlertCircle } from 'lucide-react'
+import { useState } from 'react'
 import LogoMark from '../components/LogoMark'
-
-type Mode = 'default' | 'lightning' | 'email'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const login = useAuthStore((s) => s.login)
-
-  const [mode, setMode] = useState<Mode>('default')
-
-  // Google state
   const [googleLoading, setGoogleLoading] = useState(false)
   const [googleError, setGoogleError] = useState('')
-
-  // Email form state
-  const [isRegister, setIsRegister] = useState(false)
-  const [email, setEmail] = useState('')
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [lightningAddress, setLightningAddress] = useState('')
-  const [emailError, setEmailError] = useState('')
-  const [emailLoading, setEmailLoading] = useState(false)
-
-  // Lightning state
-  const [lnChallenge, setLnChallenge] = useState<{ k1: string; lnurl: string } | null>(null)
-  const [lnError, setLnError] = useState('')
-  const [lnLoading, setLnLoading] = useState(false)
-  const [lnExpired, setLnExpired] = useState(false)
-  const [lnCopied, setLnCopied] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const errorParam = searchParams.get('error')
 
@@ -58,124 +27,6 @@ export default function LoginPage() {
     } catch {
       setGoogleError('서버에 연결할 수 없습니다')
       setGoogleLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (mode !== 'lightning') {
-      if (pollRef.current) clearInterval(pollRef.current)
-      if (timeoutRef.current) clearTimeout(timeoutRef.current)
-      setLnChallenge(null)
-      setLnError('')
-      setLnExpired(false)
-      return
-    }
-    setLnLoading(true)
-    setLnError('')
-    setLnExpired(false)
-    client
-      .get<{ data: { k1: string; lnurl: string } }>('/auth/lnauth/challenge')
-      .then((res) => {
-        const { k1, lnurl } = res.data.data
-        setLnChallenge({ k1, lnurl })
-        setLnLoading(false)
-        pollRef.current = setInterval(async () => {
-          try {
-            const r = await client.get<{ data: { verified: boolean; token?: string; is_new_user?: boolean } }>(
-              `/auth/lnauth/verify?k1=${k1}`,
-            )
-            if (r.data.data.verified && r.data.data.token) {
-              if (pollRef.current) clearInterval(pollRef.current)
-              if (timeoutRef.current) clearTimeout(timeoutRef.current)
-              const token = r.data.data.token
-              if (r.data.data.is_new_user) {
-                navigate(`/setup-username?token=${encodeURIComponent(token)}`)
-                return
-              }
-              const me = await client.get<{ data: User }>('/auth/me', {
-                headers: { Authorization: `Bearer ${token}` },
-              })
-              login(token, me.data.data)
-              navigate('/')
-            }
-          } catch {
-            // ignore poll errors
-          }
-        }, LN_POLL_INTERVAL_MS)
-        timeoutRef.current = setTimeout(() => {
-          if (pollRef.current) clearInterval(pollRef.current)
-          setLnExpired(true)
-        }, LN_LOGIN_EXPIRE_MS)
-      })
-      .catch(() => {
-        setLnLoading(false)
-        setLnError('챌린지 생성에 실패했습니다')
-      })
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
-      if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    }
-  }, [mode, login, navigate])
-
-  function isValidLightningAddress(addr: string): boolean {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)
-  }
-
-  async function handleEmailSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setEmailError('')
-
-    if (isRegister && lightningAddress.trim() && !isValidLightningAddress(lightningAddress.trim())) {
-      setEmailError('라이트닝 주소 형식이 올바르지 않습니다 (예: user@walletofsatoshi.com)')
-      return
-    }
-
-    setEmailLoading(true)
-    try {
-      if (isRegister) {
-        const res = await client.post<{ data: { access_token: string; user: User } }>(
-          '/auth/register',
-          { email, username, password },
-        )
-        const { access_token, user: registeredUser } = res.data.data
-        if (lightningAddress.trim()) {
-          const updated = await client.patch<{ data: User }>(
-            '/auth/me',
-            { lightning_address: lightningAddress.trim() },
-            { headers: { Authorization: `Bearer ${access_token}` } },
-          )
-          login(access_token, updated.data.data)
-        } else {
-          login(access_token, registeredUser)
-        }
-      } else {
-        const res = await client.post<{ data: { access_token: string; user: User } }>(
-          '/auth/login',
-          { email, password },
-        )
-        login(res.data.data.access_token, res.data.data.user)
-      }
-      navigate('/')
-    } catch (err: unknown) {
-      setEmailError(getApiErrorMessage(err, '오류가 발생했습니다'))
-    } finally {
-      setEmailLoading(false)
-    }
-  }
-
-  async function copyToClipboard(text: string): Promise<void> {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text)
-    } else {
-      const el = document.createElement('textarea')
-      el.value = text
-      el.style.position = 'fixed'
-      el.style.left = '-9999px'
-      document.body.appendChild(el)
-      el.focus()
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
     }
   }
 
@@ -199,215 +50,56 @@ export default function LoginPage() {
       )}
 
       <div className="w-full max-w-sm space-y-3">
-        {/* ── Default: all options ─────────────────────────────────── */}
-        {mode === 'default' && (
-          <>
-            <div className="flex flex-col gap-1.5">
-              <button
-                onClick={handleGoogleLogin}
-                disabled={googleLoading}
-                className="flex w-full items-center justify-center gap-3 rounded-lg border border-theme-border bg-theme-surface px-4 py-3 font-medium text-theme-primary transition-colors hover:bg-theme-surface2 disabled:opacity-60"
-              >
-                {googleLoading ? (
-                  <svg className="h-4 w-4 animate-spin text-theme-muted" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
-                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853" />
-                    <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
-                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
-                  </svg>
-                )}
-                {googleLoading ? 'Google 연결 중...' : 'Google로 계속하기'}
-              </button>
-              {googleError && (
-                <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
-                  <AlertCircle size={13} />
-                  {googleError}
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setMode('lightning')}
-              className="flex w-full items-center justify-center gap-3 rounded-lg border border-theme-border bg-theme-surface px-4 py-3 font-medium text-theme-primary transition-colors hover:bg-theme-surface2"
-            >
-              <Zap size={18} className="text-yellow-500" />
-              Lightning으로 계속하기
-            </button>
-
-            <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-theme-border" />
-              <span className="text-xs text-theme-subtle">또는</span>
-              <div className="h-px flex-1 bg-theme-border" />
-            </div>
-
-            <button
-              onClick={() => setMode('email')}
-              className="flex w-full items-center justify-center gap-3 rounded-lg border border-theme-border bg-theme-surface px-4 py-3 font-medium text-theme-primary transition-colors hover:bg-theme-surface2"
-            >
-              <Mail size={18} className="text-theme-muted" />
-              이메일로 로그인
-            </button>
-          </>
-        )}
-
-        {/* ── Lightning full view ───────────────────────────────────── */}
-        {mode === 'lightning' && (
-          <div className="flex flex-col gap-4">
-            <button
-              onClick={() => setMode('default')}
-              className="flex items-center gap-2 text-sm text-theme-muted hover:text-theme-primary"
-            >
-              <ArrowLeft size={16} />
-              돌아가기
-            </button>
-
-            <p className="text-center font-semibold text-theme-primary">Lightning 로그인</p>
-
-            {lnLoading && <p className="text-center text-sm text-theme-muted">챌린지 생성 중...</p>}
-            {lnError && <p className="text-center text-sm text-red-400">{lnError}</p>}
-            {lnExpired && (
-              <div className="text-center">
-                <p className="mb-2 text-sm text-theme-muted">QR 코드가 만료되었습니다</p>
-                <button
-                  onClick={() => {
-                    setMode('default')
-                    setTimeout(() => setMode('lightning'), 50)
-                  }}
-                  className="text-sm text-accent underline"
-                >
-                  다시 생성
-                </button>
-              </div>
+        <div className="flex flex-col gap-1.5">
+          <button
+            onClick={handleGoogleLogin}
+            disabled={googleLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-lg border border-theme-border bg-theme-surface px-4 py-3 font-medium text-theme-primary transition-colors hover:bg-theme-surface2 disabled:opacity-60"
+          >
+            {googleLoading ? (
+              <svg className="h-4 w-4 animate-spin text-theme-muted" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
+                <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853" />
+                <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
+                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
+              </svg>
             )}
-            {lnChallenge && !lnExpired && (
-              <>
-                <div className="flex justify-center">
-                  <div className="rounded-xl bg-white p-4">
-                    <QRCodeSVG value={`lightning:${lnChallenge.lnurl}`} size={200} />
-                  </div>
-                </div>
-                <p className="text-center text-xs text-theme-muted">
-                  Lightning 지갑으로 QR 코드를 스캔하세요
-                </p>
-                <button
-                  onClick={() => {
-                    copyToClipboard(lnChallenge.lnurl).then(() => {
-                      setLnCopied(true)
-                      setTimeout(() => setLnCopied(false), 2000)
-                    })
-                  }}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-theme-border bg-theme-surface px-3 py-3 text-sm text-theme-muted transition-colors hover:bg-theme-surface2"
-                >
-                  {lnCopied ? (
-                    <>
-                      <Check size={15} className="text-green-500" />
-                      <span className="text-green-500">복사됨</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={15} />
-                      LNURL 복사하기
-                    </>
-                  )}
-                </button>
-                <div className="flex items-center justify-center gap-2 text-xs text-theme-subtle">
-                  <div className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
-                  인증 대기 중...
-                </div>
-              </>
-            )}
-          </div>
-        )}
+            {googleLoading ? 'Google 연결 중...' : 'Google로 계속하기'}
+          </button>
+          {googleError && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+              <AlertCircle size={13} />
+              {googleError}
+            </div>
+          )}
+        </div>
 
-        {/* ── Email full view ───────────────────────────────────────── */}
-        {mode === 'email' && (
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => setMode('default')}
-              className="flex items-center gap-2 text-sm text-theme-muted hover:text-theme-primary"
-            >
-              <ArrowLeft size={16} />
-              돌아가기
-            </button>
+        <button
+          onClick={() => navigate('/login/lightning')}
+          className="flex w-full items-center justify-center gap-3 rounded-lg border border-theme-border bg-theme-surface px-4 py-3 font-medium text-theme-primary transition-colors hover:bg-theme-surface2"
+        >
+          <Zap size={18} className="text-yellow-500" />
+          Lightning으로 계속하기
+        </button>
 
-            <p className="text-center font-semibold text-theme-primary">
-              {isRegister ? '회원가입' : '이메일 로그인'}
-            </p>
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-theme-border" />
+          <span className="text-xs text-theme-subtle">또는</span>
+          <div className="h-px flex-1 bg-theme-border" />
+        </div>
 
-            <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
-              <input
-                type="email"
-                placeholder="이메일"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
-              />
-              {isRegister && (
-                <>
-                  <input
-                    type="text"
-                    placeholder="닉네임"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
-                  />
-                  <div className="relative">
-                    <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
-                      <Zap size={16} className="text-yellow-500" />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="라이트닝 주소 (선택, 예: user@walletofsatoshi.com)"
-                      value={lightningAddress}
-                      onChange={(e) => setLightningAddress(e.target.value)}
-                      className="w-full rounded-lg bg-theme-surface py-3 pl-9 pr-4 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
-                    />
-                  </div>
-                  <div className="flex justify-end -mt-2">
-                    <Link
-                      to="/lightning-guide"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-accent underline underline-offset-2"
-                    >
-                      지갑 만드는 법
-                    </Link>
-                  </div>
-                </>
-              )}
-              <input
-                type="password"
-                placeholder="비밀번호"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
-              />
-              {emailError && <p className="text-sm text-red-400">{emailError}</p>}
-              <button
-                type="submit"
-                disabled={emailLoading}
-                className="w-full rounded-lg bg-accent py-3 font-semibold text-accent-fg transition-opacity disabled:opacity-60"
-              >
-                {emailLoading ? '처리 중...' : isRegister ? '회원가입' : '로그인'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsRegister((v) => !v)}
-                className="w-full text-sm text-theme-muted underline"
-              >
-                {isRegister ? '이미 계정이 있어요' : '계정이 없어요'}
-              </button>
-            </form>
-          </div>
-        )}
+        <button
+          onClick={() => navigate('/login/email')}
+          className="flex w-full items-center justify-center gap-3 rounded-lg border border-theme-border bg-theme-surface px-4 py-3 font-medium text-theme-primary transition-colors hover:bg-theme-surface2"
+        >
+          <Mail size={18} className="text-theme-muted" />
+          이메일로 로그인
+        </button>
       </div>
     </div>
   )
