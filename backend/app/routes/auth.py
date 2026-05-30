@@ -1,3 +1,4 @@
+import asyncio
 import io
 import random
 import uuid
@@ -97,14 +98,13 @@ def get_optional_user(
 
 @router.post("/register")
 async def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)) -> dict:
-    import asyncio
     check_rate_limit(request, "auth:register", max_calls=5, period_seconds=3600)
     if get_user_by_email(db, req.email):
         raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다")
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="이미 사용 중인 닉네임입니다")
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     password_hash = await loop.run_in_executor(None, hash_password, req.password)
 
     user = User(
@@ -121,17 +121,18 @@ async def register(req: RegisterRequest, request: Request, db: Session = Depends
     return {"data": TokenResponse(access_token=token, user=UserSchema.model_validate(user))}
 
 
+_DUMMY_HASH = "$2b$10$bUTcbia9bmP44rUY1VwI6ug8a0fR68wtSzXIBzHxCsfh5DiI54e4e"
+
+
 @router.post("/login")
 async def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)) -> dict:
-    import asyncio
     check_rate_limit(request, "auth:login", max_calls=10, period_seconds=900)
     user = get_user_by_email(db, req.email)
-    if user is None:
-        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다")
-
-    loop = asyncio.get_event_loop()
-    ok = await loop.run_in_executor(None, verify_password, req.password, user.password_hash)
-    if not ok:
+    # user가 없어도 항상 bcrypt 실행 — 응답 시간으로 이메일 존재 여부 추론 방지
+    hash_to_check = user.password_hash if user is not None else _DUMMY_HASH
+    loop = asyncio.get_running_loop()
+    ok = await loop.run_in_executor(None, verify_password, req.password, hash_to_check)
+    if not ok or user is None:
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다")
 
     token = create_access_token(user.id)
