@@ -7,6 +7,7 @@ import LoginPromptSheet from '../components/LoginPromptSheet'
 import CommentSheet from '../components/CommentSheet'
 import LoadingScreen from '../components/LoadingScreen'
 import LogoMark from '../components/LogoMark'
+import { useUiStore } from '../store/ui'
 
 async function fetchFeed(cursor?: number): Promise<FeedResponse> {
   const params = cursor ? { cursor } : {}
@@ -19,6 +20,7 @@ export default function FeedPage() {
   const [showLogin, setShowLogin] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
   const [commentPostId, setCommentPostId] = useState<number | null>(null)
+  const setCommentOpen = useUiStore((s) => s.setCommentOpen)
   const containerRef = useRef<HTMLDivElement>(null)
   const touchStartY = useRef(0)
 
@@ -116,7 +118,7 @@ export default function FeedPage() {
                   <VideoCard
                     post={post}
                     onLoginRequired={() => setShowLogin(true)}
-                    onCommentClick={() => setCommentPostId(post.id)}
+                    onCommentClick={() => { setCommentPostId(post.id); setCommentOpen(true) }}
                     isMuted={isMuted}
                     onToggleMute={() => setIsMuted((m) => !m)}
                   />
@@ -130,7 +132,7 @@ export default function FeedPage() {
       <CommentSheet
         postId={commentPostId ?? 0}
         open={commentPostId !== null}
-        onClose={() => setCommentPostId(null)}
+        onClose={() => { setCommentPostId(null); setCommentOpen(false) }}
         onLoginRequired={() => setShowLogin(true)}
       />
     </>

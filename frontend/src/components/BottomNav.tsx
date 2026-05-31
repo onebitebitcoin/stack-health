@@ -1,10 +1,14 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Home, Plus, UserCircle, Users, Dumbbell } from 'lucide-react'
 import { useAuthStore } from '../store/auth'
+import { useUiStore } from '../store/ui'
 
 export default function BottomNav() {
   const navigate = useNavigate()
   const token = useAuthStore((s) => s.token)
+  const commentOpen = useUiStore((s) => s.commentOpen)
+
+  if (commentOpen) return null
 
   function handleUpload() {
     if (token) {

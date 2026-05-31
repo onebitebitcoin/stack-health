@@ -22,15 +22,16 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
   const inputRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
 
-  // iOS 키보드가 올라올 때 시트가 가려지는 문제 처리
+  // 키보드가 올라올 때 시트 위치 + 높이 동적 조정
   useEffect(() => {
     const vv = window.visualViewport
     if (!vv || !open) return
     const sheet = sheetRef.current
     const reposition = () => {
-      const offset = window.innerHeight - vv.offsetTop - vv.height
+      const keyboardHeight = Math.max(0, window.innerHeight - vv.offsetTop - vv.height)
       if (sheet) {
-        sheet.style.bottom = `${Math.max(0, offset)}px`
+        sheet.style.bottom = `${keyboardHeight}px`
+        sheet.style.maxHeight = `${vv.height - 16}px`
       }
     }
     vv.addEventListener('resize', reposition)
@@ -39,7 +40,8 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       vv.removeEventListener('resize', reposition)
       vv.removeEventListener('scroll', reposition)
       if (sheet) {
-        sheet.style.bottom = '0px'
+        sheet.style.bottom = ''
+        sheet.style.maxHeight = ''
       }
     }
   }, [open])
@@ -118,7 +120,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-[55] lg:bg-black/50"
+          className="fixed inset-0 z-[55] bg-black/60"
           onClick={onClose}
         />
       )}
@@ -135,7 +137,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
             ? 'translate-y-0 lg:-translate-x-1/2 lg:-translate-y-1/2'
             : 'translate-y-full lg:-translate-x-1/2 lg:opacity-0 lg:pointer-events-none',
         ].join(' ')}
-        style={{ maxHeight: '70dvh' }}
+        style={{ maxHeight: '75dvh' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
@@ -176,7 +178,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
         </div>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="flex gap-2 px-4 py-3 border-t border-zinc-800">
+        <form onSubmit={handleSubmit} className="flex gap-2 px-4 py-3 border-t border-zinc-800 pb-safe">
           <input
             ref={inputRef}
             value={content}
