@@ -101,9 +101,20 @@ fi
 
 # ── Step 7: Nginx 전환 + 이전 슬롯 종료 ──────────────────────────────
 echo "[7/7] Nginx upstream 전환 → $NEXT_SLOT (포트 $NEXT_PORT)..."
+
+# 실제 nginx가 읽는 파일 업데이트
+sudo bash -c "cat > /etc/nginx/conf.d/stackhealth-upstream.conf << EOF
+upstream stackhealth_app {
+    server 127.0.0.1:$NEXT_PORT;
+    keepalive 32;
+}
+EOF"
+
+# repo 파일도 동기화 (참조용)
 cat > "$NGINX_UPSTREAM" << EOF
 upstream stackhealth_app {
     server 127.0.0.1:$NEXT_PORT;
+    keepalive 32;
 }
 EOF
 
