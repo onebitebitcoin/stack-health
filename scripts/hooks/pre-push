@@ -1,8 +1,7 @@
 #!/bin/bash
 # pre-push hook: main 브랜치 푸시 시 자동 버전 업
-# - feat:  → MINOR +1, PATCH 리셋  (0.90.x → 0.91.0, "0.01씩")
-# - BREAKING CHANGE → MAJOR +1, MINOR/PATCH 리셋  (0.90.x → 1.0.0, "0.1씩")
-# - 그 외  → PATCH +1
+# - BREAKING CHANGE / feat! → MINOR +1, PATCH 리셋  (0.90.2 → 0.91.0)
+# - 그 외 (feat/fix 등)     → PATCH +1              (0.90.2 → 0.90.3)
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 VERSION_FILE="$PROJECT_ROOT/VERSION"
@@ -32,9 +31,9 @@ while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
     fi
 
     # 범프 타입 결정
-    if echo "$commits" | grep -q "BREAKING CHANGE"; then
-        bump_type="major"
-    elif echo "$commits" | grep -qE "^feat(\(.+\))?[!]?:"; then
+    # breaking change → MINOR +1 (0.90.x → 0.91.0)
+    # 그 외 → PATCH +1 (0.90.2 → 0.90.3)
+    if echo "$commits" | grep -qE "BREAKING CHANGE|^feat!|^[a-z]+(\(.+\))?!:"; then
         bump_type="minor"
     else
         bump_type="patch"
@@ -45,11 +44,6 @@ while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
     IFS='.' read -r major minor patch <<< "$current_version"
 
     case "$bump_type" in
-        major)
-            major=$((major + 1))
-            minor=0
-            patch=0
-            ;;
         minor)
             minor=$((minor + 1))
             patch=0
