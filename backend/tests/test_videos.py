@@ -345,6 +345,16 @@ def test_get_merge_job_status_pending(mock_get_redis, client: TestClient) -> Non
     assert data["status"] == "pending"
 
 
+@patch("app.routes.videos.get_job_status", return_value={"status": "failed", "error": "ffmpeg exited with code 1"})
+def test_get_merge_job_failed_hides_internal_error(mock_job, client: TestClient) -> None:
+    token = _register_and_token(client, "mjfail@x.com", "mjfailuser")
+    res = client.get("/api/v1/videos/merge-job/failed-merge-id", headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["error"] == "영상 처리에 실패했습니다. 다시 시도해주세요."
+    assert "ffmpeg" not in str(data)
+
+
 def test_merge_audio_unauthenticated(client: TestClient) -> None:
     res = client.post(
         "/api/v1/videos/merge-audio",
@@ -415,6 +425,17 @@ def test_get_upload_job_completed(mock_job, client: TestClient) -> None:
     assert data["status"] == "completed"
     assert data["points_earned"] == 0.5
     assert data["cdn_url"] == "https://cdn/ok.mp4"
+
+
+@patch("app.routes.videos.get_job_status", return_value={"status": "failed", "error": "RuntimeError: R2 down"})
+def test_get_upload_job_failed_hides_internal_error(mock_job, client: TestClient) -> None:
+    token = _register_and_token(client, "jobfail@x.com", "jobfailuser")
+    res = client.get("/api/v1/videos/upload-job/failed-job-id", headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["status"] == "failed"
+    assert data["error"] == "영상 처리에 실패했습니다. 다시 시도해주세요."
+    assert "R2 down" not in str(data)
 
 
 @patch("app.routes.videos.get_job_status", return_value=None)

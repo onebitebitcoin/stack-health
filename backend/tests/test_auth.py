@@ -177,3 +177,25 @@ def test_google_oauth_state_verification_fails_closed_without_redis(monkeypatch)
 
     monkeypatch.setattr("app.services.job_queue.get_redis_client", raise_redis_unavailable)
     assert google_oauth.verify_oauth_state("state-token") is False
+
+
+def test_register_short_password_returns_user_friendly_message(client: TestClient) -> None:
+    res = client.post("/api/v1/auth/register", json={
+        "email": "shortpw@example.com",
+        "username": "shortpw",
+        "password": "short",
+    })
+    assert res.status_code == 422
+    assert res.json()["detail"] == "비밀번호는 8자 이상 입력해주세요."
+    assert "String should" not in str(res.json())
+
+
+def test_register_invalid_email_returns_user_friendly_message(client: TestClient) -> None:
+    res = client.post("/api/v1/auth/register", json={
+        "email": "not-an-email",
+        "username": "emailuser",
+        "password": "password123",
+    })
+    assert res.status_code == 422
+    assert res.json()["detail"] == "이메일 형식이 올바르지 않습니다."
+    assert "value is not" not in str(res.json())

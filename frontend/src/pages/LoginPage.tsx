@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Zap, Mail, AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import LogoMark from '../components/LogoMark'
+import { getApiErrorMessageFromBody } from '../api/errors'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -20,8 +21,7 @@ export default function LoginPage() {
         window.location.href = '/api/v1/auth/google'
       } else {
         const data = await res.json().catch(() => ({}))
-        const msg = (data as { detail?: string }).detail
-        setGoogleError(msg ?? 'Google 로그인을 사용할 수 없습니다')
+        setGoogleError(getApiErrorMessageFromBody(data, 'Google 로그인을 사용할 수 없습니다'))
         setGoogleLoading(false)
       }
     } catch {

@@ -25,6 +25,46 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def _validation_field_name(loc: tuple | list | None) -> str:
+    field = loc[-1] if loc else None
+    return {
+        "email": "이메일",
+        "username": "닉네임",
+        "password": "비밀번호",
+        "lightning_address": "라이트닝 주소",
+        "caption": "내용",
+        "title": "제목",
+    }.get(field, "입력값")
+
+
+def _validation_error_message(errors: list[dict]) -> str:
+    if not errors:
+        return "입력값을 다시 확인해주세요."
+    first = errors[0]
+    loc = first.get("loc")
+    error_type = str(first.get("type", ""))
+    msg = str(first.get("msg", ""))
+    name = _validation_field_name(loc if isinstance(loc, (list, tuple)) else None)
+
+    if name == "비밀번호" and ("string_too_short" in error_type or "at least 8" in msg or "min_length" in msg):
+        return "비밀번호는 8자 이상 입력해주세요."
+    if name == "비밀번호" and ("string_too_long" in error_type or "at most 100" in msg or "max_length" in msg):
+        return "비밀번호는 100자 이하로 입력해주세요."
+    if name == "닉네임" and ("string_too_short" in error_type or "at least 2" in msg or "min_length" in msg):
+        return "닉네임은 2자 이상 입력해주세요."
+    if name == "닉네임" and ("string_too_long" in error_type or "at most 30" in msg or "max_length" in msg):
+        return "닉네임은 30자 이하로 입력해주세요."
+    if name == "이메일" or "email" in msg.lower():
+        return "이메일 형식이 올바르지 않습니다."
+    if "missing" in error_type:
+        return f"{name}을(를) 입력해주세요."
+    if "string_too_short" in error_type:
+        return f"{name}이(가) 너무 짧습니다."
+    if "string_too_long" in error_type:
+        return f"{name}이(가) 너무 깁니다."
+    return f"{name}을(를) 다시 확인해주세요."
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     await anyio.to_thread.run_sync(ensure_r2_cors)
@@ -45,10 +85,12 @@ app.add_middleware(
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    logger.warning("Validation error: %s %s — %s", request.method, request.url.path, exc.errors())
+    errors = exc.errors()
+    logger.warning("Validation error: %s %s — %s", request.method, request.url.path, errors)
+    message = _validation_error_message(errors)
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "message": "입력값이 올바르지 않습니다"},
+        content={"detail": message, "message": message},
     )
 
 

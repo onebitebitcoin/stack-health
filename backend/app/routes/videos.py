@@ -505,7 +505,7 @@ def get_merge_job_status(
             "r2_key": job.get("output_r2_key", ""),
             "cdn_url": job.get("cdn_url", ""),
             "proof_image_url": job.get("proof_image_url", ""),
-            "error": job.get("error", ""),
+            "error": "영상 처리에 실패했습니다. 다시 시도해주세요." if job.get("status") == "failed" else "",
         }
     }
 
@@ -760,6 +760,6 @@ def get_upload_job_status(
             "post_id": job.get("post_id", ""),
             "points_earned": points_earned,
             "audio_merge_failed": job.get("audio_merge_failed", "") == "True",
-            "error": job.get("error", ""),
+            "error": "영상 처리에 실패했습니다. 다시 시도해주세요." if status == "failed" else "",
         }
     }

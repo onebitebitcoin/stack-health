@@ -523,7 +523,7 @@ def get_app_upload_url(
             body.content_type, body.filename, body.platform
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"업로드 URL 생성 실패: {exc}") from exc
+        raise HTTPException(status_code=500, detail="업로드 URL 생성에 실패했습니다") from exc
     cdn_url = r2_service.get_cdn_url(r2_key)
     return {"data": {"upload_url": upload_url, "r2_key": r2_key, "cdn_url": cdn_url}}
 
