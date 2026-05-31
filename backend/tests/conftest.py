@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -29,6 +30,13 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def block_telegram():
+    """테스트 중 실제 텔레그램 전송 차단."""
+    with patch("app.services.notify._send"):
+        yield
 
 
 @pytest.fixture(autouse=True)
