@@ -66,7 +66,7 @@ export default function LeaderboardPage() {
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
       {/* 헤더 */}
-      <div className="px-4 pt-5 pb-3">
+      <div className="shrink-0 px-4 pt-5 pb-3">
         <div className="flex items-center gap-2 mb-3">
           <Users size={20} strokeWidth={1.5} className="text-theme-primary" />
           <h1 className="text-lg font-bold text-theme-primary">사용자</h1>
@@ -137,13 +137,13 @@ export default function LeaderboardPage() {
 
       {/* 유저 목록 */}
       {isLoading ? (
-        <div className="mx-4 rounded-2xl bg-theme-surface overflow-hidden divide-y divide-theme-border">
+        <div className="shrink-0 mx-4 rounded-2xl bg-theme-surface overflow-hidden divide-y divide-theme-border">
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonLeaderboardItem key={i} />
           ))}
         </div>
       ) : entries.length > 0 ? (
-        <div className="mx-4 rounded-2xl bg-theme-surface overflow-hidden divide-y divide-theme-border">
+        <div className="shrink-0 mx-4 rounded-2xl bg-theme-surface overflow-hidden divide-y divide-theme-border">
           {entries.map((entry, idx) => {
             const isMe = currentUser?.id === entry.user_id
             const rank = (page - 1) * 20 + idx + 1
@@ -188,7 +188,7 @@ export default function LeaderboardPage() {
 
       {/* 페이지네이션 */}
       {data && data.total > data.limit && (
-        <div className="flex items-center justify-between px-6 py-4 text-sm text-theme-muted">
+        <div className="shrink-0 flex items-center justify-between px-6 py-4 text-sm text-theme-muted">
           <button
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}
