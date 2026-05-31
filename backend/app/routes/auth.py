@@ -60,7 +60,15 @@ AVATAR_MAX_SIZE = 5 * 1024 * 1024  # 5MB
 
 def _random_profile_color() -> str:
     return random.choice(PROFILE_COLORS)
-bearer = HTTPBearer()
+class _BearerAuth(HTTPBearer):
+    async def __call__(self, request: Request) -> HTTPAuthorizationCredentials:
+        try:
+            return await super().__call__(request)
+        except HTTPException:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="인증이 필요합니다")
+
+
+bearer = _BearerAuth()
 bearer_optional = HTTPBearer(auto_error=False)
 
 
