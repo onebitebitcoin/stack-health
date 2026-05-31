@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserSchema(BaseModel):
@@ -17,14 +17,14 @@ class UserSchema(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    email: str
-    username: str
-    password: str
+    email: EmailStr
+    username: str = Field(min_length=2, max_length=30)
+    password: str = Field(min_length=8, max_length=100)
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=100)
 
 
 class UpdateProfileRequest(BaseModel):
