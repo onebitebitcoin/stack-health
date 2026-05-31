@@ -44,15 +44,15 @@ def test_history_empty_month(client: TestClient) -> None:
 
 
 def test_history_after_upload(client: TestClient) -> None:
+    from zoneinfo import ZoneInfo
     token, user = _reg(client, "hu2@x.com", "huser2")
     _upload(client, token, user["id"])
-    now = _now_utc()
-    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}&timezone={TZ}", headers=_auth(token))
+    now_kst = _now_utc().astimezone(ZoneInfo(TZ))
+    res = client.get(f"/api/v1/history?year={now_kst.year}&month={now_kst.month}&timezone={TZ}", headers=_auth(token))
     data = res.json()["data"]
     assert data["total_days"] == 1
     assert data["streak"] == 1
-    from zoneinfo import ZoneInfo
-    today_str = now.astimezone(ZoneInfo(TZ)).strftime("%Y-%m-%d")
+    today_str = now_kst.strftime("%Y-%m-%d")
     assert today_str in data["workout_days"]
     day_posts = data["workout_days"][today_str]
     assert len(day_posts) == 1
@@ -61,15 +61,15 @@ def test_history_after_upload(client: TestClient) -> None:
 
 
 def test_history_multiple_uploads_same_day(client: TestClient) -> None:
+    from zoneinfo import ZoneInfo
     token, user = _reg(client, "hu3@x.com", "huser3")
     _upload(client, token, user["id"], "v1.mp4")
     _upload(client, token, user["id"], "v2.mp4")
-    now = _now_utc()
-    res = client.get(f"/api/v1/history?year={now.year}&month={now.month}&timezone={TZ}", headers=_auth(token))
+    now_kst = _now_utc().astimezone(ZoneInfo(TZ))
+    res = client.get(f"/api/v1/history?year={now_kst.year}&month={now_kst.month}&timezone={TZ}", headers=_auth(token))
     data = res.json()["data"]
     assert data["total_days"] == 1
-    from zoneinfo import ZoneInfo
-    today_str = now.astimezone(ZoneInfo(TZ)).strftime("%Y-%m-%d")
+    today_str = now_kst.strftime("%Y-%m-%d")
     assert len(data["workout_days"][today_str]) == 2
 
 
