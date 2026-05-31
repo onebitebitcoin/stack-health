@@ -92,6 +92,11 @@ if [ ! -f ".env" ]; then
   fi
 fi
 
+# --- Git Hooks ---
+cd "$PROJECT_ROOT"
+git config core.hooksPath scripts/hooks
+echo "[Git] hooks 경로 설정: scripts/hooks"
+
 echo ""
 echo "=== 설치 완료 ==="
 echo "  개발 서버: bash scripts/dev.sh"

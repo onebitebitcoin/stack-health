@@ -1,0 +1,72 @@
+#!/bin/bash
+# pre-push hook: main 브랜치 푸시 시 자동 버전 업
+# - feat:  → MINOR +1, PATCH 리셋  (0.90.x → 0.91.0, "0.01씩")
+# - BREAKING CHANGE → MAJOR +1, MINOR/PATCH 리셋  (0.90.x → 1.0.0, "0.1씩")
+# - 그 외  → PATCH +1
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+VERSION_FILE="$PROJECT_ROOT/VERSION"
+
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+    branch="${remote_ref#refs/heads/}"
+
+    # main / master 브랜치만 버전 업
+    if [[ "$branch" != "main" && "$branch" != "master" ]]; then
+        continue
+    fi
+
+    # 푸시할 커밋 범위 결정
+    if [[ "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
+        range="HEAD"
+    else
+        range="${remote_sha}..${local_sha}"
+    fi
+
+    commits=$(git log "$range" --pretty=format:"%s %b" 2>/dev/null)
+
+    # 이미 버전 범프 커밋이 제일 앞에 있으면 스킵 (무한루프 방지)
+    latest_msg=$(git log -1 --pretty=format:"%s" 2>/dev/null)
+    if [[ "$latest_msg" == bump:* ]]; then
+        echo "[pre-push] 이미 버전 범프 커밋 존재 — 스킵"
+        continue
+    fi
+
+    # 범프 타입 결정
+    if echo "$commits" | grep -q "BREAKING CHANGE"; then
+        bump_type="major"
+    elif echo "$commits" | grep -qE "^feat(\(.+\))?[!]?:"; then
+        bump_type="minor"
+    else
+        bump_type="patch"
+    fi
+
+    # 현재 버전 파싱
+    current_version=$(cat "$VERSION_FILE")
+    IFS='.' read -r major minor patch <<< "$current_version"
+
+    case "$bump_type" in
+        major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+        minor)
+            minor=$((minor + 1))
+            patch=0
+            ;;
+        patch)
+            patch=$((patch + 1))
+            ;;
+    esac
+
+    new_version="${major}.${minor}.${patch}"
+
+    # VERSION 파일 업데이트 및 커밋
+    echo "$new_version" > "$VERSION_FILE"
+    git -C "$PROJECT_ROOT" add VERSION
+    git -C "$PROJECT_ROOT" commit --no-verify -m "bump: v${new_version}"
+
+    echo "[pre-push] 버전 업: ${current_version} → ${new_version} (${bump_type})"
+done
+
+exit 0
