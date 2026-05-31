@@ -18,7 +18,19 @@ export default function UpdateBanner({ serverVersion }: Props) {
                 const reg = await navigator.serviceWorker.getRegistration()
                 if (reg?.waiting) {
                   reg.waiting.postMessage({ type: 'SKIP_WAITING' })
-                  await new Promise(r => setTimeout(r, 100))
+                }
+                if (reg) {
+                  // 새 SW 강제 설치 요청
+                  await reg.update()
+                  // 새 SW가 control을 가져올 때까지 대기 (최대 3초)
+                  await new Promise<void>(resolve => {
+                    const onControllerChange = () => {
+                      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+                      resolve()
+                    }
+                    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+                    setTimeout(resolve, 3000)
+                  })
                 }
                 const keys = await caches.keys()
                 await Promise.all(keys.map(k => caches.delete(k)))

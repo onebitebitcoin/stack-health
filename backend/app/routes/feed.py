@@ -130,9 +130,14 @@ def like_post(
         db.refresh(post)
         return {"data": {"liked": False, "like_count": post.like_count}}
 
-    db.add(PostLike(user_id=current_user.id, post_id=post_id))
-    db.execute(update(Post).where(Post.id == post_id).values(like_count=Post.like_count + 1))
-    db.commit()
+    try:
+        db.add(PostLike(user_id=current_user.id, post_id=post_id))
+        db.execute(update(Post).where(Post.id == post_id).values(like_count=Post.like_count + 1))
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        db.refresh(post)
+        return {"data": {"liked": True, "like_count": post.like_count}}
     db.refresh(post)
     return {"data": {"liked": True, "like_count": post.like_count}}
 

@@ -16,6 +16,10 @@ export function useVersionCheck() {
         if (sv && sv !== __APP_VERSION__) {
           setServerVersion(sv)
           setUpdateAvailable(true)
+          // 즉시 새 SW 다운로드 트리거 — 삼성 브라우저처럼 주기적 체크가 느린 환경 대응
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistration().then(reg => reg?.update()).catch(() => {})
+          }
         }
       } catch {
         // 네트워크 오류 시 무시
