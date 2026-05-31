@@ -11,9 +11,10 @@ import SideNav from './components/SideNav'
 import LoadingScreen from './components/LoadingScreen'
 import { isFlutterWebView } from './lib/platform'
 
-// 초기 번들에 포함 (첫 화면)
+// 초기 번들에 포함 (첫 화면 + 자주 방문하는 페이지)
 import FeedPage from './pages/FeedPage'
 import LoginPage from './pages/LoginPage'
+import UserProfilePage from './pages/UserProfilePage'
 
 // 나머지는 lazy load
 const UploadPage = lazy(() => import('./pages/UploadPage'))
@@ -23,7 +24,6 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const AdminPage = lazy(() => import('./pages/AdminPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const TeamPage = lazy(() => import('./pages/TeamPage'))
-const UserProfilePage = lazy(() => import('./pages/UserProfilePage'))
 const SetupUsernamePage = lazy(() => import('./pages/SetupUsernamePage'))
 const MyChallengeDashboardPage = lazy(() => import('./pages/MyChallengeDashboardPage'))
 const ChallengeDashboardPage = lazy(() => import('./pages/ChallengeDashboardPage'))

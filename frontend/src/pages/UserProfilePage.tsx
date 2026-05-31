@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { Trophy, ArrowLeft, Dumbbell, Heart, Eye, MessageCircle } from 'lucide-react'
 import client from '../api/client'
 import type { UserProfile, PublicPost } from '../api/types'
-import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
 
 type Tab = 'videos' | 'challenges' | 'titles'
@@ -69,7 +68,26 @@ export default function UserProfilePage() {
     setViewerIdx(null)
   }, [])
 
-  if (isLoading) return <LoadingScreen />
+  if (isLoading) return (
+    <div className="flex flex-col h-[100dvh] bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
+      <div className="flex items-center gap-3 px-4 pt-5 pb-4">
+        <div className="w-5 h-5 rounded bg-theme-surface2 flex-shrink-0" />
+        <div className="w-10 h-10 rounded-full bg-theme-surface2 flex-shrink-0" />
+        <div className="flex-1 flex flex-col gap-1.5">
+          <div className="h-3 w-24 rounded bg-theme-surface2" />
+          <div className="h-2.5 w-16 rounded bg-theme-surface2" />
+        </div>
+      </div>
+      <div className="flex gap-1.5 px-4 mb-4">
+        {[1,2,3].map(i => <div key={i} className="flex-1 h-9 rounded-xl bg-theme-surface2" />)}
+      </div>
+      <div className="grid grid-cols-3 gap-px mx-px">
+        {Array.from({length: 9}).map((_, i) => (
+          <div key={i} className="aspect-[9/16] bg-theme-surface2" />
+        ))}
+      </div>
+    </div>
+  )
 
   if (isError || !data) {
     return (
