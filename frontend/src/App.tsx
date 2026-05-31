@@ -131,6 +131,8 @@ function Layout() {
         <Route path="/leaderboard" element={<RequireAuth><LeaderboardPage /></RequireAuth>} />
         <Route path="/shorts/:shareToken" element={<SharedVideoPage />} />
         <Route path="/lightning-guide" element={<LightningWalletGuidePage />} />
+        <Route path="/feed" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </Suspense>
       </div>

@@ -29,7 +29,7 @@ from app.services.auth import (
     verify_password,
 )
 from app.services import r2 as r2_service
-from app.services.google_oauth import exchange_code, get_google_auth_url, get_google_user_info
+from app.services.google_oauth import exchange_code, generate_oauth_state, get_google_auth_url, get_google_user_info, verify_oauth_state
 from app.services.lnauth import encode_lnurl, generate_k1, verify_signature
 from app.services.rate_limit import check_rate_limit
 
@@ -235,13 +235,16 @@ async def upload_avatar(
 def google_login() -> RedirectResponse:
     if not settings.google_client_id:
         raise HTTPException(status_code=503, detail="Google 로그인이 설정되지 않았습니다")
-    url = get_google_auth_url()
+    state = generate_oauth_state()
+    url = get_google_auth_url(state=state)
     return RedirectResponse(url=url)
 
 
 @router.get("/google/callback")
-async def google_callback(code: str | None = None, error: str | None = None, db: Session = Depends(get_db)) -> RedirectResponse:
+async def google_callback(code: str | None = None, error: str | None = None, state: str | None = None, db: Session = Depends(get_db)) -> RedirectResponse:
     if error or not code:
+        return RedirectResponse(url=f"{settings.app_base_url}/?error=google_auth_failed")
+    if not verify_oauth_state(state):
         return RedirectResponse(url=f"{settings.app_base_url}/?error=google_auth_failed")
     try:
         tokens = await exchange_code(code)

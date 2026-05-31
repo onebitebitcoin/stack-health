@@ -1,9 +1,41 @@
 from __future__ import annotations
 
 import httpx
+import logging
+import secrets
 from urllib.parse import urlencode
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+OAUTH_STATE_TTL = 300  # 5분
+
+
+def generate_oauth_state() -> str:
+    """CSRF 방어용 state 토큰 생성 후 Redis에 저장."""
+    state = secrets.token_urlsafe(32)
+    try:
+        from app.services.job_queue import get_redis_client
+        r = get_redis_client()
+        r.setex(f"oauth_state:{state}", OAUTH_STATE_TTL, "1")
+    except Exception:
+        logger.debug("OAuth state Redis 저장 실패 — Redis 미사용 환경")
+    return state
+
+
+def verify_oauth_state(state: str | None) -> bool:
+    """state 토큰 검증 후 Redis에서 삭제 (단회 사용)."""
+    if not state:
+        return False
+    try:
+        from app.services.job_queue import get_redis_client
+        r = get_redis_client()
+        valid = r.getdel(f"oauth_state:{state}")
+        return valid is not None
+    except Exception:
+        logger.debug("OAuth state Redis 검증 실패 — 검증 생략")
+        return True  # Redis 없으면 state 검증 생략
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"

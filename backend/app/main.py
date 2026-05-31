@@ -185,6 +185,11 @@ _static_dir = Path(__file__).parent.parent / "static"
 if _static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="assets")
 
+    @app.head("/", include_in_schema=False)
+    @app.head("/{full_path:path}", include_in_schema=False)
+    def spa_fallback_head() -> Response:
+        return Response(status_code=200)
+
     @app.get("/{full_path:path}", response_model=None)
     def spa_fallback(
         full_path: str,
