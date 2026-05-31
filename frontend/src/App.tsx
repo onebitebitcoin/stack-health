@@ -43,6 +43,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 const HIDE_NAV = ['/login', '/login/lightning', '/login/email', '/login/register', '/admin', '/terms', '/team', '/setup-username', '/lightning-guide']
+const HIDE_NAV_PREFIXES = ['/shorts/']
 const KNOWN_ROUTE_SEGMENTS = new Set([
   'login', 'upload', 'challenges', 'my-challenges',
   'profile', 'setup-username', 'users', 'admin', 'terms',
@@ -54,7 +55,7 @@ function Layout() {
   const { pathname } = location
   const segments = pathname.split('/').filter(Boolean)
   const isShareRoute = segments.length === 1 && !KNOWN_ROUTE_SEGMENTS.has(segments[0])
-  const hideNav = HIDE_NAV.includes(pathname) || isShareRoute
+  const hideNav = HIDE_NAV.includes(pathname) || isShareRoute || HIDE_NAV_PREFIXES.some((p) => pathname.startsWith(p))
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
   const { token, setUser } = useAuthStore()
