@@ -8,7 +8,7 @@ from app.models.user import User
 from app.routes.auth import get_current_user
 from app.schemas.reward import RewardSummarySchema
 from app.services.reward import (
-    _parse_tz,
+    UTC,
     get_weekly_points,
     get_weekly_queued_points,
     settle_queued_rewards,
@@ -25,12 +25,12 @@ def get_summary(
     db: Session = Depends(get_db),
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
-    client_tz = _parse_tz(x_client_timezone)
+    _ = x_client_timezone  # Accepted for API compatibility; reward settlement uses UTC globally.
     settled_count = settle_queued_rewards(db, current_user.id)
     if settled_count:
         db.commit()
 
-    fixed_pts = get_weekly_points(db, current_user.id, client_tz)
+    fixed_pts = get_weekly_points(db, current_user.id, UTC)
     queued_pts = get_weekly_queued_points(db, current_user.id)
 
     return {

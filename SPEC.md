@@ -2,7 +2,7 @@
 
 > 버전: 0.52.0 (운영 중)
 > 런칭 목표: 2026-05-28
-> 최종 업데이트: 2026-05-28
+> 최종 업데이트: 2026-05-31
 >
 > **이 문서는 코드 기준으로 작성됩니다. 코드가 진실 원본이며, 이 문서는 코드를 설명합니다.**
 
@@ -36,7 +36,7 @@
 | **Backend Python** | `datetime.now(timezone.utc)` 사용. `datetime.now()` (naive) 사용 금지 |
 | **Backend API 응답** | 모든 datetime 필드는 ISO 8601 UTC 오프셋 포함 (`2026-05-28T15:30:00+00:00`) |
 | **Frontend** | `new Date(isoString)` — 브라우저가 UTC 파싱 → 클라이언트 timezone 자동 표시 |
-| **Timezone-aware API** | timezone이 필요한 엔드포인트는 `?timezone=` 쿼리 파라미터 또는 `X-Client-Timezone` 헤더로 클라이언트 timezone을 명시적으로 수신 |
+| **Timezone-aware API** | 사용자에게 날짜/시간을 보여주거나 히스토리 캘린더를 그릴 때만 `?timezone=` 쿼리 파라미터 또는 `X-Client-Timezone` 헤더로 클라이언트 timezone을 명시적으로 수신 |
 
 ### 금지 사항
 
@@ -46,17 +46,20 @@
 - `.replace(tzinfo=None)` 으로 timezone 정보를 제거한 뒤 DB에 저장 금지
 - `_DB_TZ = ZoneInfo("Asia/Seoul")` 류의 "DB가 KST 저장" 가정 금지
 
-### KST 비즈니스 로직 예외
+### 글로벌 UTC 비즈니스 기준
 
-아래는 기술적 가정이 아닌 **제품 정책**으로 KST를 사용합니다:
+서비스의 정산·제한·랭킹 기준은 국가별 로컬 자정이 아니라 **글로벌 UTC 캘린더**입니다.
+사용자에게 보여주는 날짜/시간만 브라우저 또는 `X-Client-Timezone` 기준 로컬 타임으로 변환합니다.
 
 | 항목 | 설명 |
 |------|------|
-| 주간 라벨 (`2026-W21`) | KST 기준 월요일 00:00 시작 — 한국 사용자 주간 정산 기준 |
-| 일일 업로드 제한 | KST 자정 기준 리셋 |
-| claim 마감일 | KST 월요일 00:00 |
+| 주간 라벨 (`2026-W21`) | UTC 기준 월요일 00:00 시작 |
+| 월간 랭킹/통계 | UTC 기준 매월 1일 00:00 시작 |
+| 일일 업로드 제한 | UTC 자정 기준 리셋 |
+| claim 마감일 | UTC 월요일 00:00 |
+| 화면 표시 | API의 UTC ISO datetime을 사용자 로컬 타임존으로 변환해 표시 |
 
-이 로직은 `reward.py`에만 집중되어 있으며, DB 저장 로직과 분리됩니다.
+`X-Client-Timezone`은 표시/캘린더용 보조 정보이며, 보상 정산·업로드 제한·랭킹 집계 기간을 바꾸면 안 됩니다.
 
 ---
 
@@ -635,7 +638,7 @@ Response: { "status": "ok", "version": "0.26.1" }
 - `get_weekly_points()`: fixed 포인트만 합산 (queued 제외)
 
 ### 주간 claim 사이클
-- 집계 기간: 월요일 00:00 ~ 일요일 23:59 (Asia/Seoul)
+- 집계 기간: 월요일 00:00 ~ 일요일 23:59:59 (UTC)
 - claim 가능: 이번 주 미청구 상태면 언제든지 (최소 sats 한도 없음)
 - 주당 1회만 claim 가능 (`UNIQUE(user_id, week_label)`)
 - 미claim 포인트: 다음 주로 이월 / close_week 실행 시 1/7로 감소

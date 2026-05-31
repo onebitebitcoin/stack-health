@@ -171,3 +171,29 @@ def test_leaderboard_ranks_fixed_positive_rewards(client: TestClient, db: Sessio
         {"rank": 1, "user_id": second_id, "username": "second", "avatar_url": None, "total_points": 50},
         {"rank": 2, "user_id": first_id, "username": "first", "avatar_url": None, "total_points": 30},
     ]
+
+
+def test_weekly_leaderboard_ignores_client_timezone_header(client: TestClient, db: Session) -> None:
+    from app.models.reward import RewardPoint
+    from app.services.reward import UTC, get_week_range
+
+    token, user = _register(client, "tzboard@x.com", "tzboard")
+    assert token
+    week_start_utc, _week_end_utc = get_week_range(UTC)
+    db.add(RewardPoint(
+        user_id=user["id"],
+        points=12,
+        reason="upload",
+        status="fixed",
+        created_at=week_start_utc + timedelta(seconds=1),
+    ))
+    db.commit()
+
+    res = client.get(
+        "/api/v1/users/leaderboard?period=week",
+        headers={"X-Client-Timezone": "America/Adak"},
+    )
+
+    assert res.status_code == 200
+    row = next(item for item in res.json()["data"] if item["user_id"] == user["id"])
+    assert row["total_points"] == 12

@@ -14,17 +14,22 @@ SATS_PER_POINT = 10  # TBD
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
 REWARD_STATUS_REVOKED = "revoked"
+UTC = ZoneInfo("UTC")
 
 
 def _parse_tz(tz_str: str) -> ZoneInfo:
     try:
         return ZoneInfo(tz_str)
     except (ZoneInfoNotFoundError, Exception):
-        return ZoneInfo("UTC")
+        return UTC
 
 
-def get_week_range(tz: ZoneInfo) -> tuple[datetime, datetime]:
-    """Return (week_start_utc, week_end_utc) for the current ISO week in the given timezone."""
+def get_week_range(tz: ZoneInfo = UTC) -> tuple[datetime, datetime]:
+    """Return (week_start_utc, week_end_utc) for the current ISO week.
+
+    Reward settlement, limits, and leaderboards use the global UTC calendar.
+    Pass a client timezone only for presentation-only calendar views.
+    """
     now_client = datetime.now(tz)
     iso = now_client.isocalendar()
     monday = datetime.fromisocalendar(iso.year, iso.week, 1)
@@ -35,8 +40,12 @@ def get_week_range(tz: ZoneInfo) -> tuple[datetime, datetime]:
     return week_start_utc, week_end_utc
 
 
-def get_month_range(tz: ZoneInfo) -> tuple[datetime, datetime]:
-    """Return (month_start_utc, month_end_utc) for the current calendar month in the given timezone."""
+def get_month_range(tz: ZoneInfo = UTC) -> tuple[datetime, datetime]:
+    """Return (month_start_utc, month_end_utc) for the current calendar month.
+
+    Reward settlement, limits, and leaderboards use the global UTC calendar.
+    Pass a client timezone only for presentation-only calendar views.
+    """
     now_client = datetime.now(tz)
     month_start_client = now_client.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     if now_client.month == 12:
@@ -50,7 +59,7 @@ def points_to_sats(points: float) -> int:
     return int(points * SATS_PER_POINT)
 
 
-def get_weekly_points(db: Session, user_id: int, tz: ZoneInfo) -> float:
+def get_weekly_points(db: Session, user_id: int, tz: ZoneInfo = UTC) -> float:
     week_start_utc, week_end_utc = get_week_range(tz)
     result = (
         db.query(func.sum(RewardPoint.points))
@@ -82,20 +91,14 @@ def _utc_today_start() -> datetime:
     return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def get_daily_upload_window(tz: ZoneInfo | None = None) -> tuple[datetime, datetime]:
-    """Return today's upload window in UTC for the product daily reset timezone.
-
-    The product policy resets daily upload limits at KST midnight. The DB still
-    stores UTC timestamps; only the comparison window is derived from KST.
-    """
-    tz = tz or ZoneInfo("Asia/Seoul")
-    now_local = datetime.now(tz)
-    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_local = start_local + timedelta(days=1)
-    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+def get_daily_upload_window() -> tuple[datetime, datetime]:
+    """Return today's global UTC upload-limit window."""
+    today_start = _utc_today_start()
+    return today_start, today_start + timedelta(days=1)
 
 
 def get_daily_upload_count(db: Session, user_id: int) -> int:
+    """Return today's upload count using the global UTC reset window."""
     today_start, today_end = get_daily_upload_window()
     return (
         db.query(Video)

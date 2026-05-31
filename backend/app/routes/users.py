@@ -16,6 +16,7 @@ from app.routes.auth import get_current_user as get_required_user
 from app.services.reward import (
     REWARD_STATUS_FIXED,
     REWARD_STATUS_QUEUED,
+    UTC,
     _parse_tz,
     get_month_range,
     get_week_range,
@@ -77,7 +78,7 @@ def get_my_stats(
     db: Session = Depends(get_db),
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
-    client_tz = _parse_tz(x_client_timezone)
+    _ = x_client_timezone  # Accepted for API compatibility; reward totals use UTC globally.
     background_tasks.add_task(_settle_rewards_background, current_user.id)
 
     total_posts = (
@@ -112,7 +113,7 @@ def get_my_stats(
         or 0
     )
 
-    week_points = get_weekly_points(db, current_user.id, client_tz)
+    week_points = get_weekly_points(db, current_user.id, UTC)
     week_queued = get_weekly_queued_points(db, current_user.id)
     week_sats = points_to_sats(week_points)
 
@@ -135,17 +136,12 @@ def get_my_weekly_points(
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     client_tz = _parse_tz(x_client_timezone)
-    week_start_utc, week_end_utc = get_week_range(client_tz)
+    week_start_utc, week_end_utc = get_week_range(UTC)
 
-    # 클라이언트 타임존 기준 주 시작/종료 날짜 계산
-    now_client = datetime.now(client_tz)
-    iso = now_client.isocalendar()
-    monday = datetime.fromisocalendar(iso.year, iso.week, 1)
-    monday_client = monday.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=client_tz)
-    sunday_client = monday_client + timedelta(days=6)
-    start_date = monday_client.date().isoformat()
-    end_date = sunday_client.date().isoformat()
-    week_number = iso.week
+    # 계산 기준은 글로벌 UTC 주간이며, 표시용 날짜만 클라이언트 타임존으로 변환한다.
+    start_date = week_start_utc.astimezone(client_tz).date().isoformat()
+    end_date = (week_end_utc - timedelta(microseconds=1)).astimezone(client_tz).date().isoformat()
+    week_number = week_start_utc.isocalendar().week
 
     records = (
         db.query(RewardPoint)
@@ -206,13 +202,8 @@ def get_my_monthly_points(
     db: Session = Depends(get_db),
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
-    client_tz = _parse_tz(x_client_timezone)
-    now_client = datetime.now(client_tz)
-    month_start = now_client.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    if now_client.month == 12:
-        month_end = month_start.replace(year=now_client.year + 1, month=1)
-    else:
-        month_end = month_start.replace(month=now_client.month + 1)
+    _ = x_client_timezone  # Accepted for API compatibility; reward totals use UTC globally.
+    month_start, month_end = get_month_range(UTC)
 
     month_points = (
         db.query(sqlfunc.sum(RewardPoint.points))
@@ -243,7 +234,7 @@ def get_leaderboard(
     period: str = Query("week"),  # "week" | "all"
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
-    client_tz = _parse_tz(x_client_timezone)
+    _ = x_client_timezone  # Accepted for API compatibility; leaderboard periods use UTC globally.
 
     point_join_cond = [
         RewardPoint.user_id == User.id,
@@ -251,11 +242,11 @@ def get_leaderboard(
         RewardPoint.status == REWARD_STATUS_FIXED,
     ]
     if period == "week":
-        week_start_utc, week_end_utc = get_week_range(client_tz)
+        week_start_utc, week_end_utc = get_week_range(UTC)
         point_join_cond.append(RewardPoint.created_at >= week_start_utc)
         point_join_cond.append(RewardPoint.created_at < week_end_utc)
     elif period == "month":
-        month_start_utc, month_end_utc = get_month_range(client_tz)
+        month_start_utc, month_end_utc = get_month_range(UTC)
         point_join_cond.append(RewardPoint.created_at >= month_start_utc)
         point_join_cond.append(RewardPoint.created_at < month_end_utc)
 

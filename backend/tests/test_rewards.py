@@ -100,18 +100,18 @@ def test_weekly_claim_endpoint_removed(client: TestClient) -> None:
     assert res.status_code in (404, 405)
 
 
-def test_daily_upload_count_uses_kst_day_window(client: TestClient, db: Session) -> None:
-    from datetime import timedelta
+def test_daily_upload_count_uses_utc_window(client: TestClient, db: Session) -> None:
+    from datetime import datetime, timedelta, timezone
 
     from app.models.video import Video
-    from app.services.reward import get_daily_upload_count, get_daily_upload_window
+    from app.services.reward import get_daily_upload_count
 
-    token, user = _reg(client, "kst-window@x.com", "kstwindow")
+    token, user = _reg(client, "utc-window@x.com", "utcwindow")
     assert token
-    start_utc, _end_utc = get_daily_upload_window()
+    start_utc = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     db.add(Video(
         user_id=user["id"],
-        r2_key="videos/kst-window/old.mp4",
+        r2_key="videos/utc-window/old.mp4",
         cdn_url="https://cdn/old.mp4",
         file_hash="old",
         duration_sec=20,
@@ -119,7 +119,7 @@ def test_daily_upload_count_uses_kst_day_window(client: TestClient, db: Session)
     ))
     db.add(Video(
         user_id=user["id"],
-        r2_key="videos/kst-window/current.mp4",
+        r2_key="videos/utc-window/current.mp4",
         cdn_url="https://cdn/current.mp4",
         file_hash="current",
         duration_sec=20,
@@ -128,3 +128,57 @@ def test_daily_upload_count_uses_kst_day_window(client: TestClient, db: Session)
     db.commit()
 
     assert get_daily_upload_count(db, user["id"]) == 1
+
+
+def test_daily_limit_ignores_client_timezone_header(client: TestClient, db: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.video import Video
+
+    token, user = _reg(client, "tz-limit@x.com", "tzlimit")
+    start_utc = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    db.add_all([
+        Video(
+            user_id=user["id"],
+            r2_key=f"videos/tz-limit/{idx}.mp4",
+            cdn_url=f"https://cdn/{idx}.mp4",
+            file_hash=f"tz-limit-{idx}",
+            duration_sec=20,
+            created_at=start_utc + timedelta(seconds=idx + 1),
+        )
+        for idx in range(3)
+    ])
+    db.commit()
+
+    res = client.get(
+        "/api/v1/videos/daily-limit",
+        headers={**_auth(token), "X-Client-Timezone": "America/Adak"},
+    )
+
+    assert res.status_code == 200
+    assert res.json()["data"]["count"] == 3
+
+
+def test_reward_summary_ignores_client_timezone_header(client: TestClient, db: Session) -> None:
+    from datetime import timedelta
+
+    from app.services.reward import UTC, get_week_range
+
+    token, user = _reg(client, "tz-reward@x.com", "tzreward")
+    week_start_utc, _week_end_utc = get_week_range(UTC)
+    db.add(RewardPoint(
+        user_id=user["id"],
+        points=0.5,
+        reason="upload",
+        status="fixed",
+        created_at=week_start_utc + timedelta(seconds=1),
+    ))
+    db.commit()
+
+    res = client.get(
+        "/api/v1/rewards/summary",
+        headers={**_auth(token), "X-Client-Timezone": "America/Adak"},
+    )
+
+    assert res.status_code == 200
+    assert res.json()["data"]["current_week_points"] == 0.5

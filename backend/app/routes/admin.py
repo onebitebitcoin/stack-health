@@ -22,7 +22,7 @@ from app.services import r2 as r2_service
 from app.schemas.video import VideoSchema
 from app.services.reward import (
     REWARD_STATUS_FIXED,
-    _parse_tz,
+    UTC,
     get_week_range,
     points_to_sats,
     revoke_queued_upload_reward,
@@ -400,8 +400,8 @@ def weekly_summary(
     _: User | None = Depends(require_admin),
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
-    client_tz = _parse_tz(x_client_timezone)
-    week_start_utc, week_end_utc = get_week_range(client_tz)
+    _ = x_client_timezone  # Accepted for API compatibility; admin settlement uses UTC globally.
+    week_start_utc, week_end_utc = get_week_range(UTC)
 
     settled_count = settle_queued_rewards(db)
     if settled_count:

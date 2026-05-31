@@ -245,13 +245,10 @@ def my_posts(
         posts = base_filter.order_by(Post.created_at.desc()).all()
         has_more = False
     else:
-        KST = timezone(timedelta(hours=9))
-        now_kst = datetime.now(KST)
-        monday_kst = now_kst.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=now_kst.weekday())
-        week_start_kst = monday_kst - timedelta(weeks=week_offset)
-        week_end_kst = week_start_kst + timedelta(weeks=1)
-        week_start_utc = week_start_kst.astimezone(timezone.utc)
-        week_end_utc = week_end_kst.astimezone(timezone.utc)
+        now_utc = datetime.now(timezone.utc)
+        monday_utc = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=now_utc.weekday())
+        week_start_utc = monday_utc - timedelta(weeks=week_offset)
+        week_end_utc = week_start_utc + timedelta(weeks=1)
         posts = (
             base_filter
             .filter(Post.created_at >= week_start_utc, Post.created_at < week_end_utc)
