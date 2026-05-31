@@ -48,7 +48,7 @@ def notify_video_success(job: dict, result: dict) -> None:
     image_warn = "  ⚠️ 이미지 머지 실패" if has_proof and merge_type == "video" else ""
     audio_warn = "  ⚠️ 음성 머지 실패(영상은 정상 업로드됨)" if result.get("audio_merge_failed") else ""
     _send(
-        f"✅ <b>영상 업로드 성공</b>\n"
+        f"[Event] ✅ <b>영상 업로드 성공</b>\n"
         f"• 유저: {username} ({email})\n"
         f"• 유형: {merge_type}{image_warn}{audio_warn}\n"
         f"• 영상: {meta_line}\n"
@@ -56,7 +56,7 @@ def notify_video_success(job: dict, result: dict) -> None:
         f"• 압축: {_fmt_mb(pre)} → {_fmt_mb(post)} ({ratio})\n"
         f"• job: <code>{job_id}</code>\n"
         f"• url: {cdn_url}\n"
-        f"🕐 <b>시각</b>: {_now_kst()}"
+        f"🕐 {_now_kst()}"
     )
 
 
@@ -89,13 +89,25 @@ def notify_video_failure(
     step_line = f"• 실패 단계: <b>{pipeline_step}</b>\n" if pipeline_step else ""
 
     _send(
-        f"{icon} <b>{title}</b>\n"
+        f"[Event] {icon} <b>{title}</b>\n"
         f"• 유저: {user_id}\n"
         f"• 길이: {duration}초  오디오: {has_audio}  증거사진: {has_proof}\n"
         f"• job: <code>{job_id}</code>\n"
         f"• 파일: <code>{r2_key}</code>\n"
         f"{step_line}"
         f"• 오류: <code>{type(error).__name__}: {error_msg}</code>\n"
-        f"🔗 <b>컨텍스트</b>: Stack Health 업로드 파이프라인\n"
-        f"🕐 <b>시각</b>: {_now_kst()}"
+        f"🕐 {_now_kst()}"
+    )
+
+
+def notify_worker_error(error: Exception, context: str = "") -> None:
+    error_msg = str(error)
+    if len(error_msg) > 400:
+        error_msg = error_msg[:400] + "…"
+    ctx_line = f"• 컨텍스트: {context}\n" if context else ""
+    _send(
+        f"[Event] 🔥 <b>Worker 에러</b>\n"
+        f"{ctx_line}"
+        f"• 오류: <code>{type(error).__name__}: {error_msg}</code>\n"
+        f"🕐 {_now_kst()}"
     )

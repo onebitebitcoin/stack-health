@@ -6,7 +6,7 @@ import uuid
 
 from config import LOG_LEVEL, MAX_FFMPEG_CONCURRENT, QUEUE_NAME
 from queue_client import ack_job, dequeue_job, get_redis_client, set_job_status
-from notify import notify_video_failure, notify_video_success
+from notify import notify_video_failure, notify_video_success, notify_worker_error
 from tasks.full_pipeline import run_full_pipeline
 from tasks.merge import run_merge
 from tasks.image_merge import run_image_merge
@@ -99,11 +99,16 @@ def _process_job(r, job: dict) -> None:
 def main() -> None:
     r = get_redis_client()
     logger.info("Worker started. Waiting for jobs on %s", QUEUE_NAME)
-    while running:
-        job = dequeue_job(r, timeout=5)
-        if not job:
-            continue
-        _process_job(r, job)
+    try:
+        while running:
+            job = dequeue_job(r, timeout=5)
+            if not job:
+                continue
+            _process_job(r, job)
+    except Exception as e:
+        logger.exception("Worker 메인 루프 예외: %s", e)
+        notify_worker_error(e, "Worker 메인 루프 비정상 종료")
+        raise
     logger.info("Worker stopped.")
 
 

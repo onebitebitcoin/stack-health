@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from app.models.post import Post
 from app.routes import admin, auth, challenges, comments, feed, history, rewards, users, videos
 from app.services.r2 import ensure_r2_cors
+from app.services.notify import notify_backend_error
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,6 +55,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.error("Unhandled exception: %s %s — %s", request.method, request.url.path, exc, exc_info=True)
+    notify_backend_error(exc, f"{request.method} {request.url.path}")
     return JSONResponse(
         status_code=500,
         content={"detail": "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요"},

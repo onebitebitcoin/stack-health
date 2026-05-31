@@ -32,6 +32,7 @@ from app.services import r2 as r2_service
 from app.services.google_oauth import exchange_code, generate_oauth_state, get_google_auth_url, get_google_user_info, verify_oauth_state
 from app.services.lnauth import encode_lnurl, generate_k1, verify_signature
 from app.services.rate_limit import check_rate_limit
+from app.services.notify import notify_new_user
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -126,6 +127,7 @@ async def register(req: RegisterRequest, request: Request, db: Session = Depends
     db.refresh(user)
 
     token = create_access_token(user.id)
+    notify_new_user(user.username, user.email, "email")
     return {"data": TokenResponse(access_token=token, user=UserSchema.model_validate(user))}
 
 
@@ -282,6 +284,7 @@ async def google_callback(code: str | None = None, error: str | None = None, sta
         db.add(user)
         db.commit()
         db.refresh(user)
+        notify_new_user(user.username, user.email, "google")
     else:
         if not user.oauth_sub:
             user.oauth_sub = google_sub
@@ -357,6 +360,8 @@ def lnauth_callback(
             app_settings={"needs_username": True, "profile_color": _random_profile_color()},
         )
         db.add(user)
+        db.flush()
+        notify_new_user(user.username, None, "lnauth")
 
     challenge.pubkey = key
     challenge.verified = True
