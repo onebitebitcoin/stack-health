@@ -54,7 +54,7 @@ def enqueue_merge_job(job_payload: dict) -> str:
     return job_id
 
 
-def enqueue_image_merge_job(video_r2_key: str, proof_r2_key: str) -> str:
+def enqueue_image_merge_job(video_r2_key: str, proof_r2_key: str, user_id: int | None = None) -> str:
     """Redis 큐에 proof merge 잡 등록."""
     job_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
@@ -66,8 +66,13 @@ def enqueue_image_merge_job(video_r2_key: str, proof_r2_key: str) -> str:
         "proof_r2_key": proof_r2_key,
         "created_at": created_at,
     }
+    if user_id is not None:
+        payload["user_id"] = user_id
     r = get_redis_client()
-    _set_job_status(r, job_id, status="pending", job_type="proof-merge", created_at=created_at)
+    status_fields = {"status": "pending", "job_type": "proof-merge", "created_at": created_at}
+    if user_id is not None:
+        status_fields["user_id"] = str(user_id)
+    _set_job_status(r, job_id, **status_fields)
     r.lpush(QUEUE_NAME, json.dumps(payload))
     logger.info("Enqueued proof-merge job %s", job_id)
     return job_id

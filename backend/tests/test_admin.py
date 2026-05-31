@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 
 def _reg(client: TestClient, email: str = "a@x.com", username: str = "au") -> tuple[str, dict]:
-    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
+    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "password123"})
     data = res.json()["data"]
     return data["access_token"], data["user"]
 
@@ -104,3 +104,40 @@ def test_admin_reject_video(client: TestClient, db: Session) -> None:
     res = client.patch(f"/api/v1/admin/videos/{vid_id}/reject", headers=_auth(admin_token))
     assert res.status_code == 200
     assert res.json()["data"]["video"]["status"] == "rejected"
+
+
+def test_admin_app_links_public_empty_then_update(client: TestClient) -> None:
+    public_res = client.get("/api/v1/admin/app-links")
+    assert public_res.status_code == 200
+    assert public_res.json()["data"]["android_url"] is None
+
+    update_res = client.put(
+        "/api/v1/admin/app-links",
+        json={"android_url": "https://example.com/app.apk", "ios_url": None},
+        headers={"X-Admin-Key": "test-admin-key"},
+    )
+    assert update_res.status_code == 200
+    assert update_res.json()["data"]["android_url"] == "https://example.com/app.apk"
+
+    public_res = client.get("/api/v1/admin/app-links")
+    assert public_res.json()["data"]["android_url"] == "https://example.com/app.apk"
+
+
+@patch("app.routes.admin.r2_service.get_cdn_url", return_value="https://cdn/apps/android/app.apk")
+@patch("app.routes.admin.r2_service.generate_apk_presigned_url", return_value=("https://r2/upload", "apps/android/app.apk"))
+def test_admin_app_upload_url_and_confirm(mock_upload_url, mock_cdn, client: TestClient) -> None:
+    upload_res = client.post(
+        "/api/v1/admin/app-links/upload-url",
+        json={"platform": "android", "filename": "app.apk", "content_type": "application/vnd.android.package-archive"},
+        headers={"X-Admin-Key": "test-admin-key"},
+    )
+    assert upload_res.status_code == 200
+    assert upload_res.json()["data"]["cdn_url"] == "https://cdn/apps/android/app.apk"
+
+    confirm_res = client.post(
+        "/api/v1/admin/app-links/confirm-upload",
+        json={"platform": "android", "cdn_url": "https://cdn/apps/android/app.apk", "filename": "app.apk"},
+        headers={"X-Admin-Key": "test-admin-key"},
+    )
+    assert confirm_res.status_code == 200
+    assert confirm_res.json()["data"]["android_filename"] == "app.apk"

@@ -9,7 +9,7 @@ from app.models.reward import RewardPoint
 
 
 def _reg(client: TestClient, email: str = "r@x.com", username: str = "ruser") -> tuple[str, dict]:
-    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
+    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "password123"})
     data = res.json()["data"]
     return data["access_token"], data["user"]
 
@@ -98,3 +98,33 @@ def test_weekly_claim_endpoint_removed(client: TestClient) -> None:
     token, _ = _reg(client, "nc@x.com", "ncuser")
     res = client.post("/api/v1/rewards/claim", json={}, headers=_auth(token))
     assert res.status_code in (404, 405)
+
+
+def test_daily_upload_count_uses_kst_day_window(client: TestClient, db: Session) -> None:
+    from datetime import timedelta
+
+    from app.models.video import Video
+    from app.services.reward import get_daily_upload_count, get_daily_upload_window
+
+    token, user = _reg(client, "kst-window@x.com", "kstwindow")
+    assert token
+    start_utc, _end_utc = get_daily_upload_window()
+    db.add(Video(
+        user_id=user["id"],
+        r2_key="videos/kst-window/old.mp4",
+        cdn_url="https://cdn/old.mp4",
+        file_hash="old",
+        duration_sec=20,
+        created_at=start_utc - timedelta(seconds=1),
+    ))
+    db.add(Video(
+        user_id=user["id"],
+        r2_key="videos/kst-window/current.mp4",
+        cdn_url="https://cdn/current.mp4",
+        file_hash="current",
+        duration_sec=20,
+        created_at=start_utc + timedelta(seconds=1),
+    ))
+    db.commit()
+
+    assert get_daily_upload_count(db, user["id"]) == 1

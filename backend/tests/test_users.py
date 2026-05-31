@@ -10,7 +10,7 @@ from app.models.challenge import Challenge
 
 
 def _register(client: TestClient, email: str, username: str) -> tuple[str, dict]:
-    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
+    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "password123"})
     data = res.json()["data"]
     return data["access_token"], data["user"]
 
@@ -29,7 +29,7 @@ def _create_post(client: TestClient, token: str, user_id: int, filename: str = "
 
 def _make_admin(db: Session, client: TestClient) -> str:
     from app.models.user import User
-    res = client.post("/api/v1/auth/register", json={"email": "admin_u@x.com", "username": "admin_u", "password": "pw"})
+    res = client.post("/api/v1/auth/register", json={"email": "admin_u@x.com", "username": "admin_u", "password": "password123"})
     user_id = res.json()["data"]["user"]["id"]
     token = res.json()["data"]["access_token"]
     db.query(User).filter(User.id == user_id).update({"is_admin": True})

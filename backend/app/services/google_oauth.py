@@ -34,8 +34,8 @@ def verify_oauth_state(state: str | None) -> bool:
         valid = r.getdel(f"oauth_state:{state}")
         return valid is not None
     except Exception:
-        logger.debug("OAuth state Redis 검증 실패 — 검증 생략")
-        return True  # Redis 없으면 state 검증 생략
+        logger.warning("OAuth state Redis 검증 실패 — Google OAuth state 검증 실패 처리")
+        return False
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"

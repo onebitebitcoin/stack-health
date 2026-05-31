@@ -1,5 +1,6 @@
-import io
 import json
+import os
+import tempfile
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -39,6 +40,48 @@ from app.services.reward import (
 logger = logging.getLogger(__name__)
 
 
+def _assert_job_owner(job: dict, current_user: User) -> None:
+    """Prevent users from reading another user's async job status.
+
+    Legacy Redis job records created before this check may not include user_id;
+    keep those readable until their 24h TTL expires to avoid breaking in-flight
+    deployed jobs. All newly created job records include user_id.
+    """
+    job_user_id = job.get("user_id")
+    if job_user_id in (None, ""):
+        return
+    if str(job_user_id) != str(current_user.id):
+        raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+
+
+async def _spool_upload_to_temp(upload: UploadFile, max_bytes: int, label: str) -> tuple[str, int]:
+    """Copy an upload to a temp file with a hard byte limit.
+
+    This keeps the public upload-pipeline contract unchanged while avoiding
+    holding whole media files in API worker memory until BackgroundTasks run.
+    """
+    suffix = ""
+    if upload.filename and "." in upload.filename:
+        suffix = "." + upload.filename.rsplit(".", 1)[-1]
+    fd, path = tempfile.mkstemp(prefix=f"stackhealth-{label}-", suffix=suffix)
+    size = 0
+    try:
+        with os.fdopen(fd, "wb") as out:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > max_bytes:
+                    raise HTTPException(status_code=400, detail=f"{label} 파일이 너무 큽니다")
+                out.write(chunk)
+        return path, size
+    except Exception:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise
 
 def _parse_tags(raw: str | None) -> list[str]:
     try:
@@ -456,6 +499,7 @@ def get_merge_job_status(
 
     if job is None:
         raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+    _assert_job_owner(job, current_user)
 
     return {
         "data": {
@@ -522,7 +566,7 @@ def merge_proof(
 
     logger.info("merge_proof: user_id=%s video=%s proof=%s", current_user.id, video_r2_key, proof_r2_key)
     try:
-        job_id = enqueue_image_merge_job(video_r2_key, proof_r2_key)
+        job_id = enqueue_image_merge_job(video_r2_key, proof_r2_key, current_user.id)
     except Exception as e:
         logger.error("proof merge 큐 등록 실패: %s", e)
         raise HTTPException(status_code=500, detail="영상 처리에 실패했습니다")
@@ -535,12 +579,12 @@ def merge_proof(
 
 def _r2_upload_and_enqueue(
     job_id: str,
-    video_bytes: bytes,
+    video_path: str,
     video_content_type: str,
     video_filename: str,
-    audio_bytes: bytes | None,
+    audio_path: str | None,
     audio_content_type: str,
-    proof_bytes: bytes | None,
+    proof_path: str | None,
     proof_content_type: str | None,
     user_id: int,
     duration_sec: int,
@@ -551,31 +595,35 @@ def _r2_upload_and_enqueue(
     workout_end: str | None,
     audio_duration_sec: int,
 ) -> None:
+    temp_paths = [p for p in (video_path, audio_path, proof_path) if p]
     try:
-        r2_key, _cdn_url = r2_service.upload_fileobj(
-            io.BytesIO(video_bytes), video_content_type, video_filename, user_id
-        )
+        with open(video_path, "rb") as video_file:
+            r2_key, _cdn_url = r2_service.upload_fileobj(
+                video_file, video_content_type, video_filename, user_id
+            )
 
         audio_r2_key: str | None = None
-        if audio_bytes and len(audio_bytes) > 0:
+        if audio_path:
             audio_ext = "mp4" if "mp4" in audio_content_type else "webm"
-            audio_r2_key, _ = r2_service.upload_fileobj(
-                io.BytesIO(audio_bytes), audio_content_type, f"audio.{audio_ext}", user_id
-            )
+            with open(audio_path, "rb") as audio_file:
+                audio_r2_key, _ = r2_service.upload_fileobj(
+                    audio_file, audio_content_type, f"audio.{audio_ext}", user_id
+                )
 
         proof_r2_key: str | None = None
         proof_cdn_url: str | None = None
-        if proof_bytes and len(proof_bytes) > 0 and proof_content_type:
+        if proof_path and proof_content_type:
             ext = "jpg" if "jpeg" in proof_content_type or "jpg" in proof_content_type else "png"
             proof_r2_key = f"proof/{user_id}/{uuid.uuid4()}.{ext}"
             r2_client = r2_service.get_r2_client()
-            r2_client.put_object(
-                Bucket=app_settings.r2_bucket_name,
-                Key=proof_r2_key,
-                Body=proof_bytes,
-                ContentType=proof_content_type,
-                CacheControl="public, max-age=31536000, immutable",
-            )
+            with open(proof_path, "rb") as proof_file:
+                r2_client.put_object(
+                    Bucket=app_settings.r2_bucket_name,
+                    Key=proof_r2_key,
+                    Body=proof_file,
+                    ContentType=proof_content_type,
+                    CacheControl="public, max-age=31536000, immutable",
+                )
             proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
 
         enqueue_full_upload_pipeline(
@@ -598,6 +646,12 @@ def _r2_upload_and_enqueue(
     except Exception as e:
         logger.error("Background R2 upload failed job_id=%s: %s", job_id, e)
         fail_job(job_id, str(e))
+    finally:
+        for path in temp_paths:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
 
 
 @router.post("/upload-pipeline")
@@ -629,38 +683,44 @@ async def upload_pipeline(
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
         raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
 
-    # 파일 바이트를 모두 읽어둠 (HTTP 전송 완료 — 이후 연결 불필요)
-    video_bytes = await file.read()
+    video_path, _video_size = await _spool_upload_to_temp(file, r2_service.MAX_FILE_SIZE, "영상")
 
-    audio_bytes: bytes | None = None
+    audio_path: str | None = None
     audio_content_type = "audio/webm"
     if audio is not None:
         audio_content_type = audio.content_type or "audio/webm"
-        audio_bytes = await audio.read()
+        audio_path, _audio_size = await _spool_upload_to_temp(audio, r2_service.MAX_FILE_SIZE, "오디오")
 
-    proof_bytes: bytes | None = None
+    proof_path: str | None = None
     proof_content_type: str | None = None
     if proof_image is not None:
         proof_content_type = proof_image.content_type or "image/jpeg"
         if proof_content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
             raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식: {proof_content_type}")
-        proof_bytes = await proof_image.read()
-        if len(proof_bytes) > MAX_IMAGE_SIZE:
-            raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 10MB)")
+        proof_path, _proof_size = await _spool_upload_to_temp(proof_image, MAX_IMAGE_SIZE, "이미지")
 
-    # job_id 선점: 응답 전에 Redis에 등록해 폴링 가능하게
-    job_id = reserve_job_id(current_user.id)
+    temp_paths = [p for p in (video_path, audio_path, proof_path) if p]
+    try:
+        # job_id 선점: 응답 전에 Redis에 등록해 폴링 가능하게
+        job_id = reserve_job_id(current_user.id)
+    except Exception:
+        for path in temp_paths:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        raise
     logger.info("upload_pipeline: user_id=%s job_id=%s", current_user.id, job_id)
 
     background_tasks.add_task(
         _r2_upload_and_enqueue,
         job_id=job_id,
-        video_bytes=video_bytes,
+        video_path=video_path,
         video_content_type=content_type,
         video_filename=file.filename or "video.mp4",
-        audio_bytes=audio_bytes,
+        audio_path=audio_path,
         audio_content_type=audio_content_type,
-        proof_bytes=proof_bytes,
+        proof_path=proof_path,
         proof_content_type=proof_content_type,
         user_id=current_user.id,
         duration_sec=duration_sec,
@@ -684,6 +744,7 @@ def get_upload_job_status(
     job = get_job_status(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+    _assert_job_owner(job, current_user)
 
     status = job.get("status", "unknown")
     points_earned = 0.0

@@ -9,7 +9,7 @@ TZ = "Asia/Seoul"
 
 
 def _reg(client: TestClient, email: str = "h@x.com", username: str = "huser") -> tuple[str, dict]:
-    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
+    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "password123"})
     data = res.json()["data"]
     return data["access_token"], data["user"]
 

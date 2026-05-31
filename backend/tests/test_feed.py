@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 
 def _make_user(client: TestClient, email: str, username: str) -> tuple[str, dict]:
-    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
+    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "password123"})
     data = res.json()["data"]
     return data["access_token"], data["user"]
 

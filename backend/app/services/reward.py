@@ -78,18 +78,32 @@ def get_weekly_queued_points(db: Session, user_id: int) -> float:
 
 
 def _utc_today_start() -> datetime:
-    """UTC midnight — daily limits reset at UTC 00:00."""
+    """UTC midnight. Kept for non-reward daily dedupe paths such as view counting."""
     return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+def get_daily_upload_window(tz: ZoneInfo | None = None) -> tuple[datetime, datetime]:
+    """Return today's upload window in UTC for the product daily reset timezone.
+
+    The product policy resets daily upload limits at KST midnight. The DB still
+    stores UTC timestamps; only the comparison window is derived from KST.
+    """
+    tz = tz or ZoneInfo("Asia/Seoul")
+    now_local = datetime.now(tz)
+    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_local = start_local + timedelta(days=1)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
 def get_daily_upload_count(db: Session, user_id: int) -> int:
-    today_start = _utc_today_start()
+    today_start, today_end = get_daily_upload_window()
     return (
         db.query(Video)
         .filter(
             Video.user_id == user_id,
             Video.status == "active",
             Video.created_at >= today_start,
+            Video.created_at < today_end,
         )
         .count()
     )

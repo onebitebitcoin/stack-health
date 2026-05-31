@@ -15,6 +15,9 @@ os.environ.setdefault("R2_ACCESS_KEY_ID", "test")
 os.environ.setdefault("R2_SECRET_ACCESS_KEY", "test")
 os.environ.setdefault("R2_BUCKET_NAME", "test")
 os.environ.setdefault("R2_PUBLIC_URL", "https://test.r2.dev")
+os.environ["REDIS_URL"] = ""
+os.environ["GOOGLE_CLIENT_ID"] = ""
+os.environ["GOOGLE_CLIENT_SECRET"] = ""
 
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402

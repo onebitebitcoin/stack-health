@@ -1,24 +1,33 @@
 from __future__ import annotations
 
 from unittest.mock import patch
+import os
+import tempfile
 
 from fastapi.testclient import TestClient
 
 
 def _register_and_token(client: TestClient, email: str = "u@x.com", username: str = "user") -> str:
-    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
+    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "password123"})
     return res.json()["data"]["access_token"]
 
 
 def _register(client: TestClient, email: str = "u@x.com", username: str = "user") -> tuple[str, int]:
     """Returns (token, user_id) — use when r2_key ownership prefix is needed."""
-    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "pw"})
+    res = client.post("/api/v1/auth/register", json={"email": email, "username": username, "password": "password123"})
     data = res.json()["data"]
     return data["access_token"], data["user"]["id"]
 
 
 def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+def _tmp_media_file(data: bytes, suffix: str = ".bin") -> str:
+    fd, path = tempfile.mkstemp(prefix="stackhealth-test-", suffix=suffix)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    return path
 
 
 @patch("app.routes.videos.r2_service.generate_presigned_url", return_value=("https://r2.example.com/upload", "videos/test.mp4"))
@@ -536,12 +545,12 @@ def test_r2_upload_and_enqueue_video_only(mock_upload, mock_r2_client, mock_enqu
 
     _r2_upload_and_enqueue(
         job_id="test-job-1",
-        video_bytes=b"\x00\x01\x02",
+        video_path=_tmp_media_file(b"\x00\x01\x02", ".mp4"),
         video_content_type="video/mp4",
         video_filename="test.mp4",
-        audio_bytes=None,
+        audio_path=None,
         audio_content_type="audio/webm",
-        proof_bytes=None,
+        proof_path=None,
         proof_content_type=None,
         user_id=1,
         duration_sec=15,
@@ -564,12 +573,12 @@ def test_r2_upload_and_enqueue_failure(mock_upload, mock_fail) -> None:
 
     _r2_upload_and_enqueue(
         job_id="fail-job-1",
-        video_bytes=b"\x00",
+        video_path=_tmp_media_file(b"\x00", ".mp4"),
         video_content_type="video/mp4",
         video_filename="fail.mp4",
-        audio_bytes=None,
+        audio_path=None,
         audio_content_type="audio/webm",
-        proof_bytes=None,
+        proof_path=None,
         proof_content_type=None,
         user_id=2,
         duration_sec=10,
@@ -594,12 +603,12 @@ def test_r2_upload_and_enqueue_with_audio_and_proof(mock_upload, mock_r2_client,
 
     _r2_upload_and_enqueue(
         job_id="test-job-2",
-        video_bytes=b"\x00\x01",
+        video_path=_tmp_media_file(b"\x00\x01", ".mp4"),
         video_content_type="video/mp4",
         video_filename="v.mp4",
-        audio_bytes=b"\x10\x20",
+        audio_path=_tmp_media_file(b"\x10\x20", ".webm"),
         audio_content_type="audio/webm",
-        proof_bytes=b"\xff\xd8\xff",
+        proof_path=_tmp_media_file(b"\xff\xd8\xff", ".jpg"),
         proof_content_type="image/jpeg",
         user_id=3,
         duration_sec=20,
@@ -687,3 +696,33 @@ def test_get_upload_job_bad_points(mock_job, client: TestClient) -> None:
     res = client.get("/api/v1/videos/upload-job/some-job", headers=_auth(token))
     assert res.status_code == 200
     assert res.json()["data"]["points_earned"] == 0.0
+
+
+def test_async_job_status_rejects_other_user(client: TestClient) -> None:
+    token, uid = _register(client, "job-owner-a@x.com", "jobownera")
+    other_uid = uid + 999
+    with patch("app.routes.videos.get_job_status", return_value={"status": "completed", "user_id": str(other_uid), "cdn_url": "https://cdn/private.mp4"}):
+        res = client.get("/api/v1/videos/upload-job/private-job", headers=_auth(token))
+    assert res.status_code == 404
+
+
+def test_merge_job_status_rejects_other_user(client: TestClient) -> None:
+    token, uid = _register(client, "job-owner-b@x.com", "jobownerb")
+    other_uid = uid + 999
+    with patch("app.routes.videos.get_job_status", return_value={"status": "completed", "user_id": str(other_uid), "cdn_url": "https://cdn/private.mp4"}):
+        res = client.get("/api/v1/videos/merge-job/private-job", headers=_auth(token))
+    assert res.status_code == 404
+
+
+def test_upload_pipeline_rejects_oversized_video_before_job_reservation(client: TestClient, monkeypatch) -> None:
+    token = _register_and_token(client, "oversized@x.com", "oversizeduser")
+    monkeypatch.setattr("app.routes.videos.r2_service.MAX_FILE_SIZE", 4)
+    with patch("app.routes.videos.reserve_job_id") as mock_reserve:
+        res = client.post(
+            "/api/v1/videos/upload-pipeline",
+            data={"duration_sec": "20"},
+            files={"file": ("workout.mp4", b"12345", "video/mp4")},
+            headers=_auth(token),
+        )
+    assert res.status_code == 400
+    mock_reserve.assert_not_called()
