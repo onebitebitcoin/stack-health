@@ -47,6 +47,7 @@ echo ""
 # ── Step 1: 코드 업데이트 ─────────────────────────────────────────────
 echo "[1/7] git pull..."
 cd "$APP_DIR"
+git restore nginx/upstream.conf 2>/dev/null || true
 git pull --rebase origin main
 
 # ── Step 2: 의존성 설치 ───────────────────────────────────────────────
