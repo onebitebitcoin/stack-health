@@ -25,11 +25,26 @@ def _upload(client: TestClient, token: str, user_id: int, filename: str = "v.mp4
 
 
 def _age_queued_rewards(db: Session) -> None:
-    """Backdate queued rewards past the 24h cutoff so settle_queued_rewards fixes them."""
+    """Backdate queued rewards past the 24h cutoff so settle_queued_rewards fixes them.
+
+    On Mondays (week < 25h old) we cannot backdate into this week AND past the 24h
+    settle cutoff simultaneously, so we settle directly to keep created_at this week.
+    """
     from datetime import datetime, timedelta, timezone
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=25)
+    from app.services.reward import get_week_range, UTC, REWARD_STATUS_FIXED
+
+    now = datetime.now(timezone.utc)
+    week_start, _ = get_week_range(UTC)
+    cutoff_24h = now - timedelta(hours=24)
+    backdate_to = max(now - timedelta(hours=25), week_start + timedelta(seconds=1))
+
     for reward in db.query(RewardPoint).filter(RewardPoint.status == "queued").all():
-        reward.created_at = cutoff
+        if backdate_to <= cutoff_24h:
+            reward.created_at = backdate_to
+        else:
+            # Week started < 25h ago (e.g., early Monday); settle directly
+            reward.created_at = week_start + timedelta(seconds=1)
+            reward.status = REWARD_STATUS_FIXED
     db.commit()
 
 
