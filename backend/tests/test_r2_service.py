@@ -19,7 +19,7 @@ def test_allowed_content_types_set() -> None:
 
 
 def test_max_file_size() -> None:
-    assert MAX_FILE_SIZE == 50 * 1024 * 1024
+    assert MAX_FILE_SIZE == 100 * 1024 * 1024
 
 
 def test_get_cdn_url_basic() -> None:

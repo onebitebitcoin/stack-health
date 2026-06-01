@@ -106,7 +106,7 @@ def get_presigned_url(
         )
         raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식입니다: {req.content_type}")
     if req.file_size > r2_service.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="파일이 너무 큽니다 (최대 50MB)")
+        raise HTTPException(status_code=400, detail="파일이 너무 큽니다 (최대 100MB)")
 
     upload_url, r2_key = r2_service.generate_presigned_url(req.content_type, req.filename, current_user.id)
     return {"data": PresignedUrlResponse(upload_url=upload_url, r2_key=r2_key)}

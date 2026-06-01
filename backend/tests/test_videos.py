@@ -165,7 +165,7 @@ def test_presigned_url_file_too_large(client: TestClient) -> None:
     token = _register_and_token(client)
     res = client.post("/api/v1/videos/presigned-url", json={
         "filename": "big.mp4", "content_type": "video/mp4",
-        "file_size": 51 * 1024 * 1024,
+        "file_size": 101 * 1024 * 1024,
     }, headers=_auth(token))
     assert res.status_code == 400
 
