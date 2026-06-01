@@ -34,6 +34,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'favicon-192.png', 'apple-touch-icon.png'],
       manifest: {
+        id: '/',
         name: 'Stack Health',
         short_name: 'Stack Health',
         description: 'Stack Health',

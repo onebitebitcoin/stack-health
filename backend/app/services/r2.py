@@ -9,7 +9,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 PRESIGNED_URL_EXPIRES = 900  # 15 minutes
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 MAX_APK_FILE_SIZE = 500 * 1024 * 1024  # 500MB
 ALLOWED_CONTENT_TYPES = {
     "video/mp4",

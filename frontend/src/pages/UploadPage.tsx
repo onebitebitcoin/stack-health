@@ -31,7 +31,7 @@ function useCountUp(target: number, duration = 800) {
 }
 
 const STEPS = ['영상 선택', '태그·챌린지', '음성 녹음', '설명·사진'] as const
-const MAX_RECORD_SECONDS = 30
+const MAX_RECORD_SECONDS = 60
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
 const PIPELINE_JOB_KEY = 'upload_pipeline_job'
