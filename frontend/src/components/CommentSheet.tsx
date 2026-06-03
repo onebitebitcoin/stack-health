@@ -21,6 +21,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
   const [content, setContent] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
+  const isComposingRef = useRef(false)
 
   // 키보드가 올라올 때 시트 위치 + 높이 동적 조정
   useEffect(() => {
@@ -183,6 +184,11 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
             ref={inputRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
+            onCompositionStart={() => { isComposingRef.current = true }}
+            onCompositionEnd={(e) => {
+              isComposingRef.current = false
+              setContent(e.currentTarget.value)
+            }}
             placeholder={token ? '댓글 입력...' : '로그인 후 댓글을 작성하세요'}
             className="flex-1 rounded-full bg-zinc-800 px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none"
             maxLength={500}
