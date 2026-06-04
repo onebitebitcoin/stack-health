@@ -105,6 +105,7 @@ export default function UploadPage() {
   const displayPoints = useCountUp(pointsEarned)
   const [error, setError] = useState('')
   const [limitError, setLimitError] = useState('')
+  const [videoHasAudio, setVideoHasAudio] = useState(false)
 
   const [pipelineJobId, setPipelineJobId] = useState<string | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<string | null>(null)
@@ -216,6 +217,14 @@ export default function UploadPage() {
           ? `영상 길이가 ${secs}초입니다. 5초 이상 영상만 업로드할 수 있습니다.`
           : `영상 길이가 ${secs}초입니다. 60초 이하 영상만 업로드할 수 있습니다.`)
         return
+      }
+      // Detect existing audio track in video file
+      const audioTracks = (videoEl as any).audioTracks
+      const mozHasAudio = (videoEl as any).mozHasAudio
+      if (audioTracks !== undefined) {
+        setVideoHasAudio(audioTracks.length > 0)
+      } else if (mozHasAudio !== undefined) {
+        setVideoHasAudio(Boolean(mozHasAudio))
       }
       setError(''); setFile(f); setPreviewUrl(url); setStep(1)
     }
@@ -505,6 +514,7 @@ export default function UploadPage() {
           previewUrl={previewUrl} recording={recording} recordedSeconds={recordedSeconds}
           recordingDone={recordingDone} progressPct={progressPct} error={error}
           maxSeconds={MAX_RECORD_SECONDS}
+          videoHasAudio={videoHasAudio}
           startRecording={startRecording} stopRecording={stopRecording} skipRecording={skipRecording}
           onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0) }}
           onNext={() => setStep(3)}

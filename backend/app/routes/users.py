@@ -52,6 +52,9 @@ class PublicPostSchema(BaseModel):
     id: int
     cdn_url: str
     thumbnail_url: str | None = None
+    subtitle_url: str | None = None
+    subtitle_text: str | None = None
+    subtitle_status: str = "skipped"
     like_count: int
     view_count: int
     comment_count: int
@@ -336,6 +339,9 @@ def get_user_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
             id=p.id,
             cdn_url=p.video.cdn_url,
             thumbnail_url=p.thumbnail_url,
+            subtitle_url=p.video.subtitle_url,
+            subtitle_text=p.video.subtitle_text,
+            subtitle_status=p.video.subtitle_status,
             like_count=p.like_count,
             view_count=p.view_count,
             comment_count=comment_counts.get(p.id, 0),

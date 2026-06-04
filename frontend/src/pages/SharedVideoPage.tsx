@@ -90,7 +90,11 @@ export default function SharedVideoPage() {
         src={post.cdn_url}
         className="h-full w-full object-contain"
         autoPlay playsInline controls
-      />
+      >
+        {post.subtitle_url && post.subtitle_status !== 'completed' && (
+          <track kind="subtitles" src={post.subtitle_url} srcLang="ko" label="한국어" default />
+        )}
+      </video>
 
       <div className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-8 pt-16 bg-gradient-to-t from-black/70 to-transparent">
         <p className="text-white font-semibold mb-1">@{post.username}</p>

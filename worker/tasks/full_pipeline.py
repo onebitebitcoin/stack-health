@@ -22,6 +22,7 @@ from config import (
     R2_SECRET_ACCESS_KEY,
 )
 from tasks.image_merge import run_image_merge
+from tasks.subtitle import generate_subtitle_for_video, subtitle_metrics_json
 
 logger = logging.getLogger(__name__)
 
@@ -353,6 +354,11 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     has_audio_merged = False
     has_image_merged = False
     audio_merge_failed = False
+    subtitle_status = "skipped"
+    subtitle_url: str | None = None
+    subtitle_text: str | None = None
+    subtitle_error: str | None = None
+    subtitle_metrics: str | None = None
 
     audio_r2_key: str | None = job.get("audio_r2_key")
     if audio_r2_key:
@@ -422,6 +428,31 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
         logger.info("[full-pipeline] job=%s thumbnail → %s", job_id, thumb_key)
 
     if status_callback:
+        status_callback("subtitle")
+    pre_subtitle_key = current_key
+    subtitle_result = generate_subtitle_for_video(r2, current_key)
+    subtitle_status = subtitle_result.status
+    subtitle_url = subtitle_result.subtitle_url
+    subtitle_text = subtitle_result.subtitle_text
+    subtitle_error = subtitle_result.error
+    subtitle_metrics = subtitle_metrics_json(subtitle_result)
+    if subtitle_status == "completed" and subtitle_result.burned_video_r2_key:
+        current_key = subtitle_result.burned_video_r2_key
+        try:
+            r2.delete_object(Bucket=R2_BUCKET_NAME, Key=pre_subtitle_key)
+        except Exception:
+            pass
+        logger.info("[full-pipeline] job=%s subtitle burn-in → %s", job_id, current_key)
+    elif subtitle_status == "completed":
+        subtitle_status = "failed"
+        subtitle_error = "subtitle burn-in did not produce a video"
+        logger.warning("[full-pipeline] job=%s subtitle failed — upload continues: %s", job_id, subtitle_error)
+    elif subtitle_status == "failed":
+        logger.warning("[full-pipeline] job=%s subtitle failed — upload continues: %s", job_id, subtitle_error)
+    else:
+        logger.info("[full-pipeline] job=%s subtitle skipped: %s", job_id, subtitle_error)
+
+    if status_callback:
         status_callback("db_save")
     db = SessionLocal()
     try:
@@ -433,6 +464,11 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             cdn_url=cdn_url,
             file_hash=job["file_hash"],
             duration_sec=min(60, max(5, int(job.get("duration_sec", 15)))),
+            subtitle_url=subtitle_url,
+            subtitle_text=subtitle_text,
+            subtitle_status=subtitle_status,
+            subtitle_error=subtitle_error,
+            subtitle_metrics=subtitle_metrics,
         )
         db.add(video)
         db.flush()
@@ -489,6 +525,10 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             "video_meta": video_meta,
             "merge_type": merge_type,
             "audio_merge_failed": audio_merge_failed,
+            "subtitle_status": subtitle_status,
+            "subtitle_url": subtitle_url or "",
+            "subtitle_text": subtitle_text or "",
+            "subtitle_error": subtitle_error or "",
         }
     except Exception:
         # DB 실패 시 압축된 c- 파일이 R2에 고아로 남지 않도록 정리

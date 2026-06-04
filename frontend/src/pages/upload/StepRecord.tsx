@@ -1,4 +1,4 @@
-import { Mic, MicOff, X, ChevronRight } from 'lucide-react'
+import { Mic, MicOff, X, ChevronRight, Volume2 } from 'lucide-react'
 
 interface Props {
   previewUrl: string | null
@@ -8,6 +8,7 @@ interface Props {
   progressPct: number
   error: string
   maxSeconds: number
+  videoHasAudio?: boolean
   startRecording: () => void
   stopRecording: () => void
   skipRecording: () => void
@@ -17,7 +18,7 @@ interface Props {
 
 export default function StepRecord({
   previewUrl, recording, recordedSeconds, recordingDone,
-  progressPct, error, maxSeconds,
+  progressPct, error, maxSeconds, videoHasAudio,
   startRecording, stopRecording, skipRecording, onRetake, onNext,
 }: Props) {
   const timeStr = `${String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:${String(recordedSeconds % 60).padStart(2, '0')}`
@@ -26,6 +27,14 @@ export default function StepRecord({
     <div className="flex flex-1 flex-col px-6 pt-4 gap-4">
       {previewUrl && (
         <video src={previewUrl} className="h-40 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
+      )}
+      {videoHasAudio && !recording && !recordingDone && (
+        <div className="flex items-start gap-2 rounded-xl bg-blue-500/10 px-3 py-2.5">
+          <Volume2 size={14} className="text-blue-400 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-blue-400 leading-relaxed">
+            영상에 음성이 감지됐어요. 오디오를 추가하지 않아도 됩니다.
+          </p>
+        </div>
       )}
       <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-4">
         <div>

@@ -9,6 +9,9 @@ class VideoSchema(BaseModel):
     r2_key: str
     cdn_url: str
     duration_sec: int | None
+    subtitle_url: str | None = None
+    subtitle_text: str | None = None
+    subtitle_status: str = "skipped"
     status: str
     created_at: datetime
 
@@ -54,6 +57,9 @@ class PostSchema(BaseModel):
     workout_end: str | None = None
     share_token: str = ""
     thumbnail_url: str | None = None
+    subtitle_url: str | None = None
+    subtitle_text: str | None = None
+    subtitle_status: str = "skipped"
     avatar_url: str | None = None
     profile_color: str | None = None
     challenge_id: int | None = None

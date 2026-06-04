@@ -747,3 +747,39 @@ def test_upload_pipeline_rejects_oversized_video_before_job_reservation(client: 
         )
     assert res.status_code == 400
     mock_reserve.assert_not_called()
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/subtitle-default.mp4")
+def test_confirm_upload_returns_subtitle_defaults(mock_cdn, client: TestClient) -> None:
+    """자막 후처리는 선택 기능이므로 일반 업로드 응답은 기본 skipped 상태로 유지된다."""
+    token, uid = _register(client, "subtitle-default@x.com", "subtitledefault")
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/subtitle-default.mp4",
+        "duration_sec": 20,
+        "tags": ["러닝"],
+    }, headers=_auth(token))
+
+    assert res.status_code == 200
+    post = res.json()["data"]["post"]
+    assert post["subtitle_status"] == "skipped"
+    assert post["subtitle_url"] is None
+    assert post["subtitle_text"] is None
+
+
+def test_upload_job_status_exposes_subtitle_result(client: TestClient) -> None:
+    token, _uid = _register(client, "subtitle-job@x.com", "subtitlejob")
+    with patch("app.routes.videos.get_job_status", return_value={
+        "status": "completed",
+        "user_id": str(_uid),
+        "points_earned": "0.5",
+        "subtitle_status": "completed",
+        "subtitle_url": "https://cdn/subtitles/s-1.srt",
+        "subtitle_text": "오늘도 5킬로 뛰었습니다.",
+        "subtitle_error": "",
+    }):
+        res = client.get("/api/v1/videos/upload-job/job-1", headers=_auth(token))
+
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["subtitle_status"] == "completed"
+    assert data["subtitle_url"].endswith("s-1.srt")
+    assert data["subtitle_text"] == "오늘도 5킬로 뛰었습니다."

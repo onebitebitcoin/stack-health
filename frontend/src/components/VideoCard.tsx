@@ -192,7 +192,11 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         muted={isMuted}
         playsInline
         preload="metadata"
-      />
+      >
+        {post.subtitle_url && post.subtitle_status !== 'completed' && (
+          <track kind="subtitles" src={post.subtitle_url} srcLang="ko" label="한국어" default />
+        )}
+      </video>
 
       {/* 탭 오버레이 */}
       <div

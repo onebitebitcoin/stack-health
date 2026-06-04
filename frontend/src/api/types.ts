@@ -25,6 +25,9 @@ export interface Post {
   workout_end: string | null
   share_token: string
   thumbnail_url: string | null
+  subtitle_url: string | null
+  subtitle_text: string | null
+  subtitle_status: string
   avatar_url: string | null
   profile_color: string | null
 }
@@ -86,6 +89,9 @@ export interface HistoryWorkoutPost {
   view_count: number
   caption: string | null
   thumbnail_url?: string | null
+  subtitle_url?: string | null
+  subtitle_text?: string | null
+  subtitle_status?: string
 }
 
 export interface HistoryResponse {
@@ -140,6 +146,9 @@ export interface ChallengeVideo {
   avatar_url: string | null
   cdn_url: string
   thumbnail_url: string | null
+  subtitle_url?: string | null
+  subtitle_text?: string | null
+  subtitle_status?: string
   caption: string | null
   created_at: string
 }
@@ -159,6 +168,9 @@ export interface PublicPost {
   caption: string | null
   created_at: string
   thumbnail_url?: string | null
+  subtitle_url?: string | null
+  subtitle_text?: string | null
+  subtitle_status?: string
 }
 
 export interface ActiveChallenge {
