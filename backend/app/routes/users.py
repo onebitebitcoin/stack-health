@@ -14,6 +14,7 @@ from app.models.user import User
 from app.models.video import Video
 from app.routes.auth import get_current_user as get_required_user
 from app.services.reward import (
+    KST,
     REWARD_STATUS_FIXED,
     REWARD_STATUS_QUEUED,
     UTC,
@@ -234,7 +235,7 @@ def get_leaderboard(
     period: str = Query("week"),  # "week" | "all"
     x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
-    _ = x_client_timezone  # Accepted for API compatibility; leaderboard periods use UTC globally.
+    _ = x_client_timezone  # Accepted for API compatibility; leaderboard periods use KST globally.
 
     point_join_cond = [
         RewardPoint.user_id == User.id,
@@ -242,11 +243,11 @@ def get_leaderboard(
         RewardPoint.status == REWARD_STATUS_FIXED,
     ]
     if period == "week":
-        week_start_utc, week_end_utc = get_week_range(UTC)
+        week_start_utc, week_end_utc = get_week_range(KST)
         point_join_cond.append(RewardPoint.created_at >= week_start_utc)
         point_join_cond.append(RewardPoint.created_at < week_end_utc)
     elif period == "month":
-        month_start_utc, month_end_utc = get_month_range(UTC)
+        month_start_utc, month_end_utc = get_month_range(KST)
         point_join_cond.append(RewardPoint.created_at >= month_start_utc)
         point_join_cond.append(RewardPoint.created_at < month_end_utc)
 

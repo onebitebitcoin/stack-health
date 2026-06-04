@@ -71,7 +71,7 @@ export default function LeaderboardPage() {
           <Users size={20} strokeWidth={1.5} className="text-theme-primary" />
           <h1 className="text-lg font-bold text-theme-primary">사용자</h1>
         </div>
-        <div className="flex rounded-xl bg-theme-surface overflow-hidden mb-3">
+        <div className="flex rounded-xl bg-theme-surface overflow-hidden mb-1">
           {(['week', 'month', 'all'] as const).map((p) => (
             <button
               key={p}
@@ -84,6 +84,9 @@ export default function LeaderboardPage() {
             </button>
           ))}
         </div>
+        {period === 'week' && (
+          <p className="text-[11px] text-theme-muted text-right mb-3 pr-1">KST 기준</p>
+        )}
 
         {/* 검색 */}
         <div className="relative">

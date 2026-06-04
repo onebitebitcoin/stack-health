@@ -15,6 +15,7 @@ REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
 REWARD_STATUS_REVOKED = "revoked"
 UTC = ZoneInfo("UTC")
+KST = ZoneInfo("Asia/Seoul")
 
 
 def _parse_tz(tz_str: str) -> ZoneInfo:
