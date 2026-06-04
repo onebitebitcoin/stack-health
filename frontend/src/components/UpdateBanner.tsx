@@ -1,10 +1,41 @@
-import { RefreshCw } from 'lucide-react'
+import { useState } from 'react'
+import { RefreshCw, Loader2 } from 'lucide-react'
 
 interface Props {
   serverVersion: string | null
 }
 
 export default function UpdateBanner({ serverVersion }: Props) {
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  const handleUpdate = async () => {
+    setIsUpdating(true)
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration()
+        if (reg?.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+        }
+        if (reg) {
+          await reg.update()
+          await new Promise<void>(resolve => {
+            const onControllerChange = () => {
+              navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+              resolve()
+            }
+            navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+            setTimeout(resolve, 3000)
+          })
+        }
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+    } catch {
+      // ignore
+    }
+    window.location.replace('/?_v=' + Date.now())
+  }
+
   return (
     <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+4rem)] inset-x-0 z-[90] flex justify-center px-4 pointer-events-none">
       <div className="flex items-center gap-3 rounded-2xl bg-accent px-4 py-3 shadow-xl pointer-events-auto">
@@ -12,38 +43,15 @@ export default function UpdateBanner({ serverVersion }: Props) {
           v{__APP_VERSION__} → v{serverVersion ?? '?'}
         </span>
         <button
-          onClick={async () => {
-            try {
-              if ('serviceWorker' in navigator) {
-                const reg = await navigator.serviceWorker.getRegistration()
-                if (reg?.waiting) {
-                  reg.waiting.postMessage({ type: 'SKIP_WAITING' })
-                }
-                if (reg) {
-                  // 새 SW 강제 설치 요청
-                  await reg.update()
-                  // 새 SW가 control을 가져올 때까지 대기 (최대 3초)
-                  await new Promise<void>(resolve => {
-                    const onControllerChange = () => {
-                      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
-                      resolve()
-                    }
-                    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
-                    setTimeout(resolve, 3000)
-                  })
-                }
-                const keys = await caches.keys()
-                await Promise.all(keys.map(k => caches.delete(k)))
-              }
-            } catch {
-              // ignore
-            }
-            window.location.replace('/?_v=' + Date.now())
-          }}
-          className="flex items-center gap-1.5 rounded-xl bg-accent-fg/20 px-3 py-1.5 text-xs font-bold text-accent-fg active:opacity-70"
+          onClick={handleUpdate}
+          disabled={isUpdating}
+          className="flex items-center gap-1.5 rounded-xl bg-accent-fg/20 px-3 py-1.5 text-xs font-bold text-accent-fg active:opacity-70 disabled:opacity-60"
         >
-          <RefreshCw size={12} />
-          업데이트
+          {isUpdating
+            ? <Loader2 size={12} className="animate-spin" />
+            : <RefreshCw size={12} />
+          }
+          {isUpdating ? '업데이트 중...' : '업데이트'}
         </button>
       </div>
     </div>
