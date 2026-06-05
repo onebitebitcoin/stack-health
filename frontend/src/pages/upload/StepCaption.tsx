@@ -22,12 +22,6 @@ interface Props {
   setWorkoutStart: (v: string) => void
   workoutEnd: string
   setWorkoutEnd: (v: string) => void
-  videoHasAudio: boolean
-  recordingDone: boolean
-  muteOriginalAudio: boolean
-  setMuteOriginalAudio: (v: boolean) => void
-  removeRecordedAudio: boolean
-  setRemoveRecordedAudio: (v: boolean) => void
   error: string
   uploading: boolean
   onUpload: () => void
@@ -37,9 +31,9 @@ const SIZE_LABELS: Record<SubtitleSize, string> = { small: '소', medium: '중',
 const POSITION_LABELS: Record<SubtitlePosition, string> = { top: '상단', center: '중앙', bottom: '하단' }
 
 const SIZE_TEXT_CLASS: Record<SubtitleSize, string> = {
-  small: 'text-xs',
-  medium: 'text-sm',
-  large: 'text-base',
+  small: 'text-[9px]',
+  medium: 'text-xs',
+  large: 'text-sm',
 }
 
 const POSITION_FLEX_CLASS: Record<SubtitlePosition, string> = {
@@ -53,9 +47,6 @@ export default function StepCaption({
   caption, setCaption, subtitleText,
   subtitleSize, subtitlePosition, onSubtitleSizeChange, onSubtitlePositionChange,
   workoutStart, setWorkoutStart, workoutEnd, setWorkoutEnd,
-  videoHasAudio, recordingDone,
-  muteOriginalAudio, setMuteOriginalAudio,
-  removeRecordedAudio, setRemoveRecordedAudio,
   error, uploading, onUpload,
 }: Props) {
   const hasSubtitle = subtitleText.trim().length > 0
@@ -83,49 +74,6 @@ export default function StepCaption({
           />
         </div>
       </div>
-
-      {/* 오디오 설정 */}
-      {(videoHasAudio || recordingDone) && (
-        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2">
-          <p className="text-xs font-medium text-theme-muted">오디오 설정</p>
-          {videoHasAudio && (
-            <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
-              <span className="text-sm text-theme-primary">원본 영상 소리 제거</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={muteOriginalAudio}
-                onClick={() => setMuteOriginalAudio(!muteOriginalAudio)}
-                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  muteOriginalAudio ? 'bg-accent' : 'bg-theme-surface2'
-                }`}
-              >
-                <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  muteOriginalAudio ? 'translate-x-5' : 'translate-x-0'
-                }`} />
-              </button>
-            </label>
-          )}
-          {recordingDone && (
-            <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
-              <span className="text-sm text-theme-primary">녹음 음성 제거</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={removeRecordedAudio}
-                onClick={() => setRemoveRecordedAudio(!removeRecordedAudio)}
-                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  removeRecordedAudio ? 'bg-accent' : 'bg-theme-surface2'
-                }`}
-              >
-                <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  removeRecordedAudio ? 'translate-x-5' : 'translate-x-0'
-                }`} />
-              </button>
-            </label>
-          )}
-        </div>
-      )}
 
       {/* 자막 스타일 (추출된 경우만) */}
       {hasSubtitle && (

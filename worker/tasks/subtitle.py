@@ -214,7 +214,7 @@ def _escape_filter_path(path: str) -> str:
     return path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
-FONT_SIZE_MAP = {"small": 18, "medium": 26, "large": 36}
+FONT_SIZE_MAP = {"small": 10, "medium": 14, "large": 18}
 ALIGNMENT_MAP = {"bottom": 2, "center": 5, "top": 8}
 MARGIN_V_MAP = {"bottom": SUBTITLE_BURN_IN_MARGIN_V, "center": 0, "top": 40}
 

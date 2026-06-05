@@ -17,6 +17,10 @@ interface Props {
   setSubtitleText: (v: string) => void
   subtitlePlainText: string
   subtitleExtracting: boolean
+  muteOriginalAudio: boolean
+  setMuteOriginalAudio: (v: boolean) => void
+  removeRecordedAudio: boolean
+  setRemoveRecordedAudio: (v: boolean) => void
   onExtractFromVideo: () => void
   onExtractFromAudio: () => void
   onClearSubtitle: () => void
@@ -31,6 +35,8 @@ export default function StepRecord({
   previewUrl, recording, recordedSeconds, recordingDone,
   progressPct, error, maxSeconds, videoHasAudio,
   subtitleText, setSubtitleText, subtitlePlainText, subtitleExtracting,
+  muteOriginalAudio, setMuteOriginalAudio,
+  removeRecordedAudio, setRemoveRecordedAudio,
   onExtractFromVideo, onExtractFromAudio, onClearSubtitle,
   startRecording, stopRecording, skipRecording, onRetake, onNext,
 }: Props) {
@@ -95,6 +101,54 @@ export default function StepRecord({
     <div className="flex flex-1 flex-col px-6 pt-4 gap-4 overflow-y-auto">
       {previewUrl && (
         <video src={previewUrl} className="h-40 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
+      )}
+
+      {/* 안내 문구 */}
+      <p className="text-xs text-theme-muted leading-relaxed">
+        자막을 추출해서 영상을 풍부하게 만드세요.
+      </p>
+
+      {/* 오디오 설정 */}
+      {(videoHasAudio || recordingDone) && (
+        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-1">
+          <p className="text-xs font-medium text-theme-muted mb-2">오디오 설정</p>
+          {videoHasAudio && (
+            <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
+              <span className="text-sm text-theme-primary">원본 영상 소리 제거</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={muteOriginalAudio}
+                onClick={() => setMuteOriginalAudio(!muteOriginalAudio)}
+                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  muteOriginalAudio ? 'bg-accent' : 'bg-theme-surface2'
+                }`}
+              >
+                <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  muteOriginalAudio ? 'translate-x-5' : 'translate-x-0'
+                }`} />
+              </button>
+            </label>
+          )}
+          {recordingDone && (
+            <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
+              <span className="text-sm text-theme-primary">녹음 음성 제거</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={removeRecordedAudio}
+                onClick={() => setRemoveRecordedAudio(!removeRecordedAudio)}
+                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  removeRecordedAudio ? 'bg-accent' : 'bg-theme-surface2'
+                }`}
+              >
+                <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  removeRecordedAudio ? 'translate-x-5' : 'translate-x-0'
+                }`} />
+              </button>
+            </label>
+          )}
+        </div>
       )}
 
       {/* 모드 스위치 */}

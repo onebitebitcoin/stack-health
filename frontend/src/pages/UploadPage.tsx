@@ -381,7 +381,6 @@ export default function UploadPage() {
         if (status === 'completed') {
           setSubtitleText(srt)
           setSubtitlePlainText(plain_text)
-          if (!caption.trim() && plain_text) setCaption(plain_text.slice(0, 140))
           toast.success('자막을 추출했어요.')
           setExtractingSubtitles(false)
           return
@@ -597,6 +596,8 @@ export default function UploadPage() {
           setSubtitleText={setSubtitleText}
           subtitlePlainText={subtitlePlainText}
           subtitleExtracting={extractingSubtitles}
+          muteOriginalAudio={muteOriginalAudio} setMuteOriginalAudio={setMuteOriginalAudio}
+          removeRecordedAudio={removeRecordedAudio} setRemoveRecordedAudio={setRemoveRecordedAudio}
           onExtractFromVideo={() => extractSubtitles('video')}
           onExtractFromAudio={() => extractSubtitles('audio')}
           onClearSubtitle={clearSubtitle}
@@ -614,9 +615,6 @@ export default function UploadPage() {
           onSubtitleSizeChange={setSubtitleSize} onSubtitlePositionChange={setSubtitlePosition}
           workoutStart={workoutStart} setWorkoutStart={setWorkoutStart}
           workoutEnd={workoutEnd} setWorkoutEnd={setWorkoutEnd}
-          videoHasAudio={videoHasAudio} recordingDone={recordingDone}
-          muteOriginalAudio={muteOriginalAudio} setMuteOriginalAudio={setMuteOriginalAudio}
-          removeRecordedAudio={removeRecordedAudio} setRemoveRecordedAudio={setRemoveRecordedAudio}
           error={error} uploading={uploading} onUpload={handleUpload}
         />
       )}
