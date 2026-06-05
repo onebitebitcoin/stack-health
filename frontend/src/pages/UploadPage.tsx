@@ -350,20 +350,47 @@ export default function UploadPage() {
         }
       }
       form.append('language', 'ko')
-      const res = await client.post<{ data: { srt: string; plain_text: string } }>(
+      const { data: { data: { job_id } } } = await client.post<{ data: { job_id: string } }>(
         '/videos/transcribe-subtitles',
         form,
-        { timeout: 300_000 },
+        { timeout: 60_000 },
       )
-      setSubtitleText(res.data.data.srt)
-      setSubtitlePlainText(res.data.data.plain_text)
-      if (!caption.trim() && res.data.data.plain_text) setCaption(res.data.data.plain_text.slice(0, 140))
-      toast.success('자막을 추출했어요.')
+      // worker가 처리할 때까지 폴링
+      await pollSubtitleJob(job_id)
     } catch (err) {
       setError(getApiErrorMessage(err, '자막 추출 실패'))
-    } finally {
       setExtractingSubtitles(false)
     }
+  }
+
+  async function pollSubtitleJob(jobId: string) {
+    const MAX_ATTEMPTS = 60  // 2초 간격 × 60 = 최대 2분
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      await new Promise((r) => setTimeout(r, 2000))
+      try {
+        const res = await client.get<{ data: { status: string; srt: string; plain_text: string; error: string } }>(
+          `/videos/subtitle-job/${jobId}`
+        )
+        const { status, srt, plain_text, error: jobError } = res.data.data
+        if (status === 'completed') {
+          setSubtitleText(srt)
+          setSubtitlePlainText(plain_text)
+          if (!caption.trim() && plain_text) setCaption(plain_text.slice(0, 140))
+          toast.success('자막을 추출했어요.')
+          setExtractingSubtitles(false)
+          return
+        }
+        if (status === 'failed') {
+          setError(jobError || '자막 추출에 실패했습니다')
+          setExtractingSubtitles(false)
+          return
+        }
+      } catch {
+        // 일시적 네트워크 오류 무시, 계속 폴링
+      }
+    }
+    setError('자막 추출 시간이 초과됐습니다')
+    setExtractingSubtitles(false)
   }
 
   function clearSubtitle() {

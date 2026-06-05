@@ -27,8 +27,9 @@ from app.schemas.video import (
     PresignedUrlResponse,
 )
 from app.services import r2 as r2_service
+from app.services.subtitles import sanitize_srt
 from app.services.share_token import generate_share_token
-from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_merge_job, enqueue_image_merge_job, fail_job, get_job_status, reserve_job_id
+from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_image_merge_job, enqueue_merge_job, enqueue_subtitle_extract_job, fail_job, get_job_status, reserve_job_id
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
     POINTS_PER_UPLOAD,
@@ -570,6 +571,110 @@ def merge_proof(
     return {"data": {"job_id": job_id, "status": "processing"}}
 
 
+
+@router.post("/transcribe-subtitles")
+async def transcribe_subtitles(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    audio: UploadFile | None = File(None),
+    language: str = Form("ko"),
+    current_user: User = Depends(get_active_user),
+) -> dict:
+    """파일을 R2에 올리고 자막 추출 잡을 큐에 등록. job_id 즉시 반환."""
+    content_type = file.content_type or "video/mp4"
+    if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식: {content_type}")
+
+    video_path, _ = await _spool_upload_to_temp(file, r2_service.MAX_FILE_SIZE, "자막영상")
+    audio_path: str | None = None
+    audio_ct: str | None = None
+    if audio is not None:
+        audio_path, _ = await _spool_upload_to_temp(audio, r2_service.MAX_FILE_SIZE, "자막오디오")
+        audio_ct = audio.content_type
+
+    job_id = reserve_job_id(current_user.id, job_type="subtitle-extract")
+    background_tasks.add_task(
+        _r2_upload_and_enqueue_subtitle,
+        job_id, video_path, file.content_type or "video/mp4",
+        audio_path, audio_ct, current_user.id, language or "ko",
+    )
+    return {"data": {"job_id": job_id}}
+
+
+@router.get("/subtitle-job/{job_id}")
+async def get_subtitle_job(
+    job_id: str,
+    current_user: User = Depends(get_active_user),
+) -> dict:
+    """자막 추출 잡 상태 + 결과 폴링."""
+    job = get_job_status(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+    _assert_job_owner(job, current_user)
+    return {"data": {
+        "status": job.get("status"),
+        "srt": job.get("srt", ""),
+        "plain_text": job.get("plain_text", ""),
+        "error": job.get("error", ""),
+    }}
+
+# ---------------------------------------------------------------------------
+# 자막 추출 비동기 헬퍼
+# ---------------------------------------------------------------------------
+
+def _r2_upload_and_enqueue_subtitle(
+    job_id: str,
+    video_path: str,
+    video_content_type: str,
+    audio_path: str | None,
+    audio_content_type: str | None,
+    user_id: int,
+    language: str,
+) -> None:
+    temp_paths = [p for p in (video_path, audio_path) if p]
+    try:
+        r2_client = r2_service.get_r2_client()
+        video_r2_key = f"subtitle-tmp/{uuid.uuid4()}.mp4"
+        with open(video_path, "rb") as f:
+            r2_client.put_object(
+                Bucket=app_settings.r2_bucket_name,
+                Key=video_r2_key,
+                Body=f,
+                ContentType=video_content_type,
+                CacheControl="private, max-age=3600",
+            )
+
+        audio_r2_key: str | None = None
+        if audio_path and audio_content_type:
+            ext = "mp4" if "mp4" in audio_content_type else "webm"
+            audio_r2_key = f"subtitle-tmp/{uuid.uuid4()}-audio.{ext}"
+            with open(audio_path, "rb") as f:
+                r2_client.put_object(
+                    Bucket=app_settings.r2_bucket_name,
+                    Key=audio_r2_key,
+                    Body=f,
+                    ContentType=audio_content_type,
+                    CacheControl="private, max-age=3600",
+                )
+
+        enqueue_subtitle_extract_job(
+            video_r2_key=video_r2_key,
+            audio_r2_key=audio_r2_key,
+            language=language,
+            user_id=user_id,
+            job_id=job_id,
+        )
+    except Exception as e:
+        logger.exception("subtitle R2 upload failed for job %s: %s", job_id, e)
+        fail_job(job_id, str(e))
+    finally:
+        for p in temp_paths:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+
 # ---------------------------------------------------------------------------
 # MQ 방식 전체 업로드 파이프라인
 # ---------------------------------------------------------------------------
@@ -591,6 +696,7 @@ def _r2_upload_and_enqueue(
     workout_start: str | None,
     workout_end: str | None,
     audio_duration_sec: int,
+    subtitle_srt: str | None,
 ) -> None:
     temp_paths = [p for p in (video_path, audio_path, proof_path) if p]
     try:
@@ -623,6 +729,19 @@ def _r2_upload_and_enqueue(
                 )
             proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
 
+        subtitle_srt_r2_key: str | None = None
+        if subtitle_srt:
+            cleaned_srt = sanitize_srt(subtitle_srt)
+            subtitle_srt_r2_key = f"subtitles/{user_id}/{uuid.uuid4()}.srt"
+            r2_client = r2_service.get_r2_client()
+            r2_client.put_object(
+                Bucket=app_settings.r2_bucket_name,
+                Key=subtitle_srt_r2_key,
+                Body=cleaned_srt.encode("utf-8"),
+                ContentType="application/x-subrip; charset=utf-8",
+                CacheControl="private, max-age=86400",
+            )
+
         enqueue_full_upload_pipeline(
             job_id=job_id,
             r2_key=r2_key,
@@ -639,6 +758,7 @@ def _r2_upload_and_enqueue(
             audio_content_type=audio_content_type,
             proof_r2_key=proof_r2_key,
             proof_cdn_url=proof_cdn_url,
+            subtitle_srt_r2_key=subtitle_srt_r2_key,
         )
     except Exception as e:
         logger.error("Background R2 upload failed job_id=%s: %s", job_id, e)
@@ -663,6 +783,7 @@ async def upload_pipeline(
     audio: UploadFile | None = File(None),
     audio_duration_sec: int = Form(0),
     proof_image: UploadFile | None = File(None),
+    subtitle_srt: str | None = Form(None),
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = ...,
@@ -727,6 +848,7 @@ async def upload_pipeline(
         workout_start=workout_start,
         workout_end=workout_end,
         audio_duration_sec=audio_duration_sec,
+        subtitle_srt=subtitle_srt,
     )
 
     return {"data": {"job_id": job_id, "status": "processing"}}
