@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Mic, MicOff, X, ChevronRight, Volume2, FileVideo, Loader2 } from 'lucide-react'
+import { srtToTextLines, applyTextLinesToSrt } from '../../utils/subtitles'
 
 type Mode = 'video' | 'audio'
 
@@ -12,6 +13,8 @@ interface Props {
   error: string
   maxSeconds: number
   videoHasAudio?: boolean
+  subtitleText: string
+  setSubtitleText: (v: string) => void
   subtitlePlainText: string
   subtitleExtracting: boolean
   onExtractFromVideo: () => void
@@ -27,11 +30,36 @@ interface Props {
 export default function StepRecord({
   previewUrl, recording, recordedSeconds, recordingDone,
   progressPct, error, maxSeconds, videoHasAudio,
-  subtitlePlainText, subtitleExtracting,
+  subtitleText, setSubtitleText, subtitlePlainText, subtitleExtracting,
   onExtractFromVideo, onExtractFromAudio, onClearSubtitle,
   startRecording, stopRecording, skipRecording, onRetake, onNext,
 }: Props) {
   const [mode, setMode] = useState<Mode>('video')
+  const prevSrtRef = useRef(subtitleText)
+  const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
+
+  useEffect(() => {
+    if (prevSrtRef.current !== subtitleText) {
+      prevSrtRef.current = subtitleText
+      setEditLines(srtToTextLines(subtitleText).join('\n'))
+    }
+  }, [subtitleText])
+
+  function handleEditChange(val: string) {
+    setEditLines(val)
+    const lines = val.split('\n').map(l => l.trim()).filter(Boolean)
+    const newSrt = applyTextLinesToSrt(subtitleText, lines)
+    prevSrtRef.current = newSrt
+    setSubtitleText(newSrt)
+  }
+
+  function handleClearSubtitle() {
+    prevSrtRef.current = ''
+    setSubtitleText('')
+    setEditLines('')
+    onClearSubtitle()
+  }
+
   const timeStr = `${String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:${String(recordedSeconds % 60).padStart(2, '0')}`
   const hasSubtitle = subtitlePlainText.trim() !== ''
   const canProceed = (recordingDone || hasSubtitle) && !recording
@@ -39,6 +67,28 @@ export default function StepRecord({
   function handleModeChange(m: Mode) {
     if (recording) return
     setMode(m)
+  }
+
+  function SubtitleEditor() {
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-theme-muted">추출된 자막 — 오타만 수정하세요</p>
+          <button
+            onClick={handleClearSubtitle}
+            className="flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
+          >
+            <X size={11} /> 자막 제거
+          </button>
+        </div>
+        <textarea
+          value={editLines}
+          onChange={(e) => handleEditChange(e.target.value)}
+          rows={4}
+          className="w-full resize-none rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+        />
+      </div>
+    )
   }
 
   return (
@@ -82,15 +132,7 @@ export default function StepRecord({
               <span className="text-xs text-theme-muted">자막 추출 중...</span>
             </div>
           ) : hasSubtitle ? (
-            <div className="rounded-lg bg-theme-surface2 px-3 py-2.5">
-              <p className="text-xs text-theme-primary leading-relaxed line-clamp-3">{subtitlePlainText}</p>
-              <button
-                onClick={onClearSubtitle}
-                className="mt-2 flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
-              >
-                <X size={11} /> 자막 제거
-              </button>
-            </div>
+            <SubtitleEditor />
           ) : (
             <button
               onClick={onExtractFromVideo}
@@ -166,15 +208,7 @@ export default function StepRecord({
                   <span className="text-xs text-theme-muted">자막 추출 중...</span>
                 </div>
               ) : hasSubtitle ? (
-                <div className="rounded-lg bg-theme-surface2 px-3 py-2.5">
-                  <p className="text-xs text-theme-primary leading-relaxed line-clamp-3">{subtitlePlainText}</p>
-                  <button
-                    onClick={onClearSubtitle}
-                    className="mt-2 flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
-                  >
-                    <X size={11} /> 자막 제거
-                  </button>
-                </div>
+                <SubtitleEditor />
               ) : (
                 <button
                   onClick={onExtractFromAudio}

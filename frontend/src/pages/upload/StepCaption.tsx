@@ -1,7 +1,7 @@
-import { useRef, useEffect, useState, type ChangeEvent } from 'react'
+import { useRef, type ChangeEvent } from 'react'
 import type { RefObject, MutableRefObject } from 'react'
 import { ImagePlus, X } from 'lucide-react'
-import { captionFromSubtitleText, srtToTextLines, applyTextLinesToSrt } from '../../utils/subtitles'
+import { srtToTextLines } from '../../utils/subtitles'
 
 type SubtitleSize = 'small' | 'medium' | 'large'
 type SubtitlePosition = 'top' | 'center' | 'bottom'
@@ -14,7 +14,6 @@ interface Props {
   caption: string
   setCaption: (v: string) => void
   subtitleText: string
-  setSubtitleText: (v: string) => void
   subtitleSize: SubtitleSize
   subtitlePosition: SubtitlePosition
   onSubtitleSizeChange: (v: SubtitleSize) => void
@@ -51,7 +50,7 @@ const POSITION_FLEX_CLASS: Record<SubtitlePosition, string> = {
 
 export default function StepCaption({
   proofImageRef, proofPreviewUrl, setProofPreviewUrl, proofFileRef,
-  caption, setCaption, subtitleText, setSubtitleText,
+  caption, setCaption, subtitleText,
   subtitleSize, subtitlePosition, onSubtitleSizeChange, onSubtitlePositionChange,
   workoutStart, setWorkoutStart, workoutEnd, setWorkoutEnd,
   videoHasAudio, recordingDone,
@@ -59,40 +58,14 @@ export default function StepCaption({
   removeRecordedAudio, setRemoveRecordedAudio,
   error, uploading, onUpload,
 }: Props) {
-  const prevSrtRef = useRef(subtitleText)
-  const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
-
-  useEffect(() => {
-    if (prevSrtRef.current !== subtitleText) {
-      prevSrtRef.current = subtitleText
-      setEditLines(srtToTextLines(subtitleText).join('\n'))
-    }
-  }, [subtitleText])
-
   const hasSubtitle = subtitleText.trim().length > 0
-  const previewText = editLines.split('\n').find(l => l.trim()) ?? ''
-
-  function handleEditChange(val: string) {
-    setEditLines(val)
-    const lines = val.split('\n').map(l => l.trim()).filter(Boolean)
-    const newSrt = applyTextLinesToSrt(subtitleText, lines)
-    prevSrtRef.current = newSrt
-    setSubtitleText(newSrt)
-  }
-
-  function handleClearSubtitle() {
-    prevSrtRef.current = ''
-    setSubtitleText('')
-    setEditLines('')
-  }
-
-  function applySubtitleToCaption() {
-    setCaption(captionFromSubtitleText(subtitleText))
-  }
+  const previewText = srtToTextLines(subtitleText).find(l => l.trim()) ?? '자막 미리보기'
+  const captionRef = useRef<HTMLTextAreaElement>(null)
 
   return (
-    <div className="flex flex-1 flex-col px-6 pt-4 overflow-y-auto">
-      <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-4">
+    <div className="flex flex-1 flex-col px-6 pt-4 pb-6 overflow-y-auto gap-4">
+      {/* 운동 시간대 */}
+      <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2">
         <p className="text-xs font-medium text-theme-muted">운동 시간대 <span className="text-theme-subtle">(선택)</span></p>
         <div className="flex items-center gap-2">
           <input
@@ -111,8 +84,9 @@ export default function StepCaption({
         </div>
       </div>
 
+      {/* 오디오 설정 */}
       {(videoHasAudio || recordingDone) && (
-        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-4">
+        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2">
           <p className="text-xs font-medium text-theme-muted">오디오 설정</p>
           {videoHasAudio && (
             <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
@@ -153,151 +127,123 @@ export default function StepCaption({
         </div>
       )}
 
+      {/* 자막 스타일 (추출된 경우만) */}
       {hasSubtitle && (
-        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-3 mb-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-theme-primary">자막 수정 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-              <p className="mt-1 text-xs leading-relaxed text-theme-muted">텍스트 오타만 수정하세요.</p>
+        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-3">
+          <p className="text-sm font-semibold text-theme-primary">자막 스타일</p>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-theme-muted w-10 flex-shrink-0">크기</span>
+            <div className="flex gap-1.5">
+              {(['small', 'medium', 'large'] as SubtitleSize[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onSubtitleSizeChange(s)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    subtitleSize === s
+                      ? 'bg-accent text-accent-fg'
+                      : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
+                  }`}
+                >
+                  {SIZE_LABELS[s]}
+                </button>
+              ))}
             </div>
-            <button
-              type="button"
-              onClick={handleClearSubtitle}
-              className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-theme-muted hover:text-red-400 transition-colors"
-            >
-              <X size={12} /> 자막 제거
-            </button>
           </div>
-          <textarea
-            value={editLines}
-            onChange={(e) => handleEditChange(e.target.value)}
-            rows={4}
-            className="w-full resize-none rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
-          />
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={applySubtitleToCaption}
-              disabled={!editLines.trim()}
-              className="rounded-lg bg-theme-surface2 px-3 py-2 text-xs font-semibold text-theme-primary disabled:opacity-50"
-            >
-              설명에 반영
-            </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-theme-muted w-10 flex-shrink-0">위치</span>
+            <div className="flex gap-1.5">
+              {(['top', 'center', 'bottom'] as SubtitlePosition[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => onSubtitlePositionChange(p)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    subtitlePosition === p
+                      ? 'bg-accent text-accent-fg'
+                      : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
+                  }`}
+                >
+                  {POSITION_LABELS[p]}
+                </button>
+              ))}
+            </div>
           </div>
-
-          <div className="space-y-3 pt-1 border-t border-theme-border">
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-theme-muted w-10 flex-shrink-0">크기</span>
-              <div className="flex gap-1.5">
-                {(['small', 'medium', 'large'] as SubtitleSize[]).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => onSubtitleSizeChange(s)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                      subtitleSize === s
-                        ? 'bg-accent text-accent-fg'
-                        : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
-                    }`}
-                  >
-                    {SIZE_LABELS[s]}
-                  </button>
-                ))}
+          <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16', maxHeight: '180px' }}>
+            <div className={`relative w-full h-full flex flex-col items-center ${POSITION_FLEX_CLASS[subtitlePosition]}`}>
+              <div className="px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                <span className={`text-white font-medium ${SIZE_TEXT_CLASS[subtitleSize]}`}>{previewText}</span>
               </div>
             </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-theme-muted w-10 flex-shrink-0">위치</span>
-              <div className="flex gap-1.5">
-                {(['top', 'center', 'bottom'] as SubtitlePosition[]).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => onSubtitlePositionChange(p)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                      subtitlePosition === p
-                        ? 'bg-accent text-accent-fg'
-                        : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
-                    }`}
-                  >
-                    {POSITION_LABELS[p]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16', maxHeight: '220px' }}>
-              <div className={`relative w-full h-full flex flex-col items-center ${POSITION_FLEX_CLASS[subtitlePosition]}`}>
-                <div className="px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
-                  <span className={`text-white font-medium ${SIZE_TEXT_CLASS[subtitleSize]}`}>
-                    {previewText || '자막 미리보기'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-theme-subtle text-center -mt-1">실제 영상 비율과 근사한 미리보기입니다</p>
           </div>
         </div>
       )}
 
-      <p className="mb-2 text-sm font-semibold text-theme-primary">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-      <textarea
-        value={caption}
-        onChange={(e) => setCaption(e.target.value.slice(0, 140))}
-        maxLength={140}
-        placeholder="오늘의 운동을 간략하게 요약해주세요. #3km #런닝 #오운완"
-        rows={3}
-        className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent mb-1"
-      />
-      <p className="text-right text-xs text-theme-subtle mb-4">{caption.length}/140</p>
+      {/* 설명 */}
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-semibold text-theme-primary mb-1">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+        <textarea
+          ref={captionRef}
+          value={caption}
+          onChange={(e) => setCaption(e.target.value.slice(0, 140))}
+          maxLength={140}
+          placeholder="오늘의 운동을 간략하게 요약해주세요. #3km #런닝 #오운완"
+          rows={4}
+          className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+        />
+        <p className="text-right text-xs text-theme-subtle">{caption.length}/140</p>
+      </div>
 
-      <p className="mb-1 text-sm font-semibold text-theme-primary">인증 사진 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-      <p className="mb-3 text-xs text-theme-muted leading-relaxed">
-        사진을 영상 뒷부분에 붙여서 운동 인증을 강화하세요. 업로드 후 영상 끝에 3초간 표시됩니다.
-      </p>
-      <input
-        ref={proofImageRef}
-        id="proof-image-input"
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e: ChangeEvent<HTMLInputElement>) => {
-          const f = e.target.files?.[0]
-          if (!f) return
-          proofFileRef.current = f
-          setProofPreviewUrl(URL.createObjectURL(f))
-        }}
-      />
-      {proofPreviewUrl ? (
-        <div className="relative mb-4">
-          <img src={proofPreviewUrl} alt="사진 미리보기" className="w-full rounded-xl object-cover max-h-48" />
-          <button
-            onClick={() => {
-              proofFileRef.current = null
-              setProofPreviewUrl(null)
-              if (proofImageRef.current) proofImageRef.current.value = ''
-            }}
-            className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
+      {/* 인증 사진 */}
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-semibold text-theme-primary">인증 사진 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+        <p className="text-xs text-theme-muted leading-relaxed mb-2">
+          사진을 영상 뒷부분에 붙여서 운동 인증을 강화하세요. 업로드 후 영상 끝에 3초간 표시됩니다.
+        </p>
+        <input
+          ref={proofImageRef}
+          id="proof-image-input"
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            const f = e.target.files?.[0]
+            if (!f) return
+            proofFileRef.current = f
+            setProofPreviewUrl(URL.createObjectURL(f))
+          }}
+        />
+        {proofPreviewUrl ? (
+          <div className="relative">
+            <img src={proofPreviewUrl} alt="사진 미리보기" className="w-full rounded-xl object-cover max-h-48" />
+            <button
+              onClick={() => {
+                proofFileRef.current = null
+                setProofPreviewUrl(null)
+                if (proofImageRef.current) proofImageRef.current.value = ''
+              }}
+              className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <label
+            htmlFor="proof-image-input"
+            className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-theme-border p-4 text-theme-muted hover:border-accent hover:text-accent transition-colors cursor-pointer"
           >
-            <X size={14} />
-          </button>
-        </div>
-      ) : (
-        <label
-          htmlFor="proof-image-input"
-          className="mb-4 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-theme-border p-4 text-theme-muted hover:border-accent hover:text-accent transition-colors cursor-pointer"
-        >
-          <ImagePlus size={20} strokeWidth={1.5} />
-          <span className="text-sm">사진 추가</span>
-        </label>
-      )}
+            <ImagePlus size={20} strokeWidth={1.5} />
+            <span className="text-sm">사진 추가</span>
+          </label>
+        )}
+      </div>
 
-      {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
 
       <button
         onClick={onUpload}
         disabled={uploading}
-        className="mb-4 w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
+        className="w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
       >
         업로드 시작
       </button>

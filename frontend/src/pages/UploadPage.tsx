@@ -593,6 +593,8 @@ export default function UploadPage() {
           recordingDone={recordingDone} progressPct={progressPct} error={error}
           maxSeconds={MAX_RECORD_SECONDS}
           videoHasAudio={videoHasAudio}
+          subtitleText={subtitleText}
+          setSubtitleText={setSubtitleText}
           subtitlePlainText={subtitlePlainText}
           subtitleExtracting={extractingSubtitles}
           onExtractFromVideo={() => extractSubtitles('video')}
@@ -607,7 +609,7 @@ export default function UploadPage() {
         <StepCaption
           proofImageRef={proofImageRef} proofPreviewUrl={proofPreviewUrl} setProofPreviewUrl={setProofPreviewUrl}
           proofFileRef={proofFileRef} caption={caption} setCaption={setCaption}
-          subtitleText={subtitleText} setSubtitleText={setSubtitleText}
+          subtitleText={subtitleText}
           subtitleSize={subtitleSize} subtitlePosition={subtitlePosition}
           onSubtitleSizeChange={setSubtitleSize} onSubtitlePositionChange={setSubtitlePosition}
           workoutStart={workoutStart} setWorkoutStart={setWorkoutStart}
