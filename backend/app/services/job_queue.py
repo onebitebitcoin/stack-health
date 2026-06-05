@@ -93,6 +93,7 @@ def enqueue_full_upload_pipeline(
     audio_content_type: str = "audio/webm",
     proof_r2_key: str | None = None,
     proof_cdn_url: str | None = None,
+    subtitle_srt_r2_key: str | None = None,
     job_id: str | None = None,
 ) -> str:
     """영상 업로드 전체 파이프라인을 Redis 큐에 등록. job_id 즉시 반환."""
@@ -118,6 +119,7 @@ def enqueue_full_upload_pipeline(
         "audio_content_type": audio_content_type,
         "proof_r2_key": proof_r2_key,
         "proof_cdn_url": proof_cdn_url,
+        "subtitle_srt_r2_key": subtitle_srt_r2_key,
     }
 
     r = get_redis_client()
@@ -132,18 +134,51 @@ def enqueue_full_upload_pipeline(
     return job_id
 
 
-def reserve_job_id(user_id: int) -> str:
+def reserve_job_id(user_id: int, job_type: str = "full-pipeline") -> str:
     """job_id를 미리 예약하고 Redis에 'pending' 상태로 등록. 파일 수신 즉시 응답 가능하도록."""
     job_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
     r = get_redis_client()
     _set_job_status(r, job_id,
         status="pending",
-        job_type="full-pipeline",
+        job_type=job_type,
         user_id=str(user_id),
         created_at=created_at,
     )
-    logger.info("Reserved job_id %s for user %s", job_id, user_id)
+    logger.info("Reserved job_id %s (type=%s) for user %s", job_id, job_type, user_id)
+    return job_id
+
+
+def enqueue_subtitle_extract_job(
+    video_r2_key: str,
+    audio_r2_key: str | None,
+    language: str,
+    user_id: int,
+    job_id: str | None = None,
+) -> str:
+    """자막 추출 작업을 Redis 큐에 등록. job_id 즉시 반환."""
+    if job_id is None:
+        job_id = str(uuid.uuid4())
+    created_at = datetime.now(timezone.utc).isoformat()
+    payload: dict = {
+        "job_id": job_id,
+        "job_type": "subtitle-extract",
+        "created_at": created_at,
+        "video_r2_key": video_r2_key,
+        "language": language,
+        "user_id": user_id,
+    }
+    if audio_r2_key:
+        payload["audio_r2_key"] = audio_r2_key
+    r = get_redis_client()
+    _set_job_status(r, job_id,
+        status="pending",
+        job_type="subtitle-extract",
+        user_id=str(user_id),
+        created_at=created_at,
+    )
+    r.lpush(QUEUE_NAME, json.dumps(payload))
+    logger.info("Enqueued subtitle-extract job %s for user %s", job_id, user_id)
     return job_id
 
 
