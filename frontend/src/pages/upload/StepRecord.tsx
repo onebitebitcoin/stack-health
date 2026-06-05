@@ -19,8 +19,6 @@ interface Props {
   subtitleExtracting: boolean
   muteOriginalAudio: boolean
   setMuteOriginalAudio: (v: boolean) => void
-  removeRecordedAudio: boolean
-  setRemoveRecordedAudio: (v: boolean) => void
   onExtractFromVideo: () => void
   onExtractFromAudio: () => void
   onClearSubtitle: () => void
@@ -36,7 +34,6 @@ export default function StepRecord({
   progressPct, error, maxSeconds, videoHasAudio,
   subtitleText, setSubtitleText, subtitlePlainText, subtitleExtracting,
   muteOriginalAudio, setMuteOriginalAudio,
-  removeRecordedAudio, setRemoveRecordedAudio,
   onExtractFromVideo, onExtractFromAudio, onClearSubtitle,
   startRecording, stopRecording, skipRecording, onRetake, onNext,
 }: Props) {
@@ -75,17 +72,19 @@ export default function StepRecord({
     setMode(m)
   }
 
-  function SubtitleEditor() {
+  function SubtitleEditor({ showClear = true }: { showClear?: boolean }) {
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <p className="text-xs text-theme-muted">추출된 자막 — 오타만 수정하세요</p>
-          <button
-            onClick={handleClearSubtitle}
-            className="flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
-          >
-            <X size={11} /> 자막 제거
-          </button>
+          {showClear && (
+            <button
+              onClick={handleClearSubtitle}
+              className="flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
+            >
+              <X size={11} /> 자막 제거
+            </button>
+          )}
         </div>
         <textarea
           value={editLines}
@@ -109,47 +108,24 @@ export default function StepRecord({
       </p>
 
       {/* 오디오 설정 */}
-      {(videoHasAudio || recordingDone) && (
-        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-1">
-          <p className="text-xs font-medium text-theme-muted mb-2">오디오 설정</p>
-          {videoHasAudio && (
-            <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
-              <span className="text-sm text-theme-primary">원본 영상 소리 제거</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={muteOriginalAudio}
-                onClick={() => setMuteOriginalAudio(!muteOriginalAudio)}
-                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  muteOriginalAudio ? 'bg-accent' : 'bg-theme-surface2'
-                }`}
-              >
-                <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  muteOriginalAudio ? 'translate-x-5' : 'translate-x-0'
-                }`} />
-              </button>
-            </label>
-          )}
-          {recordingDone && (
-            <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
-              <span className="text-sm text-theme-primary">녹음 음성 제거</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={removeRecordedAudio}
-                onClick={() => setRemoveRecordedAudio(!removeRecordedAudio)}
-                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
-                  removeRecordedAudio ? 'bg-accent' : 'bg-theme-surface2'
-                }`}
-              >
-                <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  removeRecordedAudio ? 'translate-x-5' : 'translate-x-0'
-                }`} />
-              </button>
-            </label>
-          )}
-        </div>
-      )}
+      <div className="rounded-xl bg-theme-surface px-4 py-3">
+        <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
+          <span className="text-sm text-theme-primary">음성 제거하고 자막만 남기기</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={muteOriginalAudio}
+            onClick={() => setMuteOriginalAudio(!muteOriginalAudio)}
+            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+              muteOriginalAudio ? 'bg-accent' : 'bg-theme-surface2'
+            }`}
+          >
+            <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+              muteOriginalAudio ? 'translate-x-5' : 'translate-x-0'
+            }`} />
+          </button>
+        </label>
+      </div>
 
       {/* 모드 스위치 */}
       <div className="flex rounded-xl bg-theme-surface p-1 gap-1">
@@ -262,7 +238,7 @@ export default function StepRecord({
                   <span className="text-xs text-theme-muted">자막 추출 중...</span>
                 </div>
               ) : hasSubtitle ? (
-                <SubtitleEditor />
+                <SubtitleEditor showClear={false} />
               ) : (
                 <button
                   onClick={onExtractFromAudio}

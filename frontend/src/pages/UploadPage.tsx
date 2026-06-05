@@ -106,7 +106,6 @@ export default function UploadPage() {
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   })
   const [muteOriginalAudio, setMuteOriginalAudio] = useState(true)
-  const [removeRecordedAudio, setRemoveRecordedAudio] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [done, setDone] = useState(false)
@@ -428,7 +427,7 @@ export default function UploadPage() {
       if (workoutStart) form.append('workout_start', workoutStart)
       if (workoutEnd) form.append('workout_end', workoutEnd)
       const ab = audioBlobRef.current
-      if (ab && ab.size > 0 && !removeRecordedAudio) {
+      if (ab && ab.size > 0) {
         const mime = ab.type || audioMimeTypeRef.current || 'audio/webm'
         form.append('audio', new File([ab], `audio.${mime.includes('mp4') ? 'mp4' : 'webm'}`, { type: mime }))
         form.append('audio_duration_sec', String(recordedSecondsRef.current))
@@ -597,7 +596,6 @@ export default function UploadPage() {
           subtitlePlainText={subtitlePlainText}
           subtitleExtracting={extractingSubtitles}
           muteOriginalAudio={muteOriginalAudio} setMuteOriginalAudio={setMuteOriginalAudio}
-          removeRecordedAudio={removeRecordedAudio} setRemoveRecordedAudio={setRemoveRecordedAudio}
           onExtractFromVideo={() => extractSubtitles('video')}
           onExtractFromAudio={() => extractSubtitles('audio')}
           onClearSubtitle={clearSubtitle}
