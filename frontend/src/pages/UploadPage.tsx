@@ -221,7 +221,7 @@ export default function UploadPage() {
         return
       }
       // Detect existing audio track in video file
-      const audioTracks = (videoEl as HTMLVideoElement & { audioTracks?: AudioTrackList }).audioTracks
+      const audioTracks = (videoEl as HTMLVideoElement & { audioTracks?: { length: number } }).audioTracks
       const mozHasAudio = (videoEl as HTMLVideoElement & { mozHasAudio?: boolean }).mozHasAudio
       if (audioTracks !== undefined) {
         setVideoHasAudio(audioTracks.length > 0)
