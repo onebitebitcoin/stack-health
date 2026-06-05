@@ -584,6 +584,7 @@ def test_r2_upload_and_enqueue_video_only(mock_upload, mock_r2_client, mock_enqu
         subtitle_srt=None,
         subtitle_size=None,
         subtitle_position=None,
+        mute_video_audio=False,
     )
     mock_upload.assert_called_once()
     mock_enqueue.assert_called_once()
@@ -615,6 +616,7 @@ def test_r2_upload_and_enqueue_failure(mock_upload, mock_fail) -> None:
         subtitle_srt=None,
         subtitle_size=None,
         subtitle_position=None,
+        mute_video_audio=False,
     )
     mock_fail.assert_called_once_with("fail-job-1", "R2 down")
 
@@ -648,6 +650,7 @@ def test_r2_upload_and_enqueue_with_audio_and_proof(mock_upload, mock_r2_client,
         subtitle_srt=None,
         subtitle_size=None,
         subtitle_position=None,
+        mute_video_audio=False,
     )
     assert mock_upload.call_count == 2  # video + audio
     mock_r2_client.return_value.put_object.assert_called_once()  # proof image

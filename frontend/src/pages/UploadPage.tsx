@@ -105,6 +105,8 @@ export default function UploadPage() {
     const d = new Date()
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   })
+  const [muteOriginalAudio, setMuteOriginalAudio] = useState(true)
+  const [removeRecordedAudio, setRemoveRecordedAudio] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [done, setDone] = useState(false)
@@ -421,12 +423,13 @@ export default function UploadPage() {
         form.append('subtitle_size', subtitleSize)
         form.append('subtitle_position', subtitlePosition)
       }
+      if (muteOriginalAudio) form.append('mute_video', 'true')
       form.append('tags', JSON.stringify(selectedTags))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       if (workoutStart) form.append('workout_start', workoutStart)
       if (workoutEnd) form.append('workout_end', workoutEnd)
       const ab = audioBlobRef.current
-      if (ab && ab.size > 0) {
+      if (ab && ab.size > 0 && !removeRecordedAudio) {
         const mime = ab.type || audioMimeTypeRef.current || 'audio/webm'
         form.append('audio', new File([ab], `audio.${mime.includes('mp4') ? 'mp4' : 'webm'}`, { type: mime }))
         form.append('audio_duration_sec', String(recordedSecondsRef.current))
@@ -609,6 +612,9 @@ export default function UploadPage() {
           onSubtitleSizeChange={setSubtitleSize} onSubtitlePositionChange={setSubtitlePosition}
           workoutStart={workoutStart} setWorkoutStart={setWorkoutStart}
           workoutEnd={workoutEnd} setWorkoutEnd={setWorkoutEnd}
+          videoHasAudio={videoHasAudio} recordingDone={recordingDone}
+          muteOriginalAudio={muteOriginalAudio} setMuteOriginalAudio={setMuteOriginalAudio}
+          removeRecordedAudio={removeRecordedAudio} setRemoveRecordedAudio={setRemoveRecordedAudio}
           error={error} uploading={uploading} onUpload={handleUpload}
         />
       )}

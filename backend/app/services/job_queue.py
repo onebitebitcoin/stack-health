@@ -96,6 +96,7 @@ def enqueue_full_upload_pipeline(
     subtitle_srt_r2_key: str | None = None,
     subtitle_size: str | None = None,
     subtitle_position: str | None = None,
+    mute_video_audio: bool = False,
     job_id: str | None = None,
 ) -> str:
     """영상 업로드 전체 파이프라인을 Redis 큐에 등록. job_id 즉시 반환."""
@@ -124,6 +125,7 @@ def enqueue_full_upload_pipeline(
         "subtitle_srt_r2_key": subtitle_srt_r2_key,
         "subtitle_size": subtitle_size,
         "subtitle_position": subtitle_position,
+        "mute_video_audio": mute_video_audio,
     }
 
     r = get_redis_client()

@@ -261,7 +261,7 @@ def _extract_thumbnail(r2, video_key: str) -> str | None:
                 os.unlink(tmp)
 
 
-def _compress_video(r2, video_key: str) -> tuple[str, int, int, dict] | None:
+def _compress_video(r2, video_key: str, mute_video: bool = False) -> tuple[str, int, int, dict] | None:
     """Re-encode video to reduce file size (CRF 28, ultrafast).
     Returns (compressed_key, pre_bytes, post_bytes, video_meta) or None if no benefit / failure.
     """
@@ -291,7 +291,7 @@ def _compress_video(r2, video_key: str) -> tuple[str, int, int, dict] | None:
             "-vcodec", "libx264", "-crf", "28", "-preset", "veryfast",
             "-pix_fmt", "yuv420p",
         ]
-        cmd += ["-c:a", "aac", "-b:a", "96k"] if has_audio else ["-an"]
+        cmd += ["-an"] if (mute_video or not has_audio) else ["-c:a", "aac", "-b:a", "96k"]
         cmd += ["-movflags", "+faststart", tmp_output]
 
         result = subprocess.run(cmd, capture_output=True, timeout=180)
@@ -405,9 +405,10 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     post_size_bytes: int = 0
     video_meta: dict = {}
     compressed_key: str | None = None
+    mute_video_audio = bool(job.get("mute_video_audio", False))
     if status_callback:
         status_callback("compress")
-    compress_result = _compress_video(r2, current_key)
+    compress_result = _compress_video(r2, current_key, mute_video=mute_video_audio)
     if compress_result:
         compressed_key, pre_size_bytes, post_size_bytes, video_meta = compress_result
         try:

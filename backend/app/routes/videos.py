@@ -711,6 +711,7 @@ def _r2_upload_and_enqueue(
     subtitle_srt: str | None,
     subtitle_size: str | None,
     subtitle_position: str | None,
+    mute_video_audio: bool = False,
 ) -> None:
     temp_paths = [p for p in (video_path, audio_path, proof_path) if p]
     try:
@@ -775,6 +776,7 @@ def _r2_upload_and_enqueue(
             subtitle_srt_r2_key=subtitle_srt_r2_key,
             subtitle_size=subtitle_size,
             subtitle_position=subtitle_position,
+            mute_video_audio=mute_video_audio,
         )
     except Exception as e:
         logger.error("Background R2 upload failed job_id=%s: %s", job_id, e)
@@ -802,6 +804,7 @@ async def upload_pipeline(
     subtitle_srt: str | None = Form(None),
     subtitle_size: str | None = Form(None),
     subtitle_position: str | None = Form(None),
+    mute_video: bool = Form(False),
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = ...,
@@ -869,6 +872,7 @@ async def upload_pipeline(
         subtitle_srt=subtitle_srt,
         subtitle_size=subtitle_size,
         subtitle_position=subtitle_position,
+        mute_video_audio=mute_video,
     )
 
     return {"data": {"job_id": job_id, "status": "processing"}}

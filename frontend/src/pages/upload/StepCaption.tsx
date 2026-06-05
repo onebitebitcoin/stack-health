@@ -1,7 +1,7 @@
-import { useRef, type ChangeEvent } from 'react'
+import { useRef, useEffect, useState, type ChangeEvent } from 'react'
 import type { RefObject, MutableRefObject } from 'react'
-import { FileText, ImagePlus, X } from 'lucide-react'
-import { captionFromSubtitleText, subtitleFileToEditableSrt } from '../../utils/subtitles'
+import { ImagePlus, X } from 'lucide-react'
+import { captionFromSubtitleText, srtToTextLines, applyTextLinesToSrt } from '../../utils/subtitles'
 
 type SubtitleSize = 'small' | 'medium' | 'large'
 type SubtitlePosition = 'top' | 'center' | 'bottom'
@@ -23,6 +23,12 @@ interface Props {
   setWorkoutStart: (v: string) => void
   workoutEnd: string
   setWorkoutEnd: (v: string) => void
+  videoHasAudio: boolean
+  recordingDone: boolean
+  muteOriginalAudio: boolean
+  setMuteOriginalAudio: (v: boolean) => void
+  removeRecordedAudio: boolean
+  setRemoveRecordedAudio: (v: boolean) => void
   error: string
   uploading: boolean
   onUpload: () => void
@@ -43,50 +49,46 @@ const POSITION_FLEX_CLASS: Record<SubtitlePosition, string> = {
   bottom: 'justify-end pb-3',
 }
 
-function parseSrtFirstCue(srt: string): string {
-  const lines = srt.split('\n')
-  const textLines: string[] = []
-  let inCue = false
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (/^\d+$/.test(trimmed)) { inCue = false; continue }
-    if (/\d{2}:\d{2}:\d{2}[,.]\d{3}\s+-->\s+/.test(trimmed)) { inCue = true; continue }
-    if (inCue && trimmed) {
-      textLines.push(trimmed)
-      if (textLines.length >= 2) break
-    }
-    if (inCue && !trimmed && textLines.length > 0) break
-  }
-  return textLines.join(' ')
-}
-
 export default function StepCaption({
   proofImageRef, proofPreviewUrl, setProofPreviewUrl, proofFileRef,
   caption, setCaption, subtitleText, setSubtitleText,
   subtitleSize, subtitlePosition, onSubtitleSizeChange, onSubtitlePositionChange,
   workoutStart, setWorkoutStart, workoutEnd, setWorkoutEnd,
+  videoHasAudio, recordingDone,
+  muteOriginalAudio, setMuteOriginalAudio,
+  removeRecordedAudio, setRemoveRecordedAudio,
   error, uploading, onUpload,
 }: Props) {
-  const subtitleInputRef = useRef<HTMLInputElement>(null)
+  const prevSrtRef = useRef(subtitleText)
+  const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
 
-  function handleSubtitleFile(e: ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (!f) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const raw = typeof reader.result === 'string' ? reader.result : ''
-      setSubtitleText(subtitleFileToEditableSrt(raw))
-      e.target.value = ''
+  useEffect(() => {
+    if (prevSrtRef.current !== subtitleText) {
+      prevSrtRef.current = subtitleText
+      setEditLines(srtToTextLines(subtitleText).join('\n'))
     }
-    reader.readAsText(f)
+  }, [subtitleText])
+
+  const hasSubtitle = subtitleText.trim().length > 0
+  const previewText = editLines.split('\n').find(l => l.trim()) ?? ''
+
+  function handleEditChange(val: string) {
+    setEditLines(val)
+    const lines = val.split('\n').map(l => l.trim()).filter(Boolean)
+    const newSrt = applyTextLinesToSrt(subtitleText, lines)
+    prevSrtRef.current = newSrt
+    setSubtitleText(newSrt)
+  }
+
+  function handleClearSubtitle() {
+    prevSrtRef.current = ''
+    setSubtitleText('')
+    setEditLines('')
   }
 
   function applySubtitleToCaption() {
     setCaption(captionFromSubtitleText(subtitleText))
   }
-
-  const hasSubtitle = subtitleText.trim().length > 0
-  const previewText = hasSubtitle ? parseSrtFirstCue(subtitleText) || '자막 미리보기' : ''
 
   return (
     <div className="flex flex-1 flex-col px-6 pt-4 overflow-y-auto">
@@ -109,59 +111,80 @@ export default function StepCaption({
         </div>
       </div>
 
-      <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-3 mb-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-theme-primary">자막 편집 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-            <p className="mt-1 text-xs leading-relaxed text-theme-muted">텍스트 오타만 고치세요. 시간 코드를 유지하면 영상에 정확히 입혀져요.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => subtitleInputRef.current?.click()}
-            className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-theme-surface2 px-3 py-2 text-xs font-medium text-theme-muted hover:text-accent"
-          >
-            <FileText size={14} /> 불러오기
-          </button>
-        </div>
-        <input
-          ref={subtitleInputRef}
-          type="file"
-          accept=".srt,.vtt,.txt,text/plain,text/vtt"
-          className="hidden"
-          onChange={handleSubtitleFile}
-        />
-        <textarea
-          value={subtitleText}
-          onChange={(e) => setSubtitleText(e.target.value.slice(0, 2000))}
-          maxLength={2000}
-          placeholder={"1\n00:00:00,000 --> 00:00:03,000\n오늘도 5킬로 뛰었어요."}
-          rows={6}
-          className="w-full resize-none rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
-        />
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-theme-subtle">{subtitleText.length}/2000</span>
-          <div className="flex gap-2">
-            {subtitleText && (
+      {(videoHasAudio || recordingDone) && (
+        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-4">
+          <p className="text-xs font-medium text-theme-muted">오디오 설정</p>
+          {videoHasAudio && (
+            <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
+              <span className="text-sm text-theme-primary">원본 영상 소리 제거</span>
               <button
                 type="button"
-                onClick={() => setSubtitleText('')}
-                className="rounded-lg px-3 py-2 text-xs text-theme-muted hover:bg-theme-surface2"
+                role="switch"
+                aria-checked={muteOriginalAudio}
+                onClick={() => setMuteOriginalAudio(!muteOriginalAudio)}
+                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  muteOriginalAudio ? 'bg-accent' : 'bg-theme-surface2'
+                }`}
               >
-                비우기
+                <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  muteOriginalAudio ? 'translate-x-5' : 'translate-x-0'
+                }`} />
               </button>
-            )}
+            </label>
+          )}
+          {recordingDone && (
+            <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
+              <span className="text-sm text-theme-primary">녹음 음성 제거</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={removeRecordedAudio}
+                onClick={() => setRemoveRecordedAudio(!removeRecordedAudio)}
+                className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  removeRecordedAudio ? 'bg-accent' : 'bg-theme-surface2'
+                }`}
+              >
+                <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  removeRecordedAudio ? 'translate-x-5' : 'translate-x-0'
+                }`} />
+              </button>
+            </label>
+          )}
+        </div>
+      )}
+
+      {hasSubtitle && (
+        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-3 mb-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-theme-primary">자막 수정 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+              <p className="mt-1 text-xs leading-relaxed text-theme-muted">텍스트 오타만 수정하세요.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearSubtitle}
+              className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-theme-muted hover:text-red-400 transition-colors"
+            >
+              <X size={12} /> 자막 제거
+            </button>
+          </div>
+          <textarea
+            value={editLines}
+            onChange={(e) => handleEditChange(e.target.value)}
+            rows={4}
+            className="w-full resize-none rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+          />
+          <div className="flex justify-end">
             <button
               type="button"
               onClick={applySubtitleToCaption}
-              disabled={!subtitleText.trim()}
+              disabled={!editLines.trim()}
               className="rounded-lg bg-theme-surface2 px-3 py-2 text-xs font-semibold text-theme-primary disabled:opacity-50"
             >
               설명에 반영
             </button>
           </div>
-        </div>
 
-        {hasSubtitle && (
           <div className="space-y-3 pt-1 border-t border-theme-border">
             <div className="flex items-center gap-3">
               <span className="text-xs text-theme-muted w-10 flex-shrink-0">크기</span>
@@ -207,15 +230,15 @@ export default function StepCaption({
               <div className={`relative w-full h-full flex flex-col items-center ${POSITION_FLEX_CLASS[subtitlePosition]}`}>
                 <div className="px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
                   <span className={`text-white font-medium ${SIZE_TEXT_CLASS[subtitleSize]}`}>
-                    {previewText}
+                    {previewText || '자막 미리보기'}
                   </span>
                 </div>
               </div>
             </div>
             <p className="text-xs text-theme-subtle text-center -mt-1">실제 영상 비율과 근사한 미리보기입니다</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <p className="mb-2 text-sm font-semibold text-theme-primary">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
       <textarea
@@ -238,7 +261,7 @@ export default function StepCaption({
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(e) => {
+        onChange={(e: ChangeEvent<HTMLInputElement>) => {
           const f = e.target.files?.[0]
           if (!f) return
           proofFileRef.current = f
