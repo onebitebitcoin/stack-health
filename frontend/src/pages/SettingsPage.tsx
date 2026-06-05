@@ -158,10 +158,9 @@ export default function SettingsPage() {
             <div className={`${ROW} border-b border-theme-surface2`}>
               <span className={LABEL}>프로필 사진</span>
               <div className="flex flex-col items-end gap-1">
-                <button
-                  onClick={() => avatarInputRef.current?.click()}
-                  disabled={avatarUploading}
-                  className="relative group"
+                <label
+                  htmlFor="avatar-file-input"
+                  className={`relative group ${avatarUploading ? 'pointer-events-none' : 'cursor-pointer'}`}
                   aria-label="프로필 사진 변경"
                 >
                   <UserAvatar
@@ -176,12 +175,14 @@ export default function SettingsPage() {
                       : <Camera size={16} className="text-white" />
                     }
                   </div>
-                </button>
+                </label>
                 <input
+                  id="avatar-file-input"
                   ref={avatarInputRef}
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif"
                   className="hidden"
+                  disabled={avatarUploading}
                   onChange={handleAvatarChange}
                 />
               </div>

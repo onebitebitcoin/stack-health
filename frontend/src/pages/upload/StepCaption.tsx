@@ -60,6 +60,7 @@ export default function StepCaption({
       </p>
       <input
         ref={proofImageRef}
+        id="proof-image-input"
         type="file"
         accept="image/*"
         className="hidden"
@@ -85,13 +86,13 @@ export default function StepCaption({
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => proofImageRef.current?.click()}
-          className="mb-4 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-theme-border p-4 text-theme-muted hover:border-accent hover:text-accent transition-colors"
+        <label
+          htmlFor="proof-image-input"
+          className="mb-4 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-theme-border p-4 text-theme-muted hover:border-accent hover:text-accent transition-colors cursor-pointer"
         >
           <ImagePlus size={20} strokeWidth={1.5} />
           <span className="text-sm">사진 추가</span>
-        </button>
+        </label>
       )}
 
       {error && <p className="mb-2 text-sm text-red-400">{error}</p>}

@@ -164,10 +164,9 @@ export default function ChallengeEditPage() {
 
         {/* 이미지 */}
         <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="relative h-24 w-24 rounded-full overflow-hidden bg-theme-surface2 ring-2 ring-theme-border group"
+          <label
+            htmlFor="challenge-edit-image-input"
+            className="relative h-24 w-24 rounded-full overflow-hidden bg-theme-surface2 ring-2 ring-theme-border group cursor-pointer"
           >
             {imageSrc ? (
               <img
@@ -185,8 +184,9 @@ export default function ChallengeEditPage() {
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
               <ImagePlus size={18} className="text-white" />
             </div>
-          </button>
+          </label>
           <input
+            id="challenge-edit-image-input"
             ref={fileInputRef}
             type="file"
             accept="image/*"

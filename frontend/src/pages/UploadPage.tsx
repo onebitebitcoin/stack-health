@@ -209,8 +209,10 @@ export default function UploadPage() {
     const videoEl = document.createElement('video')
     videoEl.preload = 'metadata'
     videoEl.src = url
+    videoEl.load() // iOS Safari requires explicit load() to trigger onloadedmetadata
     videoEl.onloadedmetadata = () => {
-      if (videoEl.duration < 5 || videoEl.duration > 60) {
+      // duration may be Infinity on iOS Live Photos / screen recordings — let server validate
+      if (isFinite(videoEl.duration) && (videoEl.duration < 5 || videoEl.duration > 60)) {
         URL.revokeObjectURL(url); e.target.value = ''
         const secs = Math.round(videoEl.duration)
         setError(secs < 5
@@ -219,8 +221,8 @@ export default function UploadPage() {
         return
       }
       // Detect existing audio track in video file
-      const audioTracks = (videoEl as any).audioTracks
-      const mozHasAudio = (videoEl as any).mozHasAudio
+      const audioTracks = (videoEl as HTMLVideoElement & { audioTracks?: AudioTrackList }).audioTracks
+      const mozHasAudio = (videoEl as HTMLVideoElement & { mozHasAudio?: boolean }).mozHasAudio
       if (audioTracks !== undefined) {
         setVideoHasAudio(audioTracks.length > 0)
       } else if (mozHasAudio !== undefined) {

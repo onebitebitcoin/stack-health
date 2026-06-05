@@ -219,25 +219,24 @@ export default function ChallengeCreatePage() {
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-xs text-theme-muted text-center py-1"
+              <label
+                htmlFor="challenge-image-input"
+                className="text-xs text-theme-muted text-center py-1 cursor-pointer"
               >
                 다른 이미지 선택
-              </button>
+              </label>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full aspect-square rounded-2xl bg-theme-surface flex flex-col items-center justify-center gap-2 text-theme-muted border-2 border-dashed border-theme-border"
+            <label
+              htmlFor="challenge-image-input"
+              className="w-full aspect-square rounded-2xl bg-theme-surface flex flex-col items-center justify-center gap-2 text-theme-muted border-2 border-dashed border-theme-border cursor-pointer"
             >
               <ImagePlus size={28} strokeWidth={1.5} />
               <span className="text-xs">이미지 선택</span>
-            </button>
+            </label>
           )}
           <input
+            id="challenge-image-input"
             ref={fileInputRef}
             type="file"
             accept="image/*"

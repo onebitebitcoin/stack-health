@@ -151,7 +151,7 @@ export default function SetupUsernamePage() {
         {/* 아바타 선택 */}
         <div className="flex justify-center mb-6">
           <div className="relative">
-            <div className="cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+            <label htmlFor="setup-avatar-input" className="cursor-pointer">
               {previewUrl ? (
                 <img src={previewUrl} alt="프로필" className="h-20 w-20 rounded-full object-cover" />
               ) : (
@@ -162,24 +162,24 @@ export default function SetupUsernamePage() {
                   {username ? username[0].toUpperCase() : '?'}
                 </div>
               )}
-            </div>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-fg shadow-md disabled:opacity-60"
+            </label>
+            <label
+              htmlFor="setup-avatar-input"
+              className={`absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-accent text-accent-fg shadow-md ${uploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}
             >
               {uploading ? (
                 <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent-fg border-t-transparent" />
               ) : (
                 <Camera size={13} strokeWidth={2} />
               )}
-            </button>
+            </label>
             <input
+              id="setup-avatar-input"
               ref={fileInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
               className="hidden"
+              disabled={uploading}
               onChange={handleFileChange}
             />
           </div>
