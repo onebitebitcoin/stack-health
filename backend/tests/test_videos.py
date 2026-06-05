@@ -581,6 +581,9 @@ def test_r2_upload_and_enqueue_video_only(mock_upload, mock_r2_client, mock_enqu
         workout_start=None,
         workout_end=None,
         audio_duration_sec=0,
+        subtitle_srt=None,
+        subtitle_size=None,
+        subtitle_position=None,
     )
     mock_upload.assert_called_once()
     mock_enqueue.assert_called_once()
@@ -609,6 +612,9 @@ def test_r2_upload_and_enqueue_failure(mock_upload, mock_fail) -> None:
         workout_start=None,
         workout_end=None,
         audio_duration_sec=0,
+        subtitle_srt=None,
+        subtitle_size=None,
+        subtitle_position=None,
     )
     mock_fail.assert_called_once_with("fail-job-1", "R2 down")
 
