@@ -645,6 +645,9 @@ def test_r2_upload_and_enqueue_with_audio_and_proof(mock_upload, mock_r2_client,
         workout_start=None,
         workout_end=None,
         audio_duration_sec=10,
+        subtitle_srt=None,
+        subtitle_size=None,
+        subtitle_position=None,
     )
     assert mock_upload.call_count == 2  # video + audio
     mock_r2_client.return_value.put_object.assert_called_once()  # proof image
