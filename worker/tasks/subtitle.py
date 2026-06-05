@@ -214,7 +214,19 @@ def _escape_filter_path(path: str) -> str:
     return path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
-def _burn_subtitles_into_video(video_path: str, srt_path: str, output_path: str) -> float:
+FONT_SIZE_MAP = {"small": 18, "medium": 26, "large": 36}
+ALIGNMENT_MAP = {"bottom": 2, "center": 5, "top": 8}
+MARGIN_V_MAP = {"bottom": SUBTITLE_BURN_IN_MARGIN_V, "center": 0, "top": 40}
+
+
+def _burn_subtitles_into_video(
+    video_path: str,
+    srt_path: str,
+    output_path: str,
+    font_size: int = SUBTITLE_BURN_IN_FONT_SIZE,
+    alignment: int = 2,
+    margin_v: int = SUBTITLE_BURN_IN_MARGIN_V,
+) -> float:
     """Render subtitles onto video pixels with an 80% opaque black box."""
     started = time.perf_counter()
     style = ",".join([
@@ -222,9 +234,9 @@ def _burn_subtitles_into_video(video_path: str, srt_path: str, output_path: str)
         f"BackColour=&H{SUBTITLE_BURN_IN_BACK_ALPHA_HEX}000000",
         "Outline=0",
         "Shadow=0",
-        f"FontSize={SUBTITLE_BURN_IN_FONT_SIZE}",
-        "Alignment=2",  # bottom center
-        f"MarginV={SUBTITLE_BURN_IN_MARGIN_V}",
+        f"FontSize={font_size}",
+        f"Alignment={alignment}",
+        f"MarginV={margin_v}",
         "PrimaryColour=&H00FFFFFF",
     ])
     vf = f"subtitles='{_escape_filter_path(srt_path)}':force_style='{style}'"
@@ -256,6 +268,80 @@ def _plain_text_from_srt(srt_text: str) -> str:
     return " ".join(lines).strip()
 
 
+def burn_user_srt(
+    r2,
+    video_key: str,
+    srt_key: str,
+    *,
+    font_size: int = SUBTITLE_BURN_IN_FONT_SIZE,
+    alignment: int = 2,
+    margin_v: int = SUBTITLE_BURN_IN_MARGIN_V,
+) -> SubtitleResult:
+    """사용자가 업로드한 SRT를 R2에서 다운로드해 영상에 burn-in한다."""
+    tmp_video = tmp_srt = tmp_burned = None
+    metrics: dict[str, Any] = {"source": "user_srt", "font_size": font_size, "alignment": alignment}
+    try:
+        _ensure_tool("ffmpeg")
+        tmp_video = _make_tmp(".mp4")
+        tmp_srt = _make_tmp(".srt")
+        tmp_burned = _make_tmp(".mp4")
+
+        resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=video_key)
+        with open(tmp_video, "wb") as f:
+            f.write(resp["Body"].read())
+
+        resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=srt_key)
+        srt_text = resp["Body"].read().decode("utf-8")
+
+        duration = _probe_duration(tmp_video)
+        if duration > 0:
+            srt_text, _ = _clamp_srt_to_duration(srt_text, duration)
+
+        subtitle_text = _plain_text_from_srt(srt_text)
+        vtt_text = _srt_to_vtt(srt_text)
+
+        subtitle_key = f"subtitles/s-{uuid.uuid4()}.vtt"
+        r2.put_object(
+            Bucket=R2_BUCKET_NAME,
+            Key=subtitle_key,
+            Body=vtt_text.encode("utf-8"),
+            ContentType="text/vtt; charset=utf-8",
+            CacheControl="public, max-age=31536000, immutable",
+        )
+
+        Path(tmp_srt).write_text(srt_text, encoding="utf-8")
+        metrics["burn_in_seconds"] = round(
+            _burn_subtitles_into_video(tmp_video, tmp_srt, tmp_burned, font_size, alignment, margin_v), 3
+        )
+
+        burned_key = f"videos/subtitled-{uuid.uuid4()}.mp4"
+        with open(tmp_burned, "rb") as f:
+            r2.put_object(
+                Bucket=R2_BUCKET_NAME,
+                Key=burned_key,
+                Body=f,
+                ContentType="video/mp4",
+                CacheControl="public, max-age=31536000, immutable",
+            )
+
+        return SubtitleResult(
+            status="completed",
+            subtitle_r2_key=subtitle_key,
+            subtitle_url=f"{R2_PUBLIC_URL}/{subtitle_key}",
+            subtitle_text=subtitle_text,
+            burned_video_r2_key=burned_key,
+            burned_video_url=f"{R2_PUBLIC_URL}/{burned_key}",
+            metrics=metrics,
+        )
+    except Exception as exc:
+        logger.warning("User SRT burn-in failed for %s: %s", video_key, exc)
+        return SubtitleResult(status="failed", error=str(exc), metrics=metrics)
+    finally:
+        for tmp in (tmp_video, tmp_srt, tmp_burned):
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
+
+
 def generate_subtitle_for_video(
     r2,
     video_key: str,
@@ -263,6 +349,9 @@ def generate_subtitle_for_video(
     model: str = DEFAULT_TRANSCRIPTION_MODEL,
     language: str | None = DEFAULT_TRANSCRIPTION_LANGUAGE,
     api_key: str | None = None,
+    font_size: int = SUBTITLE_BURN_IN_FONT_SIZE,
+    alignment: int = 2,
+    margin_v: int = SUBTITLE_BURN_IN_MARGIN_V,
 ) -> SubtitleResult:
     """Download a video from R2, transcribe audio, upload SRT, and return metadata.
 
@@ -315,7 +404,9 @@ def generate_subtitle_for_video(
         )
 
         Path(tmp_srt).write_text(srt_text, encoding="utf-8")
-        metrics["burn_in_seconds"] = round(_burn_subtitles_into_video(tmp_video, tmp_srt, tmp_burned), 3)
+        metrics["burn_in_seconds"] = round(
+            _burn_subtitles_into_video(tmp_video, tmp_srt, tmp_burned, font_size, alignment, margin_v), 3
+        )
         burned_key = f"videos/subtitled-{uuid.uuid4()}.mp4"
         with open(tmp_burned, "rb") as f:
             r2.put_object(

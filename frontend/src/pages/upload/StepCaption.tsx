@@ -3,6 +3,9 @@ import type { RefObject, MutableRefObject } from 'react'
 import { FileText, ImagePlus, X } from 'lucide-react'
 import { captionFromSubtitleText, subtitleFileToEditableSrt } from '../../utils/subtitles'
 
+type SubtitleSize = 'small' | 'medium' | 'large'
+type SubtitlePosition = 'top' | 'center' | 'bottom'
+
 interface Props {
   proofImageRef: RefObject<HTMLInputElement>
   proofPreviewUrl: string | null
@@ -12,6 +15,10 @@ interface Props {
   setCaption: (v: string) => void
   subtitleText: string
   setSubtitleText: (v: string) => void
+  subtitleSize: SubtitleSize
+  subtitlePosition: SubtitlePosition
+  onSubtitleSizeChange: (v: SubtitleSize) => void
+  onSubtitlePositionChange: (v: SubtitlePosition) => void
   workoutStart: string
   setWorkoutStart: (v: string) => void
   workoutEnd: string
@@ -21,9 +28,43 @@ interface Props {
   onUpload: () => void
 }
 
+const SIZE_LABELS: Record<SubtitleSize, string> = { small: '소', medium: '중', large: '대' }
+const POSITION_LABELS: Record<SubtitlePosition, string> = { top: '상단', center: '중앙', bottom: '하단' }
+
+const SIZE_TEXT_CLASS: Record<SubtitleSize, string> = {
+  small: 'text-xs',
+  medium: 'text-sm',
+  large: 'text-base',
+}
+
+const POSITION_FLEX_CLASS: Record<SubtitlePosition, string> = {
+  top: 'justify-start pt-3',
+  center: 'justify-center',
+  bottom: 'justify-end pb-3',
+}
+
+function parseSrtFirstCue(srt: string): string {
+  const lines = srt.split('\n')
+  const textLines: string[] = []
+  let inCue = false
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (/^\d+$/.test(trimmed)) { inCue = false; continue }
+    if (/\d{2}:\d{2}:\d{2}[,.]\d{3}\s+-->\s+/.test(trimmed)) { inCue = true; continue }
+    if (inCue && trimmed) {
+      textLines.push(trimmed)
+      if (textLines.length >= 2) break
+    }
+    if (inCue && !trimmed && textLines.length > 0) break
+  }
+  return textLines.join(' ')
+}
+
 export default function StepCaption({
   proofImageRef, proofPreviewUrl, setProofPreviewUrl, proofFileRef,
-  caption, setCaption, subtitleText, setSubtitleText, workoutStart, setWorkoutStart, workoutEnd, setWorkoutEnd,
+  caption, setCaption, subtitleText, setSubtitleText,
+  subtitleSize, subtitlePosition, onSubtitleSizeChange, onSubtitlePositionChange,
+  workoutStart, setWorkoutStart, workoutEnd, setWorkoutEnd,
   error, uploading, onUpload,
 }: Props) {
   const subtitleInputRef = useRef<HTMLInputElement>(null)
@@ -43,6 +84,9 @@ export default function StepCaption({
   function applySubtitleToCaption() {
     setCaption(captionFromSubtitleText(subtitleText))
   }
+
+  const hasSubtitle = subtitleText.trim().length > 0
+  const previewText = hasSubtitle ? parseSrtFirstCue(subtitleText) || '자막 미리보기' : ''
 
   return (
     <div className="flex flex-1 flex-col px-6 pt-4 overflow-y-auto">
@@ -116,6 +160,61 @@ export default function StepCaption({
             </button>
           </div>
         </div>
+
+        {hasSubtitle && (
+          <div className="space-y-3 pt-1 border-t border-theme-border">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-theme-muted w-10 flex-shrink-0">크기</span>
+              <div className="flex gap-1.5">
+                {(['small', 'medium', 'large'] as SubtitleSize[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => onSubtitleSizeChange(s)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                      subtitleSize === s
+                        ? 'bg-accent text-accent-fg'
+                        : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
+                    }`}
+                  >
+                    {SIZE_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-theme-muted w-10 flex-shrink-0">위치</span>
+              <div className="flex gap-1.5">
+                {(['top', 'center', 'bottom'] as SubtitlePosition[]).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => onSubtitlePositionChange(p)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                      subtitlePosition === p
+                        ? 'bg-accent text-accent-fg'
+                        : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
+                    }`}
+                  >
+                    {POSITION_LABELS[p]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16', maxHeight: '220px' }}>
+              <div className={`relative w-full h-full flex flex-col items-center ${POSITION_FLEX_CLASS[subtitlePosition]}`}>
+                <div className="px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                  <span className={`text-white font-medium ${SIZE_TEXT_CLASS[subtitleSize]}`}>
+                    {previewText}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-theme-subtle text-center -mt-1">실제 영상 비율과 근사한 미리보기입니다</p>
+          </div>
+        )}
       </div>
 
       <p className="mb-2 text-sm font-semibold text-theme-primary">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>

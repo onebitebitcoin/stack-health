@@ -22,7 +22,14 @@ from config import (
     R2_SECRET_ACCESS_KEY,
 )
 from tasks.image_merge import run_image_merge
-from tasks.subtitle import generate_subtitle_for_video, subtitle_metrics_json
+from tasks.subtitle import (
+    ALIGNMENT_MAP,
+    FONT_SIZE_MAP,
+    MARGIN_V_MAP,
+    burn_user_srt,
+    generate_subtitle_for_video,
+    subtitle_metrics_json,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -430,7 +437,27 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     if status_callback:
         status_callback("subtitle")
     pre_subtitle_key = current_key
-    subtitle_result = generate_subtitle_for_video(r2, current_key)
+
+    subtitle_srt_r2_key = job.get("subtitle_srt_r2_key")
+    subtitle_font_size = FONT_SIZE_MAP.get(job.get("subtitle_size", "medium"), 26)
+    subtitle_alignment = ALIGNMENT_MAP.get(job.get("subtitle_position", "bottom"), 2)
+    subtitle_margin_v = MARGIN_V_MAP.get(job.get("subtitle_position", "bottom"), 90)
+
+    if subtitle_srt_r2_key:
+        subtitle_result = burn_user_srt(
+            r2, current_key, subtitle_srt_r2_key,
+            font_size=subtitle_font_size,
+            alignment=subtitle_alignment,
+            margin_v=subtitle_margin_v,
+        )
+    else:
+        subtitle_result = generate_subtitle_for_video(
+            r2, current_key,
+            font_size=subtitle_font_size,
+            alignment=subtitle_alignment,
+            margin_v=subtitle_margin_v,
+        )
+
     subtitle_status = subtitle_result.status
     subtitle_url = subtitle_result.subtitle_url
     subtitle_text = subtitle_result.subtitle_text

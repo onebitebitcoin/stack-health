@@ -87,6 +87,8 @@ export default function UploadPage() {
   const [caption, setCaption] = useState('')
   const [subtitleText, setSubtitleText] = useState('')
   const [subtitlePlainText, setSubtitlePlainText] = useState('')
+  const [subtitleSize, setSubtitleSize] = useState<'small' | 'medium' | 'large'>('medium')
+  const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('bottom')
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
   const [videoHasAudio, setVideoHasAudio] = useState(false)
   const [hasChallenge, setHasChallenge] = useState<boolean | null>(null)
@@ -414,7 +416,11 @@ export default function UploadPage() {
       form.append('file', file, file.name)
       form.append('duration_sec', String(Math.min(60, Math.max(5, duration))))
       if (caption) form.append('caption', caption)
-      if (subtitleText.trim()) form.append('subtitle_srt', subtitleText)
+      if (subtitleText.trim()) {
+        form.append('subtitle_srt', subtitleText)
+        form.append('subtitle_size', subtitleSize)
+        form.append('subtitle_position', subtitlePosition)
+      }
       form.append('tags', JSON.stringify(selectedTags))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       if (workoutStart) form.append('workout_start', workoutStart)
@@ -599,6 +605,8 @@ export default function UploadPage() {
           proofImageRef={proofImageRef} proofPreviewUrl={proofPreviewUrl} setProofPreviewUrl={setProofPreviewUrl}
           proofFileRef={proofFileRef} caption={caption} setCaption={setCaption}
           subtitleText={subtitleText} setSubtitleText={setSubtitleText}
+          subtitleSize={subtitleSize} subtitlePosition={subtitlePosition}
+          onSubtitleSizeChange={setSubtitleSize} onSubtitlePositionChange={setSubtitlePosition}
           workoutStart={workoutStart} setWorkoutStart={setWorkoutStart}
           workoutEnd={workoutEnd} setWorkoutEnd={setWorkoutEnd}
           error={error} uploading={uploading} onUpload={handleUpload}
