@@ -1,5 +1,7 @@
+import { useRef, type ChangeEvent } from 'react'
 import type { RefObject, MutableRefObject } from 'react'
-import { ImagePlus, X } from 'lucide-react'
+import { FileText, ImagePlus, X } from 'lucide-react'
+import { captionFromSubtitleText, subtitleFileToEditableSrt } from '../../utils/subtitles'
 
 interface Props {
   proofImageRef: RefObject<HTMLInputElement>
@@ -8,6 +10,8 @@ interface Props {
   proofFileRef: MutableRefObject<File | null>
   caption: string
   setCaption: (v: string) => void
+  subtitleText: string
+  setSubtitleText: (v: string) => void
   workoutStart: string
   setWorkoutStart: (v: string) => void
   workoutEnd: string
@@ -19,9 +23,27 @@ interface Props {
 
 export default function StepCaption({
   proofImageRef, proofPreviewUrl, setProofPreviewUrl, proofFileRef,
-  caption, setCaption, workoutStart, setWorkoutStart, workoutEnd, setWorkoutEnd,
+  caption, setCaption, subtitleText, setSubtitleText, workoutStart, setWorkoutStart, workoutEnd, setWorkoutEnd,
   error, uploading, onUpload,
 }: Props) {
+  const subtitleInputRef = useRef<HTMLInputElement>(null)
+
+  function handleSubtitleFile(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const raw = typeof reader.result === 'string' ? reader.result : ''
+      setSubtitleText(subtitleFileToEditableSrt(raw))
+      e.target.value = ''
+    }
+    reader.readAsText(f)
+  }
+
+  function applySubtitleToCaption() {
+    setCaption(captionFromSubtitleText(subtitleText))
+  }
+
   return (
     <div className="flex flex-1 flex-col px-6 pt-4 overflow-y-auto">
       <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2 mb-4">
@@ -40,6 +62,59 @@ export default function StepCaption({
             onChange={(e) => setWorkoutEnd(e.target.value)}
             className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent"
           />
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-3 mb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-theme-primary">자막 편집 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+            <p className="mt-1 text-xs leading-relaxed text-theme-muted">텍스트 오타만 고치세요. 시간 코드를 유지하면 영상에 정확히 입혀져요.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => subtitleInputRef.current?.click()}
+            className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-theme-surface2 px-3 py-2 text-xs font-medium text-theme-muted hover:text-accent"
+          >
+            <FileText size={14} /> 불러오기
+          </button>
+        </div>
+        <input
+          ref={subtitleInputRef}
+          type="file"
+          accept=".srt,.vtt,.txt,text/plain,text/vtt"
+          className="hidden"
+          onChange={handleSubtitleFile}
+        />
+        <textarea
+          value={subtitleText}
+          onChange={(e) => setSubtitleText(e.target.value.slice(0, 2000))}
+          maxLength={2000}
+          placeholder={"1\n00:00:00,000 --> 00:00:03,000\n오늘도 5킬로 뛰었어요."}
+          rows={6}
+          className="w-full resize-none rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-theme-subtle">{subtitleText.length}/2000</span>
+          <div className="flex gap-2">
+            {subtitleText && (
+              <button
+                type="button"
+                onClick={() => setSubtitleText('')}
+                className="rounded-lg px-3 py-2 text-xs text-theme-muted hover:bg-theme-surface2"
+              >
+                비우기
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={applySubtitleToCaption}
+              disabled={!subtitleText.trim()}
+              className="rounded-lg bg-theme-surface2 px-3 py-2 text-xs font-semibold text-theme-primary disabled:opacity-50"
+            >
+              설명에 반영
+            </button>
+          </div>
         </div>
       </div>
 

@@ -42,7 +42,8 @@ const CONFETTI_COLORS = ['#B5FF2E', '#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', 
 const STEP_CONFIG: Record<string, { start: number; ceiling: number; interval: number }> = {
   audio_merge: { start: 73, ceiling: 75,  interval: 1500 },
   image_merge: { start: 76, ceiling: 88,  interval: 5000 },
-  compress:    { start: 90, ceiling: 93,  interval: 1500 },
+  subtitle_burn: { start: 86, ceiling: 90, interval: 3000 },
+  compress:    { start: 91, ceiling: 94,  interval: 1500 },
   db_save:     { start: 95, ceiling: 98,  interval: 1500 },
 }
 
@@ -84,6 +85,10 @@ export default function UploadPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [caption, setCaption] = useState('')
+  const [subtitleText, setSubtitleText] = useState('')
+  const [subtitlePlainText, setSubtitlePlainText] = useState('')
+  const [extractingSubtitles, setExtractingSubtitles] = useState(false)
+  const [videoHasAudio, setVideoHasAudio] = useState(false)
   const [hasChallenge, setHasChallenge] = useState<boolean | null>(null)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
@@ -217,6 +222,13 @@ export default function UploadPage() {
           : `영상 길이가 ${secs}초입니다. 60초 이하 영상만 업로드할 수 있습니다.`)
         return
       }
+      const audioTracks = (videoEl as unknown as { audioTracks?: { length: number } }).audioTracks
+      const mozHasAudio = (videoEl as unknown as { mozHasAudio?: boolean }).mozHasAudio
+      if (audioTracks !== undefined) {
+        setVideoHasAudio(audioTracks.length > 0)
+      } else if (mozHasAudio !== undefined) {
+        setVideoHasAudio(Boolean(mozHasAudio))
+      }
       setError(''); setFile(f); setPreviewUrl(url); setStep(1)
     }
     videoEl.onerror = () => { setFile(f); setPreviewUrl(url); setStep(1) }
@@ -323,6 +335,42 @@ export default function UploadPage() {
 
   const displayedChallenges = (challengeSearch ? searchChallenges : allChallenges).filter(c => c.joined)
 
+  async function extractSubtitles(source: 'video' | 'audio') {
+    if (!file) return
+    setError('')
+    setExtractingSubtitles(true)
+    try {
+      const form = new FormData()
+      form.append('file', file, file.name)
+      if (source === 'audio') {
+        const ab = audioBlobRef.current
+        if (ab && ab.size > 0) {
+          const mime = ab.type || audioMimeTypeRef.current || 'audio/webm'
+          form.append('audio', new File([ab], `audio.${mime.includes('mp4') ? 'mp4' : 'webm'}`, { type: mime }))
+        }
+      }
+      form.append('language', 'ko')
+      const res = await client.post<{ data: { srt: string; plain_text: string } }>(
+        '/videos/transcribe-subtitles',
+        form,
+        { timeout: 300_000 },
+      )
+      setSubtitleText(res.data.data.srt)
+      setSubtitlePlainText(res.data.data.plain_text)
+      if (!caption.trim() && res.data.data.plain_text) setCaption(res.data.data.plain_text.slice(0, 140))
+      toast.success('자막을 추출했어요.')
+    } catch (err) {
+      setError(getApiErrorMessage(err, '자막 추출 실패'))
+    } finally {
+      setExtractingSubtitles(false)
+    }
+  }
+
+  function clearSubtitle() {
+    setSubtitleText('')
+    setSubtitlePlainText('')
+  }
+
   async function handleUpload() {
     if (!file) return
     setError(''); setUploading(true); setUploadProgress(0)
@@ -337,6 +385,7 @@ export default function UploadPage() {
       form.append('file', file, file.name)
       form.append('duration_sec', String(Math.min(60, Math.max(5, duration))))
       if (caption) form.append('caption', caption)
+      if (subtitleText.trim()) form.append('subtitle_srt', subtitleText)
       form.append('tags', JSON.stringify(selectedTags))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       if (workoutStart) form.append('workout_start', workoutStart)
@@ -505,6 +554,12 @@ export default function UploadPage() {
           previewUrl={previewUrl} recording={recording} recordedSeconds={recordedSeconds}
           recordingDone={recordingDone} progressPct={progressPct} error={error}
           maxSeconds={MAX_RECORD_SECONDS}
+          videoHasAudio={videoHasAudio}
+          subtitlePlainText={subtitlePlainText}
+          subtitleExtracting={extractingSubtitles}
+          onExtractFromVideo={() => extractSubtitles('video')}
+          onExtractFromAudio={() => extractSubtitles('audio')}
+          onClearSubtitle={clearSubtitle}
           startRecording={startRecording} stopRecording={stopRecording} skipRecording={skipRecording}
           onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0) }}
           onNext={() => setStep(3)}
@@ -514,6 +569,7 @@ export default function UploadPage() {
         <StepCaption
           proofImageRef={proofImageRef} proofPreviewUrl={proofPreviewUrl} setProofPreviewUrl={setProofPreviewUrl}
           proofFileRef={proofFileRef} caption={caption} setCaption={setCaption}
+          subtitleText={subtitleText} setSubtitleText={setSubtitleText}
           workoutStart={workoutStart} setWorkoutStart={setWorkoutStart}
           workoutEnd={workoutEnd} setWorkoutEnd={setWorkoutEnd}
           error={error} uploading={uploading} onUpload={handleUpload}
