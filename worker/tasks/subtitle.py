@@ -215,7 +215,7 @@ def _escape_filter_path(path: str) -> str:
 
 
 FONT_SIZE_MAP = {"small": 10, "medium": 14, "large": 18}
-ALIGNMENT_MAP = {"bottom": 2, "center": 5, "top": 8}
+ALIGNMENT_MAP = {"bottom": 2, "center": 10, "top": 6}
 MARGIN_V_MAP = {"bottom": SUBTITLE_BURN_IN_MARGIN_V, "center": 0, "top": 40}
 
 
