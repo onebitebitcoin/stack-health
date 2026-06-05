@@ -237,7 +237,10 @@ def _burn_subtitles_into_video(
         f"FontSize={font_size}",
         f"Alignment={alignment}",
         f"MarginV={margin_v}",
+        "MarginL=30",
+        "MarginR=30",
         "PrimaryColour=&H00FFFFFF",
+        "WrapStyle=2",
     ])
     vf = f"subtitles='{_escape_filter_path(srt_path)}':force_style='{style}'"
     _run_cmd(
