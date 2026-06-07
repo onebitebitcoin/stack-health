@@ -27,7 +27,7 @@ export default function StepSelectVideo({ fileInputRef, error, setError, onFileC
       >
         <LogoMark size={48} />
         <span>영상을 선택하세요</span>
-        <span className="text-xs">5~60초, 최대 50MB</span>
+        <span className="text-xs">10~60초, 최대 50MB</span>
       </label>
       {error && <p className="text-sm text-red-400 text-center">{error}</p>}
     </div>
