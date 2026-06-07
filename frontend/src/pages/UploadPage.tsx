@@ -92,7 +92,7 @@ export default function UploadPage() {
   const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('bottom')
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
   const [videoHasAudio, setVideoHasAudio] = useState(false)
-  const [hasChallenge, setHasChallenge] = useState<boolean | null>(null)
+  const [hasChallenge, setHasChallenge] = useState<boolean | null>(false)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
   const [showChallengeModal, setShowChallengeModal] = useState(false)

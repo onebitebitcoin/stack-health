@@ -38,6 +38,7 @@ export default function StepRecord({
   startRecording, stopRecording, skipRecording, onRetake, onNext,
 }: Props) {
   const [mode, setMode] = useState<Mode>('video')
+  const [pendingProceed, setPendingProceed] = useState<(() => void) | null>(null)
   const prevSrtRef = useRef(subtitleText)
   const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
 
@@ -70,6 +71,14 @@ export default function StepRecord({
   function handleModeChange(m: Mode) {
     if (recording) return
     setMode(m)
+  }
+
+  function attemptProceed(action: () => void) {
+    if (!hasSubtitle) {
+      setPendingProceed(() => action)
+      return
+    }
+    action()
   }
 
   function SubtitleEditor({ showClear = true }: { showClear?: boolean }) {
@@ -257,16 +266,49 @@ export default function StepRecord({
       {error && <p className="text-sm text-red-400">{error}</p>}
       <div className="mt-auto flex flex-col items-center gap-3 pb-2">
         {canProceed && (
-          <button onClick={onNext} className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg">
+          <button onClick={() => attemptProceed(onNext)} className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg">
             다음 <ChevronRight size={18} />
           </button>
         )}
         {!recording && (
-          <button onClick={skipRecording} className="text-sm text-theme-muted underline underline-offset-2 py-1">
+          <button onClick={() => attemptProceed(skipRecording)} className="text-sm text-theme-muted underline underline-offset-2 py-1">
             건너뛰기
           </button>
         )}
       </div>
+
+      {pendingProceed && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setPendingProceed(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-theme-surface p-5 flex flex-col gap-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <p className="font-semibold text-theme-primary">운동 인증 정보가 부족한데 진행하시겠습니까?</p>
+              <p className="text-xs text-theme-muted mt-1">
+                자막이 없으면 운동 인증이 어려울 수 있어요.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingProceed(null)}
+                className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => { const action = pendingProceed; setPendingProceed(null); action() }}
+                className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-semibold text-accent-fg"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
