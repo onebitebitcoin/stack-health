@@ -6,7 +6,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 
 const String kAppUrl = String.fromEnvironment(
   'APP_URL',
-  defaultValue: 'https://stack-health.up.railway.app',
+  defaultValue: 'https://stackhealth.life',
 );
 
 void main() {
