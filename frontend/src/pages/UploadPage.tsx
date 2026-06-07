@@ -219,11 +219,11 @@ export default function UploadPage() {
     videoEl.load() // iOS Safari requires explicit load() to trigger onloadedmetadata
     videoEl.onloadedmetadata = () => {
       // duration may be Infinity on iOS Live Photos / screen recordings — let server validate
-      if (isFinite(videoEl.duration) && (videoEl.duration < 5 || videoEl.duration > 60)) {
+      if (isFinite(videoEl.duration) && (videoEl.duration < 10 || videoEl.duration > 60)) {
         URL.revokeObjectURL(url); e.target.value = ''
         const secs = Math.round(videoEl.duration)
-        setError(secs < 5
-          ? `영상 길이가 ${secs}초입니다. 5초 이상 영상만 업로드할 수 있습니다.`
+        setError(secs < 10
+          ? `영상 길이가 ${secs}초입니다. 10초 이상 영상만 업로드할 수 있습니다.`
           : `영상 길이가 ${secs}초입니다. 60초 이하 영상만 업로드할 수 있습니다.`)
         return
       }

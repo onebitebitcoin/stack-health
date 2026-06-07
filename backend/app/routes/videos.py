@@ -141,8 +141,8 @@ def confirm_upload(
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    if req.duration_sec < 5 or req.duration_sec > 60:
-        raise HTTPException(status_code=400, detail="5초 이상 60초 이하의 영상만 업로드할 수 있습니다")
+    if req.duration_sec < 10 or req.duration_sec > 60:
+        raise HTTPException(status_code=400, detail="10초 이상 60초 이하의 영상만 업로드할 수 있습니다")
 
     expected_prefix = f"videos/{current_user.id}/"
     if not req.r2_key.startswith(expected_prefix):
@@ -810,8 +810,8 @@ async def upload_pipeline(
     background_tasks: BackgroundTasks = ...,
 ) -> dict:
     """파일 수신 즉시 job_id 반환. R2 업로드 + 처리는 백그라운드에서 실행."""
-    if duration_sec < 5 or duration_sec > 60:
-        raise HTTPException(status_code=400, detail="5초 이상 60초 이하의 영상만 업로드할 수 있습니다")
+    if duration_sec < 10 or duration_sec > 60:
+        raise HTTPException(status_code=400, detail="10초 이상 60초 이하의 영상만 업로드할 수 있습니다")
 
     content_type = file.content_type or "video/mp4"
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
