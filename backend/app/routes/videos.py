@@ -5,7 +5,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, Query, UploadFile
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings as app_settings
@@ -36,6 +36,7 @@ from app.services.reward import (
     get_daily_upload_count,
     points_for_tags,
     revoke_queued_upload_reward,
+    _parse_tz,
 )
 from app.services.error_codes import (
     api_error,
@@ -138,6 +139,7 @@ async def upload_video(
     file: UploadFile = File(...),
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
+    x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     """Server-side upload: receives file from browser, streams to R2.
 
@@ -147,7 +149,7 @@ async def upload_video(
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
         raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 파일 형식입니다: {content_type}")
 
-    if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
+    if get_daily_upload_count(db, current_user.id, _parse_tz(x_client_timezone)) >= DAILY_MAX_UPLOADS:
         raise api_error(429, E_VIDEO_DAILY_LIMIT, f"하루 업로드 한도({DAILY_MAX_UPLOADS}회)를 초과했습니다")
 
     logger.info("upload_video: user_id=%s filename=%s content_type=%s", current_user.id, file.filename, content_type)
@@ -160,6 +162,7 @@ def confirm_upload(
     req: ConfirmUploadRequest,
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
+    x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     if req.duration_sec < 10 or req.duration_sec > 60:
         raise api_error(400, E_VIDEO_DURATION_INVALID, "영상은 10~60초여야 합니다")
@@ -170,7 +173,7 @@ def confirm_upload(
 
     tags = req.tags or []
 
-    if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
+    if get_daily_upload_count(db, current_user.id, _parse_tz(x_client_timezone)) >= DAILY_MAX_UPLOADS:
         raise api_error(429, E_VIDEO_DAILY_LIMIT, f"하루 업로드 한도({DAILY_MAX_UPLOADS}회)를 초과했습니다")
 
     cdn_url = r2_service.get_cdn_url(req.r2_key)
@@ -239,9 +242,10 @@ def confirm_upload(
 def get_daily_limit(
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
+    x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     """오늘 업로드 횟수 및 한도 조회."""
-    count = get_daily_upload_count(db, current_user.id)
+    count = get_daily_upload_count(db, current_user.id, _parse_tz(x_client_timezone))
     return {
         "data": {
             "count": count,
@@ -828,6 +832,7 @@ async def upload_pipeline(
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = ...,
+    x_client_timezone: str = Header(default="UTC"),
 ) -> dict:
     """파일 수신 즉시 job_id 반환. R2 업로드 + 처리는 백그라운드에서 실행."""
     if duration_sec < 10 or duration_sec > 60:
@@ -839,7 +844,7 @@ async def upload_pipeline(
 
     tags_list = _parse_tags(tags)
 
-    if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
+    if get_daily_upload_count(db, current_user.id, _parse_tz(x_client_timezone)) >= DAILY_MAX_UPLOADS:
         raise api_error(429, E_VIDEO_DAILY_LIMIT, f"하루 업로드 한도({DAILY_MAX_UPLOADS}회)를 초과했습니다")
 
     video_path, _video_size = await _spool_upload_to_temp(file, r2_service.MAX_FILE_SIZE, "영상")

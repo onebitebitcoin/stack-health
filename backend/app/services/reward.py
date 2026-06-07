@@ -99,15 +99,17 @@ def _utc_today_start() -> datetime:
     return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-def get_daily_upload_window() -> tuple[datetime, datetime]:
-    """Return today's global UTC upload-limit window."""
-    today_start = _utc_today_start()
-    return today_start, today_start + timedelta(days=1)
+def get_daily_upload_window(tz: ZoneInfo = UTC) -> tuple[datetime, datetime]:
+    """Return today's upload-limit window in the given timezone (default UTC)."""
+    now_client = datetime.now(tz)
+    today_start_client = now_client.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end_client = today_start_client + timedelta(days=1)
+    return today_start_client.astimezone(timezone.utc), today_end_client.astimezone(timezone.utc)
 
 
-def get_daily_upload_count(db: Session, user_id: int) -> int:
-    """Return today's upload count using the global UTC reset window."""
-    today_start, today_end = get_daily_upload_window()
+def get_daily_upload_count(db: Session, user_id: int, tz: ZoneInfo = UTC) -> int:
+    """Return today's upload count using the given timezone's reset window."""
+    today_start, today_end = get_daily_upload_window(tz)
     return (
         db.query(Video)
         .filter(
