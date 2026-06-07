@@ -3,7 +3,7 @@ import LogoMark from './LogoMark'
 export default function LoadingScreen() {
   return (
     <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-theme-page px-6 text-center">
-      <div className="rounded-3xl bg-theme-surface p-5 text-accent shadow-[0_0_40px_rgba(181,255,46,0.12)]">
+      <div className="text-accent">
         <LogoMark aria-hidden="true" size={56} />
       </div>
       <div className="text-center">

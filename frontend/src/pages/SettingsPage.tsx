@@ -1,10 +1,11 @@
 import { ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2, RefreshCw } from 'lucide-react'
 import { useState, useRef, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import UserAvatar from '../components/UserAvatar'
+
+const ANDROID_APK_URL = 'https://github.com/onebitebitcoin/stack-health/releases/download/v0.0.28-android/app-release.apk'
 
 const ROW = 'flex items-center justify-between px-4 py-3.5'
 const LABEL = 'text-sm text-theme-primary'
@@ -85,13 +86,6 @@ export default function SettingsPage() {
     }
   }
 
-  const { data: appLinks } = useQuery<{ android_url: string | null; android_filename: string | null }>({
-    queryKey: ['app-links'],
-    queryFn: async () => {
-      const res = await client.get<{ data: { android_url: string | null; android_filename: string | null } }>('/admin/app-links')
-      return res.data.data
-    },
-  })
 
   async function saveUsername(e: FormEvent) {
     e.preventDefault()
@@ -289,28 +283,18 @@ export default function SettingsPage() {
           <p className={SECTION}>앱 다운로드</p>
           <div className={GROUP}>
             {/* Android */}
-            {appLinks?.android_url ? (
-              <a
-                href={appLinks.android_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${ROW} ${DIVIDER}`}
-              >
-                <div className="flex items-center gap-2">
-                  <Smartphone size={13} className="text-[#3DDC84]" />
-                  <span className={LABEL}>Android APK</span>
-                </div>
-                <Download size={14} className="text-theme-muted" />
-              </a>
-            ) : (
-              <div className={`${ROW} ${DIVIDER} opacity-40`}>
-                <div className="flex items-center gap-2">
-                  <Smartphone size={13} className="text-theme-muted" />
-                  <span className={LABEL}>Android APK</span>
-                </div>
-                <span className="text-xs text-theme-muted">준비 중</span>
+            <a
+              href={ANDROID_APK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${ROW} ${DIVIDER}`}
+            >
+              <div className="flex items-center gap-2">
+                <Smartphone size={13} className="text-[#3DDC84]" />
+                <span className={LABEL}>Android APK</span>
               </div>
-            )}
+              <Download size={14} className="text-theme-muted" />
+            </a>
 
             {/* iOS PWA */}
             <button
