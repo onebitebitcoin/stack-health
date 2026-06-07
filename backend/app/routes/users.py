@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query
 from pydantic import BaseModel
 from sqlalchemy import and_, func as sqlfunc, or_
 from sqlalchemy.orm import Session, selectinload, joinedload
@@ -26,6 +26,7 @@ from app.services.reward import (
     points_to_sats,
     settle_queued_rewards,
 )
+from app.services.error_codes import api_error, E_USER_NOT_FOUND
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -308,7 +309,7 @@ def get_leaderboard(
 def get_user_profile(user_id: int, db: Session = Depends(get_db)) -> dict:
     user = db.query(User).filter(User.id == user_id).first()
     if not user or user.is_banned:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
 
     post_count = (
         db.query(Post)

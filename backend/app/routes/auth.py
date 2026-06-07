@@ -33,6 +33,21 @@ from app.services.google_oauth import exchange_code, generate_oauth_state, get_g
 from app.services.lnauth import encode_lnurl, generate_k1, verify_signature
 from app.services.rate_limit import check_rate_limit
 from app.services.notify import notify_new_user
+from app.services.error_codes import (
+    api_error,
+    E_AUTH_EMAIL_TAKEN,
+    E_AUTH_INVALID_CREDENTIALS,
+    E_AUTH_INVALID_TOKEN,
+    E_AUTH_REQUIRED,
+    E_AUTH_USERNAME_TAKEN,
+    E_BANNED,
+    E_CHALLENGE_EXPIRED,
+    E_CHALLENGE_INVALID,
+    E_FILE_TOO_LARGE,
+    E_GOOGLE_AUTH_UNAVAILABLE,
+    E_IMAGE_FORMAT_INVALID,
+    E_USER_NOT_FOUND,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -66,7 +81,7 @@ class _BearerAuth(HTTPBearer):
         try:
             return await super().__call__(request)
         except HTTPException:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="인증이 필요합니다")
+            raise api_error(status.HTTP_401_UNAUTHORIZED, E_AUTH_REQUIRED, "인증이 필요합니다")
 
 
 bearer = _BearerAuth()
@@ -79,17 +94,17 @@ def get_current_user(
 ) -> User:
     user_id = decode_token(credentials.credentials)
     if user_id is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰입니다")
+        raise api_error(status.HTTP_401_UNAUTHORIZED, E_AUTH_INVALID_TOKEN, "유효하지 않은 토큰입니다")
     user = get_user_by_id(db, user_id)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="사용자를 찾을 수 없습니다")
+        raise api_error(status.HTTP_401_UNAUTHORIZED, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
     return user
 
 
 def get_active_user(user: User = Depends(get_current_user)) -> User:
     """get_current_user + ban check. Use on write/action endpoints."""
     if user.is_banned:
-        raise HTTPException(status_code=403, detail="계정이 정지되었습니다")
+        raise api_error(403, E_BANNED, "계정이 정지된 상태입니다")
     return user
 
 
@@ -109,9 +124,9 @@ def get_optional_user(
 async def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     check_rate_limit(request, "auth:register", max_calls=5, period_seconds=3600)
     if get_user_by_email(db, req.email):
-        raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다")
+        raise api_error(400, E_AUTH_EMAIL_TAKEN, "이미 사용 중인 이메일입니다")
     if db.query(User).filter(User.username == req.username).first():
-        raise HTTPException(status_code=400, detail="이미 사용 중인 닉네임입니다")
+        raise api_error(400, E_AUTH_USERNAME_TAKEN, "이미 사용 중인 닉네임입니다")
 
     loop = asyncio.get_running_loop()
     password_hash = await loop.run_in_executor(None, hash_password, req.password)
@@ -143,7 +158,7 @@ async def login(req: LoginRequest, request: Request, db: Session = Depends(get_d
     loop = asyncio.get_running_loop()
     ok = await loop.run_in_executor(None, verify_password, req.password, hash_to_check)
     if not ok or user is None:
-        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다")
+        raise api_error(401, E_AUTH_INVALID_CREDENTIALS, "이메일 또는 비밀번호가 올바르지 않습니다")
 
     token = create_access_token(user.id)
     return {"data": TokenResponse(access_token=token, user=UserSchema.model_validate(user))}
@@ -186,7 +201,7 @@ def update_me(
             User.username == req.username, User.id != current_user.id
         ).first()
         if existing:
-            raise HTTPException(status_code=400, detail="이미 사용 중인 닉네임입니다")
+            raise api_error(400, E_AUTH_USERNAME_TAKEN, "이미 사용 중인 닉네임입니다")
         current_user.username = req.username
         settings = dict(current_user.app_settings or {})
         settings.pop("needs_username", None)
@@ -209,11 +224,11 @@ async def upload_avatar(
 ) -> dict:
     content_type = file.content_type or ""
     if content_type not in AVATAR_ALLOWED_TYPES:
-        raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다 (jpeg/png/webp/gif)")
+        raise api_error(400, E_IMAGE_FORMAT_INVALID, "이미지 파일(jpeg/png/webp/gif)만 업로드할 수 있습니다")
 
     data = await file.read()
     if len(data) > AVATAR_MAX_SIZE:
-        raise HTTPException(status_code=400, detail="파일 크기는 5MB 이하여야 합니다")
+        raise api_error(400, E_FILE_TOO_LARGE, "파일 크기는 5MB 이하여야 합니다")
 
     ext = AVATAR_CONTENT_TYPE_TO_EXT[content_type]
     r2_key = f"avatars/{uuid.uuid4()}.{ext}"
@@ -236,7 +251,7 @@ async def upload_avatar(
 @router.get("/google")
 def google_login() -> RedirectResponse:
     if not settings.google_client_id:
-        raise HTTPException(status_code=503, detail="Google 로그인이 설정되지 않았습니다")
+        raise api_error(503, E_GOOGLE_AUTH_UNAVAILABLE, "Google 로그인을 현재 사용할 수 없습니다")
     state = generate_oauth_state()
     url = get_google_auth_url(state=state)
     return RedirectResponse(url=url)
@@ -326,11 +341,11 @@ def lnauth_callback(
 ) -> dict:
     challenge = db.query(LNAuthChallenge).filter(LNAuthChallenge.k1 == k1).first()
     if not challenge:
-        raise HTTPException(status_code=400, detail="유효하지 않은 챌린지입니다")
+        raise api_error(400, E_CHALLENGE_INVALID, "유효하지 않은 챌린지입니다")
     if datetime.now(timezone.utc) - _as_utc(challenge.created_at) > LNAUTH_CHALLENGE_TTL:
         db.delete(challenge)
         db.commit()
-        raise HTTPException(status_code=400, detail="챌린지가 만료되었습니다. 다시 시도해주세요")
+        raise api_error(400, E_CHALLENGE_EXPIRED, "챌린지가 만료되었습니다. 다시 시도해주세요")
 
     if sig is None or key is None:
         return {

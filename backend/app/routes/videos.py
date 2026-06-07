@@ -5,7 +5,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings as app_settings
@@ -37,6 +37,26 @@ from app.services.reward import (
     points_for_tags,
     revoke_queued_upload_reward,
 )
+from app.services.error_codes import (
+    api_error,
+    E_AUDIO_DURATION_INVALID,
+    E_AUDIO_UPLOAD_FAILED,
+    E_FILE_TOO_LARGE,
+    E_FORBIDDEN,
+    E_IMAGE_FORMAT_INVALID,
+    E_IMAGE_TOO_LARGE,
+    E_IMAGE_UPLOAD_FAILED,
+    E_JOB_NOT_FOUND,
+    E_POST_NOT_FOUND,
+    E_QUEUE_FAILED,
+    E_USER_NOT_FOUND,
+    E_VIDEO_DAILY_LIMIT,
+    E_VIDEO_DURATION_INVALID,
+    E_VIDEO_FORMAT_INVALID,
+    E_VIDEO_NOT_FOUND,
+    E_VIDEO_PROCESS_FAILED,
+    E_VIDEO_TOO_LARGE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +72,7 @@ def _assert_job_owner(job: dict, current_user: User) -> None:
     if job_user_id in (None, ""):
         return
     if str(job_user_id) != str(current_user.id):
-        raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+        raise api_error(404, E_JOB_NOT_FOUND, "요청한 작업을 찾을 수 없습니다")
 
 
 async def _spool_upload_to_temp(upload: UploadFile, max_bytes: int, label: str) -> tuple[str, int]:
@@ -74,7 +94,7 @@ async def _spool_upload_to_temp(upload: UploadFile, max_bytes: int, label: str) 
                     break
                 size += len(chunk)
                 if size > max_bytes:
-                    raise HTTPException(status_code=400, detail=f"{label} 파일이 너무 큽니다")
+                    raise api_error(400, E_FILE_TOO_LARGE, f"{label} 파일이 너무 큽니다")
                 out.write(chunk)
         return path, size
     except Exception:
@@ -105,9 +125,9 @@ def get_presigned_url(
             req.content_type,
             current_user.id,
         )
-        raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식입니다: {req.content_type}")
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 파일 형식입니다: {req.content_type}")
     if req.file_size > r2_service.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="파일이 너무 큽니다 (최대 100MB)")
+        raise api_error(400, E_VIDEO_TOO_LARGE, "파일이 너무 큽니다 (최대 100MB)")
 
     upload_url, r2_key = r2_service.generate_presigned_url(req.content_type, req.filename, current_user.id)
     return {"data": PresignedUrlResponse(upload_url=upload_url, r2_key=r2_key)}
@@ -125,10 +145,10 @@ async def upload_video(
     """
     content_type = file.content_type or "video/mp4"
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식입니다: {content_type}")
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 파일 형식입니다: {content_type}")
 
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
-        raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
+        raise api_error(429, E_VIDEO_DAILY_LIMIT, f"하루 업로드 한도({DAILY_MAX_UPLOADS}회)를 초과했습니다")
 
     logger.info("upload_video: user_id=%s filename=%s content_type=%s", current_user.id, file.filename, content_type)
     r2_key, cdn_url = r2_service.upload_fileobj(file.file, content_type, file.filename or "video.mp4", current_user.id)
@@ -142,16 +162,16 @@ def confirm_upload(
     db: Session = Depends(get_db),
 ) -> dict:
     if req.duration_sec < 10 or req.duration_sec > 60:
-        raise HTTPException(status_code=400, detail="10초 이상 60초 이하의 영상만 업로드할 수 있습니다")
+        raise api_error(400, E_VIDEO_DURATION_INVALID, "영상은 10~60초여야 합니다")
 
     expected_prefix = f"videos/{current_user.id}/"
     if not req.r2_key.startswith(expected_prefix):
-        raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
+        raise api_error(403, E_FORBIDDEN, "접근 권한이 없습니다")
 
     tags = req.tags or []
 
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
-        raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
+        raise api_error(429, E_VIDEO_DAILY_LIMIT, f"하루 업로드 한도({DAILY_MAX_UPLOADS}회)를 초과했습니다")
 
     cdn_url = r2_service.get_cdn_url(req.r2_key)
 
@@ -319,13 +339,13 @@ def get_post_by_share_token(
 ) -> dict:
     post = db.query(Post).filter(Post.share_token == share_token).first()
     if not post:
-        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+        raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
     video = db.query(Video).filter(Video.id == post.video_id).first()
     if not video:
-        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+        raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
     user = db.query(User).filter(User.id == post.user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
     tags = _parse_tags(post.tags)
     comment_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
     is_liked = False
@@ -366,13 +386,13 @@ def get_post(
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
-        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+        raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
     video = db.query(Video).filter(Video.id == post.video_id).first()
     if not video:
-        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+        raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
     user = db.query(User).filter(User.id == post.user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
     tags = _parse_tags(post.tags)
     comment_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
     post_schema = PostSchema(
@@ -409,9 +429,9 @@ def delete_post(
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
-        raise HTTPException(status_code=404, detail="게시물을 찾을 수 없습니다")
+        raise api_error(404, E_POST_NOT_FOUND, "게시물을 찾을 수 없습니다")
     if post.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="권한이 없습니다")
+        raise api_error(403, E_FORBIDDEN, "이 작업을 수행할 권한이 없습니다")
 
     video = db.query(Video).filter(Video.id == post.video_id).first()
 
@@ -457,10 +477,10 @@ async def merge_audio(
 ) -> dict:
     """오디오+비디오 병합 잡을 외부 워커 큐에 등록한다."""
     if not video_r2_key.startswith(f"videos/{current_user.id}/"):
-        raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
+        raise api_error(403, E_FORBIDDEN, "접근 권한이 없습니다")
 
     if audio_duration_sec <= 0 or audio_duration_sec > 65:
-        raise HTTPException(status_code=400, detail="오디오 길이가 올바르지 않습니다")
+        raise api_error(400, E_AUDIO_DURATION_INVALID, "오디오 길이를 확인해주세요")
 
     logger.info("merge_audio enqueue: user_id=%s video_r2_key=%s", current_user.id, video_r2_key)
 
@@ -480,7 +500,7 @@ async def merge_audio(
         )
     except Exception as e:
         logger.error("오디오 R2 업로드 실패: %s", e)
-        raise HTTPException(status_code=500, detail="오디오 업로드에 실패했습니다")
+        raise api_error(500, E_AUDIO_UPLOAD_FAILED, "오디오 업로드에 실패했습니다. 잠시 후 다시 시도해주세요")
 
     job_payload = {
         "user_id": current_user.id,
@@ -494,7 +514,7 @@ async def merge_audio(
         job_id = enqueue_merge_job(job_payload)
     except Exception as e:
         logger.error("Redis 큐 실패: %s", e)
-        raise HTTPException(status_code=500, detail="영상 처리 큐 등록에 실패했습니다")
+        raise api_error(500, E_QUEUE_FAILED, "영상 처리 요청에 실패했습니다. 잠시 후 다시 시도해주세요")
 
     return {"data": {"job_id": job_id, "status": "processing"}}
 
@@ -508,7 +528,7 @@ def get_merge_job_status(
     job = get_job_status(job_id)  # 로컬 스토어 → Redis 순 확인, 예외 없음
 
     if job is None:
-        raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+        raise api_error(404, E_JOB_NOT_FOUND, "요청한 작업을 찾을 수 없습니다")
     _assert_job_owner(job, current_user)
 
     return {
@@ -535,11 +555,11 @@ async def upload_proof_image(
     """증거 이미지를 R2에 업로드하고 proof_r2_key를 반환한다."""
     content_type = file.content_type or "image/jpeg"
     if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식입니다: {content_type}")
+        raise api_error(400, E_IMAGE_FORMAT_INVALID, f"지원하지 않는 이미지 형식입니다: {content_type}")
 
     image_bytes = await file.read()
     if len(image_bytes) > MAX_IMAGE_SIZE:
-        raise HTTPException(status_code=400, detail="이미지가 너무 큽니다 (최대 10MB)")
+        raise api_error(400, E_IMAGE_TOO_LARGE, "이미지가 너무 큽니다 (최대 10MB)")
 
     ext = "jpg" if "jpeg" in content_type or "jpg" in content_type else "png"
     proof_r2_key = f"proof/{current_user.id}/{uuid.uuid4()}.{ext}"
@@ -555,7 +575,7 @@ async def upload_proof_image(
         )
     except Exception as e:
         logger.error("증거 이미지 R2 업로드 실패: %s", e)
-        raise HTTPException(status_code=500, detail="이미지 업로드에 실패했습니다")
+        raise api_error(500, E_IMAGE_UPLOAD_FAILED, "이미지 업로드에 실패했습니다. 잠시 후 다시 시도해주세요")
 
     proof_cdn_url = f"{app_settings.r2_public_url.rstrip('/')}/{proof_r2_key}"
     logger.info("upload_proof: user_id=%s key=%s", current_user.id, proof_r2_key)
@@ -570,16 +590,16 @@ def merge_proof(
 ) -> dict:
     """증거 이미지를 비디오 끝에 3초 슬라이드로 붙인다."""
     if not video_r2_key.startswith(f"videos/{current_user.id}/"):
-        raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
+        raise api_error(403, E_FORBIDDEN, "접근 권한이 없습니다")
     if not proof_r2_key.startswith(f"proof/{current_user.id}/"):
-        raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
+        raise api_error(403, E_FORBIDDEN, "접근 권한이 없습니다")
 
     logger.info("merge_proof: user_id=%s video=%s proof=%s", current_user.id, video_r2_key, proof_r2_key)
     try:
         job_id = enqueue_image_merge_job(video_r2_key, proof_r2_key, current_user.id)
     except Exception as e:
         logger.error("proof merge 큐 등록 실패: %s", e)
-        raise HTTPException(status_code=500, detail="영상 처리에 실패했습니다")
+        raise api_error(500, E_VIDEO_PROCESS_FAILED, "영상 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요")
     return {"data": {"job_id": job_id, "status": "processing"}}
 
 
@@ -595,7 +615,7 @@ async def transcribe_subtitles(
     """파일을 R2에 올리고 자막 추출 잡을 큐에 등록. job_id 즉시 반환."""
     content_type = file.content_type or "video/mp4"
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식: {content_type}")
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 파일 형식입니다: {content_type}")
 
     video_path, _ = await _spool_upload_to_temp(file, r2_service.MAX_FILE_SIZE, "자막영상")
     audio_path: str | None = None
@@ -621,7 +641,7 @@ async def get_subtitle_job(
     """자막 추출 잡 상태 + 결과 폴링."""
     job = get_job_status(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+        raise api_error(404, E_JOB_NOT_FOUND, "요청한 작업을 찾을 수 없습니다")
     _assert_job_owner(job, current_user)
     return {"data": {
         "status": job.get("status"),
@@ -811,16 +831,16 @@ async def upload_pipeline(
 ) -> dict:
     """파일 수신 즉시 job_id 반환. R2 업로드 + 처리는 백그라운드에서 실행."""
     if duration_sec < 10 or duration_sec > 60:
-        raise HTTPException(status_code=400, detail="10초 이상 60초 이하의 영상만 업로드할 수 있습니다")
+        raise api_error(400, E_VIDEO_DURATION_INVALID, "영상은 10~60초여야 합니다")
 
     content_type = file.content_type or "video/mp4"
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail=f"지원하지 않는 파일 형식: {content_type}")
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 파일 형식입니다: {content_type}")
 
     tags_list = _parse_tags(tags)
 
     if get_daily_upload_count(db, current_user.id) >= DAILY_MAX_UPLOADS:
-        raise HTTPException(status_code=429, detail=f"하루 업로드 한도 초과 ({DAILY_MAX_UPLOADS}회/일)")
+        raise api_error(429, E_VIDEO_DAILY_LIMIT, f"하루 업로드 한도({DAILY_MAX_UPLOADS}회)를 초과했습니다")
 
     video_path, _video_size = await _spool_upload_to_temp(file, r2_service.MAX_FILE_SIZE, "영상")
 
@@ -835,7 +855,7 @@ async def upload_pipeline(
     if proof_image is not None:
         proof_content_type = proof_image.content_type or "image/jpeg"
         if proof_content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
-            raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식: {proof_content_type}")
+            raise api_error(400, E_IMAGE_FORMAT_INVALID, f"지원하지 않는 이미지 형식입니다: {proof_content_type}")
         proof_path, _proof_size = await _spool_upload_to_temp(proof_image, MAX_IMAGE_SIZE, "이미지")
 
     temp_paths = [p for p in (video_path, audio_path, proof_path) if p]
@@ -886,7 +906,7 @@ def get_upload_job_status(
     """upload-pipeline 잡 상태 폴링 엔드포인트."""
     job = get_job_status(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="잡을 찾을 수 없습니다")
+        raise api_error(404, E_JOB_NOT_FOUND, "요청한 작업을 찾을 수 없습니다")
     _assert_job_owner(job, current_user)
 
     status = job.get("status", "unknown")

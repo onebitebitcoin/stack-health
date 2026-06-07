@@ -5,6 +5,11 @@ type ApiErrorBody = {
   message?: unknown
 }
 
+type CodedError = {
+  code: string
+  message: string
+}
+
 type ValidationIssue = {
   loc?: unknown[]
   msg?: unknown
@@ -58,7 +63,19 @@ function validationIssueMessage(issue: ValidationIssue): string {
   return `${name}을(를) 다시 확인해주세요.`
 }
 
+function isCodedError(value: unknown): value is CodedError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'code' in value &&
+    'message' in value &&
+    typeof (value as CodedError).code === 'string' &&
+    typeof (value as CodedError).message === 'string'
+  )
+}
+
 function detailToMessage(detail: unknown): string | null {
+  if (isCodedError(detail)) return `${detail.message} [${detail.code}]`
   if (typeof detail === 'string') return isKoreanUserMessage(detail) ? detail : null
   if (Array.isArray(detail) && detail.length > 0) {
     return validationIssueMessage(detail[0] as ValidationIssue)

@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import case, func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -15,6 +15,10 @@ from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.video import PostSchema
 from app.services.reward import _utc_today_start
+from app.services.error_codes import (
+    api_error,
+    E_POST_NOT_FOUND,
+)
 
 router = APIRouter(prefix="/api/v1/feed", tags=["feed"])
 
@@ -118,7 +122,7 @@ def like_post(
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if post is None:
-        raise HTTPException(status_code=404, detail="게시물을 찾을 수 없습니다")
+        raise api_error(404, E_POST_NOT_FOUND, "게시물을 찾을 수 없습니다")
 
     existing_like = (
         db.query(PostLike)
@@ -153,7 +157,7 @@ def view_post(
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if post is None:
-        raise HTTPException(status_code=404, detail="게시물을 찾을 수 없습니다")
+        raise api_error(404, E_POST_NOT_FOUND, "게시물을 찾을 수 없습니다")
 
     today_start = _utc_today_start()
     already_viewed = (

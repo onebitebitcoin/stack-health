@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -28,6 +28,17 @@ from app.services.reward import (
     revoke_queued_upload_reward,
     settle_queued_rewards,
 )
+from app.services.error_codes import (
+    api_error,
+    E_ADMIN_API_KEY_DELETE,
+    E_ADMIN_REQUIRED,
+    E_ADMIN_SELF_DELETE,
+    E_AUTH_INVALID_TOKEN,
+    E_AUTH_REQUIRED,
+    E_UPLOAD_URL_FAILED,
+    E_USER_NOT_FOUND,
+    E_VIDEO_NOT_FOUND,
+)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -44,15 +55,15 @@ def require_admin(
     # 일반 브라우저: Bearer JWT 인증
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+        raise api_error(401, E_AUTH_REQUIRED, "인증이 필요합니다")
     from app.services.auth import decode_token
     from app.services.auth import get_user_by_id
     user_id = decode_token(auth.removeprefix("Bearer "))
     if user_id is None:
-        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다")
+        raise api_error(401, E_AUTH_INVALID_TOKEN, "유효하지 않은 토큰입니다")
     user = get_user_by_id(db, user_id)
     if user is None or not user.is_admin:
-        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+        raise api_error(403, E_ADMIN_REQUIRED, "관리자 권한이 필요합니다")
     return user
 
 
@@ -112,7 +123,7 @@ def reject_video(
 ) -> dict:
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
-        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+        raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
 
     revoke_queued_upload_reward(db, video.id)
     video.status = "rejected"
@@ -129,7 +140,7 @@ def delete_video(
 ) -> dict:
     video = db.query(Video).filter(Video.id == video_id).first()
     if video is None:
-        raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다")
+        raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
 
     r2_key = video.r2_key
     revoke_queued_upload_reward(db, video.id)
@@ -245,7 +256,7 @@ def toggle_ban(
 ) -> dict:
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
     user.is_banned = not user.is_banned
     log = AdminLog(
         action="ban_toggle",
@@ -267,12 +278,12 @@ def delete_user(
 ) -> dict:
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
     if admin is not None and user.id == admin.id:
-        raise HTTPException(status_code=400, detail="자신의 계정은 삭제할 수 없습니다")
+        raise api_error(400, E_ADMIN_SELF_DELETE, "자신의 계정은 삭제할 수 없습니다")
     # X-Admin-Key (admin=None) cannot delete admin accounts — no self-identity check possible
     if admin is None and user.is_admin:
-        raise HTTPException(status_code=400, detail="API 키로는 관리자 계정을 삭제할 수 없습니다")
+        raise api_error(400, E_ADMIN_API_KEY_DELETE, "API 키로는 관리자 계정을 삭제할 수 없습니다")
 
     # 영상 R2 키 수집 후 DB 삭제
     videos = db.query(Video).filter(Video.user_id == user_id).all()
@@ -329,7 +340,7 @@ def get_user_detail(
 
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+        raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
 
     videos = (
         db.query(Video)
@@ -523,7 +534,7 @@ def get_app_upload_url(
             body.content_type, body.filename, body.platform
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="업로드 URL 생성에 실패했습니다") from exc
+        raise api_error(500, E_UPLOAD_URL_FAILED, "업로드를 시작할 수 없습니다. 잠시 후 다시 시도해주세요") from exc
     cdn_url = r2_service.get_cdn_url(r2_key)
     return {"data": {"upload_url": upload_url, "r2_key": r2_key, "cdn_url": cdn_url}}
 

@@ -3,7 +3,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from PIL import Image
 from sqlalchemy import cast, func, String
 from sqlalchemy.exc import SQLAlchemyError
@@ -18,6 +18,26 @@ from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.challenge import ChallengeCreateRequest, ChallengeSchema, ChallengeUpdateRequest, EarnedTitleSchema
 from app.config import settings as app_settings
 from app.services import r2 as r2_service
+from app.services.error_codes import (
+    api_error,
+    E_ADMIN_REQUIRED,
+    E_CHALLENGE_ALREADY_COMPLETED,
+    E_CHALLENGE_ALREADY_JOINED,
+    E_CHALLENGE_CLOSED,
+    E_CHALLENGE_CREATE_FAILED,
+    E_CHALLENGE_ENDED,
+    E_CHALLENGE_FULL,
+    E_CHALLENGE_INVALID,
+    E_CHALLENGE_NOT_FOUND,
+    E_CHALLENGE_NOT_JOINED,
+    E_CHALLENGE_NOT_PARTICIPATING,
+    E_CHALLENGE_OWNER_REQUIRED,
+    E_CHALLENGE_TITLE_TAKEN,
+    E_FORBIDDEN,
+    E_IMAGE_FORMAT_INVALID,
+    E_MANAGER_REQUIRED,
+    E_PARTICIPATION_NOT_FOUND,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/challenges", tags=["challenges"])
@@ -187,7 +207,7 @@ def _assert_reward_title_unique(db: Session, reward_title: str, exclude_id: int 
     if exclude_id is not None:
         q = q.filter(Challenge.id != exclude_id)
     if q.first():
-        raise HTTPException(status_code=409, detail=f"이미 사용 중인 타이틀입니다: '{reward_title}'")
+        raise api_error(409, E_CHALLENGE_TITLE_TAKEN, f"이미 사용 중인 타이틀입니다: '{reward_title}'")
 
 
 @router.post("")
@@ -222,7 +242,7 @@ def create_challenge(
     except SQLAlchemyError as e:
         db.rollback()
         logger.exception("Failed to create challenge for user_id=%s: %s", current_user.id, e)
-        raise HTTPException(status_code=500, detail="챌린지 생성에 실패했습니다")
+        raise api_error(500, E_CHALLENGE_CREATE_FAILED, "챌린지 생성에 실패했습니다. 잠시 후 다시 시도해주세요")
 
 
 @router.post("/{challenge_id}/image")
@@ -233,13 +253,13 @@ async def upload_challenge_image(
     db: Session = Depends(get_db),
 ) -> dict:
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="관리자만 이미지를 업로드할 수 있습니다")
+        raise api_error(403, E_ADMIN_REQUIRED, "관리자만 이미지를 업로드할 수 있습니다")
     challenge = db.get(Challenge, challenge_id)
     if not challenge:
-        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+        raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     content_type = file.content_type or "image/jpeg"
     if not content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
+        raise api_error(400, E_IMAGE_FORMAT_INVALID, "이미지 파일만 업로드할 수 있습니다")
 
     raw = await file.read()
     img = Image.open(io.BytesIO(raw)).convert("RGB")
@@ -376,9 +396,9 @@ def leave_challenge(
         .first()
     )
     if not participation:
-        raise HTTPException(status_code=404, detail="참여 중인 챌린지가 아닙니다")
+        raise api_error(404, E_CHALLENGE_NOT_PARTICIPATING, "참여 중인 챌린지가 아닙니다")
     if participation.completed_at is not None:
-        raise HTTPException(status_code=400, detail="완료한 챌린지는 취소할 수 없습니다")
+        raise api_error(400, E_CHALLENGE_ALREADY_COMPLETED, "이미 완료한 챌린지는 취소할 수 없습니다")
     db.delete(participation)
     db.commit()
     logger.info("Challenge left: challenge_id=%s user_id=%s", challenge_id, current_user.id)
@@ -393,9 +413,9 @@ def join_challenge(
 ) -> dict:
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
     if not challenge:
-        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+        raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     if not challenge.is_active:
-        raise HTTPException(status_code=400, detail="종료된 챌린지입니다")
+        raise api_error(400, E_CHALLENGE_ENDED, "이미 종료된 챌린지입니다")
 
     now = datetime.now(timezone.utc)
     recruit_end = challenge.recruit_end
@@ -403,7 +423,7 @@ def join_challenge(
         if recruit_end.tzinfo is None:
             recruit_end = recruit_end.replace(tzinfo=timezone.utc)
         if now > recruit_end:
-            raise HTTPException(status_code=400, detail="모집이 마감되었습니다")
+            raise api_error(400, E_CHALLENGE_CLOSED, "모집이 마감된 챌린지입니다")
 
     if challenge.max_participants is not None:
         count = (
@@ -412,7 +432,7 @@ def join_challenge(
             .scalar()
         ) or 0
         if count >= challenge.max_participants:
-            raise HTTPException(status_code=400, detail="모집 인원이 가득 찼습니다")
+            raise api_error(400, E_CHALLENGE_FULL, "모집 인원이 가득 찼습니다")
 
     existing = (
         db.query(ChallengeParticipation)
@@ -423,7 +443,7 @@ def join_challenge(
         .first()
     )
     if existing:
-        raise HTTPException(status_code=409, detail="이미 참여 중인 챌린지입니다")
+        raise api_error(409, E_CHALLENGE_ALREADY_JOINED, "이미 참여 중인 챌린지입니다")
 
     participation = ChallengeParticipation(
         user_id=current_user.id,
@@ -444,9 +464,9 @@ def challenge_participants(
 ) -> dict:
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
     if not challenge:
-        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+        raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     if challenge.creator_id != current_user.id:
-        raise HTTPException(status_code=403, detail="챌린지 생성자만 접근할 수 있습니다")
+        raise api_error(403, E_CHALLENGE_OWNER_REQUIRED, "챌린지 생성자만 접근할 수 있습니다")
     participations = (
         db.query(ChallengeParticipation)
         .filter(ChallengeParticipation.challenge_id == challenge_id)
@@ -510,9 +530,9 @@ def challenge_videos(
 ) -> dict:
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
     if not challenge:
-        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+        raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     if challenge.creator_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="챌린지 생성자만 접근할 수 있습니다")
+        raise api_error(403, E_CHALLENGE_OWNER_REQUIRED, "챌린지 생성자만 접근할 수 있습니다")
 
     posts = (
         db.query(Post)
@@ -552,9 +572,9 @@ def toggle_participant_complete(
 ) -> dict:
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
     if not challenge:
-        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+        raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     if challenge.creator_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="매니저만 완료 처리할 수 있습니다")
+        raise api_error(403, E_MANAGER_REQUIRED, "매니저만 완료 처리할 수 있습니다")
 
     participation = (
         db.query(ChallengeParticipation)
@@ -565,7 +585,7 @@ def toggle_participant_complete(
         .first()
     )
     if not participation:
-        raise HTTPException(status_code=404, detail="참여 정보를 찾을 수 없습니다")
+        raise api_error(404, E_PARTICIPATION_NOT_FOUND, "참여 정보를 찾을 수 없습니다")
 
     if participation.completed_at is None:
         participation.completed_at = datetime.now(timezone.utc)
@@ -584,7 +604,7 @@ def get_challenge(
 ) -> dict:
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id, Challenge.is_active == True).first()  # noqa: E712
     if not challenge:
-        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+        raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     uid = current_user.id if current_user else None
     return {"data": {"challenge": _to_schema(challenge, uid, db)}}
 
@@ -598,9 +618,9 @@ def update_challenge(
 ) -> dict:
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
     if not challenge:
-        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+        raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     if challenge.creator_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="수정 권한이 없습니다")
+        raise api_error(403, E_FORBIDDEN, "수정 권한이 없습니다")
     if body.title is not None:
         challenge.title = body.title
     if body.description is not None:
@@ -638,9 +658,9 @@ def delete_challenge(
 ) -> dict:
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
     if not challenge:
-        raise HTTPException(status_code=404, detail="챌린지를 찾을 수 없습니다")
+        raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     if challenge.creator_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="삭제 권한이 없습니다")
+        raise api_error(403, E_FORBIDDEN, "삭제 권한이 없습니다")
     challenge.is_active = False
     db.commit()
     logger.info("Challenge deleted: id=%s by user_id=%s", challenge_id, current_user.id)
@@ -657,10 +677,10 @@ def increment_challenge_upload(db: Session, user_id: int, challenge_id: int) -> 
         .first()
     )
     if not participation:
-        raise HTTPException(status_code=400, detail="챌린지에 먼저 참여하세요")
+        raise api_error(400, E_CHALLENGE_NOT_JOINED, "먼저 챌린지에 참여해주세요")
 
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
     if not challenge or not challenge.is_active:
-        raise HTTPException(status_code=400, detail="유효하지 않은 챌린지입니다")
+        raise api_error(400, E_CHALLENGE_INVALID, "유효하지 않은 챌린지입니다")
 
     participation.upload_count += 1
