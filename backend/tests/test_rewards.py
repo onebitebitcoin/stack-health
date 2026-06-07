@@ -213,13 +213,18 @@ def test_comment_earns_001_points(client: TestClient) -> None:
     assert data["fixed_week_points"] == 0.01
 
 
-def test_daily_limit_ignores_client_timezone_header(client: TestClient, db: Session) -> None:
-    from datetime import datetime, timedelta, timezone
+def test_daily_limit_uses_client_timezone(client: TestClient, db: Session) -> None:
+    """클라이언트 타임존 기준 자정에 카운트가 리셋된다."""
+    from datetime import timedelta
 
     from app.models.video import Video
+    from app.services.reward import _parse_tz, get_daily_upload_window
 
     token, user = _reg(client, "tz-limit@x.com", "tzlimit")
-    start_utc = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    adak_tz = _parse_tz("America/Adak")
+    today_start_utc, _ = get_daily_upload_window(adak_tz)
+
     db.add_all([
         Video(
             user_id=user["id"],
@@ -227,7 +232,7 @@ def test_daily_limit_ignores_client_timezone_header(client: TestClient, db: Sess
             cdn_url=f"https://cdn/{idx}.mp4",
             file_hash=f"tz-limit-{idx}",
             duration_sec=20,
-            created_at=start_utc + timedelta(seconds=idx + 1),
+            created_at=today_start_utc + timedelta(seconds=idx + 1),
         )
         for idx in range(3)
     ])
