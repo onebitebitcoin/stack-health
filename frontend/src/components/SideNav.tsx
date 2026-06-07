@@ -23,7 +23,7 @@ export default function SideNav() {
       {/* 로고 */}
       <div className="flex items-center gap-2 px-6 py-5">
         <LogoMark size={28} className="text-accent" />
-        <span className="text-base font-bold text-theme-primary">Stack Health</span>
+        <span className="font-display text-xl tracking-wide text-theme-primary">Stack Health</span>
       </div>
 
       {/* 네비게이션 항목 */}

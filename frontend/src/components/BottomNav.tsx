@@ -49,7 +49,7 @@ export default function BottomNav() {
           >
             <Plus size={24} strokeWidth={2} color="var(--accent-fg)" />
           </button>
-          <span className="mt-1 text-xs text-transparent select-none">업로드</span>
+          <span className="mt-1 text-xs text-transparent select-none" aria-hidden="true">.</span>
         </div>
 
         {/* 사용자 */}

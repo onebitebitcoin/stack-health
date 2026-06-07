@@ -68,15 +68,15 @@ export default function LeaderboardPage() {
       {/* 헤더 */}
       <div className="shrink-0 px-4 pt-5 pb-3">
         <div className="flex items-center gap-2 mb-3">
-          <Users size={20} strokeWidth={1.5} className="text-theme-primary" />
+          <Users size={22} strokeWidth={1.5} className="text-accent" />
           <h1 className="text-lg font-bold text-theme-primary">사용자</h1>
         </div>
-        <div className="flex rounded-xl bg-theme-surface overflow-hidden mb-1">
+        <div className="flex rounded-xl bg-theme-surface p-1 gap-1 mb-1">
           {(['week', 'month', 'all'] as const).map((p) => (
             <button
               key={p}
               onClick={() => { setPeriod(p); setPage(1) }}
-              className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
                 period === p ? 'bg-accent text-accent-fg' : 'text-theme-muted hover:text-theme-primary'
               }`}
             >

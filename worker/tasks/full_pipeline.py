@@ -26,8 +26,8 @@ from tasks.subtitle import (
     ALIGNMENT_MAP,
     FONT_SIZE_MAP,
     MARGIN_V_MAP,
+    SubtitleResult,
     burn_user_srt,
-    generate_subtitle_for_video,
     subtitle_metrics_json,
 )
 
@@ -452,12 +452,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             margin_v=subtitle_margin_v,
         )
     else:
-        subtitle_result = generate_subtitle_for_video(
-            r2, current_key,
-            font_size=subtitle_font_size,
-            alignment=subtitle_alignment,
-            margin_v=subtitle_margin_v,
-        )
+        subtitle_result = SubtitleResult(status="skipped", error="no user-provided subtitle")
 
     subtitle_status = subtitle_result.status
     subtitle_url = subtitle_result.subtitle_url

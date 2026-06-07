@@ -265,6 +265,62 @@ _SRT_TIMESTAMP_LINE_RE = re.compile(
 _SRT_INDEX_LINE_RE = re.compile(r"^\d+\s*$")
 
 
+# Known Whisper hallucination phrases — trained on YouTube data, injected over
+# non-speech audio (gym noise, breathing, ambient sound).
+_HALLUCINATION_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"구독과\s*좋아요",
+        r"구독\s*(눌러|해|부탁)",
+        r"좋아요\s*(눌러|부탁)",
+        r"알림\s*설정",
+        r"시청해\s*주셔서\s*감사",
+        r"다음\s*영상에서\s*만나",
+        r"(?:please\s*)?subscribe",
+        r"don'?t\s*forget\s*to\s*(like|subscribe)",
+        r"thank\s*you\s*for\s*watching",
+        r"^\s*MBC\s*$",
+        r"^\s*KBS\s*$",
+        r"^\s*SBS\s*$",
+    ]
+]
+
+
+def _filter_hallucinated_phrases(srt_text: str) -> tuple[str, int]:
+    """Drop cues whose text matches known Whisper hallucination patterns.
+
+    Returns (filtered_srt, dropped_count).
+    """
+    blocks = re.split(r"\n\s*\n", srt_text.strip())
+    kept: list[list[str]] = []
+    dropped = 0
+
+    for block in blocks:
+        lines = block.splitlines()
+        text_lines = [
+            line for line in lines
+            if line.strip()
+            and not _SRT_INDEX_LINE_RE.match(line.strip())
+            and not _SRT_TIMESTAMP_LINE_RE.search(line)
+        ]
+        text = " ".join(text_lines)
+        if any(p.search(text) for p in _HALLUCINATION_PATTERNS):
+            dropped += 1
+            continue
+        kept.append(lines)
+
+    if dropped == 0:
+        return srt_text, 0
+
+    renumbered: list[str] = []
+    for new_index, lines in enumerate(kept, start=1):
+        if lines and _SRT_INDEX_LINE_RE.match(lines[0].strip()):
+            lines = [str(new_index)] + lines[1:]
+        renumbered.append("\n".join(lines))
+
+    return "\n\n".join(renumbered) + "\n", dropped
+
+
 def _filter_srt_by_silence(
     srt_text: str,
     silence_ranges: list[tuple[float, float]],
@@ -527,6 +583,8 @@ def generate_subtitle_for_video(
         metrics["transcribe_seconds"] = round(transcribe_seconds, 3)
         srt_text, clamped = _clamp_srt_to_duration(srt_text, duration)
         metrics["srt_clamped_to_source_duration"] = clamped
+        srt_text, phrase_dropped = _filter_hallucinated_phrases(srt_text)
+        metrics["phrase_filtered_cues"] = phrase_dropped
         srt_text, silence_dropped = _filter_srt_by_silence(srt_text, silence_ranges)
         metrics["silence_filtered_cues"] = silence_dropped
         subtitle_text = _plain_text_from_srt(srt_text)
