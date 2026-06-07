@@ -23,7 +23,6 @@ from app.services.reward import (
     get_week_range,
     get_weekly_points,
     get_weekly_queued_points,
-    points_to_sats,
     settle_queued_rewards,
 )
 from app.services.error_codes import api_error, E_USER_NOT_FOUND
@@ -120,7 +119,6 @@ def get_my_stats(
 
     week_points = get_weekly_points(db, current_user.id, UTC)
     week_queued = get_weekly_queued_points(db, current_user.id)
-    week_sats = points_to_sats(week_points)
 
     return {
         "data": {
@@ -129,7 +127,6 @@ def get_my_stats(
             "queued_points": round(float(queued_points), 2),
             "week_points": round(float(week_points), 2),
             "week_queued_points": round(float(week_queued), 2),
-            "week_sats": week_sats,
         }
     }
 

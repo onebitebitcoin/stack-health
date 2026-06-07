@@ -24,7 +24,6 @@ from app.services.reward import (
     REWARD_STATUS_FIXED,
     UTC,
     get_week_range,
-    points_to_sats,
     revoke_queued_upload_reward,
     settle_queued_rewards,
 )
@@ -454,7 +453,6 @@ def weekly_summary(
             "user_id": row.user_id,
             "username": row.username,
             "weekly_points": row.weekly_points,
-            "satoshi_amount": points_to_sats(row.weekly_points),
         }
         for idx, row in enumerate(rows)
     ]

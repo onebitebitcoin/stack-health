@@ -20,7 +20,6 @@ def points_for_tags(tags: list[str]) -> float:
         return POINTS_LIGHT_ACTIVITY
     return POINTS_SWEATY_EXERCISE
 DAILY_MAX_UPLOADS = 3
-SATS_PER_POINT = 10  # TBD
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
 REWARD_STATUS_REVOKED = "revoked"
@@ -66,8 +65,6 @@ def get_month_range(tz: ZoneInfo = UTC) -> tuple[datetime, datetime]:
     return month_start_client.astimezone(timezone.utc), next_month_client.astimezone(timezone.utc)
 
 
-def points_to_sats(points: float) -> int:
-    return int(points * SATS_PER_POINT)
 
 
 def get_weekly_points(db: Session, user_id: int, tz: ZoneInfo = UTC) -> float:

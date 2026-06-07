@@ -70,7 +70,6 @@ async def _settle_rewards_loop() -> None:
     from app.database import SessionLocal
     from app.services.reward import settle_queued_rewards as _settle
     while True:
-        await anyio.sleep(3600)
         db = SessionLocal()
         try:
             count = _settle(db)
@@ -82,6 +81,7 @@ async def _settle_rewards_loop() -> None:
             logger.error("Background settle error: %s", exc, exc_info=True)
         finally:
             db.close()
+        await anyio.sleep(3600)
 
 
 @asynccontextmanager
