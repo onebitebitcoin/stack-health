@@ -91,3 +91,95 @@ def test_plain_text_and_metrics_json_helpers() -> None:
     result = SubtitleResult(status="completed", metrics={"language": "ko", "seconds": 1.5})
 
     assert json.loads(subtitle_metrics_json(result) or "{}") == {"language": "ko", "seconds": 1.5}
+
+
+def test_detect_silence_ranges_parses_ffmpeg_silencedetect_output() -> None:
+    from tasks.subtitle import _detect_silence_ranges
+
+    fake_stderr = (
+        "[silencedetect @ 0x1] silence_start: 0\n"
+        "[silencedetect @ 0x1] silence_end: 2.5 | silence_duration: 2.5\n"
+        "[silencedetect @ 0x1] silence_start: 18.2\n"
+    )
+    fake_result = type("R", (), {"stderr": fake_stderr, "returncode": 0})()
+
+    with patch("tasks.subtitle.subprocess.run", return_value=fake_result) as run:
+        ranges = _detect_silence_ranges("audio.m4a", duration=24.0)
+
+    run.assert_called_once()
+    assert ranges == [(0.0, 2.5), (18.2, 24.0)]
+
+
+def test_detect_silence_ranges_returns_empty_on_failure() -> None:
+    from tasks.subtitle import _detect_silence_ranges
+
+    with patch("tasks.subtitle.subprocess.run", side_effect=OSError("boom")):
+        assert _detect_silence_ranges("audio.m4a", duration=10.0) == []
+
+
+def test_filter_srt_by_silence_drops_cues_inside_silent_ranges() -> None:
+    from tasks.subtitle import _filter_srt_by_silence
+
+    srt_text = (
+        "1\n00:00:00,000 --> 00:00:08,440\n"
+        "오늘도 5킬로 뛰었고, 한 30분 좀 넘었네요.\n"
+        "\n"
+        "2\n00:00:20,000 --> 00:00:23,871\n"
+        "시청해주셔서 감사합니다.\n"
+    )
+
+    filtered, dropped = _filter_srt_by_silence(srt_text, [(8.5, 23.871)])
+
+    assert dropped == 1
+    assert "시청해주셔서 감사합니다" not in filtered
+    assert "오늘도 5킬로 뛰었고" in filtered
+    assert filtered.lstrip().startswith("1\n")
+
+
+def test_filter_srt_by_silence_keeps_cues_outside_silence_or_when_none_detected() -> None:
+    from tasks.subtitle import _filter_srt_by_silence
+
+    srt_text = "1\n00:00:00,000 --> 00:00:08,440\n오늘도 5킬로 뛰었고.\n"
+
+    unchanged, dropped_a = _filter_srt_by_silence(srt_text, [])
+    assert (unchanged, dropped_a) == (srt_text, 0)
+
+    kept, dropped_b = _filter_srt_by_silence(srt_text, [(100.0, 110.0)])
+    assert dropped_b == 0
+    assert "오늘도 5킬로 뛰었고" in kept
+
+
+def test_transcribe_srt_sends_prompt_and_temperature(monkeypatch) -> None:
+    from tasks import subtitle
+
+    captured: dict = {}
+
+    def fake_encode_multipart(fields, file_field, file_path):
+        captured["fields"] = fields
+        return b"body", "boundary"
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b"1\n00:00:00,000 --> 00:00:01,000\nhi\n"
+
+    monkeypatch.setattr(subtitle, "_encode_multipart", fake_encode_multipart)
+    monkeypatch.setattr(subtitle.urllib.request, "Request", lambda *a, **k: object())
+    monkeypatch.setattr(subtitle.urllib.request, "urlopen", lambda *a, **k: FakeResponse())
+
+    subtitle._transcribe_srt(
+        "audio.m4a",
+        api_key="test-key",
+        model="whisper-1",
+        language="ko",
+        prompt="이것은 운동 기록 음성입니다.",
+        temperature=0.0,
+    )
+
+    assert captured["fields"]["prompt"] == "이것은 운동 기록 음성입니다."
+    assert captured["fields"]["temperature"] == "0.0"

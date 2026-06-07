@@ -30,9 +30,21 @@ logger = logging.getLogger(__name__)
 OPENAI_TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions"
 DEFAULT_TRANSCRIPTION_MODEL = os.environ.get("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
 DEFAULT_TRANSCRIPTION_LANGUAGE = os.environ.get("OPENAI_TRANSCRIPTION_LANGUAGE", "ko")
+# Whisper hallucinates stock YouTube-outro phrases (e.g. "시청해주셔서 감사합니다") on
+# silent/ambiguous audio. A topic-priming prompt + temperature=0 measurably reduces it.
+DEFAULT_TRANSCRIPTION_PROMPT = os.environ.get(
+    "OPENAI_TRANSCRIPTION_PROMPT",
+    "이것은 사용자가 직접 녹음한 운동 기록 음성 메모입니다. 실제로 들리는 발화만 받아 적으세요.",
+)
+DEFAULT_TRANSCRIPTION_TEMPERATURE = float(os.environ.get("OPENAI_TRANSCRIPTION_TEMPERATURE", "0"))
 SUBTITLE_ENABLED = os.environ.get("SUBTITLE_ENABLED", "1").lower() not in {"0", "false", "no", "off"}
 SUBTITLE_MAX_DURATION_SEC = float(os.environ.get("SUBTITLE_MAX_DURATION_SEC", "65"))
 SUBTITLE_HTTP_TIMEOUT_SEC = int(os.environ.get("SUBTITLE_HTTP_TIMEOUT_SEC", "300"))
+# Silence detection (ffmpeg silencedetect) used to drop hallucinated cues that Whisper
+# places over silent stretches of audio.
+SUBTITLE_SILENCE_NOISE_DB = float(os.environ.get("SUBTITLE_SILENCE_NOISE_DB", "-30"))
+SUBTITLE_SILENCE_MIN_DURATION_SEC = float(os.environ.get("SUBTITLE_SILENCE_MIN_DURATION_SEC", "1.0"))
+SUBTITLE_SILENCE_OVERLAP_RATIO = float(os.environ.get("SUBTITLE_SILENCE_OVERLAP_RATIO", "0.7"))
 SUBTITLE_BURN_IN_FONT_SIZE = int(os.environ.get("SUBTITLE_BURN_IN_FONT_SIZE", "26"))
 SUBTITLE_BURN_IN_MARGIN_V = int(os.environ.get("SUBTITLE_BURN_IN_MARGIN_V", "90"))
 # ASS alpha is inverse opacity: 00 opaque, FF transparent. 20% transparent = 80% opaque.
@@ -110,6 +122,47 @@ def _extract_audio(video_path: str, audio_path: str) -> float:
     return time.perf_counter() - started
 
 
+_SILENCE_START_RE = re.compile(r"silence_start:\s*(-?[\d.]+)")
+_SILENCE_END_RE = re.compile(r"silence_end:\s*(-?[\d.]+)")
+
+
+def _detect_silence_ranges(audio_path: str, duration: float) -> list[tuple[float, float]]:
+    """Return [(start, end), ...] silent stretches via ffmpeg's silencedetect filter.
+
+    Best-effort: detection failures should never block transcription, so any error
+    here yields an empty list rather than raising.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-i", audio_path,
+                "-af", f"silencedetect=noise={SUBTITLE_SILENCE_NOISE_DB}dB:d={SUBTITLE_SILENCE_MIN_DURATION_SEC}",
+                "-f", "null", "-",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning("silence detection failed for %s: %s", audio_path, exc)
+        return []
+
+    ranges: list[tuple[float, float]] = []
+    pending_start: float | None = None
+    for line in result.stderr.splitlines():
+        start_match = _SILENCE_START_RE.search(line)
+        if start_match:
+            pending_start = float(start_match.group(1))
+            continue
+        end_match = _SILENCE_END_RE.search(line)
+        if end_match and pending_start is not None:
+            ranges.append((pending_start, float(end_match.group(1))))
+            pending_start = None
+    if pending_start is not None and duration > pending_start:
+        ranges.append((pending_start, duration))
+    return ranges
+
+
 def _encode_multipart(fields: dict[str, str], file_field: str, file_path: str) -> tuple[bytes, str]:
     boundary = f"----stackhealth-{uuid.uuid4().hex}"
     parts: list[bytes] = []
@@ -132,10 +185,22 @@ def _encode_multipart(fields: dict[str, str], file_field: str, file_path: str) -
     return b"".join(parts), boundary
 
 
-def _transcribe_srt(audio_path: str, *, api_key: str, model: str, language: str | None) -> tuple[str, float]:
+def _transcribe_srt(
+    audio_path: str,
+    *,
+    api_key: str,
+    model: str,
+    language: str | None,
+    prompt: str | None = None,
+    temperature: float | None = None,
+) -> tuple[str, float]:
     fields = {"model": model, "response_format": "srt"}
     if language:
         fields["language"] = language
+    if prompt:
+        fields["prompt"] = prompt
+    if temperature is not None:
+        fields["temperature"] = str(temperature)
     body, boundary = _encode_multipart(fields, "file", audio_path)
     request = urllib.request.Request(
         OPENAI_TRANSCRIPTIONS_URL,
@@ -192,6 +257,65 @@ def _clamp_srt_to_duration(srt_text: str, duration: float) -> tuple[str, bool]:
         srt_text,
     )
     return updated, changed
+
+
+_SRT_TIMESTAMP_LINE_RE = re.compile(
+    r"(\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2},\d{3})"
+)
+_SRT_INDEX_LINE_RE = re.compile(r"^\d+\s*$")
+
+
+def _filter_srt_by_silence(
+    srt_text: str,
+    silence_ranges: list[tuple[float, float]],
+    *,
+    overlap_ratio: float = SUBTITLE_SILENCE_OVERLAP_RATIO,
+) -> tuple[str, int]:
+    """Drop cues that mostly fall inside detected silence — Whisper hallucinations
+    (e.g. "시청해주셔서 감사합니다") are typically placed over silent stretches.
+
+    Returns (filtered_srt, dropped_count). No-op when no silence was detected.
+    """
+    if not silence_ranges:
+        return srt_text, 0
+
+    blocks = re.split(r"\n\s*\n", srt_text.strip())
+    kept: list[list[str]] = []
+    dropped = 0
+
+    for block in blocks:
+        lines = block.splitlines()
+        match = next((m for m in (_SRT_TIMESTAMP_LINE_RE.search(line) for line in lines) if m), None)
+        if not match:
+            kept.append(lines)
+            continue
+
+        start = _parse_srt_timestamp(match.group(1))
+        end = _parse_srt_timestamp(match.group(2))
+        cue_duration = end - start
+        if cue_duration <= 0:
+            kept.append(lines)
+            continue
+
+        overlap = sum(
+            max(0.0, min(end, range_end) - max(start, range_start))
+            for range_start, range_end in silence_ranges
+        )
+        if overlap / cue_duration >= overlap_ratio:
+            dropped += 1
+            continue
+        kept.append(lines)
+
+    if dropped == 0:
+        return srt_text, 0
+
+    renumbered: list[str] = []
+    for new_index, lines in enumerate(kept, start=1):
+        if lines and _SRT_INDEX_LINE_RE.match(lines[0]):
+            lines = [str(new_index)] + lines[1:]
+        renumbered.append("\n".join(lines))
+
+    return "\n\n".join(renumbered) + "\n", dropped
 
 
 def _srt_to_vtt(srt_text: str) -> str:
@@ -390,10 +514,21 @@ def generate_subtitle_for_video(
             return SubtitleResult(status="skipped", error=f"duration exceeds subtitle limit: {duration:.1f}s", metrics=metrics)
 
         metrics["extract_audio_seconds"] = round(_extract_audio(tmp_video, tmp_audio), 3)
-        srt_text, transcribe_seconds = _transcribe_srt(tmp_audio, api_key=api_key, model=model, language=language)
+        silence_ranges = _detect_silence_ranges(tmp_audio, duration)
+        metrics["silence_ranges_detected"] = len(silence_ranges)
+        srt_text, transcribe_seconds = _transcribe_srt(
+            tmp_audio,
+            api_key=api_key,
+            model=model,
+            language=language,
+            prompt=DEFAULT_TRANSCRIPTION_PROMPT,
+            temperature=DEFAULT_TRANSCRIPTION_TEMPERATURE,
+        )
         metrics["transcribe_seconds"] = round(transcribe_seconds, 3)
         srt_text, clamped = _clamp_srt_to_duration(srt_text, duration)
         metrics["srt_clamped_to_source_duration"] = clamped
+        srt_text, silence_dropped = _filter_srt_by_silence(srt_text, silence_ranges)
+        metrics["silence_filtered_cues"] = silence_dropped
         subtitle_text = _plain_text_from_srt(srt_text)
         vtt_text = _srt_to_vtt(srt_text)
 

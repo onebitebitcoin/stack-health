@@ -23,8 +23,13 @@ from config import (
 from tasks.subtitle import (
     DEFAULT_TRANSCRIPTION_LANGUAGE,
     DEFAULT_TRANSCRIPTION_MODEL,
+    DEFAULT_TRANSCRIPTION_PROMPT,
+    DEFAULT_TRANSCRIPTION_TEMPERATURE,
+    _detect_silence_ranges,
     _extract_audio,
+    _filter_srt_by_silence,
     _plain_text_from_srt,
+    _probe_duration,
     _transcribe_srt,
 )
 
@@ -79,12 +84,18 @@ def run_subtitle_extract(job: dict) -> dict:
             _extract_audio(tmp_video, tmp_extracted)
             source_audio = tmp_extracted
 
+        duration = _probe_duration(source_audio)
+        silence_ranges = _detect_silence_ranges(source_audio, duration)
+
         srt, _ = _transcribe_srt(
             source_audio,
             api_key=api_key,
             model=DEFAULT_TRANSCRIPTION_MODEL,
             language=language,
+            prompt=DEFAULT_TRANSCRIPTION_PROMPT,
+            temperature=DEFAULT_TRANSCRIPTION_TEMPERATURE,
         )
+        srt, _ = _filter_srt_by_silence(srt, silence_ranges)
         plain_text = _plain_text_from_srt(srt)
         logger.info("subtitle-extract job=%s done, %d chars", job.get("job_id"), len(srt))
         return {"srt": srt, "plain_text": plain_text}
