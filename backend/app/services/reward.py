@@ -7,8 +7,18 @@ from sqlalchemy.orm import Session
 from app.models.reward import RewardPoint
 from app.models.video import Video
 
-POINTS_PER_UPLOAD = 0.5
+POINTS_LIGHT_ACTIVITY = 0.25
+POINTS_SWEATY_EXERCISE = 0.5
 POINTS_PER_COMMENT = 0.01
+
+LIGHT_ACTIVITY_LABEL = "가벼운 활동"
+
+
+def points_for_tags(tags: list[str]) -> float:
+    """Return upload points based on the main category tag."""
+    if tags and tags[0] == LIGHT_ACTIVITY_LABEL:
+        return POINTS_LIGHT_ACTIVITY
+    return POINTS_SWEATY_EXERCISE
 DAILY_MAX_UPLOADS = 3
 SATS_PER_POINT = 10  # TBD
 REWARD_STATUS_QUEUED = "queued"

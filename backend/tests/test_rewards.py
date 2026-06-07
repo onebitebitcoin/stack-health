@@ -145,6 +145,74 @@ def test_daily_upload_count_uses_utc_window(client: TestClient, db: Session) -> 
     assert get_daily_upload_count(db, user["id"]) == 1
 
 
+def test_points_for_tags_light_activity() -> None:
+    from app.services.reward import POINTS_LIGHT_ACTIVITY, points_for_tags
+
+    assert points_for_tags(["가벼운 활동"]) == POINTS_LIGHT_ACTIVITY
+    assert points_for_tags(["가벼운 활동", "산책"]) == POINTS_LIGHT_ACTIVITY
+
+
+def test_points_for_tags_sweaty_exercise() -> None:
+    from app.services.reward import POINTS_SWEATY_EXERCISE, points_for_tags
+
+    assert points_for_tags(["땀 흘리는 운동"]) == POINTS_SWEATY_EXERCISE
+    assert points_for_tags(["땀 흘리는 운동", "런닝"]) == POINTS_SWEATY_EXERCISE
+
+
+def test_points_for_tags_empty_defaults_to_sweaty() -> None:
+    from app.services.reward import POINTS_SWEATY_EXERCISE, points_for_tags
+
+    assert points_for_tags([]) == POINTS_SWEATY_EXERCISE
+
+
+def test_upload_light_activity_earns_025(client: TestClient) -> None:
+    token, user = _reg(client, "light@x.com", "lightuser")
+    key = f"videos/{user['id']}/light.mp4"
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/light.mp4"):
+        client.post(
+            "/api/v1/videos/confirm",
+            json={"r2_key": key, "duration_sec": 20, "tags": ["가벼운 활동", "산책"]},
+            headers=_auth(token),
+        )
+    res = client.get("/api/v1/rewards/summary", headers=_auth(token))
+    assert res.json()["data"]["queued_week_points"] == 0.25
+
+
+def test_upload_sweaty_exercise_earns_05(client: TestClient) -> None:
+    token, user = _reg(client, "sweaty@x.com", "sweatyuser")
+    key = f"videos/{user['id']}/sweaty.mp4"
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/sweaty.mp4"):
+        client.post(
+            "/api/v1/videos/confirm",
+            json={"r2_key": key, "duration_sec": 20, "tags": ["땀 흘리는 운동", "런닝"]},
+            headers=_auth(token),
+        )
+    res = client.get("/api/v1/rewards/summary", headers=_auth(token))
+    assert res.json()["data"]["queued_week_points"] == 0.5
+
+
+def test_comment_earns_001_points(client: TestClient) -> None:
+    from app.models.reward import RewardPoint
+    from sqlalchemy.orm import Session
+
+    token, user = _reg(client, "commenter@x.com", "commenter")
+    key = f"videos/{user['id']}/c.mp4"
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/c.mp4"):
+        post_res = client.post(
+            "/api/v1/videos/confirm",
+            json={"r2_key": key, "duration_sec": 20},
+            headers=_auth(token),
+        )
+    post_id = post_res.json()["data"]["post"]["id"]
+
+    client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "좋아요"}, headers=_auth(token))
+
+    res = client.get("/api/v1/rewards/summary", headers=_auth(token))
+    # upload (queued 0.5) + comment (fixed 0.01) = 0.01 fixed
+    data = res.json()["data"]
+    assert data["fixed_week_points"] == 0.01
+
+
 def test_daily_limit_ignores_client_timezone_header(client: TestClient, db: Session) -> None:
     from datetime import datetime, timedelta, timezone
 

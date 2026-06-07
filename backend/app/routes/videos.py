@@ -32,9 +32,9 @@ from app.services.share_token import generate_share_token
 from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_image_merge_job, enqueue_merge_job, enqueue_subtitle_extract_job, fail_job, get_job_status, reserve_job_id
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
-    POINTS_PER_UPLOAD,
     add_points,
     get_daily_upload_count,
+    points_for_tags,
     revoke_queued_upload_reward,
 )
 
@@ -182,7 +182,7 @@ def confirm_upload(
     if req.challenge_id:
         increment_challenge_upload(db, current_user.id, req.challenge_id)
 
-    rp = add_points(db, current_user.id, POINTS_PER_UPLOAD, "upload", reference_id=video.id)
+    rp = add_points(db, current_user.id, points_for_tags(tags), "upload", reference_id=video.id)
     points_earned = rp.points if rp else 0
 
     db.commit()

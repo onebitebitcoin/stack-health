@@ -349,7 +349,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     from app.models.user import User
     from app.models.video import Video
     from app.routes.challenges import increment_challenge_upload
-    from app.services.reward import DAILY_MAX_UPLOADS, POINTS_PER_UPLOAD, add_points, get_daily_upload_count
+    from app.services.reward import DAILY_MAX_UPLOADS, add_points, get_daily_upload_count, points_for_tags
 
     start_time = time.time()
     r2 = _get_r2_client()
@@ -521,7 +521,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             increment_challenge_upload(db, user_id, int(challenge_id))
 
         rp = add_points(
-            db, user_id, POINTS_PER_UPLOAD, "upload",
+            db, user_id, points_for_tags(job.get("tags", [])), "upload",
             reference_id=video.id,
         )
         points_earned = rp.points if rp else 0.0

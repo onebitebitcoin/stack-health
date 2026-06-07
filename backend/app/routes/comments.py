@@ -7,6 +7,7 @@ from app.models.comment import Comment
 from app.models.post import Post
 from app.models.user import User
 from app.routes.auth import get_current_user
+from app.services.reward import POINTS_PER_COMMENT, add_points
 
 router = APIRouter(prefix="/api/v1/feed", tags=["comments"])
 
@@ -61,6 +62,8 @@ def create_comment(
         raise HTTPException(status_code=422, detail="댓글이 너무 깁니다")
     comment = Comment(post_id=post_id, user_id=current_user.id, content=content)
     db.add(comment)
+    db.flush()
+    add_points(db, current_user.id, POINTS_PER_COMMENT, "comment", reference_id=comment.id)
     db.commit()
     db.refresh(comment)
     return {"data": {"comment": {
