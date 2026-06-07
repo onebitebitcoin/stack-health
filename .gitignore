@@ -17,6 +17,10 @@ backend/VERSION
 dev.db
 *.db
 *.sqlite
+*.sqlite3
+
+# Deploy runtime state
+.deploy-slot
 
 # Node
 node_modules/

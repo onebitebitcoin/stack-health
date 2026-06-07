@@ -9,7 +9,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-QUEUE_NAME = "queue:merge-jobs"
+QUEUE_NAME = f"queue:merge-jobs:{settings.environment}"
 JOB_KEY_PREFIX = "job:"
 JOB_TTL = 86400  # 24시간
 

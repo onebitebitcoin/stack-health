@@ -2,6 +2,8 @@ import logging
 import subprocess
 from datetime import datetime, timezone, timedelta
 
+from config import ENVIRONMENT
+
 logger = logging.getLogger(__name__)
 
 _TELEGRAM_SCRIPT = "/home/measly/.claude/scripts/telegram-send.sh"
@@ -13,6 +15,8 @@ def _now_kst() -> str:
 
 
 def _send(msg: str) -> None:
+    if ENVIRONMENT != "production":
+        return
     try:
         subprocess.run(
             ["bash", _TELEGRAM_SCRIPT, msg],
