@@ -44,21 +44,21 @@ def test_create_comment_requires_auth(client: TestClient) -> None:
 def test_create_comment_success(client: TestClient) -> None:
     token, user = _reg(client, "cb@x.com", "cuserb")
     post_id = _make_post(client, token, user["id"])
-    res = client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "좋아요!"}, headers=_auth(token))
+    res = client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "좋은 운동이네요"}, headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]["comment"]
-    assert data["content"] == "좋아요!"
+    assert data["content"] == "좋은 운동이네요"
     assert data["username"] == "cuserb"
 
 
 def test_create_comment_appears_in_list(client: TestClient) -> None:
     token, user = _reg(client, "cc@x.com", "cuserc")
     post_id = _make_post(client, token, user["id"])
-    client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "첫 댓글"}, headers=_auth(token))
+    client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "첫 번째 댓글입니다"}, headers=_auth(token))
     res = client.get(f"/api/v1/feed/{post_id}/comments")
     comments = res.json()["data"]["comments"]
     assert len(comments) == 1
-    assert comments[0]["content"] == "첫 댓글"
+    assert comments[0]["content"] == "첫 번째 댓글입니다"
 
 
 def test_create_comment_too_long(client: TestClient) -> None:
@@ -79,10 +79,40 @@ def test_create_comment_empty_content(client: TestClient) -> None:
     assert res.status_code == 422
 
 
+def test_create_comment_too_short(client: TestClient) -> None:
+    token, user = _reg(client, "cshort@x.com", "cushort")
+    post_id = _make_post(client, token, user["id"])
+    res = client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "짧"}, headers=_auth(token))
+    assert res.status_code == 422
+
+
+def test_create_comment_minimum_length_passes(client: TestClient) -> None:
+    token, user = _reg(client, "cmin@x.com", "cumin")
+    post_id = _make_post(client, token, user["id"])
+    res = client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "다섯글자댓글"}, headers=_auth(token))
+    assert res.status_code == 200
+
+
+def test_daily_comment_limit(client: TestClient) -> None:
+    from unittest.mock import patch as _patch
+    from datetime import datetime, timezone
+
+    token, user = _reg(client, "climit@x.com", "culimit")
+    post_id = _make_post(client, token, user["id"])
+
+    with _patch("app.routes.comments._get_daily_comment_count", return_value=10):
+        res = client.post(
+            f"/api/v1/feed/{post_id}/comments",
+            json={"content": "한도 초과 댓글입니다"},
+            headers=_auth(token),
+        )
+    assert res.status_code == 429
+
+
 def test_delete_comment_by_owner(client: TestClient) -> None:
     token, user = _reg(client, "cf@x.com", "caserf")
     post_id = _make_post(client, token, user["id"])
-    create_res = client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "delete me"}, headers=_auth(token))
+    create_res = client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "삭제될 댓글입니다"}, headers=_auth(token))
     comment_id = create_res.json()["data"]["comment"]["id"]
     del_res = client.delete(f"/api/v1/feed/{post_id}/comments/{comment_id}", headers=_auth(token))
     assert del_res.status_code == 200
@@ -90,11 +120,26 @@ def test_delete_comment_by_owner(client: TestClient) -> None:
     assert len(comments) == 0
 
 
+def test_delete_comment_revokes_points(client: TestClient) -> None:
+    token, user = _reg(client, "crevoke@x.com", "curevoke")
+    post_id = _make_post(client, token, user["id"])
+    create_res = client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "포인트 테스트 댓글"}, headers=_auth(token))
+    comment_id = create_res.json()["data"]["comment"]["id"]
+
+    summary_before = client.get("/api/v1/rewards/summary", headers=_auth(token)).json()["data"]
+    assert summary_before["fixed_week_points"] == 0.01
+
+    client.delete(f"/api/v1/feed/{post_id}/comments/{comment_id}", headers=_auth(token))
+
+    summary_after = client.get("/api/v1/rewards/summary", headers=_auth(token)).json()["data"]
+    assert summary_after["fixed_week_points"] == 0.0
+
+
 def test_delete_comment_by_other_user_forbidden(client: TestClient) -> None:
     token_owner, user_owner = _reg(client, "cg@x.com", "cuserg")
     token_other, _ = _reg(client, "ch@x.com", "cuserh")
     post_id = _make_post(client, token_owner, user_owner["id"])
-    create_res = client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "mine"}, headers=_auth(token_owner))
+    create_res = client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "내 댓글입니다"}, headers=_auth(token_owner))
     comment_id = create_res.json()["data"]["comment"]["id"]
     del_res = client.delete(f"/api/v1/feed/{post_id}/comments/{comment_id}", headers=_auth(token_other))
     assert del_res.status_code == 403

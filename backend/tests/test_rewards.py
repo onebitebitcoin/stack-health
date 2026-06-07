@@ -205,7 +205,7 @@ def test_comment_earns_001_points(client: TestClient) -> None:
         )
     post_id = post_res.json()["data"]["post"]["id"]
 
-    client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "좋아요"}, headers=_auth(token))
+    client.post(f"/api/v1/feed/{post_id}/comments", json={"content": "좋은 운동이에요"}, headers=_auth(token))
 
     res = client.get("/api/v1/rewards/summary", headers=_auth(token))
     # upload (queued 0.5) + comment (fixed 0.01) = 0.01 fixed
