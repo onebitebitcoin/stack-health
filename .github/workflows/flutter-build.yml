@@ -42,43 +42,40 @@ jobs:
 
       - name: "Build APK"
         working-directory: mobile
-        env:
-          APP_URL: ${{ secrets.APP_URL }}
-        run: flutter build apk --release --dart-define=APP_URL=$APP_URL
+        run: flutter build apk --release --dart-define=APP_URL=https://stackhealth.life
 
-      - name: "Upload APK to R2 and register"
-        env:
-          APP_URL: ${{ secrets.APP_URL }}
-          ADMIN_SECRET_KEY: ${{ secrets.ADMIN_SECRET_KEY }}
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+      - name: "Get version"
+        id: version
+        run: echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
+
+      - name: "Delete existing release if exists"
         run: |
-          APK_PATH="mobile/build/app/outputs/flutter-apk/app-release.apk"
-          FILENAME="stack-health-$(date +%Y%m%d-%H%M%S).apk"
+          gh release delete "v${{ steps.version.outputs.version }}-android" --yes 2>/dev/null || true
+          git push --delete origin "v${{ steps.version.outputs.version }}-android" 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          PRESIGN_RESPONSE=$(curl -sf -X POST \
-            "${APP_URL}/api/v1/admin/app-links/upload-url" \
-            -H "Content-Type: application/json" \
-            -H "X-Admin-Key: ${ADMIN_SECRET_KEY}" \
-            -d "{\"platform\":\"android\",\"filename\":\"${FILENAME}\",\"content_type\":\"application/vnd.android.package-archive\"}")
+      - name: "Create GitHub Release and upload APK"
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}-android" \
+            --title "Stack Health Android APK v${{ steps.version.outputs.version }}" \
+            --notes "Stack Health Android 앱 APK 다운로드" \
+            --latest \
+            mobile/build/app/outputs/flutter-apk/app-release.apk#app-release.apk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-          UPLOAD_URL=$(echo "$PRESIGN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['upload_url'])")
-          R2_KEY=$(echo "$PRESIGN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['r2_key'])")
-
-          curl -sf -X PUT "$UPLOAD_URL" \
-            -H "Content-Type: application/vnd.android.package-archive" \
-            --data-binary @"$APK_PATH"
-
-          CDN_URL="${R2_PUBLIC_URL}/${R2_KEY}"
-          echo "cdn_url=${CDN_URL}" >> "$GITHUB_OUTPUT"
-          echo "filename=${FILENAME}" >> "$GITHUB_OUTPUT"
-
-          curl -sf -X POST \
-            "${APP_URL}/api/v1/admin/app-links/confirm-upload" \
-            -H "Content-Type: application/json" \
-            -H "X-Admin-Key: ${ADMIN_SECRET_KEY}" \
-            -d "{\"platform\":\"android\",\"cdn_url\":\"${CDN_URL}\",\"filename\":\"${FILENAME}\"}"
-
-          echo "APK registered: ${CDN_URL}"
+      - name: "Update APK URL in SettingsPage"
+        run: |
+          APK_URL="https://github.com/onebitebitcoin/stack-health/releases/download/v${{ steps.version.outputs.version }}-android/app-release.apk"
+          sed -i "s|const ANDROID_APK_URL = '.*'|const ANDROID_APK_URL = '${APK_URL}'|" frontend/src/pages/SettingsPage.tsx
+          git config user.email "action@github.com"
+          git config user.name "GitHub Actions"
+          git add frontend/src/pages/SettingsPage.tsx
+          git diff --cached --quiet || git commit -m "chore: Android APK URL 자동 업데이트 v${{ steps.version.outputs.version }}"
+          git push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Upload APK artifact"
         uses: actions/upload-artifact@v4
