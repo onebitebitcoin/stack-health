@@ -36,8 +36,8 @@ export default function LoginPage() {
         <div className="absolute inset-0 rounded-3xl bg-accent opacity-15 blur-2xl scale-[2] pointer-events-none" />
         <LogoMark aria-label="Stack Health 로고" role="img" size={44} />
       </div>
-      <p className="mb-1 font-display text-5xl tracking-wider text-accent">Stack Health</p>
-      <p className="mb-10 text-sm text-theme-muted">나의 운동을 기록하자</p>
+      <p className="mb-1 text-2xl font-bold text-accent">Stack Health</p>
+      <p className="mb-8 text-sm text-theme-muted">나의 운동을 기록하자</p>
 
       {errorParam && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">

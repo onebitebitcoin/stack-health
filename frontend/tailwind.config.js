@@ -7,7 +7,6 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['Bebas Neue', 'cursive'],
         body: ['DM Sans', 'sans-serif'],
       },
       keyframes: {
