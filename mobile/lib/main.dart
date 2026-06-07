@@ -75,10 +75,14 @@ class _WebViewPageState extends State<WebViewPage> {
             _hasError = false;
           }),
           onPageFinished: (_) => setState(() => _isLoading = false),
-          onWebResourceError: (error) => setState(() {
-            _isLoading = false;
-            _hasError = true;
-          }),
+          onWebResourceError: (error) {
+            if (error.isForMainFrame != false) {
+              setState(() {
+                _isLoading = false;
+                _hasError = true;
+              });
+            }
+          },
           onNavigationRequest: (request) {
             // 외부 딥링크는 앱 내에서 처리
             return NavigationDecision.navigate;
