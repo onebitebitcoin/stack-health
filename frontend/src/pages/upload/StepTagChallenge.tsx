@@ -2,16 +2,23 @@ import { ChevronRight, Trophy, X, Search, Check, Plus } from 'lucide-react'
 import type { Challenge } from '../../api/types'
 import client from '../../api/client'
 
-const WORKOUT_TAGS = ['홈트', '러닝', '요가', '웨이트']
-const QUICK_TAGS = ['홈트', '러닝', '요가', '웨이트', '일상', '식단', '기타']
+export const MAIN_CATEGORIES = ['가벼운 활동', '땀 흘리는 운동'] as const
+export type MainCategory = typeof MAIN_CATEGORIES[number]
+
+const SUB_CATEGORIES: Record<MainCategory, string[]> = {
+  '가벼운 활동': ['계단 오르기', '산책'],
+  '땀 흘리는 운동': ['런닝', '조깅', '웨이트'],
+}
 
 interface Props {
   previewUrl: string | null
-  selectedTags: string[]
-  tagInput: string
-  setTagInput: (v: string) => void
-  toggleTag: (tag: string) => void
-  addTagFromInput: () => void
+  mainCategory: MainCategory | null
+  setMainCategory: (cat: MainCategory) => void
+  subCategory: string | null
+  setSubCategory: (sub: string) => void
+  subCategoryInput: string
+  setSubCategoryInput: (v: string) => void
+  addSubCategoryFromInput: () => void
   hasChallenge: boolean | null
   setHasChallenge: (v: boolean | null) => void
   selectedChallenge: Challenge | null
@@ -30,7 +37,8 @@ interface Props {
 }
 
 export default function StepTagChallenge({
-  previewUrl, selectedTags, tagInput, setTagInput, toggleTag, addTagFromInput,
+  previewUrl, mainCategory, setMainCategory, subCategory, setSubCategory,
+  subCategoryInput, setSubCategoryInput, addSubCategoryFromInput,
   hasChallenge, setHasChallenge, selectedChallenge, selectedChallengeId,
   limitError, setLimitError, clearChallenge, onNext, openChallengeModal,
   showChallengeModal, setShowChallengeModal, challengeSearch, setChallengeSearch,
@@ -38,8 +46,11 @@ export default function StepTagChallenge({
 }: Props) {
   async function handleNext() {
     setLimitError('')
-    const hasWorkout = selectedTags.some((t) => WORKOUT_TAGS.includes(t))
-    if (hasWorkout) {
+    if (!mainCategory) {
+      setLimitError('카테고리를 선택해주세요.')
+      return
+    }
+    if (mainCategory === '땀 흘리는 운동') {
       try {
         const res = await client.get<{ data: { reached: boolean } }>('/videos/daily-limit')
         if (res.data.data.reached) {
@@ -61,50 +72,68 @@ export default function StepTagChallenge({
         )}
         <p className="mb-2 text-sm font-semibold text-theme-primary">카테고리</p>
 
-        {selectedTags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {selectedTags.map((tag) => (
-              <div key={tag} className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-fg">
-                {tag}
-                <button onClick={() => toggleTag(tag)} className="flex-shrink-0">
-                  <X size={11} strokeWidth={2.5} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 mb-3">
-          {QUICK_TAGS.map((tag) => (
+        <div className="flex gap-2 mb-3">
+          {MAIN_CATEGORIES.map((cat) => (
             <button
-              key={tag}
-              onClick={() => toggleTag(tag)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                selectedTags.includes(tag) ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-theme-surface2 text-theme-muted'
+              key={cat}
+              onClick={() => setMainCategory(cat)}
+              className={`flex-1 rounded-xl py-3 text-sm font-medium transition-colors ${
+                mainCategory === cat ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
               }`}
             >
-              {tag}
+              {cat}
             </button>
           ))}
         </div>
 
-        <div className="flex gap-2 mb-5">
-          <input
-            type="text"
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTagFromInput() } }}
-            placeholder="직접 입력 후 Enter"
-            className="flex-1 rounded-xl bg-theme-surface px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none"
-          />
-          <button
-            onClick={addTagFromInput}
-            disabled={!tagInput.trim()}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-theme-surface text-theme-muted disabled:opacity-40"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
+        {mainCategory && (
+          <>
+            <p className="mb-2 text-xs font-medium text-theme-subtle">세부 종류 (선택)</p>
+
+            {subCategory && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <div className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-fg">
+                  {subCategory}
+                  <button onClick={() => setSubCategory(subCategory)} className="flex-shrink-0">
+                    <X size={11} strokeWidth={2.5} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 mb-3">
+              {SUB_CATEGORIES[mainCategory].map((sub) => (
+                <button
+                  key={sub}
+                  onClick={() => setSubCategory(sub)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    subCategory === sub ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-theme-surface2 text-theme-muted'
+                  }`}
+                >
+                  {sub}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2 mb-5">
+              <input
+                type="text"
+                value={subCategoryInput}
+                onChange={(e) => setSubCategoryInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSubCategoryFromInput() } }}
+                placeholder="직접 입력 후 Enter"
+                className="flex-1 rounded-xl bg-theme-surface px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none"
+              />
+              <button
+                onClick={addSubCategoryFromInput}
+                disabled={!subCategoryInput.trim()}
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-theme-surface text-theme-muted disabled:opacity-40"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          </>
+        )}
 
         <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지</p>
 

@@ -10,7 +10,7 @@ import { MERGE_POLL_INTERVAL_MS } from '../lib/constants'
 import type { Challenge } from '../api/types'
 import { isAxiosError } from 'axios'
 import StepSelectVideo from './upload/StepSelectVideo'
-import StepTagChallenge from './upload/StepTagChallenge'
+import StepTagChallenge, { type MainCategory } from './upload/StepTagChallenge'
 import StepRecord from './upload/StepRecord'
 import StepCaption from './upload/StepCaption'
 
@@ -82,8 +82,9 @@ export default function UploadPage() {
   const [step, setStep] = useState(0)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState('')
+  const [mainCategory, setMainCategoryState] = useState<MainCategory | null>(null)
+  const [subCategory, setSubCategoryState] = useState<string | null>(null)
+  const [subCategoryInput, setSubCategoryInput] = useState('')
   const [caption, setCaption] = useState('')
   const [subtitleText, setSubtitleText] = useState('')
   const [subtitlePlainText, setSubtitlePlainText] = useState('')
@@ -239,14 +240,22 @@ export default function UploadPage() {
     videoEl.onerror = () => { setFile(f); setPreviewUrl(url); setStep(1) }
   }
 
-  function toggleTag(tag: string) {
-    setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])
+  function selectMainCategory(cat: MainCategory) {
+    setMainCategoryState(cat)
+    setSubCategoryState(null)
+    setSubCategoryInput('')
   }
 
-  function addTagFromInput() {
-    const trimmed = tagInput.trim()
-    if (!trimmed || selectedTags.includes(trimmed)) { setTagInput(''); return }
-    setSelectedTags((prev) => [...prev, trimmed]); setTagInput('')
+  function selectSubCategory(sub: string) {
+    setSubCategoryState((prev) => prev === sub ? null : sub)
+    setSubCategoryInput('')
+  }
+
+  function addSubCategoryFromInput() {
+    const trimmed = subCategoryInput.trim()
+    if (!trimmed) return
+    setSubCategoryState(trimmed)
+    setSubCategoryInput('')
   }
 
   async function startRecording() {
@@ -422,7 +431,7 @@ export default function UploadPage() {
         form.append('subtitle_position', subtitlePosition)
       }
       if (muteOriginalAudio) form.append('mute_video', 'true')
-      form.append('tags', JSON.stringify(selectedTags))
+      form.append('tags', JSON.stringify([mainCategory, subCategory].filter((v): v is string => Boolean(v))))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       if (workoutStart) form.append('workout_start', workoutStart)
       if (workoutEnd) form.append('workout_end', workoutEnd)
@@ -573,8 +582,10 @@ export default function UploadPage() {
       {step === 1 && (
         <StepTagChallenge
           previewUrl={previewUrl}
-          selectedTags={selectedTags} tagInput={tagInput} setTagInput={setTagInput}
-          toggleTag={toggleTag} addTagFromInput={addTagFromInput}
+          mainCategory={mainCategory} setMainCategory={selectMainCategory}
+          subCategory={subCategory} setSubCategory={selectSubCategory}
+          subCategoryInput={subCategoryInput} setSubCategoryInput={setSubCategoryInput}
+          addSubCategoryFromInput={addSubCategoryFromInput}
           hasChallenge={hasChallenge} setHasChallenge={setHasChallenge}
           selectedChallenge={selectedChallenge} selectedChallengeId={selectedChallengeId}
           limitError={limitError} setLimitError={setLimitError}
