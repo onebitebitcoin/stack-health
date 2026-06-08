@@ -51,6 +51,12 @@ class _WebViewPageState extends State<WebViewPage> {
   bool _hasError = false;
   Timer? _loadTimeout;
   late final StreamSubscription<List<ConnectivityResult>> _connectivitySub;
+  final List<String> _debugLogs = [];
+  bool _showDebug = false;
+
+  void _log(String msg) {
+    if (mounted) setState(() => _debugLogs.add('[${DateTime.now().toIso8601String().substring(11, 19)}] $msg'));
+  }
 
   @override
   void initState() {
@@ -95,18 +101,21 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setBackgroundColor(const Color(0xFF0A0A0A))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) {
+          onPageStarted: (url) {
+            _log('페이지 로딩: $url');
             setState(() {
               _isLoading = true;
               _hasError = false;
             });
             _startLoadTimeout();
           },
-          onPageFinished: (_) {
+          onPageFinished: (url) {
             _loadTimeout?.cancel();
+            _log('페이지 완료: $url');
             setState(() => _isLoading = false);
           },
           onWebResourceError: (error) {
+            _log('WebView 에러: ${error.description} (code=${error.errorCode}, mainFrame=${error.isForMainFrame})');
             if (error.isForMainFrame != false) {
               _loadTimeout?.cancel();
               setState(() {
@@ -115,9 +124,13 @@ class _WebViewPageState extends State<WebViewPage> {
               });
             }
           },
-          onNavigationRequest: (request) => NavigationDecision.navigate,
+          onNavigationRequest: (request) {
+            _log('네비게이션: ${request.url}');
+            return NavigationDecision.navigate;
+          },
         ),
-      );
+      )
+      ..setOnConsoleMessage((msg) => _log('[JS] ${msg.message}'));
 
     // Android: WebView 내에서 웹이 카메라 등 권한 요청 시 자동 허용
     // 그리고 파일/영상 업로드 처리 (WebView 기본은 무시함)
@@ -130,6 +143,7 @@ class _WebViewPageState extends State<WebViewPage> {
 
       androidCtrl.setOnShowFileSelector((FileSelectorParams params) async {
         try {
+          _log('파일선택 요청: accept=${params.acceptTypes}');
           FileType fileType = FileType.any;
           final accept = params.acceptTypes;
 
@@ -140,18 +154,25 @@ class _WebViewPageState extends State<WebViewPage> {
           } else if (accept.any((t) => t.startsWith('audio/'))) {
             fileType = FileType.audio;
           }
+          _log('파일타입: $fileType');
 
           final result = await FilePicker.platform.pickFiles(
             type: fileType,
             allowMultiple: false,
           );
 
-          if (result == null || result.paths.isEmpty) return [];
-          return result.paths
+          if (result == null || result.paths.isEmpty) {
+            _log('파일선택 취소 또는 실패');
+            return [];
+          }
+          final uris = result.paths
               .whereType<String>()
               .map((p) => Uri.file(p).toString())
               .toList();
-        } catch (_) {
+          _log('파일선택 완료: $uris');
+          return uris;
+        } catch (e, st) {
+          _log('파일선택 예외: $e\n$st');
           return [];
         }
       });
@@ -208,19 +229,79 @@ class _WebViewPageState extends State<WebViewPage> {
                 child: CircularProgressIndicator(color: Color(0xFFF7931A)),
               ),
             if (_hasError) _buildErrorView(),
-            // 우하단 설정 버튼 (항상 표시)
+            // 우하단 버튼들
             Positioned(
               right: 16,
               bottom: 32,
-              child: Opacity(
-                opacity: 0.5,
-                child: FloatingActionButton.small(
-                  onPressed: _showStatusSheet,
-                  backgroundColor: const Color(0xFF333333),
-                  child: const Icon(Icons.info_outline, color: Colors.white, size: 20),
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Opacity(
+                    opacity: 0.6,
+                    child: FloatingActionButton.small(
+                      heroTag: 'debug',
+                      onPressed: () => setState(() => _showDebug = !_showDebug),
+                      backgroundColor: const Color(0xFF333333),
+                      child: Icon(
+                        _showDebug ? Icons.close : Icons.bug_report,
+                        color: Colors.orange,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Opacity(
+                    opacity: 0.5,
+                    child: FloatingActionButton.small(
+                      heroTag: 'info',
+                      onPressed: _showStatusSheet,
+                      backgroundColor: const Color(0xFF333333),
+                      child: const Icon(Icons.info_outline, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
               ),
             ),
+            // 디버그 로그 패널
+            if (_showDebug)
+              Positioned(
+                left: 0,
+                right: 60,
+                bottom: 0,
+                height: 260,
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.9),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        color: Colors.orange.withValues(alpha: 0.2),
+                        child: Row(
+                          children: [
+                            const Text('DEBUG LOG', style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: () => setState(() => _debugLogs.clear()),
+                              child: const Text('CLEAR', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          reverse: true,
+                          padding: const EdgeInsets.all(6),
+                          itemCount: _debugLogs.length,
+                          itemBuilder: (_, i) => Text(
+                            _debugLogs[_debugLogs.length - 1 - i],
+                            style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontFamily: 'monospace'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
