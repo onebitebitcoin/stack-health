@@ -40,11 +40,8 @@ DEFAULT_TRANSCRIPTION_TEMPERATURE = float(os.environ.get("OPENAI_TRANSCRIPTION_T
 SUBTITLE_ENABLED = os.environ.get("SUBTITLE_ENABLED", "1").lower() not in {"0", "false", "no", "off"}
 SUBTITLE_MAX_DURATION_SEC = float(os.environ.get("SUBTITLE_MAX_DURATION_SEC", "65"))
 SUBTITLE_HTTP_TIMEOUT_SEC = int(os.environ.get("SUBTITLE_HTTP_TIMEOUT_SEC", "300"))
-# Silence detection (ffmpeg silencedetect) used to drop hallucinated cues that Whisper
-# places over silent stretches of audio.
 SUBTITLE_SILENCE_NOISE_DB = float(os.environ.get("SUBTITLE_SILENCE_NOISE_DB", "-30"))
 SUBTITLE_SILENCE_MIN_DURATION_SEC = float(os.environ.get("SUBTITLE_SILENCE_MIN_DURATION_SEC", "1.0"))
-SUBTITLE_SILENCE_OVERLAP_RATIO = float(os.environ.get("SUBTITLE_SILENCE_OVERLAP_RATIO", "0.7"))
 SUBTITLE_BURN_IN_FONT_SIZE = int(os.environ.get("SUBTITLE_BURN_IN_FONT_SIZE", "26"))
 SUBTITLE_BURN_IN_MARGIN_V = int(os.environ.get("SUBTITLE_BURN_IN_MARGIN_V", "90"))
 # ASS alpha is inverse opacity: 00 opaque, FF transparent. 20% transparent = 80% opaque.
@@ -264,114 +261,6 @@ _SRT_TIMESTAMP_LINE_RE = re.compile(
 )
 _SRT_INDEX_LINE_RE = re.compile(r"^\d+\s*$")
 
-
-# Known Whisper hallucination phrases — trained on YouTube data, injected over
-# non-speech audio (gym noise, breathing, ambient sound).
-_HALLUCINATION_PATTERNS = [
-    re.compile(p, re.IGNORECASE)
-    for p in [
-        r"구독과\s*좋아요",
-        r"구독\s*(눌러|해|부탁)",
-        r"좋아요\s*(눌러|부탁)",
-        r"알림\s*설정",
-        r"시청해\s*주셔서\s*감사",
-        r"다음\s*영상에서\s*만나",
-        r"(?:please\s*)?subscribe",
-        r"don'?t\s*forget\s*to\s*(like|subscribe)",
-        r"thank\s*you\s*for\s*watching",
-        r"^\s*MBC\s*$",
-        r"^\s*KBS\s*$",
-        r"^\s*SBS\s*$",
-    ]
-]
-
-
-def _filter_hallucinated_phrases(srt_text: str) -> tuple[str, int]:
-    """Drop cues whose text matches known Whisper hallucination patterns.
-
-    Returns (filtered_srt, dropped_count).
-    """
-    blocks = re.split(r"\n\s*\n", srt_text.strip())
-    kept: list[list[str]] = []
-    dropped = 0
-
-    for block in blocks:
-        lines = block.splitlines()
-        text_lines = [
-            line for line in lines
-            if line.strip()
-            and not _SRT_INDEX_LINE_RE.match(line.strip())
-            and not _SRT_TIMESTAMP_LINE_RE.search(line)
-        ]
-        text = " ".join(text_lines)
-        if any(p.search(text) for p in _HALLUCINATION_PATTERNS):
-            dropped += 1
-            continue
-        kept.append(lines)
-
-    if dropped == 0:
-        return srt_text, 0
-
-    renumbered: list[str] = []
-    for new_index, lines in enumerate(kept, start=1):
-        if lines and _SRT_INDEX_LINE_RE.match(lines[0].strip()):
-            lines = [str(new_index)] + lines[1:]
-        renumbered.append("\n".join(lines))
-
-    return "\n\n".join(renumbered) + "\n", dropped
-
-
-def _filter_srt_by_silence(
-    srt_text: str,
-    silence_ranges: list[tuple[float, float]],
-    *,
-    overlap_ratio: float = SUBTITLE_SILENCE_OVERLAP_RATIO,
-) -> tuple[str, int]:
-    """Drop cues that mostly fall inside detected silence — Whisper hallucinations
-    (e.g. "시청해주셔서 감사합니다") are typically placed over silent stretches.
-
-    Returns (filtered_srt, dropped_count). No-op when no silence was detected.
-    """
-    if not silence_ranges:
-        return srt_text, 0
-
-    blocks = re.split(r"\n\s*\n", srt_text.strip())
-    kept: list[list[str]] = []
-    dropped = 0
-
-    for block in blocks:
-        lines = block.splitlines()
-        match = next((m for m in (_SRT_TIMESTAMP_LINE_RE.search(line) for line in lines) if m), None)
-        if not match:
-            kept.append(lines)
-            continue
-
-        start = _parse_srt_timestamp(match.group(1))
-        end = _parse_srt_timestamp(match.group(2))
-        cue_duration = end - start
-        if cue_duration <= 0:
-            kept.append(lines)
-            continue
-
-        overlap = sum(
-            max(0.0, min(end, range_end) - max(start, range_start))
-            for range_start, range_end in silence_ranges
-        )
-        if overlap / cue_duration >= overlap_ratio:
-            dropped += 1
-            continue
-        kept.append(lines)
-
-    if dropped == 0:
-        return srt_text, 0
-
-    renumbered: list[str] = []
-    for new_index, lines in enumerate(kept, start=1):
-        if lines and _SRT_INDEX_LINE_RE.match(lines[0]):
-            lines = [str(new_index)] + lines[1:]
-        renumbered.append("\n".join(lines))
-
-    return "\n\n".join(renumbered) + "\n", dropped
 
 
 def _srt_to_vtt(srt_text: str) -> str:
@@ -597,10 +486,6 @@ def generate_subtitle_for_video(
         metrics["transcribe_seconds"] = round(transcribe_seconds, 3)
         srt_text, clamped = _clamp_srt_to_duration(srt_text, duration)
         metrics["srt_clamped_to_source_duration"] = clamped
-        srt_text, phrase_dropped = _filter_hallucinated_phrases(srt_text)
-        metrics["phrase_filtered_cues"] = phrase_dropped
-        srt_text, silence_dropped = _filter_srt_by_silence(srt_text, silence_ranges)
-        metrics["silence_filtered_cues"] = silence_dropped
         subtitle_text = _plain_text_from_srt(srt_text)
         vtt_text = _srt_to_vtt(srt_text)
 
