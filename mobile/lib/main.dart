@@ -5,6 +5,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:file_picker/file_picker.dart';
 
 const String kAppUrl = String.fromEnvironment(
   'APP_URL',
@@ -119,10 +120,40 @@ class _WebViewPageState extends State<WebViewPage> {
       );
 
     // Android: WebView 내에서 웹이 카메라 등 권한 요청 시 자동 허용
+    // 그리고 파일/영상 업로드 처리 (WebView 기본은 무시함)
     if (_controller.platform is AndroidWebViewController) {
-      (_controller.platform as AndroidWebViewController)
-          .setOnPlatformPermissionRequest((request) {
+      final androidCtrl = _controller.platform as AndroidWebViewController;
+
+      androidCtrl.setOnPlatformPermissionRequest((request) {
         request.grant();
+      });
+
+      androidCtrl.setOnShowFileSelector((FileSelectorParams params) async {
+        try {
+          FileType fileType = FileType.any;
+          final accept = params.acceptTypes;
+
+          if (accept.any((t) => t.startsWith('video/'))) {
+            fileType = FileType.video;
+          } else if (accept.any((t) => t.startsWith('image/'))) {
+            fileType = FileType.image;
+          } else if (accept.any((t) => t.startsWith('audio/'))) {
+            fileType = FileType.audio;
+          }
+
+          final result = await FilePicker.platform.pickFiles(
+            type: fileType,
+            allowMultiple: false,
+          );
+
+          if (result == null || result.paths.isEmpty) return [];
+          return result.paths
+              .whereType<String>()
+              .map((p) => Uri.file(p).toString())
+              .toList();
+        } catch (_) {
+          return [];
+        }
       });
     }
 
