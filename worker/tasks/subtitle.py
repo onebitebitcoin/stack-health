@@ -46,9 +46,12 @@ SUBTITLE_BURN_IN_FONT_SIZE = int(os.environ.get("SUBTITLE_BURN_IN_FONT_SIZE", "2
 SUBTITLE_BURN_IN_MARGIN_V = int(os.environ.get("SUBTITLE_BURN_IN_MARGIN_V", "90"))
 # ASS alpha is inverse opacity: 00 opaque, FF transparent. 20% transparent = 80% opaque.
 SUBTITLE_BURN_IN_BACK_ALPHA_HEX = os.environ.get("SUBTITLE_BURN_IN_BACK_ALPHA_HEX", "33")
-# Whisper verbose_json includes no_speech_prob per segment. Segments at or above this
-# threshold are discarded as non-speech (ambient noise, silence above the -30dB floor).
+# Whisper verbose_json includes no_speech_prob and avg_logprob per segment.
+# Segments are dropped if EITHER condition is met:
+#   • no_speech_prob >= threshold  → Whisper itself thinks there's no speech
+#   • avg_logprob    < threshold   → model is very uncertain → likely hallucination
 SUBTITLE_NO_SPEECH_THRESHOLD = float(os.environ.get("SUBTITLE_NO_SPEECH_THRESHOLD", "0.6"))
+SUBTITLE_AVG_LOGPROB_THRESHOLD = float(os.environ.get("SUBTITLE_AVG_LOGPROB_THRESHOLD", "-1.0"))
 
 
 @dataclass(frozen=True)
@@ -275,11 +278,17 @@ def _transcribe_verbose_json(
     return payload, time.perf_counter() - started
 
 
-def _segments_to_srt(segments: list[dict], no_speech_threshold: float) -> str:
-    """Convert verbose_json segments to SRT, dropping segments Whisper marks as non-speech."""
+def _segments_to_srt(
+    segments: list[dict],
+    no_speech_threshold: float,
+    avg_logprob_threshold: float,
+) -> str:
+    """Convert verbose_json segments to SRT, dropping non-speech and uncertain segments."""
     kept: list[tuple[float, float, str]] = []
     for seg in segments:
         if seg.get("no_speech_prob", 0.0) >= no_speech_threshold:
+            continue
+        if seg.get("avg_logprob", 0.0) < avg_logprob_threshold:
             continue
         text = seg.get("text", "").strip()
         if not text:
@@ -570,7 +579,7 @@ def generate_subtitle_for_video(
         segments = verbose_data.get("segments", [])
         metrics["segments_total"] = len(segments)
 
-        srt_text = _segments_to_srt(segments, SUBTITLE_NO_SPEECH_THRESHOLD)
+        srt_text = _segments_to_srt(segments, SUBTITLE_NO_SPEECH_THRESHOLD, SUBTITLE_AVG_LOGPROB_THRESHOLD)
         kept_count = len([s for s in srt_text.strip().split("\n\n") if s.strip()]) if srt_text.strip() else 0
         metrics["segments_kept"] = kept_count
         metrics["segments_filtered"] = len(segments) - kept_count
