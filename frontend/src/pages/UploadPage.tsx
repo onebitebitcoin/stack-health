@@ -107,7 +107,7 @@ export default function UploadPage() {
     const d = new Date()
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   })
-  const muteOriginalAudio = true
+
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [done, setDone] = useState(false)
@@ -304,14 +304,6 @@ export default function UploadPage() {
     mediaRecorderRef.current?.stop()
   }
 
-  function skipRecording() {
-    if (recording) {
-      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
-      mediaRecorderRef.current?.stop()
-      streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; setRecording(false)
-    }
-    audioBlobRef.current = null; setRecordingDone(false); setError(''); setStep(3)
-  }
 
   function handleBack() {
     if (step === 0) return
