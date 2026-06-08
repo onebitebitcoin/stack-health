@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, MicOff, X, ChevronRight, Loader2, VolumeX, AlertCircle } from 'lucide-react'
+import { Mic, MicOff, X, ChevronRight, Loader2, VolumeX, AlertCircle, Volume2 } from 'lucide-react'
 import { srtToTextLines, applyTextLinesToSrt } from '../../utils/subtitles'
 
 type VideoAudioStatus = 'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'
@@ -32,6 +32,8 @@ interface Props {
   stopRecording: () => void
   onRetake: () => void
   onNext: () => void
+  muteOriginalAudio: boolean
+  setMuteOriginalAudio: (v: boolean) => void
   devMode?: boolean
   subtitleDebugMetrics?: Record<string, unknown> | null
 }
@@ -44,6 +46,7 @@ export default function StepRecord({
   subtitleText, setSubtitleText, subtitlePlainText, subtitleExtracting,
   onExtractFromAudio, onClearSubtitle,
   startRecording, stopRecording, onRetake, onNext,
+  muteOriginalAudio, setMuteOriginalAudio,
 }: Props) {
   const prevSrtRef = useRef(subtitleText)
   const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
@@ -127,6 +130,20 @@ export default function StepRecord({
                 rows={4}
                 className="w-full resize-none rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
               />
+              <button
+                onClick={() => setMuteOriginalAudio(!muteOriginalAudio)}
+                className="flex items-center justify-between w-full pt-1"
+              >
+                <div className="flex items-center gap-1.5 text-xs text-theme-muted">
+                  {muteOriginalAudio
+                    ? <VolumeX size={13} className="text-theme-subtle" />
+                    : <Volume2 size={13} className="text-accent" />}
+                  <span>{muteOriginalAudio ? '원본 음성 제거됨' : '원본 음성 포함'}</span>
+                </div>
+                <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${muteOriginalAudio ? 'bg-theme-surface2' : 'bg-accent'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform duration-200 ${muteOriginalAudio ? 'translate-x-1' : 'translate-x-[18px]'}`} />
+                </div>
+              </button>
             </div>
           ) : (
             <p className="text-xs text-theme-muted py-1">자막이 없습니다.</p>

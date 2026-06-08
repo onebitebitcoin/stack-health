@@ -94,6 +94,7 @@ export default function UploadPage() {
   const [subtitleSize, setSubtitleSize] = useState<'small' | 'medium' | 'large'>('medium')
   const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('bottom')
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
+  const [muteOriginalAudio, setMuteOriginalAudio] = useState(true)
   const [videoAudioStatus, setVideoAudioStatus] = useState<'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'>('idle')
   const [subtitleDebugMetrics, setSubtitleDebugMetrics] = useState<Record<string, unknown> | null>(null)
   const stepTwoInitRef = useRef(false)
@@ -441,7 +442,7 @@ export default function UploadPage() {
         form.append('subtitle_size', subtitleSize)
         form.append('subtitle_position', subtitlePosition)
       }
-      form.append('mute_video', 'true')
+      if (muteOriginalAudio) form.append('mute_video', 'true')
       form.append('tags', JSON.stringify([mainCategory, subCategory].filter((v): v is string => Boolean(v))))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       if (workoutStart) form.append('workout_start', workoutStart)
@@ -616,6 +617,8 @@ export default function UploadPage() {
           startRecording={startRecording} stopRecording={stopRecording}
           onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0) }}
           onNext={() => setStep(3)}
+          muteOriginalAudio={muteOriginalAudio}
+          setMuteOriginalAudio={setMuteOriginalAudio}
           devMode={devMode}
           subtitleDebugMetrics={subtitleDebugMetrics}
         />
