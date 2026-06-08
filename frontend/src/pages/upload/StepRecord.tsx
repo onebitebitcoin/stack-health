@@ -8,6 +8,7 @@ interface SegmentDetail {
   text: string
   no_speech_prob: number
   avg_logprob: number
+  compression_ratio: number
   start: number
   end: number
 }
@@ -261,7 +262,7 @@ export default function StepRecord({
           <p className="text-[10px] font-semibold uppercase tracking-widest text-theme-muted mb-2">Dev · 음성인식 결과</p>
           <div className="space-y-1 text-[11px] font-mono text-theme-subtle">
             {(['model', 'language', 'source', 'duration_sec', 'transcribe_seconds',
-               'segments_total', 'segments_kept', 'segments_filtered',
+               'segments_total', 'avg_no_speech_prob', 'segments_kept', 'segments_filtered',
                'silence_ratio', 'silence_ranges_detected'] as const).map((key) => {
               const val = subtitleDebugMetrics[key]
               if (val === undefined || val === null) return null
@@ -277,12 +278,12 @@ export default function StepRecord({
             <div className="mt-2 border-t border-theme-surface2 pt-2 space-y-1.5">
               <p className="text-[10px] uppercase tracking-widest text-theme-muted">세그먼트</p>
               {(subtitleDebugMetrics.segments_detail as SegmentDetail[]).map((seg, i) => {
-                const filtered = seg.no_speech_prob >= 0.6 || seg.avg_logprob < -1.0
+                const filtered = seg.no_speech_prob >= 0.45 || seg.avg_logprob < -0.85 || seg.compression_ratio > 2.4
                 return (
                   <div key={i} className={`text-[10px] font-mono rounded p-1.5 ${filtered ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
                     <div className="flex justify-between gap-1 mb-0.5">
                       <span>{seg.start}s–{seg.end}s</span>
-                      <span>nsp={seg.no_speech_prob} lp={seg.avg_logprob}</span>
+                      <span>nsp={seg.no_speech_prob} lp={seg.avg_logprob} cr={seg.compression_ratio}</span>
                     </div>
                     <div className="text-theme-primary truncate">{seg.text || '(empty)'}</div>
                   </div>

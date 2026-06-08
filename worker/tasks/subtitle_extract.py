@@ -27,6 +27,8 @@ from tasks.subtitle import (
     DEFAULT_TRANSCRIPTION_PROMPT,
     DEFAULT_TRANSCRIPTION_TEMPERATURE,
     SUBTITLE_AVG_LOGPROB_THRESHOLD,
+    SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD,
+    SUBTITLE_COMPRESSION_RATIO_MAX,
     SUBTITLE_NO_SPEECH_THRESHOLD,
     _extract_audio,
     _has_audio_stream,
@@ -108,18 +110,28 @@ def run_subtitle_extract(job: dict) -> dict:
         metrics["transcribe_seconds"] = round(transcribe_seconds, 3)
         segments = verbose_data.get("segments", [])
         metrics["segments_total"] = len(segments)
+        metrics["avg_no_speech_prob"] = round(
+            sum(seg.get("no_speech_prob", 0.0) for seg in segments) / len(segments), 3
+        ) if segments else 0.0
         metrics["segments_detail"] = [
             {
                 "text": seg.get("text", "").strip(),
                 "no_speech_prob": round(seg.get("no_speech_prob", 0.0), 3),
                 "avg_logprob": round(seg.get("avg_logprob", 0.0), 3),
+                "compression_ratio": round(seg.get("compression_ratio", 0.0), 3),
                 "start": round(float(seg.get("start", 0)), 2),
                 "end": round(float(seg.get("end", 0)), 2),
             }
             for seg in segments
         ]
 
-        srt = _segments_to_srt(segments, SUBTITLE_NO_SPEECH_THRESHOLD, SUBTITLE_AVG_LOGPROB_THRESHOLD)
+        srt = _segments_to_srt(
+            segments,
+            SUBTITLE_NO_SPEECH_THRESHOLD,
+            SUBTITLE_AVG_LOGPROB_THRESHOLD,
+            SUBTITLE_COMPRESSION_RATIO_MAX,
+            SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD,
+        )
         kept_count = len([s for s in srt.strip().split("\n\n") if s.strip()]) if srt.strip() else 0
         metrics["segments_kept"] = kept_count
         metrics["segments_filtered"] = len(segments) - kept_count

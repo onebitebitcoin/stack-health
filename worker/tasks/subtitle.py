@@ -46,12 +46,16 @@ SUBTITLE_BURN_IN_FONT_SIZE = int(os.environ.get("SUBTITLE_BURN_IN_FONT_SIZE", "2
 SUBTITLE_BURN_IN_MARGIN_V = int(os.environ.get("SUBTITLE_BURN_IN_MARGIN_V", "90"))
 # ASS alpha is inverse opacity: 00 opaque, FF transparent. 20% transparent = 80% opaque.
 SUBTITLE_BURN_IN_BACK_ALPHA_HEX = os.environ.get("SUBTITLE_BURN_IN_BACK_ALPHA_HEX", "33")
-# Whisper verbose_json includes no_speech_prob and avg_logprob per segment.
-# Segments are dropped if EITHER condition is met:
-#   • no_speech_prob >= threshold  → Whisper itself thinks there's no speech
-#   • avg_logprob    < threshold   → model is very uncertain → likely hallucination
-SUBTITLE_NO_SPEECH_THRESHOLD = float(os.environ.get("SUBTITLE_NO_SPEECH_THRESHOLD", "0.6"))
-SUBTITLE_AVG_LOGPROB_THRESHOLD = float(os.environ.get("SUBTITLE_AVG_LOGPROB_THRESHOLD", "-1.0"))
+# Whisper verbose_json includes no_speech_prob, avg_logprob, compression_ratio per segment.
+# Segments are dropped if ANY condition is met:
+#   • no_speech_prob     >= 0.45  → Whisper thinks there's no speech
+#   • avg_logprob        < -0.85  → model is uncertain → likely hallucination
+#   • compression_ratio  > 2.4   → repetitive output (music/noise hallucination pattern)
+# After per-segment filtering: if avg no_speech_prob across all segments > 0.45, skip all.
+SUBTITLE_NO_SPEECH_THRESHOLD = float(os.environ.get("SUBTITLE_NO_SPEECH_THRESHOLD", "0.45"))
+SUBTITLE_AVG_LOGPROB_THRESHOLD = float(os.environ.get("SUBTITLE_AVG_LOGPROB_THRESHOLD", "-0.85"))
+SUBTITLE_COMPRESSION_RATIO_MAX = float(os.environ.get("SUBTITLE_COMPRESSION_RATIO_MAX", "2.4"))
+SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD = float(os.environ.get("SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD", "0.45"))
 
 
 @dataclass(frozen=True)
@@ -282,13 +286,34 @@ def _segments_to_srt(
     segments: list[dict],
     no_speech_threshold: float,
     avg_logprob_threshold: float,
+    compression_ratio_max: float = 2.4,
+    avg_no_speech_global_threshold: float = 0.45,
 ) -> str:
-    """Convert verbose_json segments to SRT, dropping non-speech and uncertain segments."""
+    """Convert verbose_json segments to SRT, dropping hallucinated/non-speech segments.
+
+    Three per-segment filters (any match → drop):
+      • no_speech_prob >= threshold        (Whisper sees no speech)
+      • avg_logprob    <  threshold        (model is uncertain → hallucination)
+      • compression_ratio > max            (repetitive output → music/noise hallucination)
+
+    One global filter: if the mean no_speech_prob across all segments exceeds the
+    global threshold, the entire transcription is discarded as non-speech.
+    """
+    if not segments:
+        return ""
+
+    # Global check: average no_speech_prob across all segments
+    mean_no_speech = sum(seg.get("no_speech_prob", 0.0) for seg in segments) / len(segments)
+    if mean_no_speech >= avg_no_speech_global_threshold:
+        return ""
+
     kept: list[tuple[float, float, str]] = []
     for seg in segments:
         if seg.get("no_speech_prob", 0.0) >= no_speech_threshold:
             continue
         if seg.get("avg_logprob", 0.0) < avg_logprob_threshold:
+            continue
+        if seg.get("compression_ratio", 0.0) > compression_ratio_max:
             continue
         text = seg.get("text", "").strip()
         if not text:
@@ -579,7 +604,13 @@ def generate_subtitle_for_video(
         segments = verbose_data.get("segments", [])
         metrics["segments_total"] = len(segments)
 
-        srt_text = _segments_to_srt(segments, SUBTITLE_NO_SPEECH_THRESHOLD, SUBTITLE_AVG_LOGPROB_THRESHOLD)
+        srt_text = _segments_to_srt(
+            segments,
+            SUBTITLE_NO_SPEECH_THRESHOLD,
+            SUBTITLE_AVG_LOGPROB_THRESHOLD,
+            SUBTITLE_COMPRESSION_RATIO_MAX,
+            SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD,
+        )
         kept_count = len([s for s in srt_text.strip().split("\n\n") if s.strip()]) if srt_text.strip() else 0
         metrics["segments_kept"] = kept_count
         metrics["segments_filtered"] = len(segments) - kept_count
