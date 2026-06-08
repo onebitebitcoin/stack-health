@@ -4,6 +4,14 @@ import { srtToTextLines, applyTextLinesToSrt } from '../../utils/subtitles'
 
 type VideoAudioStatus = 'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'
 
+interface SegmentDetail {
+  text: string
+  no_speech_prob: number
+  avg_logprob: number
+  start: number
+  end: number
+}
+
 interface Props {
   previewUrl: string | null
   recording: boolean
@@ -23,15 +31,19 @@ interface Props {
   stopRecording: () => void
   onRetake: () => void
   onNext: () => void
+  devMode?: boolean
+  subtitleDebugMetrics?: Record<string, unknown> | null
 }
 
 export default function StepRecord({
   previewUrl, recording, recordedSeconds, recordingDone,
   progressPct, error, maxSeconds,
+  devMode = false, subtitleDebugMetrics = null,
   videoAudioStatus,
   subtitleText, setSubtitleText, subtitlePlainText, subtitleExtracting,
   onExtractFromAudio, onClearSubtitle,
   startRecording, stopRecording, onRetake, onNext,
+  devMode, subtitleDebugMetrics,
 }: Props) {
   const prevSrtRef = useRef(subtitleText)
   const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
@@ -244,6 +256,43 @@ export default function StepRecord({
       )}
 
       {error && <p className="text-sm text-red-400">{error}</p>}
+
+      {devMode && subtitleDebugMetrics && (
+        <div className="rounded-xl bg-theme-surface border border-theme-surface2 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-theme-muted mb-2">Dev · 음성인식 결과</p>
+          <div className="space-y-1 text-[11px] font-mono text-theme-subtle">
+            {(['model', 'language', 'source', 'duration_sec', 'transcribe_seconds',
+               'segments_total', 'segments_kept', 'segments_filtered',
+               'silence_ratio', 'silence_ranges_detected'] as const).map((key) => {
+              const val = subtitleDebugMetrics[key]
+              if (val === undefined || val === null) return null
+              return (
+                <div key={key} className="flex justify-between gap-2">
+                  <span className="text-theme-muted">{key}</span>
+                  <span className="text-theme-primary">{String(val)}</span>
+                </div>
+              )
+            })}
+          </div>
+          {Array.isArray(subtitleDebugMetrics.segments_detail) && (subtitleDebugMetrics.segments_detail as SegmentDetail[]).length > 0 && (
+            <div className="mt-2 border-t border-theme-surface2 pt-2 space-y-1.5">
+              <p className="text-[10px] uppercase tracking-widest text-theme-muted">세그먼트</p>
+              {(subtitleDebugMetrics.segments_detail as SegmentDetail[]).map((seg, i) => {
+                const filtered = seg.no_speech_prob >= 0.6 || seg.avg_logprob < -1.0
+                return (
+                  <div key={i} className={`text-[10px] font-mono rounded p-1.5 ${filtered ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
+                    <div className="flex justify-between gap-1 mb-0.5">
+                      <span>{seg.start}s–{seg.end}s</span>
+                      <span>nsp={seg.no_speech_prob} lp={seg.avg_logprob}</span>
+                    </div>
+                    <div className="text-theme-primary truncate">{seg.text || '(empty)'}</div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-auto flex flex-col items-center gap-3 pb-2">
         <button

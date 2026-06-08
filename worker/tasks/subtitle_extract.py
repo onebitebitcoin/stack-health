@@ -7,6 +7,7 @@ then deletes the R2 temp keys.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
@@ -25,10 +26,14 @@ from tasks.subtitle import (
     DEFAULT_TRANSCRIPTION_MODEL,
     DEFAULT_TRANSCRIPTION_PROMPT,
     DEFAULT_TRANSCRIPTION_TEMPERATURE,
+    SUBTITLE_AVG_LOGPROB_THRESHOLD,
+    SUBTITLE_NO_SPEECH_THRESHOLD,
     _extract_audio,
+    _has_audio_stream,
     _plain_text_from_srt,
     _probe_duration,
-    _transcribe_srt,
+    _segments_to_srt,
+    _transcribe_verbose_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,6 +75,8 @@ def run_subtitle_extract(job: dict) -> dict:
         with open(tmp_video, "wb") as f:
             f.write(resp["Body"].read())
 
+        metrics: dict = {"model": DEFAULT_TRANSCRIPTION_MODEL, "language": language}
+
         if audio_r2_key:
             suffix = ".mp4" if audio_r2_key.endswith(".mp4") else ".webm"
             tmp_audio = _make_tmp(suffix)
@@ -77,14 +84,20 @@ def run_subtitle_extract(job: dict) -> dict:
             with open(tmp_audio, "wb") as f:
                 f.write(resp["Body"].read())
             source_audio = tmp_audio
+            metrics["source"] = "user_audio"
         else:
+            if not _has_audio_stream(tmp_video):
+                logger.info("subtitle-extract job=%s: no audio stream", job.get("job_id"))
+                return {"srt": "", "plain_text": "", "metrics": json.dumps({"skipped": "no audio stream"})}
             tmp_extracted = _make_tmp(".m4a")
             _extract_audio(tmp_video, tmp_extracted)
             source_audio = tmp_extracted
+            metrics["source"] = "video_audio"
 
-        _probe_duration(source_audio)
+        duration = _probe_duration(source_audio)
+        metrics["duration_sec"] = round(duration, 3)
 
-        srt, _ = _transcribe_srt(
+        verbose_data, transcribe_seconds = _transcribe_verbose_json(
             source_audio,
             api_key=api_key,
             model=DEFAULT_TRANSCRIPTION_MODEL,
@@ -92,9 +105,29 @@ def run_subtitle_extract(job: dict) -> dict:
             prompt=DEFAULT_TRANSCRIPTION_PROMPT,
             temperature=DEFAULT_TRANSCRIPTION_TEMPERATURE,
         )
+        metrics["transcribe_seconds"] = round(transcribe_seconds, 3)
+        segments = verbose_data.get("segments", [])
+        metrics["segments_total"] = len(segments)
+        metrics["segments_detail"] = [
+            {
+                "text": seg.get("text", "").strip(),
+                "no_speech_prob": round(seg.get("no_speech_prob", 0.0), 3),
+                "avg_logprob": round(seg.get("avg_logprob", 0.0), 3),
+                "start": round(float(seg.get("start", 0)), 2),
+                "end": round(float(seg.get("end", 0)), 2),
+            }
+            for seg in segments
+        ]
+
+        srt = _segments_to_srt(segments, SUBTITLE_NO_SPEECH_THRESHOLD, SUBTITLE_AVG_LOGPROB_THRESHOLD)
+        kept_count = len([s for s in srt.strip().split("\n\n") if s.strip()]) if srt.strip() else 0
+        metrics["segments_kept"] = kept_count
+        metrics["segments_filtered"] = len(segments) - kept_count
+
         plain_text = _plain_text_from_srt(srt)
-        logger.info("subtitle-extract job=%s done, %d chars", job.get("job_id"), len(srt))
-        return {"srt": srt, "plain_text": plain_text}
+        logger.info("subtitle-extract job=%s done, %d chars, %d/%d segs kept",
+                    job.get("job_id"), len(srt), kept_count, len(segments))
+        return {"srt": srt, "plain_text": plain_text, "metrics": json.dumps(metrics, ensure_ascii=False)}
 
     finally:
         for key in (video_r2_key, audio_r2_key):

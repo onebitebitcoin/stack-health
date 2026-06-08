@@ -647,11 +647,17 @@ async def get_subtitle_job(
     if not job:
         raise api_error(404, E_JOB_NOT_FOUND, "요청한 작업을 찾을 수 없습니다")
     _assert_job_owner(job, current_user)
+    raw_metrics = job.get("metrics")
+    try:
+        metrics = json.loads(raw_metrics) if raw_metrics else None
+    except (ValueError, TypeError):
+        metrics = None
     return {"data": {
         "status": job.get("status"),
         "srt": job.get("srt", ""),
         "plain_text": job.get("plain_text", ""),
         "error": job.get("error", ""),
+        "metrics": metrics,
     }}
 
 # ---------------------------------------------------------------------------

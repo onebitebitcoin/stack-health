@@ -31,6 +31,8 @@ export default function SettingsPage() {
   const [usernameSaved, setUsernameSaved] = useState(false)
 
   const [showIosGuide, setShowIosGuide] = useState(false)
+  const [devMode, setDevMode] = useState(() => !!(user?.app_settings?.developer_mode))
+  const [devModeLoading, setDevModeLoading] = useState(false)
 
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState('')
@@ -86,6 +88,20 @@ export default function SettingsPage() {
     }
   }
 
+
+  async function toggleDevMode() {
+    const next = !devMode
+    setDevModeLoading(true)
+    try {
+      const res = await client.patch<{ data: typeof user }>('/auth/me', {
+        app_settings: { ...(user?.app_settings ?? {}), developer_mode: next },
+      })
+      if (res.data.data) setUser(res.data.data)
+      setDevMode(next)
+    } finally {
+      setDevModeLoading(false)
+    }
+  }
 
   async function saveUsername(e: FormEvent) {
     e.preventDefault()
@@ -341,6 +357,26 @@ export default function SettingsPage() {
                   <RefreshCw size={12} />
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 개발자 */}
+        <div>
+          <p className={SECTION}>개발자</p>
+          <div className={GROUP}>
+            <div className={ROW}>
+              <div>
+                <span className={LABEL}>개발자 모드</span>
+                <p className="text-[11px] text-theme-muted mt-0.5">음성인식 디버그 정보 표시</p>
+              </div>
+              <button
+                onClick={toggleDevMode}
+                disabled={devModeLoading}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${devMode ? 'bg-accent' : 'bg-theme-surface2'} disabled:opacity-50`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${devMode ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
             </div>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { ChevronLeft, Flame, Share2, Check } from 'lucide-react'
 import LogoMark from '../components/LogoMark'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import client from '../api/client'
+import { useAuthStore } from '../store/auth'
 import { getApiErrorMessage } from '../api/errors'
 import { MERGE_POLL_INTERVAL_MS } from '../lib/constants'
 import type { Challenge } from '../api/types'
@@ -77,6 +78,8 @@ function getSupportedAudioMimeType(): string {
 export default function UploadPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const user = useAuthStore((s) => s.user)
+  const devMode = !!(user?.app_settings?.developer_mode)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState(0)
@@ -92,6 +95,7 @@ export default function UploadPage() {
   const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('bottom')
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
   const [videoAudioStatus, setVideoAudioStatus] = useState<'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'>('idle')
+  const [subtitleDebugMetrics, setSubtitleDebugMetrics] = useState<Record<string, unknown> | null>(null)
   const stepTwoInitRef = useRef(false)
   const [hasChallenge, setHasChallenge] = useState<boolean | null>(false)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
@@ -381,10 +385,11 @@ export default function UploadPage() {
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
       await new Promise((r) => setTimeout(r, 2000))
       try {
-        const res = await client.get<{ data: { status: string; srt: string; plain_text: string; error: string } }>(
+        const res = await client.get<{ data: { status: string; srt: string; plain_text: string; error: string; metrics?: Record<string, unknown> } }>(
           `/videos/subtitle-job/${jobId}`
         )
-        const { status, srt, plain_text, error: jobError } = res.data.data
+        const { status, srt, plain_text, error: jobError, metrics } = res.data.data
+        if (metrics) setSubtitleDebugMetrics(metrics)
         if (status === 'completed') {
           setSubtitleText(srt)
           setSubtitlePlainText(plain_text)
@@ -611,6 +616,8 @@ export default function UploadPage() {
           startRecording={startRecording} stopRecording={stopRecording}
           onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0) }}
           onNext={() => setStep(3)}
+          devMode={devMode}
+          subtitleDebugMetrics={subtitleDebugMetrics}
         />
       )}
       {step === 3 && (
