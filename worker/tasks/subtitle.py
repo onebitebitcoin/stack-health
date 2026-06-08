@@ -49,13 +49,15 @@ SUBTITLE_BURN_IN_BACK_ALPHA_HEX = os.environ.get("SUBTITLE_BURN_IN_BACK_ALPHA_HE
 # Whisper verbose_json includes no_speech_prob, avg_logprob, compression_ratio per segment.
 # Segments are dropped if ANY condition is met:
 #   • no_speech_prob     >= 0.45  → Whisper thinks there's no speech
-#   • avg_logprob        < -0.85  → model is uncertain → likely hallucination
+#   • avg_logprob        < -0.75  → model is uncertain → likely hallucination
 #   • compression_ratio  > 2.4   → repetitive output (music/noise hallucination pattern)
+#   • chars_per_sec      < 2.0   → too few chars for segment duration (e.g. "유료광고" hallucination)
 # After per-segment filtering: if avg no_speech_prob across all segments > 0.45, skip all.
 SUBTITLE_NO_SPEECH_THRESHOLD = float(os.environ.get("SUBTITLE_NO_SPEECH_THRESHOLD", "0.45"))
-SUBTITLE_AVG_LOGPROB_THRESHOLD = float(os.environ.get("SUBTITLE_AVG_LOGPROB_THRESHOLD", "-0.85"))
+SUBTITLE_AVG_LOGPROB_THRESHOLD = float(os.environ.get("SUBTITLE_AVG_LOGPROB_THRESHOLD", "-0.75"))
 SUBTITLE_COMPRESSION_RATIO_MAX = float(os.environ.get("SUBTITLE_COMPRESSION_RATIO_MAX", "2.4"))
 SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD = float(os.environ.get("SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD", "0.45"))
+SUBTITLE_MIN_CHARS_PER_SEC = float(os.environ.get("SUBTITLE_MIN_CHARS_PER_SEC", "2.0"))
 
 
 @dataclass(frozen=True)
@@ -288,13 +290,15 @@ def _segments_to_srt(
     avg_logprob_threshold: float,
     compression_ratio_max: float = 2.4,
     avg_no_speech_global_threshold: float = 0.45,
+    min_chars_per_sec: float = 2.0,
 ) -> str:
     """Convert verbose_json segments to SRT, dropping hallucinated/non-speech segments.
 
-    Three per-segment filters (any match → drop):
+    Four per-segment filters (any match → drop):
       • no_speech_prob >= threshold        (Whisper sees no speech)
       • avg_logprob    <  threshold        (model is uncertain → hallucination)
       • compression_ratio > max            (repetitive output → music/noise hallucination)
+      • chars_per_sec  <  min             (too sparse → stock-phrase hallucination)
 
     One global filter: if the mean no_speech_prob across all segments exceeds the
     global threshold, the entire transcription is discarded as non-speech.
@@ -317,6 +321,9 @@ def _segments_to_srt(
             continue
         text = seg.get("text", "").strip()
         if not text:
+            continue
+        seg_duration = float(seg.get("end", 0)) - float(seg.get("start", 0))
+        if seg_duration > 0 and len(text) / seg_duration < min_chars_per_sec:
             continue
         kept.append((float(seg["start"]), float(seg["end"]), text))
     if not kept:
@@ -610,6 +617,7 @@ def generate_subtitle_for_video(
             SUBTITLE_AVG_LOGPROB_THRESHOLD,
             SUBTITLE_COMPRESSION_RATIO_MAX,
             SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD,
+            SUBTITLE_MIN_CHARS_PER_SEC,
         )
         kept_count = len([s for s in srt_text.strip().split("\n\n") if s.strip()]) if srt_text.strip() else 0
         metrics["segments_kept"] = kept_count

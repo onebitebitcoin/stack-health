@@ -303,12 +303,14 @@ export default function StepRecord({
             <div className="mt-2 border-t border-theme-surface2 pt-2 space-y-1.5">
               <p className="text-[10px] uppercase tracking-widest text-theme-muted">세그먼트</p>
               {(subtitleDebugMetrics.segments_detail as SegmentDetail[]).map((seg, i) => {
-                const filtered = seg.no_speech_prob >= 0.45 || seg.avg_logprob < -0.85 || seg.compression_ratio > 2.4
+                const dur = seg.end - seg.start
+                const cps = dur > 0 ? seg.text.length / dur : 0
+                const filtered = seg.no_speech_prob >= 0.45 || seg.avg_logprob < -0.75 || seg.compression_ratio > 2.4 || (dur > 0 && cps < 2.0)
                 return (
                   <div key={i} className={`text-[10px] font-mono rounded p-1.5 ${filtered ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
                     <div className="flex justify-between gap-1 mb-0.5">
                       <span>{seg.start}s–{seg.end}s</span>
-                      <span>nsp={seg.no_speech_prob} lp={seg.avg_logprob} cr={seg.compression_ratio}</span>
+                      <span>nsp={seg.no_speech_prob} lp={seg.avg_logprob} cr={seg.compression_ratio} cps={cps.toFixed(1)}</span>
                     </div>
                     <div className="text-theme-primary truncate">{seg.text || '(empty)'}</div>
                   </div>

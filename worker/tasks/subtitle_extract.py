@@ -29,6 +29,7 @@ from tasks.subtitle import (
     SUBTITLE_AVG_LOGPROB_THRESHOLD,
     SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD,
     SUBTITLE_COMPRESSION_RATIO_MAX,
+    SUBTITLE_MIN_CHARS_PER_SEC,
     SUBTITLE_NO_SPEECH_THRESHOLD,
     _extract_audio,
     _has_audio_stream,
@@ -131,6 +132,7 @@ def run_subtitle_extract(job: dict) -> dict:
             SUBTITLE_AVG_LOGPROB_THRESHOLD,
             SUBTITLE_COMPRESSION_RATIO_MAX,
             SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD,
+            SUBTITLE_MIN_CHARS_PER_SEC,
         )
         kept_count = len([s for s in srt.strip().split("\n\n") if s.strip()]) if srt.strip() else 0
         metrics["segments_kept"] = kept_count
