@@ -276,7 +276,15 @@ export default function StepRecord({
 
       {devMode && subtitleDebugMetrics && (
         <div className="rounded-xl bg-theme-surface border border-theme-surface2 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-theme-muted mb-2">Dev · 음성인식 결과</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-theme-muted">Dev · 음성인식 결과</p>
+            <button
+              onClick={() => navigator.clipboard.writeText(JSON.stringify(subtitleDebugMetrics, null, 2))}
+              className="text-[10px] text-theme-muted hover:text-accent transition-colors px-1.5 py-0.5 rounded border border-theme-surface2 hover:border-accent"
+            >
+              복사
+            </button>
+          </div>
           <div className="space-y-1 text-[11px] font-mono text-theme-subtle">
             {(['model', 'language', 'source', 'duration_sec', 'transcribe_seconds',
                'segments_total', 'avg_no_speech_prob', 'segments_kept', 'segments_filtered',
