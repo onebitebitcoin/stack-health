@@ -46,6 +46,9 @@ SUBTITLE_BURN_IN_FONT_SIZE = int(os.environ.get("SUBTITLE_BURN_IN_FONT_SIZE", "2
 SUBTITLE_BURN_IN_MARGIN_V = int(os.environ.get("SUBTITLE_BURN_IN_MARGIN_V", "90"))
 # ASS alpha is inverse opacity: 00 opaque, FF transparent. 20% transparent = 80% opaque.
 SUBTITLE_BURN_IN_BACK_ALPHA_HEX = os.environ.get("SUBTITLE_BURN_IN_BACK_ALPHA_HEX", "33")
+# Whisper verbose_json includes no_speech_prob per segment. Segments at or above this
+# threshold are discarded as non-speech (ambient noise, silence above the -30dB floor).
+SUBTITLE_NO_SPEECH_THRESHOLD = float(os.environ.get("SUBTITLE_NO_SPEECH_THRESHOLD", "0.6"))
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,23 @@ def _probe_duration(path: str) -> float:
             except ValueError:
                 pass
     return 0.0
+
+
+def _has_audio_stream(video_path: str) -> bool:
+    """Return True if the video contains at least one audio stream."""
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-select_streams", "a:0",
+            "-show_entries", "stream=index",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return result.returncode == 0 and bool(result.stdout.strip())
 
 
 def _extract_audio(video_path: str, audio_path: str) -> float:
@@ -216,6 +236,64 @@ def _transcribe_srt(
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"OpenAI transcription failed: HTTP {exc.code} {detail[:500]}") from exc
     return payload, time.perf_counter() - started
+
+
+def _transcribe_verbose_json(
+    audio_path: str,
+    *,
+    api_key: str,
+    model: str,
+    language: str | None,
+    prompt: str | None = None,
+    temperature: float | None = None,
+) -> tuple[dict, float]:
+    """Call Whisper with verbose_json to get per-segment no_speech_prob."""
+    fields = {"model": model, "response_format": "verbose_json"}
+    if language:
+        fields["language"] = language
+    if prompt:
+        fields["prompt"] = prompt
+    if temperature is not None:
+        fields["temperature"] = str(temperature)
+    body, boundary = _encode_multipart(fields, "file", audio_path)
+    request = urllib.request.Request(
+        OPENAI_TRANSCRIPTIONS_URL,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        method="POST",
+    )
+    started = time.perf_counter()
+    try:
+        with urllib.request.urlopen(request, timeout=SUBTITLE_HTTP_TIMEOUT_SEC) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"OpenAI transcription failed: HTTP {exc.code} {detail[:500]}") from exc
+    return payload, time.perf_counter() - started
+
+
+def _segments_to_srt(segments: list[dict], no_speech_threshold: float) -> str:
+    """Convert verbose_json segments to SRT, dropping segments Whisper marks as non-speech."""
+    kept: list[tuple[float, float, str]] = []
+    for seg in segments:
+        if seg.get("no_speech_prob", 0.0) >= no_speech_threshold:
+            continue
+        text = seg.get("text", "").strip()
+        if not text:
+            continue
+        kept.append((float(seg["start"]), float(seg["end"]), text))
+    if not kept:
+        return ""
+    lines: list[str] = []
+    for i, (start, end, text) in enumerate(kept, start=1):
+        lines.append(str(i))
+        lines.append(f"{_format_srt_timestamp(start)} --> {_format_srt_timestamp(end)}")
+        lines.append(text)
+        lines.append("")
+    return "\n".join(lines)
 
 
 def _parse_srt_timestamp(value: str) -> float:
@@ -458,12 +536,17 @@ def generate_subtitle_for_video(
         if duration > SUBTITLE_MAX_DURATION_SEC:
             return SubtitleResult(status="skipped", error=f"duration exceeds subtitle limit: {duration:.1f}s", metrics=metrics)
 
+        if not _has_audio_stream(tmp_video):
+            return SubtitleResult(
+                status="skipped",
+                error="no audio stream found in video",
+                metrics=metrics,
+            )
+
         metrics["extract_audio_seconds"] = round(_extract_audio(tmp_video, tmp_audio), 3)
         silence_ranges = _detect_silence_ranges(tmp_audio, duration)
         metrics["silence_ranges_detected"] = len(silence_ranges)
 
-        # If the audio is overwhelmingly silent, Whisper will hallucinate rather
-        # than produce meaningful output. Skip the API call entirely.
         if silence_ranges and duration > 0:
             total_silence = sum(end - start for start, end in silence_ranges)
             silence_ratio = total_silence / duration
@@ -475,7 +558,7 @@ def generate_subtitle_for_video(
                     metrics=metrics,
                 )
 
-        srt_text, transcribe_seconds = _transcribe_srt(
+        verbose_data, transcribe_seconds = _transcribe_verbose_json(
             tmp_audio,
             api_key=api_key,
             model=model,
@@ -484,6 +567,21 @@ def generate_subtitle_for_video(
             temperature=DEFAULT_TRANSCRIPTION_TEMPERATURE,
         )
         metrics["transcribe_seconds"] = round(transcribe_seconds, 3)
+        segments = verbose_data.get("segments", [])
+        metrics["segments_total"] = len(segments)
+
+        srt_text = _segments_to_srt(segments, SUBTITLE_NO_SPEECH_THRESHOLD)
+        kept_count = len([s for s in srt_text.strip().split("\n\n") if s.strip()]) if srt_text.strip() else 0
+        metrics["segments_kept"] = kept_count
+        metrics["segments_filtered"] = len(segments) - kept_count
+
+        if not srt_text.strip():
+            return SubtitleResult(
+                status="skipped",
+                error="no speech detected — all segments filtered by no_speech_prob",
+                metrics=metrics,
+            )
+
         srt_text, clamped = _clamp_srt_to_duration(srt_text, duration)
         metrics["srt_clamped_to_source_duration"] = clamped
         subtitle_text = _plain_text_from_srt(srt_text)
