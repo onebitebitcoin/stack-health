@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 const String kAppUrl = String.fromEnvironment(
   'APP_URL',
@@ -46,16 +48,38 @@ class _WebViewPageState extends State<WebViewPage> {
   late final WebViewController _controller;
   bool _isLoading = true;
   bool _hasError = false;
+  Timer? _loadTimeout;
   late final StreamSubscription<List<ConnectivityResult>> _connectivitySub;
 
   @override
   void initState() {
     super.initState();
+    _requestPermissions();
     _initWebView();
     _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
       final hasConnection = results.any((r) => r != ConnectivityResult.none);
       if (hasConnection && _hasError) {
         _reload();
+      }
+    });
+  }
+
+  Future<void> _requestPermissions() async {
+    await [
+      Permission.camera,
+      Permission.photos,
+      Permission.videos,
+    ].request();
+  }
+
+  void _startLoadTimeout() {
+    _loadTimeout?.cancel();
+    _loadTimeout = Timer(const Duration(seconds: 30), () {
+      if (mounted && _isLoading) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
       }
     });
   }
@@ -70,26 +94,40 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setBackgroundColor(const Color(0xFF0A0A0A))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) => setState(() {
-            _isLoading = true;
-            _hasError = false;
-          }),
-          onPageFinished: (_) => setState(() => _isLoading = false),
+          onPageStarted: (_) {
+            setState(() {
+              _isLoading = true;
+              _hasError = false;
+            });
+            _startLoadTimeout();
+          },
+          onPageFinished: (_) {
+            _loadTimeout?.cancel();
+            setState(() => _isLoading = false);
+          },
           onWebResourceError: (error) {
             if (error.isForMainFrame != false) {
+              _loadTimeout?.cancel();
               setState(() {
                 _isLoading = false;
                 _hasError = true;
               });
             }
           },
-          onNavigationRequest: (request) {
-            // 외부 딥링크는 앱 내에서 처리
-            return NavigationDecision.navigate;
-          },
+          onNavigationRequest: (request) => NavigationDecision.navigate,
         ),
-      )
-      ..loadRequest(Uri.parse(kAppUrl));
+      );
+
+    // Android: WebView 내에서 웹이 카메라 등 권한 요청 시 자동 허용
+    if (_controller.platform is AndroidWebViewController) {
+      (_controller.platform as AndroidWebViewController)
+          .setOnPlatformPermissionRequest((request) {
+        request.grant();
+      });
+    }
+
+    _controller.loadRequest(Uri.parse(kAppUrl));
+    _startLoadTimeout();
   }
 
   void _reload() {
@@ -98,12 +136,25 @@ class _WebViewPageState extends State<WebViewPage> {
       _hasError = false;
     });
     _controller.loadRequest(Uri.parse(kAppUrl));
+    _startLoadTimeout();
   }
 
   @override
   void dispose() {
+    _loadTimeout?.cancel();
     _connectivitySub.cancel();
     super.dispose();
+  }
+
+  void _showStatusSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => const _StatusSheet(),
+    );
   }
 
   @override
@@ -123,11 +174,22 @@ class _WebViewPageState extends State<WebViewPage> {
             if (!_hasError) WebViewWidget(controller: _controller),
             if (_isLoading && !_hasError)
               const Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFF7931A),
-                ),
+                child: CircularProgressIndicator(color: Color(0xFFF7931A)),
               ),
             if (_hasError) _buildErrorView(),
+            // 우하단 설정 버튼 (항상 표시)
+            Positioned(
+              right: 16,
+              bottom: 32,
+              child: Opacity(
+                opacity: 0.5,
+                child: FloatingActionButton.small(
+                  onPressed: _showStatusSheet,
+                  backgroundColor: const Color(0xFF333333),
+                  child: const Icon(Icons.info_outline, color: Colors.white, size: 20),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -141,11 +203,7 @@ class _WebViewPageState extends State<WebViewPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.wifi_off,
-              size: 64,
-              color: Color(0xFF666666),
-            ),
+            const Icon(Icons.wifi_off, size: 64, color: Color(0xFF666666)),
             const SizedBox(height: 16),
             const Text(
               '연결할 수 없습니다',
@@ -174,8 +232,186 @@ class _WebViewPageState extends State<WebViewPage> {
               ),
               child: const Text('다시 시도', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _showStatusSheet,
+              child: const Text(
+                '권한 및 연결 상태 확인',
+                style: TextStyle(color: Color(0xFF888888)),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _StatusSheet extends StatefulWidget {
+  const _StatusSheet();
+
+  @override
+  State<_StatusSheet> createState() => _StatusSheetState();
+}
+
+class _StatusSheetState extends State<_StatusSheet> {
+  Map<String, String> _permissionStatus = {};
+  String _connectivity = '확인 중...';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    final results = await Connectivity().checkConnectivity();
+    final hasNet = results.any((r) => r != ConnectivityResult.none);
+
+    final camera = await Permission.camera.status;
+    final photos = await Permission.photos.status;
+    final videos = await Permission.videos.status;
+
+    if (!mounted) return;
+    setState(() {
+      _connectivity = hasNet ? '연결됨' : '연결 안됨';
+      _permissionStatus = {
+        '인터넷': '자동 허용',
+        '카메라': _statusLabel(camera),
+        '사진/미디어': _statusLabel(photos),
+        '동영상': _statusLabel(videos),
+      };
+      _loading = false;
+    });
+  }
+
+  String _statusLabel(PermissionStatus s) {
+    switch (s) {
+      case PermissionStatus.granted:
+        return '허용됨';
+      case PermissionStatus.denied:
+        return '거부됨';
+      case PermissionStatus.permanentlyDenied:
+        return '영구 거부 (설정에서 변경 필요)';
+      case PermissionStatus.restricted:
+        return '제한됨';
+      default:
+        return '요청 안됨';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '앱 상태',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '서버: $kAppUrl',
+            style: const TextStyle(color: Color(0xFF888888), fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          if (_loading)
+            const Center(child: CircularProgressIndicator(color: Color(0xFFF7931A)))
+          else ...[
+            _StatusRow(label: '네트워크', value: _connectivity,
+                isOk: _connectivity == '연결됨'),
+            const Divider(color: Color(0xFF333333), height: 24),
+            const Text(
+              '권한 상태',
+              style: TextStyle(color: Color(0xFF888888), fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            ..._permissionStatus.entries.map(
+              (e) => _StatusRow(
+                label: e.key,
+                value: e.value,
+                isOk: e.value == '허용됨' || e.value == '자동 허용',
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () async {
+                  await [
+                    Permission.camera,
+                    Permission.photos,
+                    Permission.videos,
+                  ].request();
+                  await _loadStatus();
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFF7931A)),
+                  foregroundColor: const Color(0xFFF7931A),
+                ),
+                child: const Text('권한 다시 요청'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => openAppSettings(),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF555555)),
+                  foregroundColor: const Color(0xFF888888),
+                ),
+                child: const Text('Android 앱 권한 설정 열기'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isOk;
+
+  const _StatusRow({required this.label, required this.value, required this.isOk});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white, fontSize: 14)),
+          Row(
+            children: [
+              Icon(
+                isOk ? Icons.check_circle : Icons.cancel,
+                size: 14,
+                color: isOk ? Colors.green : Colors.red,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                value,
+                style: TextStyle(
+                  color: isOk ? Colors.green : Colors.red,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
