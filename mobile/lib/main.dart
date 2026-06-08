@@ -270,12 +270,12 @@ class _WebViewPageState extends State<WebViewPage> {
                 bottom: 0,
                 height: 260,
                 child: Container(
-                  color: Colors.black.withValues(alpha: 0.9),
+                  color: Colors.black.withOpacity(0.9),
                   child: Column(
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        color: Colors.orange.withValues(alpha: 0.2),
+                        color: Colors.orange.withOpacity(0.2),
                         child: Row(
                           children: [
                             const Text('DEBUG LOG', style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
