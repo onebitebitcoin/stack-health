@@ -43,7 +43,6 @@ export default function StepRecord({
   subtitleText, setSubtitleText, subtitlePlainText, subtitleExtracting,
   onExtractFromAudio, onClearSubtitle,
   startRecording, stopRecording, onRetake, onNext,
-  devMode, subtitleDebugMetrics,
 }: Props) {
   const prevSrtRef = useRef(subtitleText)
   const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
