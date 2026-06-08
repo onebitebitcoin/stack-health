@@ -572,6 +572,20 @@ def generate_subtitle_for_video(
         metrics["extract_audio_seconds"] = round(_extract_audio(tmp_video, tmp_audio), 3)
         silence_ranges = _detect_silence_ranges(tmp_audio, duration)
         metrics["silence_ranges_detected"] = len(silence_ranges)
+
+        # If the audio is overwhelmingly silent, Whisper will hallucinate rather
+        # than produce meaningful output. Skip the API call entirely.
+        if silence_ranges and duration > 0:
+            total_silence = sum(end - start for start, end in silence_ranges)
+            silence_ratio = total_silence / duration
+            metrics["silence_ratio"] = round(silence_ratio, 3)
+            if silence_ratio >= 0.90:
+                return SubtitleResult(
+                    status="skipped",
+                    error=f"audio is {silence_ratio:.0%} silent — skipping transcription to avoid hallucination",
+                    metrics=metrics,
+                )
+
         srt_text, transcribe_seconds = _transcribe_srt(
             tmp_audio,
             api_key=api_key,

@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
-import { Mic, MicOff, X, ChevronRight, Volume2, FileVideo, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Mic, MicOff, X, ChevronRight, Loader2, VolumeX, AlertCircle } from 'lucide-react'
 import { srtToTextLines, applyTextLinesToSrt } from '../../utils/subtitles'
 
-type Mode = 'video' | 'audio'
+type VideoAudioStatus = 'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'
 
 interface Props {
   previewUrl: string | null
@@ -12,33 +12,27 @@ interface Props {
   progressPct: number
   error: string
   maxSeconds: number
-  videoHasAudio?: boolean
+  videoAudioStatus: VideoAudioStatus
   subtitleText: string
   setSubtitleText: (v: string) => void
   subtitlePlainText: string
   subtitleExtracting: boolean
-  muteOriginalAudio: boolean
-  setMuteOriginalAudio: (v: boolean) => void
-  onExtractFromVideo: () => void
   onExtractFromAudio: () => void
   onClearSubtitle: () => void
   startRecording: () => void
   stopRecording: () => void
-  skipRecording: () => void
   onRetake: () => void
   onNext: () => void
 }
 
 export default function StepRecord({
   previewUrl, recording, recordedSeconds, recordingDone,
-  progressPct, error, maxSeconds, videoHasAudio,
+  progressPct, error, maxSeconds,
+  videoAudioStatus,
   subtitleText, setSubtitleText, subtitlePlainText, subtitleExtracting,
-  muteOriginalAudio, setMuteOriginalAudio,
-  onExtractFromVideo, onExtractFromAudio, onClearSubtitle,
-  startRecording, stopRecording, skipRecording, onRetake, onNext,
+  onExtractFromAudio, onClearSubtitle,
+  startRecording, stopRecording, onRetake, onNext,
 }: Props) {
-  const [mode, setMode] = useState<Mode>('video')
-  const [pendingProceed, setPendingProceed] = useState<(() => void) | null>(null)
   const prevSrtRef = useRef(subtitleText)
   const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
 
@@ -51,7 +45,7 @@ export default function StepRecord({
 
   function handleEditChange(val: string) {
     setEditLines(val)
-    const lines = val.split('\n').map(l => l.trim()).filter(Boolean)
+    const lines = val.split('\n').map((l) => l.trim()).filter(Boolean)
     const newSrt = applyTextLinesToSrt(subtitleText, lines)
     prevSrtRef.current = newSrt
     setSubtitleText(newSrt)
@@ -66,249 +60,184 @@ export default function StepRecord({
 
   const timeStr = `${String(Math.floor(recordedSeconds / 60)).padStart(2, '0')}:${String(recordedSeconds % 60).padStart(2, '0')}`
   const hasSubtitle = subtitlePlainText.trim() !== ''
-  const canProceed = (recordingDone || hasSubtitle) && !recording
-
-  function handleModeChange(m: Mode) {
-    if (recording) return
-    setMode(m)
-  }
-
-  function attemptProceed(action: () => void) {
-    if (!hasSubtitle) {
-      setPendingProceed(() => action)
-      return
-    }
-    action()
-  }
-
-  function SubtitleEditor({ showClear = true }: { showClear?: boolean }) {
-    return (
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-theme-muted">추출된 자막 — 오타만 수정하세요</p>
-          {showClear && (
-            <button
-              onClick={handleClearSubtitle}
-              className="flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
-            >
-              <X size={11} /> 자막 제거
-            </button>
-          )}
-        </div>
-        <textarea
-          value={editLines}
-          onChange={(e) => handleEditChange(e.target.value)}
-          rows={4}
-          className="w-full resize-none rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
-        />
-      </div>
-    )
-  }
+  const canProceed = !recording && !subtitleExtracting && videoAudioStatus !== 'analyzing'
 
   return (
     <div className="flex flex-1 flex-col px-6 pt-4 gap-4 overflow-y-auto">
       {previewUrl && (
-        <video src={previewUrl} className="h-40 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
+        <video
+          src={previewUrl}
+          className="h-36 w-full rounded-xl object-cover flex-shrink-0"
+          muted autoPlay loop playsInline
+        />
       )}
 
-      {/* 안내 문구 */}
-      <p className="text-xs text-theme-muted leading-relaxed">
-        자막을 추출해서 영상을 풍부하게 만드세요.
-      </p>
+      {/* 영상 오디오 분석 결과 */}
+      <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-3">
+        <p className="text-sm font-semibold text-theme-primary">
+          자막 <span className="text-xs font-normal text-theme-subtle">(선택)</span>
+        </p>
 
-      {/* 오디오 설정 */}
-      <div className="rounded-xl bg-theme-surface px-4 py-3">
-        <label className="flex items-center justify-between gap-3 py-1 cursor-pointer">
-          <span className="text-sm text-theme-primary">음성 제거하고 자막만 남기기</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={muteOriginalAudio}
-            onClick={() => setMuteOriginalAudio(!muteOriginalAudio)}
-            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${
-              muteOriginalAudio ? 'bg-accent' : 'bg-theme-surface2'
-            }`}
-          >
-            <span className={`mt-0.5 ml-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-              muteOriginalAudio ? 'translate-x-5' : 'translate-x-0'
-            }`} />
-          </button>
-        </label>
-      </div>
-
-      {/* 모드 스위치 */}
-      <div className="flex rounded-xl bg-theme-surface p-1 gap-1">
-        <button
-          type="button"
-          onClick={() => handleModeChange('video')}
-          className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-            mode === 'video' ? 'bg-theme-page text-theme-primary' : 'text-theme-muted'
-          }`}
-        >
-          영상 자막 추출
-        </button>
-        <button
-          type="button"
-          onClick={() => handleModeChange('audio')}
-          className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
-            mode === 'audio' ? 'bg-theme-page text-theme-primary' : 'text-theme-muted'
-          }`}
-        >
-          음성 녹음
-        </button>
-      </div>
-
-      {/* 영상 자막 추출 모드 */}
-      {mode === 'video' && (
-        <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-3">
-          <div>
-            <p className="font-semibold text-theme-primary">자막 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-            <p className="text-xs text-theme-muted mt-1 leading-relaxed">영상의 음성을 인식해 자막을 입혀요.</p>
+        {videoAudioStatus === 'analyzing' && (
+          <div className="flex items-center gap-2 py-1">
+            <Loader2 size={14} className="animate-spin text-accent" />
+            <span className="text-xs text-theme-muted">영상 음성 분석 중...</span>
           </div>
-          {subtitleExtracting ? (
-            <div className="flex items-center gap-2 py-1">
-              <Loader2 size={14} className="animate-spin text-accent" />
-              <span className="text-xs text-theme-muted">자막 추출 중...</span>
+        )}
+
+        {videoAudioStatus === 'has_audio' && !subtitleExtracting && (
+          hasSubtitle ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-theme-muted">추출된 자막 — 오타만 수정하세요</p>
+                <button
+                  onClick={handleClearSubtitle}
+                  className="flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
+                >
+                  <X size={11} /> 자막 제거
+                </button>
+              </div>
+              <textarea
+                value={editLines}
+                onChange={(e) => handleEditChange(e.target.value)}
+                rows={4}
+                className="w-full resize-none rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+              />
             </div>
-          ) : hasSubtitle ? (
-            <SubtitleEditor />
           ) : (
+            <p className="text-xs text-theme-muted py-1">자막이 없습니다.</p>
+          )
+        )}
+
+        {videoAudioStatus === 'no_audio' && (
+          <div className="flex items-start gap-2">
+            <VolumeX size={14} className="text-theme-muted mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-theme-muted leading-relaxed">
+              이 영상에는 음성이 없어요. 아래에서 직접 녹음해 자막을 만들어보세요.
+            </p>
+          </div>
+        )}
+
+        {videoAudioStatus === 'error' && (
+          <div className="flex items-start gap-2">
+            <AlertCircle size={14} className="text-theme-subtle mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-theme-subtle leading-relaxed">자막 추출에 실패했어요.</p>
+          </div>
+        )}
+
+        {subtitleExtracting && videoAudioStatus !== 'analyzing' && (
+          <div className="flex items-center gap-2 py-1">
+            <Loader2 size={14} className="animate-spin text-accent" />
+            <span className="text-xs text-theme-muted">자막 추출 중...</span>
+          </div>
+        )}
+      </div>
+
+      {/* 음성 녹음 섹션 */}
+      <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-4">
+        <div>
+          <p className="font-semibold text-theme-primary">운동 경험을 공유해보세요</p>
+          <p className="text-xs text-theme-muted mt-1 leading-relaxed">
+            녹음하면 자막으로 영상에 담아드려요. 최대 {maxSeconds}초.
+          </p>
+        </div>
+
+        <div className="flex flex-col items-center gap-3">
+          {recordingDone ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/20">
+                <Mic size={26} strokeWidth={1.5} className="text-accent" />
+              </div>
+              <span className="text-xs text-accent font-medium">{timeStr} 녹음 완료</span>
+              <button onClick={onRetake} className="flex items-center gap-1 text-xs text-theme-muted">
+                <X size={12} /> 다시 녹음
+              </button>
+            </div>
+          ) : !recording ? (
             <button
-              onClick={onExtractFromVideo}
-              disabled={subtitleExtracting}
-              className="flex items-center justify-center gap-1.5 rounded-lg bg-theme-surface2 px-3 py-2.5 text-sm text-theme-muted hover:text-accent transition-colors disabled:opacity-50"
+              onClick={startRecording}
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-accent"
             >
-              <FileVideo size={14} />
-              영상에서 자막 추출
+              <Mic size={26} strokeWidth={1.5} className="text-black" />
             </button>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <button
+                onClick={stopRecording}
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600"
+              >
+                <MicOff size={26} strokeWidth={1.5} className="text-black" />
+              </button>
+              <span className="text-sm font-mono text-red-400">{timeStr}</span>
+            </div>
+          )}
+
+          <div className="w-full h-1.5 rounded-full bg-theme-surface2 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-red-500 transition-all duration-1000"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          {recording && (
+            <p className="text-xs text-theme-muted">{maxSeconds - recordedSeconds}초 남음</p>
           )}
         </div>
-      )}
 
-      {/* 음성 녹음 모드 */}
-      {mode === 'audio' && (
-        <>
-          {videoHasAudio && !recording && !recordingDone && (
-            <div className="flex items-start gap-2 rounded-xl bg-blue-500/10 px-3 py-2.5">
-              <Volume2 size={14} className="text-blue-400 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-blue-400 leading-relaxed">
-                영상에 음성이 감지됐어요. 오디오를 추가하지 않아도 됩니다.
-              </p>
-            </div>
-          )}
-
-          <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-4">
-            <div>
-              <p className="font-semibold text-theme-primary">음성 녹음 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-              <p className="text-xs text-theme-muted mt-1 leading-relaxed">
-                영상에 입힐 음성이 있으면 녹음하세요. 최대 {maxSeconds}초.
-              </p>
-            </div>
-            <div className="flex flex-col items-center gap-3">
-              {recordingDone ? (
-                <div className="flex flex-col items-center gap-2">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/20">
-                    <Mic size={26} strokeWidth={1.5} className="text-accent" />
-                  </div>
-                  <span className="text-xs text-accent font-medium">{timeStr} 녹음 완료</span>
-                  <button onClick={onRetake} className="flex items-center gap-1 text-xs text-theme-muted">
-                    <X size={12} /> 다시 녹음
-                  </button>
-                </div>
-              ) : !recording ? (
-                <button onClick={startRecording} className="flex h-16 w-16 items-center justify-center rounded-full bg-accent">
-                  <Mic size={26} strokeWidth={1.5} className="text-black" />
-                </button>
-              ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <button onClick={stopRecording} className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
-                    <MicOff size={26} strokeWidth={1.5} className="text-black" />
-                  </button>
-                  <span className="text-sm font-mono text-red-400">{timeStr}</span>
-                </div>
-              )}
-              <div className="w-full h-1.5 rounded-full bg-theme-surface2 overflow-hidden">
-                <div className="h-full rounded-full bg-red-500 transition-all duration-1000" style={{ width: `${progressPct}%` }} />
-              </div>
-              {recording && <p className="text-xs text-theme-muted">{maxSeconds - recordedSeconds}초 남음</p>}
-            </div>
-          </div>
-
-          {/* 녹음 완료 후 자막 추출 */}
-          {recordingDone && (
-            <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-3">
-              <div>
-                <p className="font-semibold text-theme-primary">자막 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
-                <p className="text-xs text-theme-muted mt-1 leading-relaxed">녹음한 음성으로 자막을 추출해요.</p>
-              </div>
-              {subtitleExtracting ? (
-                <div className="flex items-center gap-2 py-1">
-                  <Loader2 size={14} className="animate-spin text-accent" />
-                  <span className="text-xs text-theme-muted">자막 추출 중...</span>
-                </div>
-              ) : hasSubtitle ? (
-                <SubtitleEditor showClear={false} />
-              ) : (
-                <button
-                  onClick={onExtractFromAudio}
-                  disabled={subtitleExtracting}
-                  className="flex items-center justify-center gap-1.5 rounded-lg bg-accent/20 border border-accent/30 px-3 py-2.5 text-sm text-accent font-medium hover:bg-accent/30 transition-colors disabled:opacity-50"
-                >
-                  <Mic size={14} />
-                  녹음 음성에서 자막 추출
-                </button>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      {error && <p className="text-sm text-red-400">{error}</p>}
-      <div className="mt-auto flex flex-col items-center gap-3 pb-2">
-        {canProceed && (
-          <button onClick={() => attemptProceed(onNext)} className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg">
-            다음 <ChevronRight size={18} />
+        {/* 녹음 완료 후 자막 추출 */}
+        {recordingDone && !subtitleExtracting && !hasSubtitle && (
+          <button
+            onClick={onExtractFromAudio}
+            className="flex items-center justify-center gap-1.5 rounded-lg bg-accent/20 border border-accent/30 px-3 py-2.5 text-sm text-accent font-medium hover:bg-accent/30 transition-colors"
+          >
+            <Mic size={14} />
+            녹음 음성으로 자막 만들기
           </button>
         )}
+
+        {recordingDone && subtitleExtracting && (
+          <div className="flex items-center gap-2 py-1">
+            <Loader2 size={14} className="animate-spin text-accent" />
+            <span className="text-xs text-theme-muted">자막 추출 중...</span>
+          </div>
+        )}
+
+        {recordingDone && hasSubtitle && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-theme-muted">녹음에서 추출한 자막</p>
+              <button
+                onClick={handleClearSubtitle}
+                className="flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
+              >
+                <X size={11} /> 자막 제거
+              </button>
+            </div>
+            <textarea
+              value={editLines}
+              onChange={(e) => handleEditChange(e.target.value)}
+              rows={3}
+              className="w-full resize-none rounded-xl bg-theme-surface2 px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+        )}
+      </div>
+
+      {error && <p className="text-sm text-red-400">{error}</p>}
+
+      <div className="mt-auto flex flex-col items-center gap-3 pb-2">
+        <button
+          onClick={onNext}
+          disabled={!canProceed}
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-40"
+        >
+          다음 <ChevronRight size={18} />
+        </button>
         {!recording && (
-          <button onClick={() => attemptProceed(skipRecording)} className="text-sm text-theme-muted underline underline-offset-2 py-1">
+          <button onClick={onNext} className="text-sm text-theme-muted underline underline-offset-2 py-1">
             건너뛰기
           </button>
         )}
       </div>
-
-      {pendingProceed && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setPendingProceed(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-3xl bg-theme-surface p-5 flex flex-col gap-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div>
-              <p className="font-semibold text-theme-primary">운동 인증 정보가 부족한데 진행하시겠습니까?</p>
-              <p className="text-xs text-theme-muted mt-1">
-                자막이 없으면 운동 인증이 어려울 수 있어요.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setPendingProceed(null)}
-                className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted"
-              >
-                취소
-              </button>
-              <button
-                onClick={() => { const action = pendingProceed; setPendingProceed(null); action() }}
-                className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-semibold text-accent-fg"
-              >
-                확인
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

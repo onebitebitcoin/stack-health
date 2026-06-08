@@ -82,7 +82,7 @@ export default function UploadPage() {
   const [step, setStep] = useState(0)
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [mainCategory, setMainCategoryState] = useState<MainCategory | null>(null)
+  const [mainCategory, setMainCategoryState] = useState<MainCategory | null>('가벼운 활동')
   const [subCategory, setSubCategoryState] = useState<string | null>(null)
   const [subCategoryInput, setSubCategoryInput] = useState('')
   const [caption, setCaption] = useState('')
@@ -91,7 +91,8 @@ export default function UploadPage() {
   const [subtitleSize, setSubtitleSize] = useState<'small' | 'medium' | 'large'>('medium')
   const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('bottom')
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
-  const [videoHasAudio, setVideoHasAudio] = useState(false)
+  const [videoAudioStatus, setVideoAudioStatus] = useState<'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'>('idle')
+  const stepTwoInitRef = useRef(false)
   const [hasChallenge, setHasChallenge] = useState<boolean | null>(false)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
@@ -106,7 +107,7 @@ export default function UploadPage() {
     const d = new Date()
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   })
-  const [muteOriginalAudio, setMuteOriginalAudio] = useState(true)
+  const muteOriginalAudio = true
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [done, setDone] = useState(false)
@@ -135,6 +136,16 @@ export default function UploadPage() {
   const streamRef = useRef<MediaStream | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const recordedSecondsRef = useRef(0)
+
+  useEffect(() => {
+    if (step === 2 && file && !stepTwoInitRef.current) {
+      stepTwoInitRef.current = true
+      setVideoAudioStatus('analyzing')
+      extractSubtitles('video')
+    }
+    if (step !== 2) stepTwoInitRef.current = false
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, file])
 
   useEffect(() => {
     const savedJobId = loadJob()
@@ -228,13 +239,8 @@ export default function UploadPage() {
           : `영상 길이가 ${secs}초입니다. 60초 이하 영상만 업로드할 수 있습니다.`)
         return
       }
-      const audioTracks = (videoEl as unknown as { audioTracks?: { length: number } }).audioTracks
-      const mozHasAudio = (videoEl as unknown as { mozHasAudio?: boolean }).mozHasAudio
-      if (audioTracks !== undefined) {
-        setVideoHasAudio(audioTracks.length > 0)
-      } else if (mozHasAudio !== undefined) {
-        setVideoHasAudio(Boolean(mozHasAudio))
-      }
+      setVideoAudioStatus('idle')
+      stepTwoInitRef.current = false
       setError(''); setFile(f); setPreviewUrl(url); setStep(1)
     }
     videoEl.onerror = () => { setFile(f); setPreviewUrl(url); setStep(1) }
@@ -373,6 +379,7 @@ export default function UploadPage() {
       await pollSubtitleJob(job_id)
     } catch (err) {
       setError(getApiErrorMessage(err, '자막 추출 실패'))
+      setVideoAudioStatus('error')
       setExtractingSubtitles(false)
     }
   }
@@ -389,11 +396,17 @@ export default function UploadPage() {
         if (status === 'completed') {
           setSubtitleText(srt)
           setSubtitlePlainText(plain_text)
-          toast.success('자막을 추출했어요.')
+          setVideoAudioStatus('has_audio')
+          setExtractingSubtitles(false)
+          return
+        }
+        if (status === 'skipped') {
+          setVideoAudioStatus('no_audio')
           setExtractingSubtitles(false)
           return
         }
         if (status === 'failed') {
+          setVideoAudioStatus('error')
           setError(jobError || '자막 추출에 실패했습니다')
           setExtractingSubtitles(false)
           return
@@ -402,6 +415,7 @@ export default function UploadPage() {
         // 일시적 네트워크 오류 무시, 계속 폴링
       }
     }
+    setVideoAudioStatus('error')
     setError('자막 추출 시간이 초과됐습니다')
     setExtractingSubtitles(false)
   }
@@ -430,17 +444,11 @@ export default function UploadPage() {
         form.append('subtitle_size', subtitleSize)
         form.append('subtitle_position', subtitlePosition)
       }
-      if (muteOriginalAudio) form.append('mute_video', 'true')
+      form.append('mute_video', 'true')
       form.append('tags', JSON.stringify([mainCategory, subCategory].filter((v): v is string => Boolean(v))))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       if (workoutStart) form.append('workout_start', workoutStart)
       if (workoutEnd) form.append('workout_end', workoutEnd)
-      const ab = audioBlobRef.current
-      if (ab && ab.size > 0) {
-        const mime = ab.type || audioMimeTypeRef.current || 'audio/webm'
-        form.append('audio', new File([ab], `audio.${mime.includes('mp4') ? 'mp4' : 'webm'}`, { type: mime }))
-        form.append('audio_duration_sec', String(recordedSecondsRef.current))
-      }
       if (proofFileRef.current) form.append('proof_image', proofFileRef.current, proofFileRef.current.name)
       const { data: { data: { job_id } } } = await client.post<{ data: { job_id: string } }>(
         '/videos/upload-pipeline', form,
@@ -601,16 +609,14 @@ export default function UploadPage() {
           previewUrl={previewUrl} recording={recording} recordedSeconds={recordedSeconds}
           recordingDone={recordingDone} progressPct={progressPct} error={error}
           maxSeconds={MAX_RECORD_SECONDS}
-          videoHasAudio={videoHasAudio}
+          videoAudioStatus={videoAudioStatus}
           subtitleText={subtitleText}
           setSubtitleText={setSubtitleText}
           subtitlePlainText={subtitlePlainText}
           subtitleExtracting={extractingSubtitles}
-          muteOriginalAudio={muteOriginalAudio} setMuteOriginalAudio={setMuteOriginalAudio}
-          onExtractFromVideo={() => extractSubtitles('video')}
           onExtractFromAudio={() => extractSubtitles('audio')}
           onClearSubtitle={clearSubtitle}
-          startRecording={startRecording} stopRecording={stopRecording} skipRecording={skipRecording}
+          startRecording={startRecording} stopRecording={stopRecording}
           onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0) }}
           onNext={() => setStep(3)}
         />
