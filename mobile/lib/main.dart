@@ -54,8 +54,8 @@ class _WebViewPageState extends State<WebViewPage> {
   @override
   void initState() {
     super.initState();
-    _requestPermissions();
     _initWebView();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _requestPermissions());
     _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
       final hasConnection = results.any((r) => r != ConnectivityResult.none);
       if (hasConnection && _hasError) {
