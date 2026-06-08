@@ -5,7 +5,7 @@ import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import UserAvatar from '../components/UserAvatar'
 
-const ANDROID_APK_URL = 'https://github.com/onebitebitcoin/stack-health/releases/download/v0.0.30-android/app-release.apk'
+const ANDROID_APK_URL = 'https://github.com/onebitebitcoin/stack-health/releases/download/v0.0.31-android/app-release.apk'
 
 const ROW = 'flex items-center justify-between px-4 py-3.5'
 const LABEL = 'text-sm text-theme-primary'
