@@ -44,6 +44,9 @@ SUBTITLE_SILENCE_NOISE_DB = float(os.environ.get("SUBTITLE_SILENCE_NOISE_DB", "-
 SUBTITLE_SILENCE_MIN_DURATION_SEC = float(os.environ.get("SUBTITLE_SILENCE_MIN_DURATION_SEC", "1.0"))
 SUBTITLE_BURN_IN_FONT_SIZE = int(os.environ.get("SUBTITLE_BURN_IN_FONT_SIZE", "26"))
 SUBTITLE_BURN_IN_MARGIN_V = int(os.environ.get("SUBTITLE_BURN_IN_MARGIN_V", "90"))
+# 좌우 여백(px, libass PlayRes 좌표계). 세로 영상에서 자막이 화면 끝까지 퍼져
+# 좌우가 잘리는 것을 막기 위해 안쪽으로 들인다. (이전 하드코딩 30 → 50)
+SUBTITLE_BURN_IN_MARGIN_H = int(os.environ.get("SUBTITLE_BURN_IN_MARGIN_H", "50"))
 # ASS alpha is inverse opacity: 00 opaque, FF transparent. 20% transparent = 80% opaque.
 SUBTITLE_BURN_IN_BACK_ALPHA_HEX = os.environ.get("SUBTITLE_BURN_IN_BACK_ALPHA_HEX", "33")
 # Whisper verbose_json includes no_speech_prob, avg_logprob, compression_ratio per segment.
@@ -414,6 +417,7 @@ def _burn_subtitles_into_video(
     font_size: int = SUBTITLE_BURN_IN_FONT_SIZE,
     alignment: int = 2,
     margin_v: int = SUBTITLE_BURN_IN_MARGIN_V,
+    margin_h: int = SUBTITLE_BURN_IN_MARGIN_H,
 ) -> float:
     """Render subtitles onto video pixels with an 80% opaque black box."""
     started = time.perf_counter()
@@ -425,8 +429,8 @@ def _burn_subtitles_into_video(
         f"FontSize={font_size}",
         f"Alignment={alignment}",
         f"MarginV={margin_v}",
-        "MarginL=30",
-        "MarginR=30",
+        f"MarginL={margin_h}",
+        f"MarginR={margin_h}",
         "PrimaryColour=&H00FFFFFF",
         "WrapStyle=0",
     ])
