@@ -5,6 +5,7 @@ import {
   ChevronLeft, ChevronRight, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../store/auth'
 import type { MyStats, HistoryResponse, HistoryWorkoutPost, MonthlyPointsResponse } from '../api/types'
 import client from '../api/client'
@@ -13,8 +14,6 @@ import UserAvatar from '../components/UserAvatar'
 import { SkeletonCalendarGrid } from '../components/Skeleton'
 
 import { getDaysInMonth, getFirstDayIndex, pad2 } from '../utils/calendar'
-
-const DAYS_KO = ['월', '화', '수', '목', '금', '토', '일']
 
 function getCurrentWeekInfo() {
   const now = new Date()
@@ -30,6 +29,7 @@ function getCurrentWeekInfo() {
 }
 
 export default function ProfilePage() {
+  const { t } = useTranslation('profile')
   const user = useAuthStore((s) => s.user)
   const navigate = useNavigate()
 
@@ -50,6 +50,8 @@ export default function ProfilePage() {
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   const videoItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const pendingScrollIdx = useRef<number>(0)
+
+  const daysOfWeek = t('daysOfWeek', { returnObjects: true }) as string[]
 
   useEffect(() => {
     videoRefs.current = videoRefs.current.slice(0, selectedPosts.length)
@@ -240,7 +242,6 @@ export default function ProfilePage() {
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
 
-      {/* ── 헤더 ── */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-4">
         <UserAvatar
           username={user?.username ?? '?'}
@@ -253,7 +254,7 @@ export default function ProfilePage() {
           <span className="text-sm font-semibold text-theme-primary truncate">{user?.username}</span>
           {user?.is_admin && (
             <span className="flex-shrink-0 flex items-center gap-0.5 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
-              <ShieldCheck size={9} />관리자
+              <ShieldCheck size={9} />{t('adminBadge')}
             </span>
           )}
         </div>
@@ -265,7 +266,6 @@ export default function ProfilePage() {
         </button>
       </div>
 
-      {/* ── 관리자 버튼 ── */}
       {user?.is_admin && (
         <div className="mx-4 mb-3">
           <button
@@ -273,17 +273,18 @@ export default function ProfilePage() {
             className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent/10 border border-accent/30 px-4 py-3 text-sm font-semibold text-accent hover:bg-accent/20 transition-colors"
           >
             <ShieldCheck size={15} />
-            관리자 페이지로 이동
+            {t('goToAdmin')}
           </button>
         </div>
       )}
 
-      {/* ── 땀 카드 ── */}
       <div className="mx-4 mb-4 rounded-2xl bg-theme-surface px-6 py-5 flex flex-col items-center gap-2">
-        {/* 기간 필터 탭 */}
         <div className="flex gap-1 rounded-full bg-theme-surface2 p-0.5 self-center">
           {(['week', 'month', 'all'] as const).map((period) => {
-            const label = period === 'week' ? '이번 주' : period === 'month' ? '이번 달' : '전체'
+            const label =
+              period === 'week' ? t('sweatPeriodWeek') :
+              period === 'month' ? t('sweatPeriodMonth') :
+              t('sweatPeriodAll')
             return (
               <button
                 key={period}
@@ -302,9 +303,8 @@ export default function ProfilePage() {
 
         <Droplets size={30} className="text-blue-400 animate-drip" strokeWidth={1.5} />
 
-        {/* 수치 표시 */}
         {sweatDisplayError ? (
-          <span className="text-sm text-red-400">불러오기 실패</span>
+          <span className="text-sm text-red-400">{t('sweatLoadError')}</span>
         ) : sweatDisplayLoading ? (
           <span className="text-5xl font-bold font-mono text-theme-muted">...</span>
         ) : (
@@ -314,37 +314,34 @@ export default function ProfilePage() {
           </span>
         )}
 
-        {/* 이번 주 전용 요소 */}
         {sweatPeriod === 'week' && weekQueuedPoints > 0 && (
           <div className="flex items-center gap-1.5 rounded-full bg-theme-surface2 px-3 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-            <span className="text-xs text-theme-muted">+{weekQueuedPoints.toFixed(2)}L 대기 중</span>
+            <span className="text-xs text-theme-muted">{t('weekQueuedLabel', { amount: weekQueuedPoints.toFixed(2) })}</span>
           </div>
         )}
         {sweatPeriod === 'week' && (() => {
           const { weekNo, range } = getCurrentWeekInfo()
-          return <span className="text-xs text-theme-subtle">{weekNo}주차 {range}</span>
+          return <span className="text-xs text-theme-subtle">{t('weekLabel', { weekNo, range })}</span>
         })()}
 
       </div>
 
 
-      {/* ── 스트릭 카드 ── */}
       <div className="mx-4 mb-4 rounded-xl bg-theme-surface px-4 py-3">
         <div className="flex items-center gap-4 py-1">
           <div className="flex items-center gap-1.5 text-orange-400">
             <Flame size={20} strokeWidth={2} />
             <span className="text-2xl font-bold leading-none">{streak}</span>
-            <span className="text-sm font-medium text-theme-primary">일 연속</span>
+            <span className="text-sm font-medium text-theme-primary">{t('streakDays')}</span>
           </div>
           <div className="h-4 w-px bg-theme-border" />
           <div className="text-sm text-theme-muted">
-            이번 달 <span className="font-semibold text-theme-primary">{totalWorkoutDays}일</span> 운동
+            {t('thisMonthWorkout')} <span className="font-semibold text-theme-primary">{t('workoutDays', { count: totalWorkoutDays })}</span>
           </div>
         </div>
       </div>
 
-      {/* ── 캘린더 ── */}
       <div className="mx-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <button
@@ -354,7 +351,7 @@ export default function ProfilePage() {
             <ChevronLeft size={20} strokeWidth={2} className="text-theme-primary" />
           </button>
           <span className="text-base font-semibold text-theme-primary">
-            {year}년 {month}월
+            {t('calendarYear', { year, month })}
           </span>
           <button
             onClick={nextMonth}
@@ -366,7 +363,7 @@ export default function ProfilePage() {
         </div>
 
         <div className="grid grid-cols-7 mb-1">
-          {DAYS_KO.map((d) => (
+          {daysOfWeek.map((d) => (
             <div key={d} className="text-center text-xs font-medium text-theme-muted py-1">{d}</div>
           ))}
         </div>
@@ -429,22 +426,21 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* ── 내 영상 목록 ── */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3 px-4">
-          <p className="text-sm font-semibold text-theme-primary">내 영상</p>
+          <p className="text-sm font-semibold text-theme-primary">{t('myVideos')}</p>
           {myPosts.length > 0 && (
-            <span className="text-xs text-theme-muted">{myPosts.length}개</span>
+            <span className="text-xs text-theme-muted">{t('videoCount', { count: myPosts.length })}</span>
           )}
         </div>
 
         {myPostsLoading ? (
           <div className="flex h-24 items-center justify-center text-sm text-theme-muted">
-            불러오는 중...
+            {t('videosLoading')}
           </div>
         ) : myPosts.length === 0 ? (
           <div className="mx-4 flex h-24 items-center justify-center rounded-xl bg-theme-surface text-sm text-theme-muted">
-            업로드한 영상이 없습니다
+            {t('noVideos')}
           </div>
         ) : (
           <div
@@ -483,7 +479,7 @@ export default function ProfilePage() {
                   <button
                     onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(post.id) }}
                     className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white/80"
-                    aria-label="삭제"
+                    aria-label={t('deleteAriaLabel')}
                   >
                     <Trash2 size={11} strokeWidth={2} />
                   </button>
@@ -508,12 +504,10 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* ── 버전 정보 ── */}
       <div className="mx-4 mb-6 flex items-center justify-center">
         <span className="text-xs text-theme-subtle">v{__APP_VERSION__}</span>
       </div>
 
-      {/* ── 삭제 확인 다이얼로그 ── */}
       {deleteConfirmId !== null && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
@@ -523,31 +517,29 @@ export default function ProfilePage() {
             className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-base font-bold text-theme-primary mb-1">영상 삭제</p>
-            <p className="text-sm text-theme-muted mb-5">삭제하면 복구할 수 없습니다.</p>
+            <p className="text-base font-bold text-theme-primary mb-1">{t('deleteConfirmTitle')}</p>
+            <p className="text-sm text-theme-muted mb-5">{t('deleteConfirmBody')}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteConfirmId(null)}
                 className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted"
               >
-                취소
+                {t('common:cancel')}
               </button>
               <button
                 onClick={() => deleteMutation.mutate(deleteConfirmId)}
                 disabled={deleteMutation.isPending}
                 className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
-                {deleteMutation.isPending ? '삭제 중...' : '삭제'}
+                {deleteMutation.isPending ? t('deleting') : t('common:delete')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── 풀스크린 영상 뷰어 ── */}
       {selectedDate && selectedPosts.length > 0 && (
         <div className="fixed inset-0 z-[70] bg-black">
-          {/* 헤더 오버레이 */}
           <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
             <button
               onClick={closeModal}
@@ -556,7 +548,7 @@ export default function ProfilePage() {
               <ArrowLeft size={20} strokeWidth={2} color="white" />
             </button>
             <span className="text-sm font-semibold text-white">
-              {selectedDate === '__my_posts__' ? '내 영상' : selectedDate.replace(/-/g, '.')}
+              {selectedDate === '__my_posts__' ? t('myPostsLabel') : selectedDate.replace(/-/g, '.')}
             </span>
             {selectedPosts.length > 1 ? (
               <span className="text-xs text-white/70">{videoIdx + 1} / {selectedPosts.length}</span>
@@ -565,7 +557,6 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* 세로 스크롤 스냅 */}
           <div
             ref={scrollContainerRef}
             className="h-full w-full overflow-y-scroll"

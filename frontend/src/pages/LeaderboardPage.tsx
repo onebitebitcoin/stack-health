@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Droplets, Users, Search, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../store/auth'
 import client from '../api/client'
 import type { LeaderboardEntry, LeaderboardResponse } from '../api/types'
@@ -18,6 +19,7 @@ const RANK_COLORS: Record<number, { bg: string; text: string }> = {
 export default function LeaderboardPage() {
   const navigate = useNavigate()
   const currentUser = useAuthStore((s) => s.user)
+  const { t } = useTranslation('challenge')
 
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -58,18 +60,18 @@ export default function LeaderboardPage() {
   if (isError) {
     return (
       <div className="flex h-[100dvh] items-center justify-center text-theme-muted text-sm lg:max-w-2xl lg:mx-auto">
-        데이터를 불러오지 못했습니다
+        {t('leaderboard.loadError')}
       </div>
     )
   }
 
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
-      {/* 헤더 */}
+      {/* header */}
       <div className="shrink-0 px-4 pt-5 pb-3">
         <div className="flex items-center gap-2 mb-3">
           <Users size={22} strokeWidth={1.5} className="text-accent" />
-          <h1 className="text-lg font-bold text-theme-primary">사용자</h1>
+          <h1 className="text-lg font-bold text-theme-primary">{t('leaderboard.title')}</h1>
         </div>
         <div className="flex rounded-xl bg-theme-surface p-1 gap-1 mb-1">
           {(['week', 'month', 'all'] as const).map((p) => (
@@ -80,15 +82,15 @@ export default function LeaderboardPage() {
                 period === p ? 'bg-accent text-accent-fg' : 'text-theme-muted hover:text-theme-primary'
               }`}
             >
-              {p === 'week' ? '이번 주' : p === 'month' ? '이번 달' : '전체'}
+              {p === 'week' ? t('leaderboard.periodWeek') : p === 'month' ? t('leaderboard.periodMonth') : t('leaderboard.periodAll')}
             </button>
           ))}
         </div>
         {period === 'week' && (
-          <p className="text-[11px] text-theme-muted text-right mb-3 pr-1">KST 기준</p>
+          <p className="text-[11px] text-theme-muted text-right mb-3 pr-1">{t('leaderboard.kstNote')}</p>
         )}
 
-        {/* 검색 */}
+        {/* search */}
         <div className="relative">
           <div className="flex items-center gap-2 rounded-xl bg-theme-surface px-3 py-2">
             <Search size={16} className="text-theme-muted flex-shrink-0" />
@@ -99,7 +101,7 @@ export default function LeaderboardPage() {
               onChange={(e) => setSearchInput(e.target.value)}
               onFocus={() => setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              placeholder="사용자 검색..."
+              placeholder={t('leaderboard.searchPlaceholder')}
               className="flex-1 bg-transparent text-sm text-theme-primary placeholder-theme-muted outline-none"
             />
             {searchInput && (
@@ -112,7 +114,7 @@ export default function LeaderboardPage() {
             )}
           </div>
 
-          {/* 자동완성 */}
+          {/* autocomplete */}
           {suggestions.length > 0 && (
             <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-xl bg-theme-surface shadow-lg border border-theme-border overflow-hidden">
               {suggestions.map((entry) => (
@@ -138,7 +140,7 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* 유저 목록 */}
+      {/* user list */}
       {isLoading ? (
         <div className="shrink-0 mx-4 rounded-2xl bg-theme-surface overflow-hidden divide-y divide-theme-border">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -173,7 +175,7 @@ export default function LeaderboardPage() {
                   style={{ color: rankColor ? rankColor.text : isMe ? 'var(--accent)' : 'var(--text-primary)' }}
                 >
                   {entry.username}
-                  {isMe && <span className="ml-1 text-xs font-normal opacity-70">(나)</span>}
+                  {isMe && <span className="ml-1 text-xs font-normal opacity-70">{t('leaderboard.me')}</span>}
                 </span>
                 <div className="flex items-center gap-1 text-sm text-theme-muted">
                   <Droplets size={12} className="text-blue-400" />
@@ -185,11 +187,11 @@ export default function LeaderboardPage() {
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center text-theme-muted text-sm">
-          {isSearching ? '검색 결과가 없습니다' : '사용자가 없습니다'}
+          {isSearching ? t('leaderboard.noResults') : t('leaderboard.noUsers')}
         </div>
       )}
 
-      {/* 페이지네이션 */}
+      {/* pagination */}
       {data && data.total > data.limit && (
         <div className="shrink-0 flex items-center justify-between px-6 py-4 text-sm text-theme-muted">
           <button
@@ -197,7 +199,7 @@ export default function LeaderboardPage() {
             onClick={() => setPage((p) => p - 1)}
             className="px-3 py-1.5 rounded-lg bg-theme-surface disabled:opacity-40"
           >
-            이전
+            {t('leaderboard.prevPage')}
           </button>
           <span>
             {page} / {Math.ceil(data.total / data.limit)}
@@ -207,7 +209,7 @@ export default function LeaderboardPage() {
             onClick={() => setPage((p) => p + 1)}
             className="px-3 py-1.5 rounded-lg bg-theme-surface disabled:opacity-40"
           >
-            다음
+            {t('leaderboard.nextPage')}
           </button>
         </div>
       )}

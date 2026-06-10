@@ -220,3 +220,5 @@ export interface LeaderboardResponse {
 export interface MonthlyPointsResponse {
   month_points: number
 }
+
+export type SubtitleLanguage = 'ko' | 'en' | 'auto'

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft, RefreshCw } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { AdminVideo, AdminUsersResponse } from '../api/types'
 import { useAuthStore } from '../store/auth'
@@ -38,6 +39,7 @@ interface AdminUserDetail {
 }
 
 function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => void }) {
+  const { t } = useTranslation('admin')
   const { data, isLoading } = useQuery<AdminUserDetail>({
     queryKey: ['admin-user-detail', userId],
     queryFn: async () => {
@@ -52,31 +54,31 @@ function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => v
         className="w-full max-w-lg max-h-[80dvh] overflow-y-auto rounded-2xl bg-theme-page p-4 space-y-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {isLoading && <p className="text-center text-theme-muted py-8">불러오는 중...</p>}
+        {isLoading && <p className="text-center text-theme-muted py-8">{t('loading')}</p>}
         {data && (
           <>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-theme-primary text-lg">@{data.user.username}</p>
-                <p className="text-xs text-theme-muted">{data.user.email ?? '이메일 없음'}</p>
+                <p className="text-xs text-theme-muted">{data.user.email ?? t('noEmail')}</p>
               </div>
-              <button onClick={onClose} className="text-theme-muted text-sm px-2 py-1">닫기</button>
+              <button onClick={onClose} className="text-theme-muted text-sm px-2 py-1">{t('userDetailClose')}</button>
             </div>
 
             <div className="flex justify-between text-xs rounded-lg bg-theme-surface px-3 py-2">
-              <span className="text-theme-muted">누적 포인트</span>
+              <span className="text-theme-muted">{t('userDetailAccumPoints')}</span>
               <span className="font-semibold text-theme-primary">{Number(data.total_points).toFixed(2)}P</span>
             </div>
 
             {data.challenges.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-theme-muted mb-2">챌린지 ({data.challenges.length})</p>
+                <p className="text-xs font-semibold text-theme-muted mb-2">{t('userDetailChallenges', { count: data.challenges.length })}</p>
                 <div className="space-y-1">
                   {data.challenges.map((c) => (
                     <div key={c.challenge_id} className="flex items-center justify-between text-xs rounded-lg bg-theme-surface px-3 py-2">
                       <span className="text-theme-primary flex-1 min-w-0 truncate">{c.title}</span>
                       <span className="ml-2 text-theme-muted shrink-0">
-                        {c.upload_count}/{c.condition_value}{c.completed ? ' ✓' : ''}
+                        {t('challengeProgress', { upload: c.upload_count, total: c.condition_value })}{c.completed ? ' ✓' : ''}
                       </span>
                     </div>
                   ))}
@@ -84,7 +86,7 @@ function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => v
               </div>
             )}
 
-            <p className="text-xs text-theme-muted">총 업로드: {data.videos.length}개</p>
+            <p className="text-xs text-theme-muted">{t('userDetailVideoCount', { count: data.videos.length })}</p>
           </>
         )}
       </div>
@@ -93,6 +95,7 @@ function UserDetailPanel({ userId, onClose }: { userId: number; onClose: () => v
 }
 
 export default function AdminPage() {
+  const { t } = useTranslation('admin')
   const qc = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const navigate = useNavigate()
@@ -110,11 +113,11 @@ export default function AdminPage() {
   const isAdmin = user?.is_admin ?? false
 
   useEffect(() => {
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setUserSearch(userSearchInput)
       setUserPage(1)
     }, 300)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [userSearchInput])
 
   const { data: usersData, isLoading: usersLoading, isError: usersError, refetch: refetchUsers, isFetching: usersFetching } = useQuery<AdminUsersResponse>({
@@ -164,14 +167,14 @@ export default function AdminPage() {
   if (!isAdmin) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page">
-        <p className="text-theme-muted text-sm">관리자만 접근할 수 있습니다</p>
+        <p className="text-theme-muted text-sm">{t('adminOnly')}</p>
       </div>
     )
   }
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: 'users', label: '유저', icon: <User size={14} /> },
-    { id: 'videos', label: '영상', icon: <Video size={14} /> },
+    { id: 'users', label: t('tabUsers'), icon: <User size={14} /> },
+    { id: 'videos', label: t('tabVideos'), icon: <Video size={14} /> },
   ]
 
   return (
@@ -219,7 +222,7 @@ export default function AdminPage() {
                   onChange={(e) => setUserSearchInput(e.target.value)}
                   onFocus={() => setShowSuggestions(true)}
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                  placeholder="닉네임, 이메일, ID 검색"
+                  placeholder={t('searchPlaceholder')}
                   className="w-full rounded-xl border border-theme-border bg-theme-surface py-3 pl-9 pr-9 text-sm text-theme-primary placeholder:text-theme-subtle outline-none focus:border-accent"
                 />
                 {userSearchInput && (
@@ -227,7 +230,7 @@ export default function AdminPage() {
                     type="button"
                     onClick={() => { setUserSearchInput(''); setUserSearch('') }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-primary"
-                    aria-label="검색어 지우기"
+                    aria-label={t('clearSearch')}
                   >
                     <X size={14} />
                   </button>
@@ -253,22 +256,24 @@ export default function AdminPage() {
                 onClick={() => refetchUsers()}
                 disabled={usersFetching}
                 className="shrink-0 rounded-xl border border-theme-border bg-theme-surface p-3 text-theme-muted hover:text-theme-primary disabled:opacity-40"
-                aria-label="새로고침"
+                aria-label={t('refresh')}
               >
                 <RefreshCw size={14} className={usersFetching ? 'animate-spin' : ''} />
               </button>
             </div>
             {!usersLoading && !usersError && usersData && (
               <p className="mt-2 text-xs text-theme-muted">
-                {userSearch ? `${usersData.total}명 검색됨` : `전체 ${usersData.total}명`}
+                {userSearch
+                  ? t('searchResultCount', { count: usersData.total })
+                  : t('totalUserCount', { count: usersData.total })}
               </p>
             )}
           </div>
 
-          {usersLoading && <p className="text-center text-theme-muted py-10">불러오는 중...</p>}
-          {!usersLoading && usersError && <p className="text-center text-red-400 py-10">조회 실패</p>}
+          {usersLoading && <p className="text-center text-theme-muted py-10">{t('loading')}</p>}
+          {!usersLoading && usersError && <p className="text-center text-red-400 py-10">{t('loadFailed')}</p>}
           {!usersLoading && !usersError && users.length === 0 && (
-            <p className="text-center text-theme-subtle py-10">{userSearch ? '검색 결과가 없습니다' : '유저가 없습니다'}</p>
+            <p className="text-center text-theme-subtle py-10">{userSearch ? t('noSearchResults') : t('noUsers')}</p>
           )}
           {users.map((u) => (
             <div key={u.id} className="rounded-xl bg-theme-surface p-4">
@@ -289,10 +294,10 @@ export default function AdminPage() {
                       <span className="text-[10px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded-full">Email</span>
                     )}
                   </div>
-                  <p className="text-xs text-theme-muted">{u.email ?? '이메일 없음'}</p>
+                  <p className="text-xs text-theme-muted">{u.email ?? t('noEmail')}</p>
                   <div className="flex items-center gap-3 mt-1 text-xs text-theme-subtle">
-                    <span>영상 {u.video_count}개</span>
-                    <span>챌린지 {u.challenge_count}개</span>
+                    <span>{t('videoCountLabel', { count: u.video_count })}</span>
+                    <span>{t('challengeCountLabel', { count: u.challenge_count })}</span>
                     <span>{Number(u.total_points).toFixed(2)}L</span>
                   </div>
                 </div>
@@ -303,7 +308,7 @@ export default function AdminPage() {
                   className="flex items-center gap-1.5 rounded-lg bg-theme-surface2 px-3 py-2 text-xs font-semibold text-theme-muted hover:text-theme-primary"
                 >
                   <ChevronRight size={12} />
-                  상세
+                  {t('detailButton')}
                 </button>
                 <button
                   onClick={() => setDeleteUserConfirm({ id: u.id, username: u.username })}
@@ -311,7 +316,7 @@ export default function AdminPage() {
                   className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                 >
                   <Trash2 size={12} />
-                  삭제
+                  {t('deleteButton')}
                 </button>
               </div>
             </div>
@@ -319,9 +324,9 @@ export default function AdminPage() {
 
           {usersData && (
             <div className="flex items-center justify-between px-2 py-3 text-sm text-theme-muted">
-              <button disabled={userPage === 1} onClick={() => setUserPage(p => p - 1)} className="disabled:opacity-40">이전</button>
-              <span>페이지 {userPage} / {Math.ceil(usersData.total / 20)}</span>
-              <button disabled={!usersData.has_next} onClick={() => setUserPage(p => p + 1)} className="disabled:opacity-40">다음</button>
+              <button disabled={userPage === 1} onClick={() => setUserPage(p => p - 1)} className="disabled:opacity-40">{t('prevPage')}</button>
+              <span>{t('pageLabel', { page: userPage, total: Math.ceil(usersData.total / 20) })}</span>
+              <button disabled={!usersData.has_next} onClick={() => setUserPage(p => p + 1)} className="disabled:opacity-40">{t('nextPage')}</button>
             </div>
           )}
         </div>
@@ -331,14 +336,14 @@ export default function AdminPage() {
         <div className="space-y-4">
           <div className="px-1">
             <p className="text-xs text-theme-muted">
-              {videoTotal > 0 ? `총 ${videoTotal}개 · ${videoPage}/${videoTotalPages} 페이지` : ''}
+              {videoTotal > 0 ? t('totalVideos', { total: videoTotal, page: videoPage, totalPages: videoTotalPages }) : ''}
             </p>
           </div>
 
-          {videosLoading && <p className="text-center text-theme-muted py-10">불러오는 중...</p>}
-          {!videosLoading && videosError && <p className="text-center text-red-400 py-10">조회 실패</p>}
+          {videosLoading && <p className="text-center text-theme-muted py-10">{t('loading')}</p>}
+          {!videosLoading && videosError && <p className="text-center text-red-400 py-10">{t('loadFailed')}</p>}
           {!videosLoading && !videosError && videos.length === 0 && (
-            <p className="text-center text-theme-subtle py-10">영상이 없습니다</p>
+            <p className="text-center text-theme-subtle py-10">{t('noVideos')}</p>
           )}
 
           <div className="grid grid-cols-2 gap-3">
@@ -384,7 +389,7 @@ export default function AdminPage() {
                     className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                   >
                     <Trash2 size={12} />
-                    삭제
+                    {t('deleteButton')}
                   </button>
                 </div>
               </div>
@@ -398,15 +403,15 @@ export default function AdminPage() {
                 disabled={videoPage === 1}
                 className="rounded-lg bg-theme-surface px-4 py-2 text-sm font-semibold text-theme-muted disabled:opacity-40"
               >
-                이전
+                {t('prevPage')}
               </button>
-              <span className="text-sm text-theme-muted">{videoPage} / {videoTotalPages}</span>
+              <span className="text-sm text-theme-muted">{t('videoPageLabel', { page: videoPage, totalPages: videoTotalPages })}</span>
               <button
                 onClick={() => setVideoPage((p) => Math.min(videoTotalPages, p + 1))}
                 disabled={videoPage === videoTotalPages}
                 className="rounded-lg bg-theme-surface px-4 py-2 text-sm font-semibold text-theme-muted disabled:opacity-40"
               >
-                다음
+                {t('nextPage')}
               </button>
             </div>
           )}
@@ -420,16 +425,16 @@ export default function AdminPage() {
       {deleteVideoConfirmId !== null && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteVideoConfirmId(null)}>
           <div className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-bold text-theme-primary mb-1">영상 삭제</p>
-            <p className="text-sm text-theme-muted mb-5">삭제하면 복구할 수 없습니다.</p>
+            <p className="text-base font-bold text-theme-primary mb-1">{t('deleteVideoTitle')}</p>
+            <p className="text-sm text-theme-muted mb-5">{t('deleteVideoBody')}</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteVideoConfirmId(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">취소</button>
+              <button onClick={() => setDeleteVideoConfirmId(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">{t('cancel')}</button>
               <button
                 onClick={() => { deleteVideo.mutate(deleteVideoConfirmId); setDeleteVideoConfirmId(null) }}
                 disabled={deleteVideo.isPending}
                 className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
-                {deleteVideo.isPending ? '삭제 중...' : '삭제'}
+                {deleteVideo.isPending ? t('deletingVideo') : t('deleteButton')}
               </button>
             </div>
           </div>
@@ -439,16 +444,16 @@ export default function AdminPage() {
       {deleteUserConfirm !== null && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteUserConfirm(null)}>
           <div className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-bold text-theme-primary mb-1">@{deleteUserConfirm.username} 계정 삭제</p>
-            <p className="text-sm text-theme-muted mb-5">영상, 포인트 등 모든 데이터가 삭제됩니다.</p>
+            <p className="text-base font-bold text-theme-primary mb-1">{t('deleteUserTitle', { username: deleteUserConfirm.username })}</p>
+            <p className="text-sm text-theme-muted mb-5">{t('deleteUserBody')}</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteUserConfirm(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">취소</button>
+              <button onClick={() => setDeleteUserConfirm(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">{t('cancel')}</button>
               <button
                 onClick={() => { deleteUser.mutate(deleteUserConfirm.id); setDeleteUserConfirm(null) }}
                 disabled={deleteUser.isPending}
                 className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
-                {deleteUser.isPending ? '삭제 중...' : '삭제'}
+                {deleteUser.isPending ? t('deletingUser') : t('deleteButton')}
               </button>
             </div>
           </div>

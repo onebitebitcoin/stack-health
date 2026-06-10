@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Search, Dumbbell, Users, CheckCircle, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { Challenge } from '../api/types'
 import { useAuthStore } from '../store/auth'
@@ -18,6 +19,8 @@ function ChallengeCard({
   challenge: Challenge
   onNavigate: (id: number) => void
 }) {
+  const { t } = useTranslation('challenge')
+
   return (
     <div
       className="rounded-xl bg-theme-surface cursor-pointer active:opacity-80 overflow-hidden flex"
@@ -36,40 +39,40 @@ function ChallengeCard({
       )}
 
       <div className="flex-1 min-w-0 px-3 py-2.5 flex flex-col gap-1">
-        {/* 제목 + 완료 아이콘 */}
+        {/* title + completed icon */}
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-semibold text-theme-primary text-sm leading-tight truncate">{challenge.title}</h3>
           {challenge.completed && <CheckCircle size={15} className="text-accent flex-shrink-0" />}
         </div>
 
-        {/* 설명 요약 */}
+        {/* description */}
         {challenge.description && (
           <p className="text-[11px] text-theme-muted leading-snug line-clamp-1">{challenge.description}</p>
         )}
 
-        {/* 진행 바 */}
+        {/* progress */}
         {challenge.joined && (
           <div className="flex items-center gap-1 text-[10px] text-accent font-medium">
             <CheckCircle size={10} strokeWidth={2} />
-            {challenge.my_upload_count}회 인증
+            {t('card.certCount', { count: challenge.my_upload_count })}
           </div>
         )}
 
-        {/* 하단 정보 + 버튼 */}
+        {/* bottom info + button */}
         <div className="flex items-center justify-between mt-auto pt-0.5">
           <div className="flex items-center gap-1 text-[10px] text-theme-subtle">
             <Users size={11} />
-            <span>{challenge.participant_count}명</span>
+            <span>{t('card.participantCount', { count: challenge.participant_count })}</span>
             <span>·</span>
             <span>~{formatMonthDay(challenge.end_date)}</span>
           </div>
           {challenge.completed ? (
-            <span className="text-[10px] font-semibold text-accent">완료</span>
+            <span className="text-[10px] font-semibold text-accent">{t('card.completed')}</span>
           ) : challenge.joined ? (
-            <span className="text-[10px] font-semibold text-accent">참여중</span>
+            <span className="text-[10px] font-semibold text-accent">{t('card.joined')}</span>
           ) : (
             <span className="rounded-lg bg-accent px-2.5 py-1 text-[10px] font-semibold text-accent-fg">
-              참여하기
+              {t('card.join')}
             </span>
           )}
         </div>
@@ -81,6 +84,7 @@ function ChallengeCard({
 export default function ChallengePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  const { t } = useTranslation('challenge')
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<'all' | 'joined' | 'available'>('all')
 
@@ -100,8 +104,8 @@ export default function ChallengePage() {
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
       <div className="px-4 pt-5 pb-3 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-theme-primary">챌린지</h1>
-          <p className="text-xs text-theme-muted mt-0.5">운동하고 타이틀을 획득하세요</p>
+          <h1 className="text-lg font-bold text-theme-primary">{t('pageTitle')}</h1>
+          <p className="text-xs text-theme-muted mt-0.5">{t('pageSubtitle')}</p>
         </div>
         {user && (
           <button
@@ -109,32 +113,29 @@ export default function ChallengePage() {
             className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg"
           >
             <Plus size={13} />
-            챌린지 추가
+            {t('addChallenge')}
           </button>
         )}
       </div>
 
-      {/* 필터 */}
+      {/* filters */}
       {user && (
         <div className="px-4 mb-3 flex gap-2">
-          {(['all', 'joined', 'available'] as const).map((f) => {
-            const label = f === 'all' ? '전체' : f === 'joined' ? '참여중' : '참여 가능'
-            return (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  filter === f ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
-                }`}
-              >
-                {label}
-              </button>
-            )
-          })}
+          {(['all', 'joined', 'available'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                filter === f ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
+              }`}
+            >
+              {t(`filter.${f}`)}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* 검색 */}
+      {/* search */}
       <div className="px-4 mb-4">
         <div className="flex items-center gap-2 rounded-xl bg-theme-surface px-3 py-2.5">
           <Search size={16} className="text-theme-subtle flex-shrink-0" />
@@ -142,7 +143,7 @@ export default function ChallengePage() {
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="챌린지 검색..."
+            placeholder={t('searchPlaceholder')}
             className="flex-1 bg-transparent text-sm text-theme-primary placeholder-theme-subtle outline-none"
           />
         </div>
@@ -156,7 +157,13 @@ export default function ChallengePage() {
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center px-6">
           <Dumbbell size={40} className="text-theme-surface2" strokeWidth={1} />
           <p className="text-sm text-theme-muted">
-            {filter === 'joined' ? '참여 중인 챌린지가 없어요' : filter === 'available' ? '참여 가능한 챌린지가 없어요' : q ? '검색 결과가 없어요' : '현재 진행 중인 챌린지가 없어요'}
+            {filter === 'joined'
+              ? t('empty.joined')
+              : filter === 'available'
+              ? t('empty.available')
+              : q
+              ? t('empty.search')
+              : t('empty.default')}
           </p>
         </div>
       ) : (

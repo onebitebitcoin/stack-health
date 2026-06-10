@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { CheckCircle, XCircle, Camera } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
@@ -14,6 +15,7 @@ const PROFILE_COLORS = [
 ]
 
 export default function SetupUsernamePage() {
+  const { t } = useTranslation('auth')
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const login = useAuthStore((s) => s.login)
@@ -34,14 +36,12 @@ export default function SetupUsernamePage() {
   const [selectedColor] = useState(() => PROFILE_COLORS[Math.floor(Math.random() * PROFILE_COLORS.length)])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 토큰 없으면 로그인으로
   useEffect(() => {
     if (!token) {
       navigate('/login', { replace: true })
     }
   }, [token, navigate])
 
-  // 기존 유저 정보 fetch → username 미리 채우기
   useEffect(() => {
     if (!token) return
     client.get<{ data: User }>('/auth/me', {
@@ -54,7 +54,6 @@ export default function SetupUsernamePage() {
     }).catch(() => {}).finally(() => setLoadingUser(false))
   }, [token])
 
-  // username 중복 체크 (본인 제외)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (username.length < 2) {
@@ -111,7 +110,7 @@ export default function SetupUsernamePage() {
     if (!token || !available) return
 
     if (lightningAddress.trim() && !isValidLightningAddress(lightningAddress.trim())) {
-      setError('라이트닝 주소 형식이 올바르지 않습니다 (예: user@walletofsatoshi.com)')
+      setError(t('lightningAddressInvalid'))
       return
     }
 
@@ -129,7 +128,7 @@ export default function SetupUsernamePage() {
       login(token, me.data.data)
       navigate('/', { replace: true })
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, '프로필 설정에 실패했습니다'))
+      setError(getApiErrorMessage(err, t('profileSetupFailed')))
     } finally {
       setSubmitting(false)
     }
@@ -142,18 +141,17 @@ export default function SetupUsernamePage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
       <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
-        <LogoMark aria-label="Stack Health 로고" role="img" size={40} />
+        <LogoMark aria-label={t('logoAlt')} role="img" size={40} />
       </div>
       <p className="mb-1 text-xs font-bold tracking-[0.28em] text-accent uppercase">Stack Health</p>
-      <p className="mb-8 text-sm text-theme-muted">프로필을 설정해주세요</p>
+      <p className="mb-8 text-sm text-theme-muted">{t('setupProfileTitle')}</p>
 
       <div className="w-full max-w-sm">
-        {/* 아바타 선택 */}
         <div className="flex justify-center mb-6">
           <div className="relative">
             <label htmlFor="setup-avatar-input" className="cursor-pointer">
               {previewUrl ? (
-                <img src={previewUrl} alt="프로필" className="h-20 w-20 rounded-full object-cover" />
+                <img src={previewUrl} alt={t('profileAlt')} className="h-20 w-20 rounded-full object-cover" />
               ) : (
                 <div
                   className="h-20 w-20 rounded-full flex items-center justify-center font-bold text-white text-3xl"
@@ -186,17 +184,16 @@ export default function SetupUsernamePage() {
         </div>
 
         <p className="text-center text-xs text-theme-muted mb-6 -mt-2">
-          탭하여 사진 변경
+          {t('changePhoto')}
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* 닉네임 */}
           <div>
-            <p className="text-xs text-theme-muted mb-1.5 ml-1">닉네임</p>
+            <p className="text-xs text-theme-muted mb-1.5 ml-1">{t('nicknameLabel')}</p>
             <div className="relative">
               <input
                 type="text"
-                placeholder="닉네임 (2~30자)"
+                placeholder={t('nicknamePlaceholder')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value.trim())}
                 minLength={2}
@@ -218,17 +215,18 @@ export default function SetupUsernamePage() {
             </div>
             {username.length >= 2 && !checking && (
               <p className={`mt-1 text-xs ml-1 ${available ? 'text-green-500' : 'text-red-400'}`}>
-                {available ? '사용 가능한 닉네임이에요' : '이미 사용 중인 닉네임이에요'}
+                {available ? t('usernameAvailable') : t('usernameTaken')}
               </p>
             )}
           </div>
 
-          {/* 라이트닝 주소 */}
           <div>
             <div className="flex items-center justify-between mb-1.5 ml-1">
-              <p className="text-xs text-theme-muted">라이트닝 주소 <span className="text-theme-subtle">(선택)</span></p>
+              <p className="text-xs text-theme-muted">
+                {t('lightningAddressLabel')} <span className="text-theme-subtle">{t('lightningAddressOptional')}</span>
+              </p>
               <Link to="/lightning-guide" className="text-xs text-accent underline underline-offset-2">
-                지갑 만드는 법
+                {t('howToCreateWallet')}
               </Link>
             </div>
             <div className="relative">
@@ -249,7 +247,7 @@ export default function SetupUsernamePage() {
             disabled={!available || submitting || uploading}
             className="w-full rounded-lg bg-accent py-3 font-semibold text-accent-fg transition-opacity disabled:opacity-40"
           >
-            {submitting ? '설정 중...' : '시작하기'}
+            {submitting ? t('settingUp') : t('startButton')}
           </button>
         </form>
       </div>

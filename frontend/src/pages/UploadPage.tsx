@@ -2,13 +2,14 @@ import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'reac
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ChevronLeft, Flame, Share2, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import LogoMark from '../components/LogoMark'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { getApiErrorMessage } from '../api/errors'
 import { MERGE_POLL_INTERVAL_MS } from '../lib/constants'
-import type { Challenge } from '../api/types'
+import type { Challenge, SubtitleLanguage } from '../api/types'
 import { isAxiosError } from 'axios'
 import StepSelectVideo from './upload/StepSelectVideo'
 import StepTagChallenge, { type MainCategory } from './upload/StepTagChallenge'
@@ -31,7 +32,7 @@ function useCountUp(target: number, duration = 800) {
   return val
 }
 
-const STEPS = ['영상 선택', '태그·챌린지', '음성 녹음', '설명·사진'] as const
+const STEPS_KEYS = ['selectVideo', 'tagChallenge', 'record', 'caption'] as const
 const MAX_RECORD_SECONDS = 60
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
@@ -77,6 +78,7 @@ function getSupportedAudioMimeType(): string {
 
 export default function UploadPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation('upload')
   const qc = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const devMode = !!(user?.app_settings?.developer_mode)
@@ -93,6 +95,7 @@ export default function UploadPage() {
   const [subtitlePlainText, setSubtitlePlainText] = useState('')
   const [subtitleSize, setSubtitleSize] = useState<'small' | 'medium' | 'large'>('medium')
   const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('bottom')
+  const [subtitleLanguage, setSubtitleLanguage] = useState<SubtitleLanguage>('ko')
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
   const [muteOriginalAudio, setMuteOriginalAudio] = useState(true)
   const [videoAudioStatus, setVideoAudioStatus] = useState<'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'>('idle')
@@ -198,12 +201,12 @@ export default function UploadPage() {
         if (cfg) setUploadProgress((p) => Math.max(p, cfg.start))
       }
       if (status === 'completed') { setUploadProgress(100); handleJobCompleted(points_earned ?? 0) }
-      else if (status === 'failed') abortJob(jobError || '처리 중 오류가 발생했습니다')
+      else if (status === 'failed') abortJob(jobError || t('error.processingError'))
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 404)
-        abortJob('업로드 결과를 확인할 수 없습니다. 피드에서 영상을 확인해주세요.')
+        abortJob(t('error.jobNotFound'))
     }
-  }, [handleJobCompleted, abortJob])
+  }, [handleJobCompleted, abortJob, t])
 
   useEffect(() => {
     if (!pipelineJobId || uploading || done) return
@@ -240,8 +243,8 @@ export default function UploadPage() {
         URL.revokeObjectURL(url); e.target.value = ''
         const secs = Math.round(videoEl.duration)
         setError(secs < 10
-          ? `영상 길이가 ${secs}초입니다. 10초 이상 영상만 업로드할 수 있습니다.`
-          : `영상 길이가 ${secs}초입니다. 60초 이하 영상만 업로드할 수 있습니다.`)
+          ? t('error.tooShort', { secs })
+          : t('error.tooLong', { secs }))
         return
       }
       setVideoAudioStatus('idle')
@@ -270,7 +273,7 @@ export default function UploadPage() {
   }
 
   async function startRecording() {
-    if (typeof MediaRecorder === 'undefined') { setError('이 브라우저에서는 음성 녹음을 지원하지 않습니다.'); return }
+    if (typeof MediaRecorder === 'undefined') { setError(t('error.micUnsupported')); return }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48_000 },
@@ -297,10 +300,10 @@ export default function UploadPage() {
       }, 1000)
     } catch (err) {
       if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'))
-        setError('마이크 접근이 거부되었습니다. 브라우저 주소창 옆 자물쇠 아이콘을 눌러 마이크를 허용해주세요.')
+        setError(t('error.micNotAllowed'))
       else if (err instanceof DOMException && err.name === 'NotFoundError')
-        setError('마이크를 찾을 수 없습니다. 장치를 확인해주세요.')
-      else setError('마이크 접근 권한이 필요합니다.')
+        setError(t('error.micNotFound'))
+      else setError(t('error.micRequired'))
     }
   }
 
@@ -366,7 +369,7 @@ export default function UploadPage() {
           form.append('audio', new File([ab], `audio.${mime.includes('mp4') ? 'mp4' : 'webm'}`, { type: mime }))
         }
       }
-      form.append('language', 'ko')
+      form.append('subtitle_language', subtitleLanguage)
       const { data: { data: { job_id } } } = await client.post<{ data: { job_id: string } }>(
         '/videos/transcribe-subtitles',
         form,
@@ -375,7 +378,7 @@ export default function UploadPage() {
       // worker가 처리할 때까지 폴링
       await pollSubtitleJob(job_id)
     } catch (err) {
-      setError(getApiErrorMessage(err, '자막 추출 실패'))
+      setError(getApiErrorMessage(err, t('error.subtitleFailed')))
       setVideoAudioStatus('error')
       setExtractingSubtitles(false)
     }
@@ -405,7 +408,7 @@ export default function UploadPage() {
         }
         if (status === 'failed') {
           setVideoAudioStatus('error')
-          setError(jobError || '자막 추출에 실패했습니다')
+          setError(jobError || t('error.subtitleFailed'))
           setExtractingSubtitles(false)
           return
         }
@@ -414,7 +417,7 @@ export default function UploadPage() {
       }
     }
     setVideoAudioStatus('error')
-    setError('자막 추출 시간이 초과됐습니다')
+    setError(t('error.subtitleTimeout'))
     setExtractingSubtitles(false)
   }
 
@@ -441,6 +444,7 @@ export default function UploadPage() {
         form.append('subtitle_srt', subtitleText)
         form.append('subtitle_size', subtitleSize)
         form.append('subtitle_position', subtitlePosition)
+        form.append('subtitle_language', subtitleLanguage)
       }
       if (muteOriginalAudio) form.append('mute_video', 'true')
       form.append('tags', JSON.stringify([mainCategory, subCategory].filter((v): v is string => Boolean(v))))
@@ -455,13 +459,13 @@ export default function UploadPage() {
       saveJob(job_id); setPipelineJobId(job_id); setPipelineStatus('pending'); setUploadProgress(70)
     } catch (err: unknown) {
       if (isAxiosError(err) && err.code === 'ERR_CANCELED') return
-      setError(getApiErrorMessage(err, '업로드 실패'))
+      setError(getApiErrorMessage(err, t('error.uploadFailed')))
     } finally { setUploading(false) }
   }
 
   // ── Done screen ──
   if (done) {
-    const shareText = '나의 운동을 기록하자'
+    const shareText = t('done.shareText')
     const confettiItems = Array.from({ length: 20 }, (_, i) => ({
       id: i,
       color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
@@ -484,32 +488,32 @@ export default function UploadPage() {
         <div className="w-full max-w-sm rounded-2xl bg-theme-surface p-6 relative z-20">
           <div className="flex items-center gap-2 mb-4">
             <Flame size={20} className="text-orange-400" />
-            <span className="text-sm font-semibold text-theme-primary">오늘 운동 완료</span>
+            <span className="text-sm font-semibold text-theme-primary">{t('done.title')}</span>
           </div>
           {caption && <p className="text-sm text-theme-muted mb-4">"{caption}"</p>}
           <div className="flex items-center justify-between rounded-xl bg-theme-surface2 px-4 py-3">
-            <span className="text-xs text-theme-muted">흘린 땀</span>
+            <span className="text-xs text-theme-muted">{t('done.sweatLabel')}</span>
             <span className="text-lg font-bold text-accent">+{displayPoints.toFixed(1)} L</span>
           </div>
           <p className="text-xs text-theme-subtle mt-3 leading-relaxed">
-            업로드 후 24시간이 지나면 땀이 확정돼요. 그 전에 영상을 삭제하면 취소됩니다.
+            {t('done.pendingNote')}
           </p>
         </div>
         <div className="flex w-full max-w-sm flex-col gap-3 relative z-20">
           <button
             onClick={() => {
               if (typeof navigator !== 'undefined' && 'share' in navigator) {
-                navigator.share({ title: '오늘 운동 완료', text: shareText }).catch(() => undefined)
+                navigator.share({ title: t('done.title'), text: shareText }).catch(() => undefined)
               } else {
-                window.navigator.clipboard?.writeText(shareText).then(() => toast.success('클립보드에 복사됐어요!')).catch(() => undefined)
+                window.navigator.clipboard?.writeText(shareText).then(() => toast.success(t('error.clipboardCopied'))).catch(() => undefined)
               }
             }}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
           >
-            <Share2 size={18} />공유하기
+            <Share2 size={18} />{t('done.share')}
           </button>
           <button onClick={() => navigate('/')} className="w-full rounded-xl bg-theme-surface py-3 text-sm text-theme-muted">
-            피드 보기
+            {t('done.viewFeed')}
           </button>
         </div>
       </div>
@@ -518,7 +522,7 @@ export default function UploadPage() {
 
   // ── Processing screen ──
   if (uploading || pipelineJobId) {
-    const statusLabel = uploading ? '업로드 중...' : pipelineStatus === 'processing' ? '영상 처리 중...' : '잠시만 기다려주세요...'
+    const statusLabel = uploading ? t('processing.uploading') : pipelineStatus === 'processing' ? t('processing.processing') : t('processing.waiting')
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-theme-page px-6 lg:max-w-2xl lg:mx-auto">
         <LogoMark size={48} className="animate-bounce text-accent" />
@@ -535,7 +539,7 @@ export default function UploadPage() {
             <button
               onClick={() => { clearJob(); setError(''); setPipelineJobId(null); setPipelineStatus(null) }}
               className="block mx-auto mt-2 text-xs text-theme-muted underline"
-            >처음으로</button>
+            >{t('processing.reset')}</button>
           </div>
         )}
       </div>
@@ -550,16 +554,16 @@ export default function UploadPage() {
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-2 mb-3">
           {step > 0 ? (
-            <button onClick={handleBack} className="flex-shrink-0 p-1 text-theme-muted hover:text-theme-primary transition-colors" aria-label="이전">
+            <button onClick={handleBack} className="flex-shrink-0 p-1 text-theme-muted hover:text-theme-primary transition-colors" aria-label={t('common:back')}>
               <ChevronLeft size={20} strokeWidth={1.5} />
             </button>
           ) : (
             <div className="w-7 flex-shrink-0" />
           )}
-          <span className="text-sm font-semibold text-theme-primary">영상 업로드</span>
+          <span className="text-sm font-semibold text-theme-primary">{t('pageTitle')}</span>
         </div>
         <div data-testid="step-bar" className="flex items-start">
-          {STEPS.flatMap((label, i) => {
+          {STEPS_KEYS.flatMap((key, i) => {
             const isCompleted = i < step
             const isActive = i === step
             const nodes = [
@@ -570,11 +574,11 @@ export default function UploadPage() {
                   {isCompleted ? <Check size={12} strokeWidth={2.5} /> : <span className="text-[11px] font-bold">{i + 1}</span>}
                 </div>
                 <span className={`text-[9px] leading-tight text-center font-medium ${isActive ? 'text-accent' : isCompleted ? 'text-theme-muted' : 'text-theme-subtle'}`}>
-                  {label}
+                  {t(`steps.${key}`)}
                 </span>
               </div>,
             ]
-            if (i < STEPS.length - 1) {
+            if (i < STEPS_KEYS.length - 1) {
               nodes.push(<div key={`line-${i}`} className={`flex-1 h-0.5 mt-3.5 transition-colors ${isCompleted ? 'bg-accent' : 'bg-theme-surface2'}`} />)
             }
             return nodes
@@ -630,6 +634,7 @@ export default function UploadPage() {
           subtitleText={subtitleText}
           subtitleSize={subtitleSize} subtitlePosition={subtitlePosition}
           onSubtitleSizeChange={setSubtitleSize} onSubtitlePositionChange={setSubtitlePosition}
+          subtitleLanguage={subtitleLanguage} onSubtitleLanguageChange={setSubtitleLanguage}
           workoutStart={workoutStart} setWorkoutStart={setWorkoutStart}
           workoutEnd={workoutEnd} setWorkoutEnd={setWorkoutEnd}
           error={error} uploading={uploading} onUpload={handleUpload}

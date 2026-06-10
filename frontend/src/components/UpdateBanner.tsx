@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { RefreshCw, Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   serverVersion: string | null
 }
 
 export default function UpdateBanner({ serverVersion }: Props) {
+  const { t } = useTranslation('auth')
   const [isUpdating, setIsUpdating] = useState(false)
 
   const handleUpdate = async () => {
@@ -51,7 +53,7 @@ export default function UpdateBanner({ serverVersion }: Props) {
             ? <Loader2 size={12} className="animate-spin" />
             : <RefreshCw size={12} />
           }
-          {isUpdating ? '업데이트 중...' : '업데이트'}
+          {isUpdating ? t('updating') : t('updateButton')}
         </button>
       </div>
     </div>

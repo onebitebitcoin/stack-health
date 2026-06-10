@@ -1,7 +1,9 @@
 import { useRef, type ChangeEvent } from 'react'
 import type { RefObject, MutableRefObject } from 'react'
 import { ImagePlus, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { srtToTextLines } from '../../utils/subtitles'
+import type { SubtitleLanguage } from '../../api/types'
 
 type SubtitleSize = 'small' | 'medium' | 'large'
 type SubtitlePosition = 'top' | 'center' | 'bottom'
@@ -18,6 +20,8 @@ interface Props {
   subtitlePosition: SubtitlePosition
   onSubtitleSizeChange: (v: SubtitleSize) => void
   onSubtitlePositionChange: (v: SubtitlePosition) => void
+  subtitleLanguage: SubtitleLanguage
+  onSubtitleLanguageChange: (v: SubtitleLanguage) => void
   workoutStart: string
   setWorkoutStart: (v: string) => void
   workoutEnd: string
@@ -26,9 +30,6 @@ interface Props {
   uploading: boolean
   onUpload: () => void
 }
-
-const SIZE_LABELS: Record<SubtitleSize, string> = { small: '소', medium: '중', large: '대' }
-const POSITION_LABELS: Record<SubtitlePosition, string> = { top: '상단', center: '중앙', bottom: '하단' }
 
 const SIZE_TEXT_CLASS: Record<SubtitleSize, string> = {
   small: 'text-[9px]',
@@ -46,18 +47,40 @@ export default function StepCaption({
   proofImageRef, proofPreviewUrl, setProofPreviewUrl, proofFileRef,
   caption, setCaption, subtitleText,
   subtitleSize, subtitlePosition, onSubtitleSizeChange, onSubtitlePositionChange,
+  subtitleLanguage, onSubtitleLanguageChange,
   workoutStart, setWorkoutStart, workoutEnd, setWorkoutEnd,
   error, uploading, onUpload,
 }: Props) {
+  const { t } = useTranslation('upload')
   const hasSubtitle = subtitleText.trim().length > 0
-  const previewText = srtToTextLines(subtitleText).find(l => l.trim()) ?? '자막 미리보기'
+  const previewText = srtToTextLines(subtitleText).find(l => l.trim()) ?? t('caption.subtitlePreview')
   const captionRef = useRef<HTMLTextAreaElement>(null)
+
+  const SIZE_LABELS: Record<SubtitleSize, string> = {
+    small: t('caption.subtitleSizeSmall'),
+    medium: t('caption.subtitleSizeMedium'),
+    large: t('caption.subtitleSizeLarge'),
+  }
+
+  const POSITION_LABELS: Record<SubtitlePosition, string> = {
+    top: t('caption.subtitlePositionTop'),
+    center: t('caption.subtitlePositionCenter'),
+    bottom: t('caption.subtitlePositionBottom'),
+  }
+
+  const LANGUAGE_OPTIONS: { value: SubtitleLanguage; label: string }[] = [
+    { value: 'ko', label: t('caption.subtitleLanguageKo') },
+    { value: 'en', label: t('caption.subtitleLanguageEn') },
+    { value: 'auto', label: t('caption.subtitleLanguageAuto') },
+  ]
 
   return (
     <div className="flex flex-1 flex-col px-6 pt-4 pb-6 overflow-y-auto gap-4">
       {/* 운동 시간대 */}
       <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2">
-        <p className="text-xs font-medium text-theme-muted">운동 시간대 <span className="text-theme-subtle">(선택)</span></p>
+        <p className="text-xs font-medium text-theme-muted">
+          {t('caption.workoutTime')} <span className="text-theme-subtle">{t('caption.workoutTimeOptional')}</span>
+        </p>
         <div className="flex items-center gap-2">
           <input
             type="time"
@@ -75,12 +98,33 @@ export default function StepCaption({
         </div>
       </div>
 
+      {/* 자막 언어 선택 */}
+      <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2">
+        <p className="text-xs font-medium text-theme-muted">{t('caption.subtitleLanguage')}</p>
+        <div className="flex gap-1.5">
+          {LANGUAGE_OPTIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onSubtitleLanguageChange(value)}
+              className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors ${
+                subtitleLanguage === value
+                  ? 'bg-accent text-accent-fg'
+                  : 'bg-theme-surface2 text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 자막 스타일 (추출된 경우만) */}
       {hasSubtitle && (
         <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-3">
-          <p className="text-sm font-semibold text-theme-primary">자막 스타일</p>
+          <p className="text-sm font-semibold text-theme-primary">{t('record.subtitle')}</p>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-theme-muted w-10 flex-shrink-0">크기</span>
+            <span className="text-xs text-theme-muted w-10 flex-shrink-0">{t('caption.subtitleSize')}</span>
             <div className="flex gap-1.5">
               {(['small', 'medium', 'large'] as SubtitleSize[]).map((s) => (
                 <button
@@ -99,7 +143,7 @@ export default function StepCaption({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-theme-muted w-10 flex-shrink-0">위치</span>
+            <span className="text-xs text-theme-muted w-10 flex-shrink-0">{t('caption.subtitlePosition')}</span>
             <div className="flex gap-1.5">
               {(['top', 'center', 'bottom'] as SubtitlePosition[]).map((p) => (
                 <button
@@ -129,13 +173,15 @@ export default function StepCaption({
 
       {/* 설명 */}
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-theme-primary mb-1">설명 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+        <p className="text-sm font-semibold text-theme-primary mb-1">
+          {t('caption.captionLabel')} <span className="text-xs font-normal text-theme-subtle">{t('caption.captionOptional')}</span>
+        </p>
         <textarea
           ref={captionRef}
           value={caption}
           onChange={(e) => setCaption(e.target.value.slice(0, 140))}
           maxLength={140}
-          placeholder="오늘의 운동을 간략하게 요약해주세요. #3km #런닝 #오운완"
+          placeholder={t('caption.captionPlaceholder')}
           rows={4}
           className="resize-none rounded-xl bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
         />
@@ -144,9 +190,11 @@ export default function StepCaption({
 
       {/* 인증 사진 */}
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-theme-primary">인증 사진 <span className="text-xs font-normal text-theme-subtle">(선택)</span></p>
+        <p className="text-sm font-semibold text-theme-primary">
+          {t('caption.proofPhoto')} <span className="text-xs font-normal text-theme-subtle">{t('caption.proofPhotoOptional')}</span>
+        </p>
         <p className="text-xs text-theme-muted leading-relaxed mb-2">
-          사진을 영상 뒷부분에 붙여서 운동 인증을 강화하세요. 업로드 후 영상 끝에 3초간 표시됩니다.
+          {t('caption.proofPhotoHint')}
         </p>
         <input
           ref={proofImageRef}
@@ -163,7 +211,7 @@ export default function StepCaption({
         />
         {proofPreviewUrl ? (
           <div className="relative">
-            <img src={proofPreviewUrl} alt="사진 미리보기" className="w-full rounded-xl object-cover max-h-48" />
+            <img src={proofPreviewUrl} alt={t('caption.proofPhotoPreviewAlt')} className="w-full rounded-xl object-cover max-h-48" />
             <button
               onClick={() => {
                 proofFileRef.current = null
@@ -181,7 +229,7 @@ export default function StepCaption({
             className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-theme-border p-4 text-theme-muted hover:border-accent hover:text-accent transition-colors cursor-pointer"
           >
             <ImagePlus size={20} strokeWidth={1.5} />
-            <span className="text-sm">사진 추가</span>
+            <span className="text-sm">{t('caption.proofPhotoAdd')}</span>
           </label>
         )}
       </div>
@@ -193,7 +241,7 @@ export default function StepCaption({
         disabled={uploading}
         className="w-full rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-60"
       >
-        업로드 시작
+        {t('caption.uploadStart')}
       </button>
     </div>
   )

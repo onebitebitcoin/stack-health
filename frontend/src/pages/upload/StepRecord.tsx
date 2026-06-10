@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Mic, MicOff, X, ChevronRight, Loader2, VolumeX, AlertCircle, Volume2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { srtToTextLines, applyTextLinesToSrt } from '../../utils/subtitles'
 
 type VideoAudioStatus = 'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'
@@ -48,6 +49,7 @@ export default function StepRecord({
   startRecording, stopRecording, onRetake, onNext,
   muteOriginalAudio, setMuteOriginalAudio,
 }: Props) {
+  const { t } = useTranslation('upload')
   const prevSrtRef = useRef(subtitleText)
   const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
   const [showRecording, setShowRecording] = useState(false)
@@ -97,13 +99,13 @@ export default function StepRecord({
       {/* 영상 오디오 분석 결과 */}
       <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-3">
         <p className="text-sm font-semibold text-theme-primary">
-          자막 <span className="text-xs font-normal text-theme-subtle">(선택)</span>
+          {t('record.subtitle')} <span className="text-xs font-normal text-theme-subtle">{t('record.subtitleOptional')}</span>
         </p>
 
         {videoAudioStatus === 'analyzing' && (
           <div className="flex items-center gap-2 py-1">
             <Loader2 size={14} className="animate-spin text-accent" />
-            <span className="text-xs text-theme-muted">영상 음성 분석 중...</span>
+            <span className="text-xs text-theme-muted">{t('record.analyzing')}</span>
           </div>
         )}
 
@@ -111,17 +113,17 @@ export default function StepRecord({
           subtitleExtracting ? (
             <div className="flex items-center gap-2 py-1">
               <Loader2 size={14} className="animate-spin text-accent" />
-              <span className="text-xs text-theme-muted">자막 추출 중...</span>
+              <span className="text-xs text-theme-muted">{t('record.extracting')}</span>
             </div>
           ) : hasSubtitle ? (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-theme-muted">추출된 자막 — 오타만 수정하세요</p>
+                <p className="text-xs text-theme-muted">{t('record.extractedLabel')}</p>
                 <button
                   onClick={handleClearSubtitle}
                   className="flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
                 >
-                  <X size={11} /> 자막 제거
+                  <X size={11} /> {t('record.removeSubtitle')}
                 </button>
               </div>
               <textarea
@@ -138,7 +140,7 @@ export default function StepRecord({
                   {muteOriginalAudio
                     ? <VolumeX size={13} className="text-theme-subtle" />
                     : <Volume2 size={13} className="text-accent" />}
-                  <span>{muteOriginalAudio ? '원본 음성 제거됨' : '원본 음성 포함'}</span>
+                  <span>{muteOriginalAudio ? t('record.muteOriginal') : t('record.keepOriginal')}</span>
                 </div>
                 <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${muteOriginalAudio ? 'bg-theme-surface2' : 'bg-accent'}`}>
                   <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform duration-200 ${muteOriginalAudio ? 'translate-x-1' : 'translate-x-[18px]'}`} />
@@ -146,7 +148,7 @@ export default function StepRecord({
               </button>
             </div>
           ) : (
-            <p className="text-xs text-theme-muted py-1">자막이 없습니다.</p>
+            <p className="text-xs text-theme-muted py-1">{t('record.noSubtitle')}</p>
           )
         )}
 
@@ -154,7 +156,7 @@ export default function StepRecord({
           <div className="flex items-start gap-2">
             <VolumeX size={14} className="text-theme-muted mt-0.5 flex-shrink-0" />
             <p className="text-xs text-theme-muted leading-relaxed">
-              이 영상에는 음성이 없어요.
+              {t('record.noAudio')}
             </p>
           </div>
         )}
@@ -162,7 +164,7 @@ export default function StepRecord({
         {videoAudioStatus === 'error' && (
           <div className="flex items-start gap-2">
             <AlertCircle size={14} className="text-theme-subtle mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-theme-subtle leading-relaxed">자막 추출에 실패했어요.</p>
+            <p className="text-xs text-theme-subtle leading-relaxed">{t('record.extractFailed')}</p>
           </div>
         )}
       </div>
@@ -172,9 +174,9 @@ export default function StepRecord({
         showRecording ? (
           <div className="rounded-xl bg-theme-surface p-4 flex flex-col gap-4">
             <div>
-              <p className="font-semibold text-theme-primary">운동 경험을 공유해보세요</p>
+              <p className="font-semibold text-theme-primary">{t('record.shareExperience')}</p>
               <p className="text-xs text-theme-muted mt-1 leading-relaxed">
-                녹음하면 자막으로 영상에 담아드려요. 최대 {maxSeconds}초.
+                {t('record.recordingHint', { maxSeconds })}
               </p>
             </div>
 
@@ -184,9 +186,9 @@ export default function StepRecord({
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/20">
                     <Mic size={26} strokeWidth={1.5} className="text-accent" />
                   </div>
-                  <span className="text-xs text-accent font-medium">{timeStr} 녹음 완료</span>
+                  <span className="text-xs text-accent font-medium">{t('record.recordingDone', { time: timeStr })}</span>
                   <button onClick={onRetake} className="flex items-center gap-1 text-xs text-theme-muted">
-                    <X size={12} /> 다시 녹음
+                    <X size={12} /> {t('record.retake')}
                   </button>
                 </div>
               ) : !recording ? (
@@ -215,7 +217,7 @@ export default function StepRecord({
                 />
               </div>
               {recording && (
-                <p className="text-xs text-theme-muted">{maxSeconds - recordedSeconds}초 남음</p>
+                <p className="text-xs text-theme-muted">{t('record.secondsLeft', { count: maxSeconds - recordedSeconds })}</p>
               )}
             </div>
 
@@ -225,26 +227,26 @@ export default function StepRecord({
                 className="flex items-center justify-center gap-1.5 rounded-lg bg-accent/20 border border-accent/30 px-3 py-2.5 text-sm text-accent font-medium hover:bg-accent/30 transition-colors"
               >
                 <Mic size={14} />
-                녹음 음성으로 자막 만들기
+                {t('record.extractFromAudio')}
               </button>
             )}
 
             {recordingDone && subtitleExtracting && (
               <div className="flex items-center gap-2 py-1">
                 <Loader2 size={14} className="animate-spin text-accent" />
-                <span className="text-xs text-theme-muted">자막 추출 중...</span>
+                <span className="text-xs text-theme-muted">{t('record.extracting')}</span>
               </div>
             )}
 
             {recordingDone && hasSubtitle && (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-theme-muted">녹음에서 추출한 자막</p>
+                  <p className="text-xs text-theme-muted">{t('record.recordedSubtitleLabel')}</p>
                   <button
                     onClick={handleClearSubtitle}
                     className="flex items-center gap-1 text-xs text-theme-muted hover:text-red-400 transition-colors"
                   >
-                    <X size={11} /> 자막 제거
+                    <X size={11} /> {t('record.removeSubtitle')}
                   </button>
                 </div>
                 <textarea
@@ -265,8 +267,8 @@ export default function StepRecord({
               <Mic size={18} strokeWidth={1.5} className="text-accent" />
             </div>
             <div>
-              <p className="text-sm font-medium text-theme-primary">운동 경험을 공유해보세요</p>
-              <p className="text-xs text-theme-muted mt-0.5">녹음하면 자막으로 영상에 담아드려요</p>
+              <p className="text-sm font-medium text-theme-primary">{t('record.shareExperience')}</p>
+              <p className="text-xs text-theme-muted mt-0.5">{t('record.recordingHintShort')}</p>
             </div>
           </button>
         )
@@ -277,12 +279,12 @@ export default function StepRecord({
       {devMode && subtitleDebugMetrics && (
         <div className="rounded-xl bg-theme-surface border border-theme-surface2 p-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-theme-muted">Dev · 음성인식 결과</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-theme-muted">{t('record.devPanel')}</p>
             <button
               onClick={() => navigator.clipboard.writeText(JSON.stringify(subtitleDebugMetrics, null, 2))}
               className="text-[10px] text-theme-muted hover:text-accent transition-colors px-1.5 py-0.5 rounded border border-theme-surface2 hover:border-accent"
             >
-              복사
+              {t('record.devCopy')}
             </button>
           </div>
           <div className="space-y-1 text-[11px] font-mono text-theme-subtle">
@@ -301,7 +303,7 @@ export default function StepRecord({
           </div>
           {Array.isArray(subtitleDebugMetrics.segments_detail) && (subtitleDebugMetrics.segments_detail as SegmentDetail[]).length > 0 && (
             <div className="mt-2 border-t border-theme-surface2 pt-2 space-y-1.5">
-              <p className="text-[10px] uppercase tracking-widest text-theme-muted">세그먼트</p>
+              <p className="text-[10px] uppercase tracking-widest text-theme-muted">{t('record.devSegments')}</p>
               {(subtitleDebugMetrics.segments_detail as SegmentDetail[]).map((seg, i) => {
                 const dur = seg.end - seg.start
                 const cps = dur > 0 ? seg.text.length / dur : 0
@@ -327,11 +329,11 @@ export default function StepRecord({
           disabled={!canProceed}
           className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg disabled:opacity-40"
         >
-          다음 <ChevronRight size={18} />
+          {t('record.next')} <ChevronRight size={18} />
         </button>
         {!recording && (
           <button onClick={onNext} className="text-sm text-theme-muted underline underline-offset-2 py-1">
-            건너뛰기
+            {t('record.skip')}
           </button>
         )}
       </div>

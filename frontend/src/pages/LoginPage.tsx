@@ -1,10 +1,12 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Zap, Mail, AlertCircle } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import LogoMark from '../components/LogoMark'
 import { getApiErrorMessageFromBody } from '../api/errors'
 
 export default function LoginPage() {
+  const { t } = useTranslation('auth')
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -21,11 +23,11 @@ export default function LoginPage() {
         window.location.href = '/api/v1/auth/google'
       } else {
         const data = await res.json().catch(() => ({}))
-        setGoogleError(getApiErrorMessageFromBody(data, 'Google 로그인을 사용할 수 없습니다'))
+        setGoogleError(getApiErrorMessageFromBody(data, t('googleUnavailable')))
         setGoogleLoading(false)
       }
     } catch {
-      setGoogleError('서버에 연결할 수 없습니다')
+      setGoogleError(t('serverUnreachable'))
       setGoogleLoading(false)
     }
   }
@@ -34,18 +36,18 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
       <div className="relative mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-theme-surface text-accent ring-1 ring-white/5">
         <div className="absolute inset-0 rounded-3xl bg-accent opacity-15 blur-2xl scale-[2] pointer-events-none" />
-        <LogoMark aria-label="Stack Health 로고" role="img" size={44} />
+        <LogoMark aria-label={t('logoAlt')} role="img" size={44} />
       </div>
       <p className="mb-1 text-2xl font-bold text-accent">Stack Health</p>
-      <p className="mb-8 text-sm text-theme-muted">나의 운동을 기록하자</p>
+      <p className="mb-8 text-sm text-theme-muted">{t('tagline')}</p>
 
       {errorParam && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">
           <AlertCircle size={16} />
           <span>
             {errorParam === 'google_auth_failed'
-              ? 'Google 인증에 실패했습니다. 다시 시도해 주세요.'
-              : '로그인에 실패했습니다. 다시 시도해 주세요.'}
+              ? t('googleAuthFailed')
+              : t('loginFailed')}
           </span>
         </div>
       )}
@@ -70,7 +72,7 @@ export default function LoginPage() {
                 <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
               </svg>
             )}
-            {googleLoading ? 'Google 연결 중...' : 'Google로 계속하기'}
+            {googleLoading ? t('googleConnecting') : t('continueWithGoogle')}
           </button>
           {googleError && (
             <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
@@ -85,12 +87,12 @@ export default function LoginPage() {
           className="flex w-full items-center justify-center gap-3 rounded-lg border border-theme-border bg-theme-surface px-4 py-3 font-medium text-theme-primary transition-colors hover:bg-theme-surface2"
         >
           <Zap size={18} className="text-yellow-500" />
-          Lightning으로 계속하기
+          {t('continueWithLightning')}
         </button>
 
         <div className="flex items-center gap-3">
           <div className="h-px flex-1 bg-theme-border" />
-          <span className="text-xs text-theme-subtle">또는</span>
+          <span className="text-xs text-theme-subtle">{t('or')}</span>
           <div className="h-px flex-1 bg-theme-border" />
         </div>
 
@@ -99,7 +101,7 @@ export default function LoginPage() {
           className="flex w-full items-center justify-center gap-3 rounded-lg border border-theme-border bg-theme-surface px-4 py-3 font-medium text-theme-primary transition-colors hover:bg-theme-surface2"
         >
           <Mail size={18} className="text-theme-muted" />
-          이메일로 로그인
+          {t('loginWithEmail')}
         </button>
       </div>
     </div>

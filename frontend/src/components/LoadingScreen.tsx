@@ -1,6 +1,8 @@
+import { useTranslation } from 'react-i18next'
 import LogoMark from './LogoMark'
 
 export default function LoadingScreen() {
+  const { t } = useTranslation('auth')
   return (
     <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-theme-page px-6 text-center">
       <div className="text-accent">
@@ -10,7 +12,7 @@ export default function LoadingScreen() {
         <p className="text-sm font-semibold tracking-widest text-theme-primary uppercase">
           Stack Health
         </p>
-        <p className="mt-1 text-xs text-theme-muted">건강이 쌓여가는 중</p>
+        <p className="mt-1 text-xs text-theme-muted">{t('loadingHealth')}</p>
       </div>
     </div>
   )

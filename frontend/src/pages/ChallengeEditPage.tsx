@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Trophy, ImagePlus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
@@ -13,6 +14,7 @@ export default function ChallengeEditPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const user = useAuthStore((s) => s.user)
+  const { t } = useTranslation('challenge')
 
   const [form, setForm] = useState({
     title: '',
@@ -125,7 +127,7 @@ export default function ChallengeEditPage() {
       navigate(`/challenges/${id}`)
     },
     onError: (e: unknown) => {
-      setError(getApiErrorMessage(e, '수정에 실패했습니다'))
+      setError(getApiErrorMessage(e, t('edit.errorDefault')))
     },
   })
 
@@ -134,9 +136,9 @@ export default function ChallengeEditPage() {
   if (isError || !challenge) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-2 bg-theme-page lg:max-w-2xl lg:mx-auto">
-        <p className="text-sm text-theme-muted">챌린지를 찾을 수 없습니다</p>
+        <p className="text-sm text-theme-muted">{t('edit.notFound')}</p>
         <button onClick={() => navigate('/challenges')} className="text-xs text-accent">
-          목록으로 돌아가기
+          {t('edit.backToList')}
         </button>
       </div>
     )
@@ -145,24 +147,24 @@ export default function ChallengeEditPage() {
   if (!isCreator) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page lg:max-w-2xl lg:mx-auto">
-        <p className="text-theme-muted text-sm">수정 권한이 없습니다</p>
+        <p className="text-theme-muted text-sm">{t('edit.noPermission')}</p>
       </div>
     )
   }
 
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
-      {/* 헤더 */}
+      {/* header */}
       <div className="px-4 pt-5 pb-3 flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="text-theme-muted">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-lg font-bold text-theme-primary">챌린지 수정</h1>
+        <h1 className="text-lg font-bold text-theme-primary">{t('edit.title')}</h1>
       </div>
 
       <div className="px-4 flex flex-col gap-4">
 
-        {/* 이미지 */}
+        {/* image */}
         <div className="flex justify-center">
           <label
             htmlFor="challenge-edit-image-input"
@@ -178,7 +180,7 @@ export default function ChallengeEditPage() {
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-1">
                 <ImagePlus size={20} strokeWidth={1.5} className="text-theme-muted" />
-                <span className="text-[10px] text-theme-muted">이미지</span>
+                <span className="text-[10px] text-theme-muted">{t('edit.imageLabel')}</span>
               </div>
             )}
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
@@ -195,57 +197,57 @@ export default function ChallengeEditPage() {
           />
         </div>
 
-        {/* 제목 */}
+        {/* title */}
         <div>
-          <label className="block text-xs text-theme-muted mb-1">챌린지 제목</label>
+          <label className="block text-xs text-theme-muted mb-1">{t('create.challengeTitle')}</label>
           <input
             value={form.title}
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            placeholder="예: 30일 스쿼트 챌린지"
+            placeholder={t('create.titlePlaceholder')}
             className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
           />
         </div>
 
-        {/* 설명 */}
+        {/* description */}
         <div>
-          <label className="block text-xs text-theme-muted mb-1">설명 <span className="text-red-400">*</span></label>
+          <label className="block text-xs text-theme-muted mb-1">{t('create.description')} <span className="text-red-400">*</span></label>
           <textarea
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            placeholder="챌린지 내용을 입력하세요"
+            placeholder={t('create.descriptionPlaceholder')}
             rows={3}
             className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none resize-none"
           />
         </div>
 
-        {/* 리워드 타이틀 */}
+        {/* reward title */}
         <div>
-          <label className="block text-xs text-theme-muted mb-1">획득 타이틀</label>
+          <label className="block text-xs text-theme-muted mb-1">{t('create.rewardTitle')}</label>
           <div className="flex items-center gap-2 rounded-xl bg-theme-surface px-3 py-2.5">
             <Trophy size={14} className="text-accent flex-shrink-0" />
             <input
               value={form.reward_title}
               onChange={(e) => setForm((f) => ({ ...f, reward_title: e.target.value }))}
-              placeholder="예: 스쿼트 마스터"
+              placeholder={t('create.rewardPlaceholder')}
               className="flex-1 bg-transparent text-sm text-theme-primary placeholder-theme-subtle outline-none"
             />
           </div>
         </div>
 
-        {/* 목표 */}
+        {/* goal */}
         <div>
-          <label className="block text-xs text-theme-muted mb-1">목표 <span className="text-theme-subtle">(선택)</span></label>
+          <label className="block text-xs text-theme-muted mb-1">{t('create.goal')} <span className="text-theme-subtle">{t('create.goalOptional')}</span></label>
           <input
             value={form.goal_description}
             onChange={(e) => setForm((f) => ({ ...f, goal_description: e.target.value }))}
-            placeholder="예: 30일 동안 매일 운동하기"
+            placeholder={t('create.goalPlaceholder')}
             className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
           />
         </div>
 
-        {/* 모집 기간 */}
+        {/* recruit period */}
         <div>
-          <label className="block text-xs text-theme-muted mb-1">모집 기간 <span className="text-theme-subtle">(선택 — 미입력 시 상시 모집)</span></label>
+          <label className="block text-xs text-theme-muted mb-1">{t('create.recruitPeriod')} <span className="text-theme-subtle">{t('create.recruitOptional')}</span></label>
           <div className="grid grid-cols-2 gap-3">
             <input
               type="date"
@@ -262,9 +264,9 @@ export default function ChallengeEditPage() {
           </div>
         </div>
 
-        {/* 진행 기간 */}
+        {/* challenge period */}
         <div>
-          <label className="block text-xs text-theme-muted mb-1">진행 기간</label>
+          <label className="block text-xs text-theme-muted mb-1">{t('create.challengePeriod')}</label>
           <div className="grid grid-cols-2 gap-3">
             <input
               type="date"
@@ -281,28 +283,28 @@ export default function ChallengeEditPage() {
           </div>
         </div>
 
-        {/* 모집 인원 */}
+        {/* max participants */}
         <div>
-          <label className="block text-xs text-theme-muted mb-1">모집 인원 <span className="text-theme-subtle">(선택 — 미입력 시 무제한)</span></label>
+          <label className="block text-xs text-theme-muted mb-1">{t('create.maxParticipants')} <span className="text-theme-subtle">{t('create.maxParticipantsOptional')}</span></label>
           <input
             type="number"
             min={1}
             value={form.max_participants}
             onChange={(e) => setForm((f) => ({ ...f, max_participants: e.target.value }))}
-            placeholder="예: 30"
+            placeholder={t('create.maxParticipantsPlaceholder')}
             className="w-full rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary placeholder-theme-subtle outline-none"
           />
         </div>
 
         {error && <p className="text-xs text-red-400">{error}</p>}
 
-        {/* 제출 버튼 */}
+        {/* submit */}
         <button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending || !form.title || !form.description || !form.reward_title || !form.start_date || !form.end_date}
           className="mt-6 mb-4 rounded-2xl bg-accent py-4 text-sm font-semibold text-accent-fg disabled:opacity-50"
         >
-          {mutation.isPending ? '저장 중...' : '저장'}
+          {mutation.isPending ? t('edit.submitting') : t('edit.submitButton')}
         </button>
       </div>
     </div>

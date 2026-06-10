@@ -1,10 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Home, Plus, UserCircle, Users, Dumbbell } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../store/auth'
 import LogoMark from './LogoMark'
 
 export default function SideNav() {
   const navigate = useNavigate()
+  const { t } = useTranslation('common')
   const token = useAuthStore((s) => s.token)
 
   function handleUpload() {
@@ -30,30 +32,31 @@ export default function SideNav() {
       <div className="flex flex-1 flex-col gap-1 px-3">
         <NavLink to="/" end className={navItem}>
           <Home size={20} strokeWidth={1.5} />
-          <span>피드</span>
+          <span>{t('nav.feed')}</span>
         </NavLink>
 
         <NavLink to="/challenges" className={navItem}>
           <Dumbbell size={20} strokeWidth={1.5} />
-          <span>챌린지</span>
+          <span>{t('nav.challenges')}</span>
         </NavLink>
 
         <button
           onClick={handleUpload}
           className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-theme-subtle transition-colors hover:bg-theme-surface2 hover:text-theme-primary"
+          aria-label={t('nav.uploadAria')}
         >
           <Plus size={20} strokeWidth={1.5} />
-          <span>업로드</span>
+          <span>{t('nav.upload')}</span>
         </button>
 
         <NavLink to="/leaderboard" className={navItem}>
           <Users size={20} strokeWidth={1.5} />
-          <span>사용자</span>
+          <span>{t('nav.users')}</span>
         </NavLink>
 
         <NavLink to="/profile" className={navItem}>
           <UserCircle size={20} strokeWidth={1.5} />
-          <span>프로필</span>
+          <span>{t('nav.profile')}</span>
         </NavLink>
       </div>
     </nav>

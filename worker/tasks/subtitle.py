@@ -61,6 +61,56 @@ SUBTITLE_AVG_LOGPROB_THRESHOLD = float(os.environ.get("SUBTITLE_AVG_LOGPROB_THRE
 SUBTITLE_COMPRESSION_RATIO_MAX = float(os.environ.get("SUBTITLE_COMPRESSION_RATIO_MAX", "2.4"))
 SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD = float(os.environ.get("SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD", "0.45"))
 SUBTITLE_MIN_CHARS_PER_SEC = float(os.environ.get("SUBTITLE_MIN_CHARS_PER_SEC", "2.0"))
+# English text has more characters per second than Korean (Latin charset density).
+# Apply a ~2.5x multiplier so the chars_per_sec filter does not over-drop English.
+SUBTITLE_MIN_CHARS_PER_SEC_EN = float(os.environ.get("SUBTITLE_MIN_CHARS_PER_SEC_EN", "5.0"))
+
+# Korean hallucination stock phrases (YouTube-outro patterns)
+_HALLUCINATION_PHRASES_KO: frozenset[str] = frozenset({
+    "시청해주셔서 감사합니다",
+    "구독과 좋아요",
+    "좋아요와 구독",
+    "알림 설정",
+    "다음 영상에서 만나요",
+    "영상 시청",
+})
+# English hallucination stock phrases (YouTube-outro patterns)
+_HALLUCINATION_PHRASES_EN: frozenset[str] = frozenset({
+    "thanks for watching",
+    "please subscribe",
+    "like and subscribe",
+    "subscribe to my channel",
+    "don't forget to subscribe",
+    "hit the subscribe button",
+    "click the subscribe button",
+    "turn on notifications",
+    "see you in the next video",
+    "see you next time",
+})
+
+
+def _contains_hallucination_phrase(text: str, language: str | None) -> bool:
+    """Return True if text is dominated by a known hallucination stock phrase."""
+    lower = text.lower().strip()
+    if language == "en":
+        return any(phrase in lower for phrase in _HALLUCINATION_PHRASES_EN)
+    # For 'ko' and 'auto' check Korean phrases (conservative default)
+    return any(phrase in lower for phrase in _HALLUCINATION_PHRASES_KO)
+
+
+def _chars_per_sec_threshold(language: str | None, detected_language: str | None = None) -> float:
+    """Return the appropriate chars_per_sec threshold for the given language.
+
+    'auto' resolves to the Whisper-detected language when available.
+    English gets a ~2.5x higher threshold than Korean because Latin text
+    has more characters per second than Korean syllable blocks.
+    """
+    effective = language
+    if language == "auto" and detected_language:
+        effective = detected_language
+    if effective == "en":
+        return SUBTITLE_MIN_CHARS_PER_SEC_EN
+    return SUBTITLE_MIN_CHARS_PER_SEC
 
 
 @dataclass(frozen=True)
@@ -294,14 +344,18 @@ def _segments_to_srt(
     compression_ratio_max: float = 2.4,
     avg_no_speech_global_threshold: float = 0.45,
     min_chars_per_sec: float = 2.0,
+    language: str | None = None,
+    detected_language: str | None = None,
 ) -> str:
     """Convert verbose_json segments to SRT, dropping hallucinated/non-speech segments.
 
-    Four per-segment filters (any match → drop):
+    Five per-segment filters (any match → drop):
       • no_speech_prob >= threshold        (Whisper sees no speech)
       • avg_logprob    <  threshold        (model is uncertain → hallucination)
       • compression_ratio > max            (repetitive output → music/noise hallucination)
-      • chars_per_sec  <  min             (too sparse → stock-phrase hallucination)
+      • chars_per_sec  <  min             (too sparse → stock-phrase hallucination;
+                                           threshold is language-aware: EN ~2.5x KO)
+      • hallucination phrase match         (known YouTube-outro stock phrases)
 
     One global filter: if the mean no_speech_prob across all segments exceeds the
     global threshold, the entire transcription is discarded as non-speech.
@@ -314,6 +368,8 @@ def _segments_to_srt(
     if mean_no_speech >= avg_no_speech_global_threshold:
         return ""
 
+    effective_min_cps = _chars_per_sec_threshold(language, detected_language)
+
     kept: list[tuple[float, float, str]] = []
     for seg in segments:
         if seg.get("no_speech_prob", 0.0) >= no_speech_threshold:
@@ -325,8 +381,10 @@ def _segments_to_srt(
         text = seg.get("text", "").strip()
         if not text:
             continue
+        if _contains_hallucination_phrase(text, language):
+            continue
         seg_duration = float(seg.get("end", 0)) - float(seg.get("start", 0))
-        if seg_duration > 0 and len(text) / seg_duration < min_chars_per_sec:
+        if seg_duration > 0 and len(text) / seg_duration < effective_min_cps:
             continue
         kept.append((float(seg["start"]), float(seg["end"]), text))
     if not kept:
@@ -338,6 +396,59 @@ def _segments_to_srt(
         lines.append(text)
         lines.append("")
     return "\n".join(lines)
+
+
+def _filter_srt_by_silence(
+    srt_text: str,
+    silence_ranges: list[tuple[float, float]],
+) -> tuple[str, int]:
+    """Drop SRT cues whose midpoint falls within a detected silence range.
+
+    Returns (filtered_srt, dropped_count).  When silence_ranges is empty
+    the original text is returned unchanged.
+    """
+    if not silence_ranges or not srt_text.strip():
+        return srt_text, 0
+
+    def _midpoint_in_silence(start: float, end: float) -> bool:
+        mid = (start + end) / 2.0
+        return any(s <= mid <= e for s, e in silence_ranges)
+
+    blocks = [b for b in srt_text.strip().split("\n\n") if b.strip()]
+    kept_blocks: list[str] = []
+    dropped = 0
+    for block in blocks:
+        lines = block.strip().splitlines()
+        ts_line = next(
+            (l for l in lines if _SRT_TIMESTAMP_LINE_RE.search(l)),
+            None,
+        )
+        if ts_line is None:
+            kept_blocks.append(block)
+            continue
+        m = _SRT_TIMESTAMP_LINE_RE.search(ts_line)
+        if m is None:
+            kept_blocks.append(block)
+            continue
+        start = _parse_srt_timestamp(m.group(1))
+        end = _parse_srt_timestamp(m.group(2))
+        if _midpoint_in_silence(start, end):
+            dropped += 1
+        else:
+            kept_blocks.append(block)
+
+    if dropped == 0:
+        return srt_text, 0
+
+    # Re-number cues from 1
+    renumbered: list[str] = []
+    for idx, block in enumerate(kept_blocks, start=1):
+        lines = block.strip().splitlines()
+        # Replace first numeric-only line with new index
+        if lines and _SRT_INDEX_LINE_RE.match(lines[0]):
+            lines[0] = str(idx)
+        renumbered.append("\n".join(lines))
+    return "\n\n".join(renumbered) + "\n", dropped
 
 
 def _parse_srt_timestamp(value: str) -> float:
@@ -603,17 +714,22 @@ def generate_subtitle_for_video(
                     metrics=metrics,
                 )
 
+        # 'auto' → pass language=None to Whisper so it auto-detects
+        whisper_language: str | None = None if language == "auto" else language
         verbose_data, transcribe_seconds = _transcribe_verbose_json(
             tmp_audio,
             api_key=api_key,
             model=model,
-            language=language,
+            language=whisper_language,
             prompt=DEFAULT_TRANSCRIPTION_PROMPT,
             temperature=DEFAULT_TRANSCRIPTION_TEMPERATURE,
         )
         metrics["transcribe_seconds"] = round(transcribe_seconds, 3)
         segments = verbose_data.get("segments", [])
         metrics["segments_total"] = len(segments)
+        detected_language: str | None = verbose_data.get("language")
+        if detected_language:
+            metrics["detected_language"] = detected_language
 
         srt_text = _segments_to_srt(
             segments,
@@ -622,6 +738,8 @@ def generate_subtitle_for_video(
             SUBTITLE_COMPRESSION_RATIO_MAX,
             SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD,
             SUBTITLE_MIN_CHARS_PER_SEC,
+            language=language,
+            detected_language=detected_language,
         )
         kept_count = len([s for s in srt_text.strip().split("\n\n") if s.strip()]) if srt_text.strip() else 0
         metrics["segments_kept"] = kept_count

@@ -1,4 +1,5 @@
 import { ChevronRight, Trophy, X, Search, Check, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { Challenge } from '../../api/types'
 import client from '../../api/client'
 
@@ -44,17 +45,19 @@ export default function StepTagChallenge({
   showChallengeModal, setShowChallengeModal, challengeSearch, setChallengeSearch,
   displayedChallenges, selectChallenge,
 }: Props) {
+  const { t } = useTranslation('upload')
+
   async function handleNext() {
     setLimitError('')
     if (!mainCategory) {
-      setLimitError('카테고리를 선택해주세요.')
+      setLimitError(t('tagChallenge.categoryRequired'))
       return
     }
     if (mainCategory === '땀 흘리는 운동') {
       try {
         const res = await client.get<{ data: { reached: boolean } }>('/videos/daily-limit')
         if (res.data.data.reached) {
-          setLimitError('오늘 운동 영상 업로드 한도(3개)에 도달했습니다.')
+          setLimitError(t('tagChallenge.dailyLimitReached'))
           return
         }
       } catch {
@@ -64,13 +67,30 @@ export default function StepTagChallenge({
     onNext()
   }
 
+  const MAIN_CATEGORY_LABELS: Record<MainCategory, string> = {
+    '가벼운 활동': t('tagChallenge.mainCategoryLight'),
+    '땀 흘리는 운동': t('tagChallenge.mainCategorySweat'),
+  }
+
+  const SUB_CATEGORY_LABEL_MAP: Record<string, string> = {
+    '계단 오르기': t('tagChallenge.subCategoryStairs'),
+    '산책': t('tagChallenge.subCategoryWalk'),
+    '런닝': t('tagChallenge.subCategoryRunning'),
+    '조깅': t('tagChallenge.subCategoryJogging'),
+    '웨이트': t('tagChallenge.subCategoryWeight'),
+  }
+
+  function getSubLabel(sub: string): string {
+    return SUB_CATEGORY_LABEL_MAP[sub] ?? sub
+  }
+
   return (
     <>
       <div className="flex flex-1 flex-col px-6 pt-2 overflow-y-auto">
         {previewUrl && (
           <video src={previewUrl} className="mb-4 h-36 w-full rounded-xl object-cover flex-shrink-0" muted autoPlay loop playsInline />
         )}
-        <p className="mb-2 text-sm font-semibold text-theme-primary">카테고리</p>
+        <p className="mb-2 text-sm font-semibold text-theme-primary">{t('tagChallenge.category')}</p>
 
         <div className="flex gap-2 mb-3">
           {MAIN_CATEGORIES.map((cat) => (
@@ -81,19 +101,19 @@ export default function StepTagChallenge({
                 mainCategory === cat ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
               }`}
             >
-              {cat}
+              {MAIN_CATEGORY_LABELS[cat]}
             </button>
           ))}
         </div>
 
         {mainCategory && (
           <>
-            <p className="mb-2 text-xs font-medium text-theme-subtle">세부 종류 (선택)</p>
+            <p className="mb-2 text-xs font-medium text-theme-subtle">{t('tagChallenge.subCategory')}</p>
 
             {subCategory && (
               <div className="flex flex-wrap gap-1.5 mb-3">
                 <div className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-fg">
-                  {subCategory}
+                  {getSubLabel(subCategory)}
                   <button onClick={() => setSubCategory(subCategory)} className="flex-shrink-0">
                     <X size={11} strokeWidth={2.5} />
                   </button>
@@ -110,7 +130,7 @@ export default function StepTagChallenge({
                     subCategory === sub ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-theme-surface2 text-theme-muted'
                   }`}
                 >
-                  {sub}
+                  {getSubLabel(sub)}
                 </button>
               ))}
             </div>
@@ -121,7 +141,7 @@ export default function StepTagChallenge({
                 value={subCategoryInput}
                 onChange={(e) => setSubCategoryInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSubCategoryFromInput() } }}
-                placeholder="직접 입력 후 Enter"
+                placeholder={t('tagChallenge.subCategoryPlaceholder')}
                 className="flex-1 rounded-xl bg-theme-surface px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none"
               />
               <button
@@ -135,7 +155,7 @@ export default function StepTagChallenge({
           </>
         )}
 
-        <p className="mb-2 text-sm font-semibold text-theme-primary">챌린지</p>
+        <p className="mb-2 text-sm font-semibold text-theme-primary">{t('tagChallenge.challenge')}</p>
 
         <div className="flex gap-2 mb-4">
           <button
@@ -144,7 +164,7 @@ export default function StepTagChallenge({
               hasChallenge === false ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
             }`}
           >
-            없음
+            {t('tagChallenge.challengeNone')}
           </button>
           <button
             onClick={() => { setHasChallenge(true); openChallengeModal() }}
@@ -152,7 +172,7 @@ export default function StepTagChallenge({
               hasChallenge === true ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
             }`}
           >
-            있음
+            {t('tagChallenge.challengeHas')}
           </button>
         </div>
 
@@ -164,7 +184,7 @@ export default function StepTagChallenge({
             <Trophy size={14} className="text-accent flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-accent truncate">{selectedChallenge.title}</p>
-              <p className="text-xs text-accent/70 mt-0.5">{selectedChallenge.participant_count}명 참여 · {selectedChallenge.reward_title}</p>
+              <p className="text-xs text-accent/70 mt-0.5">{t('tagChallenge.participantCount', { count: selectedChallenge.participant_count })}{t('tagChallenge.participantSeparator')}{selectedChallenge.reward_title}</p>
             </div>
             <X
               size={15}
@@ -179,7 +199,7 @@ export default function StepTagChallenge({
             onClick={openChallengeModal}
             className="flex items-center justify-between mb-4 rounded-xl bg-theme-surface px-4 py-3 w-full"
           >
-            <span className="text-sm text-theme-muted">챌린지를 선택하세요</span>
+            <span className="text-sm text-theme-muted">{t('tagChallenge.challengeSelect')}</span>
             <ChevronRight size={16} className="text-theme-muted" />
           </button>
         )}
@@ -190,7 +210,7 @@ export default function StepTagChallenge({
           onClick={handleNext}
           className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 font-semibold text-accent-fg"
         >
-          다음 <ChevronRight size={18} />
+          {t('tagChallenge.next')} <ChevronRight size={18} />
         </button>
       </div>
 
@@ -207,7 +227,7 @@ export default function StepTagChallenge({
             >
               <X size={20} />
             </button>
-            <h2 className="text-base font-semibold text-theme-primary flex-1">챌린지 선택</h2>
+            <h2 className="text-base font-semibold text-theme-primary flex-1">{t('tagChallenge.challengeModalTitle')}</h2>
           </div>
 
           <div className="px-4 mb-3 flex-shrink-0">
@@ -217,7 +237,7 @@ export default function StepTagChallenge({
                 type="text"
                 value={challengeSearch}
                 onChange={(e) => setChallengeSearch(e.target.value)}
-                placeholder="챌린지 이름 검색..."
+                placeholder={t('tagChallenge.challengeSearchPlaceholder')}
                 autoFocus
                 className="flex-1 bg-transparent text-sm text-theme-primary placeholder-theme-subtle outline-none"
               />
@@ -231,13 +251,13 @@ export default function StepTagChallenge({
 
           <div className="flex-1 overflow-y-auto px-4 pb-6">
             {!challengeSearch && (
-              <p className="text-[10px] text-theme-subtle mb-2">진행 중인 챌린지</p>
+              <p className="text-[10px] text-theme-subtle mb-2">{t('tagChallenge.challengeOngoing')}</p>
             )}
             {displayedChallenges.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Trophy size={32} className="text-theme-surface2 mb-3" strokeWidth={1} />
                 <p className="text-sm text-theme-muted">
-                  {challengeSearch ? '참여 중인 챌린지 중 검색 결과가 없어요' : '참여 중인 챌린지가 없어요'}
+                  {challengeSearch ? t('tagChallenge.challengeSearchEmpty') : t('tagChallenge.challengeEmpty')}
                 </p>
               </div>
             ) : (
@@ -260,7 +280,7 @@ export default function StepTagChallenge({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{c.title}</p>
                       <p className={`text-xs mt-0.5 ${selectedChallengeId === c.id ? 'text-accent-fg/70' : 'text-theme-muted'}`}>
-                        {c.participant_count}명 참여 · {c.reward_title}
+                        {t('tagChallenge.participantCount', { count: c.participant_count })}{t('tagChallenge.participantSeparator')}{c.reward_title}
                       </p>
                     </div>
                     {selectedChallengeId === c.id && (

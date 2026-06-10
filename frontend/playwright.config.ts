@@ -10,6 +10,8 @@ export default defineConfig({
   reporter: [['html', { outputFolder: 'playwright-report', open: 'never' }], ['list']],
   use: {
     baseURL: 'http://localhost:5173',
+    // 기본 UI는 한국어 기준으로 검증한다 (i18n LanguageDetector가 navigator 언어를 따르므로 고정)
+    locale: 'ko-KR',
     screenshot: 'on',
     video: 'off',
     trace: 'off',

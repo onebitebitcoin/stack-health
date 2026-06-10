@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Trophy, ArrowLeft, Dumbbell, Heart, Eye, MessageCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { UserProfile, PublicPost } from '../api/types'
 import UserAvatar from '../components/UserAvatar'
@@ -9,6 +10,7 @@ import UserAvatar from '../components/UserAvatar'
 type Tab = 'videos' | 'challenges' | 'titles'
 
 export default function UserProfilePage() {
+  const { t } = useTranslation('profile')
   const { userId } = useParams<{ userId: string }>()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tab>('videos')
@@ -92,7 +94,7 @@ export default function UserProfilePage() {
   if (isError || !data) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-2 bg-theme-page lg:max-w-2xl lg:mx-auto">
-        <p className="text-sm text-theme-muted">존재하지 않는 사용자예요</p>
+        <p className="text-sm text-theme-muted">{t('userNotFound')}</p>
       </div>
     )
   }
@@ -100,14 +102,13 @@ export default function UserProfilePage() {
   const { user, post_count, titles, active_challenges } = data
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'videos', label: '영상', count: post_count },
-    { key: 'challenges', label: '챌린지', count: active_challenges.length },
-    { key: 'titles', label: '타이틀', count: titles.length },
+    { key: 'videos', label: t('tabVideos'), count: post_count },
+    { key: 'challenges', label: t('tabChallenges'), count: active_challenges.length },
+    { key: 'titles', label: t('tabTitles'), count: titles.length },
   ]
 
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
-      {/* 헤더 */}
       <div className="flex items-center gap-3 px-4 pt-5 pb-4">
         <button onClick={() => navigate(-1)} className="text-theme-muted flex-shrink-0">
           <ArrowLeft size={20} />
@@ -115,11 +116,10 @@ export default function UserProfilePage() {
         <UserAvatar username={user.username} avatarUrl={user.avatar_url} size={40} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-theme-primary leading-tight">@{user.username}</p>
-          <p className="text-xs text-theme-muted">{post_count}개 업로드</p>
+          <p className="text-xs text-theme-muted">{t('uploadCount', { count: post_count })}</p>
         </div>
       </div>
 
-      {/* 탭 */}
       <div className="flex gap-1.5 px-4 mb-4">
         {tabs.map(({ key, label, count }) => (
           <button
@@ -137,11 +137,10 @@ export default function UserProfilePage() {
         ))}
       </div>
 
-      {/* 탭 콘텐츠 */}
       {activeTab === 'videos' && (
         posts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2">
-            <p className="text-sm text-theme-muted">아직 업로드한 영상이 없어요</p>
+            <p className="text-sm text-theme-muted">{t('noUserVideos')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-px mx-px">
@@ -194,7 +193,7 @@ export default function UserProfilePage() {
           {active_challenges.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-2">
               <Dumbbell size={36} className="text-theme-surface2" strokeWidth={1.5} />
-              <p className="text-sm text-theme-muted">참여 중인 챌린지가 없어요</p>
+              <p className="text-sm text-theme-muted">{t('noActiveChallenges')}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -214,7 +213,7 @@ export default function UserProfilePage() {
                         {c.title}
                       </span>
                       <span className="text-xs text-theme-muted flex-shrink-0">
-                        {c.upload_count}/{c.condition_value}회
+                        {t('challengeCount', { upload: c.upload_count, total: c.condition_value })}
                       </span>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-theme-surface2">
@@ -223,7 +222,7 @@ export default function UserProfilePage() {
                         style={{ width: `${progress}%` }}
                       />
                     </div>
-                    <p className="text-xs text-theme-muted mt-1.5">{progress}% 달성</p>
+                    <p className="text-xs text-theme-muted mt-1.5">{t('challengeProgress', { progress })}</p>
                   </div>
                 )
               })}
@@ -237,11 +236,11 @@ export default function UserProfilePage() {
           {titles.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-2">
               <Trophy size={36} className="text-theme-surface2" strokeWidth={1.5} />
-              <p className="text-sm text-theme-muted">아직 획득한 타이틀이 없어요</p>
+              <p className="text-sm text-theme-muted">{t('noTitles')}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {titles.map((t, i) => (
+              {titles.map((titleItem, i) => (
                 <div
                   key={i}
                   className="rounded-2xl bg-theme-surface px-4 py-3 flex items-center gap-3"
@@ -250,8 +249,8 @@ export default function UserProfilePage() {
                     <Trophy size={16} className="text-accent" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-accent">{t.title}</p>
-                    <p className="text-xs text-theme-muted truncate">{t.challenge_title}</p>
+                    <p className="text-sm font-semibold text-accent">{titleItem.title}</p>
+                    <p className="text-xs text-theme-muted truncate">{titleItem.challenge_title}</p>
                   </div>
                 </div>
               ))}
@@ -260,7 +259,6 @@ export default function UserProfilePage() {
         </div>
       )}
 
-      {/* 풀스크린 영상 뷰어 */}
       {viewerIdx !== null && posts.length > 0 && (
         <div className="fixed inset-0 z-[70] bg-black">
           <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe pt-4 pb-3 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">

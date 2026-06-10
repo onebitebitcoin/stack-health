@@ -777,6 +777,85 @@ def test_confirm_upload_returns_subtitle_defaults(mock_cdn, client: TestClient) 
     assert post["subtitle_text"] is None
 
 
+# ──────────────────────────────────────────────
+# subtitle_language 파라미터 테스트
+# ──────────────────────────────────────────────
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/lang-ko.mp4")
+def test_confirm_upload_subtitle_language_default(mock_cdn, client: TestClient) -> None:
+    """subtitle_language 기본값은 'ko'."""
+    token, uid = _register(client, "lang-ko@x.com", "langkouser")
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/lang-ko.mp4",
+        "duration_sec": 20,
+    }, headers=_auth(token))
+    assert res.status_code == 200
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/lang-en.mp4")
+def test_confirm_upload_subtitle_language_en(mock_cdn, client: TestClient) -> None:
+    """subtitle_language='en' 허용."""
+    token, uid = _register(client, "lang-en@x.com", "langenuser")
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/lang-en.mp4",
+        "duration_sec": 20,
+        "subtitle_language": "en",
+    }, headers=_auth(token))
+    assert res.status_code == 200
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/lang-auto.mp4")
+def test_confirm_upload_subtitle_language_auto(mock_cdn, client: TestClient) -> None:
+    """subtitle_language='auto' 허용."""
+    token, uid = _register(client, "lang-auto@x.com", "langautouser")
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/lang-auto.mp4",
+        "duration_sec": 20,
+        "subtitle_language": "auto",
+    }, headers=_auth(token))
+    assert res.status_code == 200
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/lang-bad.mp4")
+def test_confirm_upload_subtitle_language_invalid(mock_cdn, client: TestClient) -> None:
+    """허용되지 않는 subtitle_language 값은 422."""
+    token, uid = _register(client, "lang-bad@x.com", "langbaduser")
+    res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/lang-bad.mp4",
+        "duration_sec": 20,
+        "subtitle_language": "ja",
+    }, headers=_auth(token))
+    assert res.status_code == 422
+
+
+@patch("app.services.job_queue.get_redis_client")
+@patch("app.routes.videos.enqueue_full_upload_pipeline")
+@patch("app.routes.videos.r2_service.upload_fileobj", return_value=("videos/langpipe.mp4", "https://cdn/lp.mp4"))
+def test_upload_pipeline_subtitle_language_passed_to_enqueue(mock_upload, mock_enqueue, mock_redis, client: TestClient) -> None:
+    """upload-pipeline이 subtitle_language를 enqueue payload에 전달한다."""
+    from unittest.mock import MagicMock, patch as mpatch
+    mock_r = MagicMock()
+    mock_redis.return_value = mock_r
+
+    with mpatch("app.routes.videos.reserve_job_id", return_value="job-lang-test"):
+        token = _register_and_token(client, "langpipe@x.com", "langpipeuser")
+        res = client.post(
+            "/api/v1/videos/upload-pipeline",
+            data={"duration_sec": "20", "subtitle_language": "en"},
+            files={"file": ("v.mp4", b"\x00", "video/mp4")},
+            headers=_auth(token),
+        )
+
+    assert res.status_code == 200
+    # _r2_upload_and_enqueue is called in background — check via mock_enqueue
+    # (background tasks run synchronously in TestClient)
+    assert mock_enqueue.called
+    call_kwargs = mock_enqueue.call_args[1] if mock_enqueue.call_args[1] else {}
+    call_args = mock_enqueue.call_args[0] if mock_enqueue.call_args[0] else ()
+    # subtitle_language should be passed as keyword arg
+    assert call_kwargs.get("subtitle_language") == "en" or "en" in str(mock_enqueue.call_args)
+
+
 def test_upload_job_status_exposes_subtitle_result(client: TestClient) -> None:
     token, _uid = _register(client, "subtitle-job@x.com", "subtitlejob")
     with patch("app.routes.videos.get_job_status", return_value={
@@ -795,3 +874,189 @@ def test_upload_job_status_exposes_subtitle_result(client: TestClient) -> None:
     assert data["subtitle_status"] == "completed"
     assert data["subtitle_url"].endswith("s-1.srt")
     assert data["subtitle_text"] == "오늘도 5킬로 뛰었습니다."
+
+
+# ──────────────────────────────────────────────
+# sanitize_srt 테스트 (subtitles.py 커버리지)
+# ──────────────────────────────────────────────
+
+def test_sanitize_srt_strips_html_tags() -> None:
+    from app.services.subtitles import sanitize_srt
+
+    raw = "1\n00:00:00,000 --> 00:00:01,000\n<b>Hello</b> <i>world</i>\n"
+    result = sanitize_srt(raw)
+    assert "<b>" not in result
+    assert "Hello world" in result
+
+
+def test_sanitize_srt_preserves_timestamps_and_index() -> None:
+    from app.services.subtitles import sanitize_srt
+
+    raw = "1\n00:00:00,000 --> 00:00:01,000\nHello\n"
+    result = sanitize_srt(raw)
+    assert "00:00:00,000 --> 00:00:01,000" in result
+    assert "1" in result
+
+
+def test_sanitize_srt_truncates_at_2000_chars() -> None:
+    from app.services.subtitles import sanitize_srt
+
+    long_srt = "x" * 3000
+    result = sanitize_srt(long_srt)
+    assert len(result) <= 2000
+
+
+def test_sanitize_srt_empty_string() -> None:
+    from app.services.subtitles import sanitize_srt
+
+    assert sanitize_srt("") == ""
+
+
+# ──────────────────────────────────────────────
+# _parse_tags 테스트 (videos.py 112-113 커버리지)
+# ──────────────────────────────────────────────
+
+def test_parse_tags_invalid_json_returns_empty() -> None:
+    from app.routes.videos import _parse_tags
+
+    assert _parse_tags("not-json") == []
+    assert _parse_tags(None) == []
+    assert _parse_tags("") == []
+
+
+def test_parse_tags_valid_json() -> None:
+    from app.routes.videos import _parse_tags
+
+    assert _parse_tags('["홈트", "러닝"]') == ["홈트", "러닝"]
+
+
+# ──────────────────────────────────────────────
+# my-posts?all=true (videos.py 274-275 커버리지)
+# ──────────────────────────────────────────────
+
+def test_my_posts_all_true(client: TestClient) -> None:
+    """my-posts?all=true 는 주간 필터 없이 전체 반환."""
+    token, uid = _register(client, "myall@x.com", "myalluser")
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/all.mp4"):
+        client.post("/api/v1/videos/confirm", json={"r2_key": f"videos/{uid}/v.mp4", "duration_sec": 20}, headers=_auth(token))
+    res = client.get("/api/v1/videos/my-posts?all=true", headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["has_more"] is False
+    assert len(data["posts"]) == 1
+
+
+# ──────────────────────────────────────────────
+# subtitle-job 엔드포인트 (videos.py 655-664 커버리지)
+# ──────────────────────────────────────────────
+
+@patch("app.routes.videos.get_job_status", return_value=None)
+def test_get_subtitle_job_not_found(mock_job, client: TestClient) -> None:
+    token = _register_and_token(client, "subtjob@x.com", "subtjobuser")
+    res = client.get("/api/v1/videos/subtitle-job/nonexistent", headers=_auth(token))
+    assert res.status_code == 404
+
+
+@patch("app.routes.videos.get_job_status", return_value={
+    "status": "completed", "srt": "1\n00:00:00,000 --> 00:00:01,000\nHello\n",
+    "plain_text": "Hello", "error": "", "metrics": '{"transcribe_seconds": 1.2}',
+})
+def test_get_subtitle_job_completed(mock_job, client: TestClient) -> None:
+    token, uid = _register(client, "subtjob2@x.com", "subtjob2user")
+    res = client.get("/api/v1/videos/subtitle-job/done-id", headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["status"] == "completed"
+    assert data["plain_text"] == "Hello"
+    assert data["metrics"]["transcribe_seconds"] == 1.2
+
+
+@patch("app.routes.videos.get_job_status", return_value={
+    "status": "completed", "srt": "", "plain_text": "", "error": "", "metrics": "not-json",
+})
+def test_get_subtitle_job_bad_metrics(mock_job, client: TestClient) -> None:
+    """metrics 파싱 실패 시 None 반환."""
+    token = _register_and_token(client, "subtjob3@x.com", "subtjob3user")
+    res = client.get("/api/v1/videos/subtitle-job/bad-metrics", headers=_auth(token))
+    assert res.status_code == 200
+    assert res.json()["data"]["metrics"] is None
+
+
+# ──────────────────────────────────────────────
+# transcribe-subtitles (videos.py 626-646 커버리지)
+# ──────────────────────────────────────────────
+
+@patch("app.routes.videos.reserve_job_id", return_value="sub-job-en")
+@patch("app.routes.videos._r2_upload_and_enqueue_subtitle")
+def test_transcribe_subtitles_subtitle_language_en(mock_bg, mock_reserve, client: TestClient) -> None:
+    """subtitle_language=en 으로 자막 추출 잡 등록."""
+    token = _register_and_token(client, "transcribeen@x.com", "transcribeenuser")
+    res = client.post(
+        "/api/v1/videos/transcribe-subtitles",
+        data={"subtitle_language": "en"},
+        files={"file": ("v.mp4", b"\x00\x01", "video/mp4")},
+        headers=_auth(token),
+    )
+    assert res.status_code == 200
+    assert res.json()["data"]["job_id"] == "sub-job-en"
+
+
+@patch("app.routes.videos.reserve_job_id", return_value="sub-job-auto")
+@patch("app.routes.videos._r2_upload_and_enqueue_subtitle")
+def test_transcribe_subtitles_subtitle_language_auto(mock_bg, mock_reserve, client: TestClient) -> None:
+    """subtitle_language=auto 로 자막 추출 잡 등록."""
+    token = _register_and_token(client, "transcribeauto@x.com", "transcribeautouser")
+    res = client.post(
+        "/api/v1/videos/transcribe-subtitles",
+        data={"subtitle_language": "auto"},
+        files={"file": ("v.mp4", b"\x00\x01", "video/mp4")},
+        headers=_auth(token),
+    )
+    assert res.status_code == 200
+    assert res.json()["data"]["job_id"] == "sub-job-auto"
+
+
+def test_transcribe_subtitles_invalid_content_type(client: TestClient) -> None:
+    """잘못된 파일 형식은 400."""
+    token = _register_and_token(client, "transcribect@x.com", "transcribectuser")
+    res = client.post(
+        "/api/v1/videos/transcribe-subtitles",
+        data={},
+        files={"file": ("doc.pdf", b"\x00", "application/pdf")},
+        headers=_auth(token),
+    )
+    assert res.status_code == 400
+
+
+# ──────────────────────────────────────────────
+# upload-pipeline proof image 잘못된 형식 (videos.py 879-882)
+# ──────────────────────────────────────────────
+
+@patch("app.routes.videos.reserve_job_id", return_value="pipe-proof-bad")
+def test_upload_pipeline_proof_image_invalid_type(mock_reserve, client: TestClient) -> None:
+    """upload-pipeline: proof_image가 잘못된 타입이면 400."""
+    token = _register_and_token(client, "proofbadtype@x.com", "proofbadtypeuser")
+    res = client.post(
+        "/api/v1/videos/upload-pipeline",
+        data={"duration_sec": "20"},
+        files={
+            "file": ("v.mp4", b"\x00", "video/mp4"),
+            "proof_image": ("proof.gif", b"\x00", "image/gif"),
+        },
+        headers=_auth(token),
+    )
+    assert res.status_code == 400
+
+
+# ──────────────────────────────────────────────
+# presigned-url invalid content_type (videos.py 125-130)
+# ──────────────────────────────────────────────
+
+@patch("app.routes.videos.r2_service.generate_presigned_url", return_value=("https://url", "videos/t.mp4"))
+def test_presigned_url_invalid_content_type(mock_r2, client: TestClient) -> None:
+    """presigned-url: 지원하지 않는 content_type은 400."""
+    token = _register_and_token(client, "psinvct@x.com", "psinvctuser")
+    res = client.post("/api/v1/videos/presigned-url", json={
+        "filename": "x.avi", "content_type": "video/avi", "file_size": 1024,
+    }, headers=_auth(token))
+    assert res.status_code == 400

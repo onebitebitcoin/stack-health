@@ -4,18 +4,18 @@ test.describe('브랜드 공유 패키지', () => {
   test('정적 메타데이터와 공유 이미지 자산을 제공한다', async ({ page }) => {
     await page.goto('/login')
 
-    await expect(page).toHaveTitle('Stack Health | 운동하고 비트코인 모으자')
+    await expect(page).toHaveTitle('Stack Health | 나의 운동을 기록하자')
     await expect(page.locator('meta[name="description"]')).toHaveAttribute(
       'content',
-      '건강과 비트코인, 두 마리 토끼를 한 번에',
+      '나의 운동을 기록하자',
     )
     await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
       'content',
-      'Stack Health | 운동하고 비트코인 모으자',
+      'Stack Health | 나의 운동을 기록하자',
     )
     await expect(page.locator('meta[property="og:description"]')).toHaveAttribute(
       'content',
-      '건강과 비트코인, 두 마리 토끼를 한 번에',
+      '나의 운동을 기록하자',
     )
     await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', '/og-image.png')
     await expect(page.locator('meta[property="og:type"]')).toHaveAttribute('content', 'website')

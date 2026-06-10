@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Users, CheckCircle, TrendingUp, Droplets } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { toSweatL } from '../utils/sweat'
 import { useNavigate, useParams } from 'react-router-dom'
 import client from '../api/client'
@@ -14,6 +15,7 @@ interface ParticipantsResponse {
 export default function ChallengeDashboardPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { t } = useTranslation('challenge')
 
   const { data, isLoading, isError, error } = useQuery<ParticipantsResponse>({
     queryKey: ['challenge-participants', id],
@@ -38,7 +40,7 @@ export default function ChallengeDashboardPage() {
         </div>
         <div className="flex flex-col items-center justify-center flex-1 px-6 text-center">
           <p className="text-sm text-theme-muted">
-            {is403or404 ? '접근 권한이 없습니다.' : '데이터를 불러오는 데 실패했습니다.'}
+            {is403or404 ? t('dashboard.accessDenied') : t('dashboard.loadError')}
           </p>
         </div>
       </div>
@@ -63,30 +65,30 @@ export default function ChallengeDashboardPage() {
         <h1 className="text-base font-bold text-theme-primary truncate">{challenge?.title}</h1>
       </div>
 
-      {/* 통계 카드 3개 */}
+      {/* stats */}
       <div className="px-4 mb-4 grid grid-cols-3 gap-2">
         <div className="rounded-xl bg-theme-surface p-3 text-center">
           <Users size={16} className="text-accent mx-auto mb-1" />
           <p className="text-lg font-bold text-theme-primary">{participants.length}</p>
-          <p className="text-[10px] text-theme-muted">참여자</p>
+          <p className="text-[10px] text-theme-muted">{t('dashboard.statsParticipants')}</p>
         </div>
         <div className="rounded-xl bg-theme-surface p-3 text-center">
           <CheckCircle size={16} className="text-accent mx-auto mb-1" />
           <p className="text-lg font-bold text-theme-primary">{completedCount}</p>
-          <p className="text-[10px] text-theme-muted">완료</p>
+          <p className="text-[10px] text-theme-muted">{t('dashboard.statsCompleted')}</p>
         </div>
         <div className="rounded-xl bg-theme-surface p-3 text-center">
           <TrendingUp size={16} className="text-accent mx-auto mb-1" />
           <p className="text-lg font-bold text-theme-primary">{avgProgress}%</p>
-          <p className="text-[10px] text-theme-muted">평균 진행</p>
+          <p className="text-[10px] text-theme-muted">{t('dashboard.statsAvgProgress')}</p>
         </div>
       </div>
 
-      {/* 참여자 목록 */}
+      {/* participant list */}
       <div className="px-4">
-        <h2 className="text-sm font-semibold text-theme-primary mb-2">참여자 목록</h2>
+        <h2 className="text-sm font-semibold text-theme-primary mb-2">{t('dashboard.participantList')}</h2>
         {participants.length === 0 ? (
-          <p className="text-sm text-theme-muted py-8 text-center">아직 참여자가 없어요.</p>
+          <p className="text-sm text-theme-muted py-8 text-center">{t('dashboard.noParticipants')}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {participants.map((p) => (
@@ -100,7 +102,7 @@ export default function ChallengeDashboardPage() {
                     </span>
                     {p.completed_at !== null && (
                       <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent">
-                        완료
+                        {t('dashboard.statsCompleted')}
                       </span>
                     )}
                   </div>

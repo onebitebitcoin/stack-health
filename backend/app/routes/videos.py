@@ -25,6 +25,7 @@ from app.schemas.video import (
     PostSchema,
     PresignedUrlRequest,
     PresignedUrlResponse,
+    SubtitleLanguage,
 )
 from app.services import r2 as r2_service
 from app.services.subtitles import sanitize_srt
@@ -614,12 +615,20 @@ async def transcribe_subtitles(
     file: UploadFile = File(...),
     audio: UploadFile | None = File(None),
     language: str = Form("ko"),
+    subtitle_language: SubtitleLanguage = Form("ko"),
     current_user: User = Depends(get_active_user),
 ) -> dict:
-    """파일을 R2에 올리고 자막 추출 잡을 큐에 등록. job_id 즉시 반환."""
+    """파일을 R2에 올리고 자막 추출 잡을 큐에 등록. job_id 즉시 반환.
+
+    subtitle_language (ko|en|auto, 기본 ko) 로 Whisper 언어를 지정한다.
+    legacy `language` 파라미터가 있으면 subtitle_language보다 우선 적용된다.
+    """
     content_type = file.content_type or "video/mp4"
     if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
         raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 파일 형식입니다: {content_type}")
+
+    # subtitle_language가 명시된 경우 우선 사용, 그 외 legacy language 필드 사용
+    effective_language: str = subtitle_language if subtitle_language != "ko" else (language or "ko")
 
     video_path, _ = await _spool_upload_to_temp(file, r2_service.MAX_FILE_SIZE, "자막영상")
     audio_path: str | None = None
@@ -632,7 +641,7 @@ async def transcribe_subtitles(
     background_tasks.add_task(
         _r2_upload_and_enqueue_subtitle,
         job_id, video_path, file.content_type or "video/mp4",
-        audio_path, audio_ct, current_user.id, language or "ko",
+        audio_path, audio_ct, current_user.id, effective_language,
     )
     return {"data": {"job_id": job_id}}
 
@@ -742,6 +751,7 @@ def _r2_upload_and_enqueue(
     subtitle_size: str | None,
     subtitle_position: str | None,
     mute_video_audio: bool = False,
+    subtitle_language: str = "ko",
 ) -> None:
     temp_paths = [p for p in (video_path, audio_path, proof_path) if p]
     try:
@@ -807,6 +817,7 @@ def _r2_upload_and_enqueue(
             subtitle_size=subtitle_size,
             subtitle_position=subtitle_position,
             mute_video_audio=mute_video_audio,
+            subtitle_language=subtitle_language,
         )
     except Exception as e:
         logger.error("Background R2 upload failed job_id=%s: %s", job_id, e)
@@ -834,6 +845,7 @@ async def upload_pipeline(
     subtitle_srt: str | None = Form(None),
     subtitle_size: str | None = Form(None),
     subtitle_position: str | None = Form(None),
+    subtitle_language: SubtitleLanguage = Form("ko"),
     mute_video: bool = Form(False),
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
@@ -904,6 +916,7 @@ async def upload_pipeline(
         subtitle_size=subtitle_size,
         subtitle_position=subtitle_position,
         mute_video_audio=mute_video,
+        subtitle_language=subtitle_language,
     )
 
     return {"data": {"job_id": job_id, "status": "processing"}}

@@ -21,6 +21,8 @@
 - 핵심 명제: 비트코인 리워드는 진입 후크이며, 진짜 동기는 커뮤니티와 성장 피드백이다.
 - Phase A 목표: MVP 런칭, 영상 업로드 + 피드 + 리워드 claim + 어드민 운영 도구
 - 주요 문서:
+  - `docs/INDEX.md` — **파일 탐색 전 필수로 읽는 탐색 인덱스** (작업 유형 → 파일 매핑)
+  - `docs/ARCHITECTURE.md` — 시스템 아키텍처 (구성도, 데이터 흐름, 배포)
   - `SPEC.md` — 구현 스펙
   - `docs/vision.md` — 제품 비전과 Phase A/B 경계
   - `docs/team-vision.md` — multi-agent 토론 공통 프로젝트 컨텍스트

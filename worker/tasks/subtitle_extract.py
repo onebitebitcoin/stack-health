@@ -37,6 +37,7 @@ from tasks.subtitle import (
     _probe_duration,
     _segments_to_srt,
     _transcribe_verbose_json,
+    _chars_per_sec_threshold,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,11 +101,13 @@ def run_subtitle_extract(job: dict) -> dict:
         duration = _probe_duration(source_audio)
         metrics["duration_sec"] = round(duration, 3)
 
+        # 'auto' → pass language=None to Whisper so it auto-detects
+        whisper_language: str | None = None if language == "auto" else language
         verbose_data, transcribe_seconds = _transcribe_verbose_json(
             source_audio,
             api_key=api_key,
             model=DEFAULT_TRANSCRIPTION_MODEL,
-            language=language,
+            language=whisper_language,
             prompt=DEFAULT_TRANSCRIPTION_PROMPT,
             temperature=DEFAULT_TRANSCRIPTION_TEMPERATURE,
         )
@@ -125,6 +128,9 @@ def run_subtitle_extract(job: dict) -> dict:
             }
             for seg in segments
         ]
+        detected_language: str | None = verbose_data.get("language")
+        if detected_language:
+            metrics["detected_language"] = detected_language
 
         srt = _segments_to_srt(
             segments,
@@ -133,6 +139,8 @@ def run_subtitle_extract(job: dict) -> dict:
             SUBTITLE_COMPRESSION_RATIO_MAX,
             SUBTITLE_AVG_NO_SPEECH_GLOBAL_THRESHOLD,
             SUBTITLE_MIN_CHARS_PER_SEC,
+            language=language,
+            detected_language=detected_language,
         )
         kept_count = len([s for s in srt.strip().split("\n\n") if s.strip()]) if srt.strip() else 0
         metrics["segments_kept"] = kept_count

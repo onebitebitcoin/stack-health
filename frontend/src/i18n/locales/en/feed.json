@@ -1,0 +1,18 @@
+{
+  "emptyTitle": "No videos uploaded yet",
+  "emptySubtitle": "Be the first to upload a workout video.",
+  "videoNotFound": "Video not found",
+  "appTagline": "Track your workouts",
+  "loginCta": "Log in to see more",
+  "muteAria": "Mute",
+  "unmuteAria": "Unmute",
+  "share": "Share",
+  "shareCopied": "Link copied!",
+  "shareText": "Track your workouts",
+  "commentCount": "{{count}} comments",
+  "commentEmpty": "Be the first to comment",
+  "commentPlaceholder": "Add a comment...",
+  "commentLoginPlaceholder": "Log in to comment",
+  "shareLinkFallback": "Share link: ",
+  "subtitleTrackLabel": "Subtitles"
+}

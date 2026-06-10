@@ -34,13 +34,30 @@ class FakeR2:
         return {}
 
 
+SAMPLE_VERBOSE_RESPONSE = {
+    "language": "ko",
+    "segments": [
+        {
+            "id": 0, "start": 0.0, "end": 8.44,
+            "text": " 오늘도 5킬로 뛰었고, 한 30분 좀 넘었네요.",
+            "no_speech_prob": 0.01, "avg_logprob": -0.2, "compression_ratio": 1.1,
+        },
+        {
+            "id": 1, "start": 20.719, "end": 24.559,
+            "text": " 그럼 모두들 화이팅 하세요. 화이팅!",
+            "no_speech_prob": 0.02, "avg_logprob": -0.15, "compression_ratio": 1.0,
+        },
+    ],
+}
+
+
 @pytest.mark.skipif(not TEST_VIDEO.exists(), reason="subtitle test video missing")
 def test_generate_subtitle_for_video_uses_real_video_and_uploads_clamped_srt() -> None:
     from tasks.subtitle import generate_subtitle_for_video
 
     fake_r2 = FakeR2(TEST_VIDEO.read_bytes())
 
-    with patch("tasks.subtitle._transcribe_srt", return_value=(SAMPLE_SRT, 0.123)) as transcribe:
+    with patch("tasks.subtitle._transcribe_verbose_json", return_value=(SAMPLE_VERBOSE_RESPONSE, 0.123)) as transcribe:
         result = generate_subtitle_for_video(fake_r2, "videos/source.mp4", api_key="test-key")
 
     assert result.status == "completed"
@@ -183,3 +200,121 @@ def test_transcribe_srt_sends_prompt_and_temperature(monkeypatch) -> None:
 
     assert captured["fields"]["prompt"] == "이것은 운동 기록 음성입니다."
     assert captured["fields"]["temperature"] == "0.0"
+
+
+# ──────────────────────────────────────────────
+# 언어 분기 테스트 (태스크 #2)
+# ──────────────────────────────────────────────
+
+def test_chars_per_sec_threshold_returns_higher_for_en() -> None:
+    """영어 임계치는 한국어 임계치보다 높아야 한다 (~2.5x)."""
+    from tasks.subtitle import _chars_per_sec_threshold, SUBTITLE_MIN_CHARS_PER_SEC, SUBTITLE_MIN_CHARS_PER_SEC_EN
+
+    ko_threshold = _chars_per_sec_threshold("ko")
+    en_threshold = _chars_per_sec_threshold("en")
+    auto_ko_threshold = _chars_per_sec_threshold("auto", detected_language="ko")
+    auto_en_threshold = _chars_per_sec_threshold("auto", detected_language="en")
+    auto_no_detect = _chars_per_sec_threshold("auto", detected_language=None)
+
+    assert ko_threshold == SUBTITLE_MIN_CHARS_PER_SEC
+    assert en_threshold == SUBTITLE_MIN_CHARS_PER_SEC_EN
+    assert en_threshold > ko_threshold
+    assert auto_ko_threshold == SUBTITLE_MIN_CHARS_PER_SEC
+    assert auto_en_threshold == SUBTITLE_MIN_CHARS_PER_SEC_EN
+    # auto with no detected language falls back to Korean threshold
+    assert auto_no_detect == SUBTITLE_MIN_CHARS_PER_SEC
+
+
+def test_segments_to_srt_drops_english_hallucination_phrases() -> None:
+    """영어 환각 상용구는 language='en' 설정 시 차단된다."""
+    from tasks.subtitle import _segments_to_srt
+
+    segments = [
+        {
+            # hallucination phrase → must be dropped
+            "id": 0, "start": 0.0, "end": 3.0,
+            "text": "Thanks for watching",
+            "no_speech_prob": 0.01, "avg_logprob": -0.2, "compression_ratio": 1.1,
+        },
+        {
+            # 33 chars / 2s = 16.5 cps → well above en threshold (5.0) → kept
+            "id": 1, "start": 3.0, "end": 5.0,
+            "text": "I just ran five kilometres today.",
+            "no_speech_prob": 0.01, "avg_logprob": -0.1, "compression_ratio": 1.0,
+        },
+    ]
+
+    srt = _segments_to_srt(segments, 0.45, -0.75, language="en")
+
+    assert "Thanks for watching" not in srt
+    assert "I just ran five kilometres" in srt
+
+
+def test_segments_to_srt_drops_korean_hallucination_phrases() -> None:
+    """한국어 환각 상용구는 language='ko' 설정 시 차단된다."""
+    from tasks.subtitle import _segments_to_srt
+
+    segments = [
+        {
+            # hallucination phrase → must be dropped
+            "id": 0, "start": 0.0, "end": 4.0,
+            "text": "시청해주셔서 감사합니다",
+            "no_speech_prob": 0.01, "avg_logprob": -0.2, "compression_ratio": 1.1,
+        },
+        {
+            # 12 chars / 3s = 4.0 cps → above ko threshold (2.0) → kept
+            "id": 1, "start": 4.0, "end": 7.0,
+            "text": "오늘도 완주했습니다",
+            "no_speech_prob": 0.01, "avg_logprob": -0.1, "compression_ratio": 1.0,
+        },
+    ]
+
+    srt = _segments_to_srt(segments, 0.45, -0.75, language="ko")
+
+    assert "시청해주셔서 감사합니다" not in srt
+    assert "오늘도 완주했습니다" in srt
+
+
+def test_segments_to_srt_en_applies_higher_chars_per_sec() -> None:
+    """영어는 높은 chars_per_sec 임계치로 짧은 세그먼트를 더 엄격하게 필터링한다."""
+    from tasks.subtitle import _segments_to_srt
+
+    # "Hello" = 5 chars / 3s = 1.67 cps
+    # → above ko threshold (2.0)? No, 1.67 < 2.0 → also filtered by ko
+    # Use a segment that passes ko but fails en:
+    # "Good" = 4 chars / 1s = 4.0 cps → passes ko(2.0), fails en(5.0)
+    segments = [
+        {
+            "id": 0, "start": 0.0, "end": 1.0,
+            "text": "Good",  # 4 cps → passes ko(2.0), blocked by en(5.0)
+            "no_speech_prob": 0.01, "avg_logprob": -0.2, "compression_ratio": 1.0,
+        },
+    ]
+
+    srt_ko = _segments_to_srt(segments, 0.45, -0.75, language="ko")
+    srt_en = _segments_to_srt(segments, 0.45, -0.75, language="en")
+
+    assert "Good" in srt_ko   # 4.0 cps >= ko threshold (2.0) → passes
+    assert "Good" not in srt_en  # 4.0 cps < en threshold (5.0) → blocked
+
+
+def test_segments_to_srt_auto_language_uses_detected_language() -> None:
+    """'auto' 언어는 Whisper가 감지한 언어 기반으로 임계치를 적용한다."""
+    from tasks.subtitle import _segments_to_srt
+
+    # "Good" = 4 chars / 1s = 4.0 cps → passes ko(2.0), blocked by en(5.0)
+    segments = [
+        {
+            "id": 0, "start": 0.0, "end": 1.0,
+            "text": "Good",
+            "no_speech_prob": 0.01, "avg_logprob": -0.2, "compression_ratio": 1.0,
+        },
+    ]
+
+    # auto + detected=en → en threshold (5.0) → blocked
+    srt_auto_en = _segments_to_srt(segments, 0.45, -0.75, language="auto", detected_language="en")
+    assert "Good" not in srt_auto_en
+
+    # auto + detected=ko → ko threshold (2.0) → passes
+    srt_auto_ko = _segments_to_srt(segments, 0.45, -0.75, language="auto", detected_language="ko")
+    assert "Good" in srt_auto_ko

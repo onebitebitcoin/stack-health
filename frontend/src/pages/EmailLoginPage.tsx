@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
@@ -7,6 +8,7 @@ import type { User } from '../api/types'
 import LogoMark from '../components/LogoMark'
 
 export default function EmailLoginPage() {
+  const { t } = useTranslation('auth')
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
 
@@ -27,7 +29,7 @@ export default function EmailLoginPage() {
       login(res.data.data.access_token, res.data.data.user)
       navigate('/')
     } catch (err: unknown) {
-      setEmailError(getApiErrorMessage(err, '오류가 발생했습니다'))
+      setEmailError(getApiErrorMessage(err, t('common:unknownError')))
     } finally {
       setEmailLoading(false)
     }
@@ -36,16 +38,16 @@ export default function EmailLoginPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
       <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
-        <LogoMark aria-label="Stack Health 로고" role="img" size={40} />
+        <LogoMark aria-label={t('logoAlt')} role="img" size={40} />
       </div>
       <p className="mb-1 text-2xl font-bold text-accent">Stack Health</p>
-      <p className="mb-8 text-sm text-theme-muted">이메일 로그인</p>
+      <p className="mb-8 text-sm text-theme-muted">{t('emailLoginTitle')}</p>
 
       <div className="w-full max-w-sm">
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input
             type="email"
-            placeholder="이메일"
+            placeholder={t('emailPlaceholder')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -53,7 +55,7 @@ export default function EmailLoginPage() {
           />
           <input
             type="password"
-            placeholder="비밀번호"
+            placeholder={t('passwordPlaceholder')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -65,14 +67,14 @@ export default function EmailLoginPage() {
             disabled={emailLoading}
             className="w-full rounded-lg bg-accent py-3 font-semibold text-accent-fg transition-opacity disabled:opacity-60"
           >
-            {emailLoading ? '처리 중...' : '로그인'}
+            {emailLoading ? t('processing') : t('loginButton')}
           </button>
           <button
             type="button"
             onClick={() => navigate('/login/register')}
             className="w-full text-sm text-theme-muted underline"
           >
-            계정이 없어요
+            {t('noAccount')}
           </button>
         </form>
       </div>

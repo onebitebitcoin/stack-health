@@ -1,6 +1,7 @@
-import { ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2, RefreshCw } from 'lucide-react'
+import { ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2, RefreshCw, Globe } from 'lucide-react'
 import { useState, useRef, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import UserAvatar from '../components/UserAvatar'
@@ -15,6 +16,7 @@ const SECTION = 'text-[10px] font-medium uppercase tracking-widest text-theme-mu
 
 export default function SettingsPage() {
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation(['profile', 'common'])
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
   const logout = useAuthStore((s) => s.logout)
@@ -37,6 +39,13 @@ export default function SettingsPage() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState('')
   const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  const currentLang = i18n.language?.startsWith('en') ? 'en' : 'ko'
+
+  function handleLanguageChange(lang: 'ko' | 'en') {
+    void i18n.changeLanguage(lang)
+    localStorage.setItem('app-language', lang)
+  }
 
   function compressImage(file: File, maxPx: number, quality: number): Promise<Blob> {
     return new Promise((resolve, reject) => {
@@ -69,7 +78,7 @@ export default function SettingsPage() {
     if (!file) return
 
     if (file.size > 5 * 1024 * 1024) {
-      setAvatarError('파일 크기는 5MB 이하여야 합니다')
+      setAvatarError(t('profile:avatarSizeError'))
       return
     }
 
@@ -82,7 +91,7 @@ export default function SettingsPage() {
       const res = await client.post<{ data: typeof user }>('/auth/avatar', form)
       if (res.data.data) setUser(res.data.data)
     } catch {
-      setAvatarError('이미지 업로드에 실패했습니다')
+      setAvatarError(t('profile:avatarUploadError'))
     } finally {
       setAvatarUploading(false)
     }
@@ -106,7 +115,7 @@ export default function SettingsPage() {
   async function saveUsername(e: FormEvent) {
     e.preventDefault()
     if (usernameInput.trim().length < 2 || usernameInput.trim().length > 30) {
-      setUsernameError('2~30자 사이로 입력해주세요')
+      setUsernameError(t('profile:nicknameLengthError'))
       return
     }
     setSavingUsername(true)
@@ -118,7 +127,7 @@ export default function SettingsPage() {
       setUsernameSaved(true)
       setTimeout(() => setUsernameSaved(false), 2000)
     } catch {
-      setUsernameError('이미 사용 중인 닉네임입니다')
+      setUsernameError(t('profile:nicknameConflictError'))
     } finally {
       setSavingUsername(false)
     }
@@ -132,7 +141,7 @@ export default function SettingsPage() {
     e.preventDefault()
     const trimmed = lnInput.trim()
     if (trimmed && !isValidLightningAddress(trimmed)) {
-      setLnError('형식이 올바르지 않습니다 (예: user@walletofsatoshi.com)')
+      setLnError(t('profile:lightningAddressHint'))
       return
     }
     setLnError('')
@@ -155,23 +164,23 @@ export default function SettingsPage() {
         <button onClick={() => navigate(-1)} className="p-1 text-theme-muted hover:text-theme-primary transition-colors">
           <ChevronLeft size={20} strokeWidth={1.5} />
         </button>
-        <h1 className="text-base font-bold text-theme-primary">설정</h1>
+        <h1 className="text-base font-bold text-theme-primary">{t('profile:settings')}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pt-4 space-y-4">
 
         {/* 계정 */}
         <div>
-          <p className={SECTION}>계정</p>
+          <p className={SECTION}>{t('profile:account')}</p>
           <div className={GROUP}>
             {/* 프로필 이미지 */}
             <div className={`${ROW} border-b border-theme-surface2`}>
-              <span className={LABEL}>프로필 사진</span>
+              <span className={LABEL}>{t('profile:profilePhoto')}</span>
               <div className="flex flex-col items-end gap-1">
                 <label
                   htmlFor="avatar-file-input"
                   className={`relative group ${avatarUploading ? 'pointer-events-none' : 'cursor-pointer'}`}
-                  aria-label="프로필 사진 변경"
+                  aria-label={t('profile:profilePhoto')}
                 >
                   <UserAvatar
                     username={user?.username ?? ''}
@@ -202,7 +211,7 @@ export default function SettingsPage() {
             {/* 닉네임 */}
             <div className={`${DIVIDER}`}>
               <div className={ROW}>
-                <span className={LABEL}>닉네임</span>
+                <span className={LABEL}>{t('profile:nickname')}</span>
                 {!editingUsername ? (
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm text-theme-subtle">@{user?.username}</span>
@@ -241,7 +250,7 @@ export default function SettingsPage() {
             {/* 이메일 */}
             <div className={`${DIVIDER}`}>
               <div className={ROW}>
-                <span className={LABEL}>이메일</span>
+                <span className={LABEL}>{t('profile:email')}</span>
                 <span className="text-sm text-theme-subtle truncate max-w-[180px]">{user?.email}</span>
               </div>
             </div>
@@ -249,13 +258,13 @@ export default function SettingsPage() {
             {/* Lightning 주소 */}
             <div className={editingLn ? DIVIDER : ''}>
               <div className={ROW}>
-                <span className={LABEL}>Lightning 주소</span>
+                <span className={LABEL}>{t('profile:lightningAddress')}</span>
                 {!editingLn ? (
                   <div className="flex items-center gap-1.5">
                     {lnSaved
-                      ? <span className="flex items-center gap-1 text-xs text-green-400"><Check size={11} />저장됨</span>
+                      ? <span className="flex items-center gap-1 text-xs text-green-400"><Check size={11} />{t('common:saved')}</span>
                       : <span className="text-sm text-theme-subtle truncate max-w-[150px]">
-                          {user?.lightning_address ?? '설정하기'}
+                          {user?.lightning_address ?? t('profile:lightningAddressPlaceholder')}
                         </span>
                     }
                     {!lnSaved && (
@@ -294,9 +303,44 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* 언어 */}
+        <div>
+          <p className={SECTION}>{t('common:language')}</p>
+          <div className={GROUP}>
+            <div className={ROW}>
+              <div className="flex items-center gap-2">
+                <Globe size={13} className="text-theme-muted" />
+                <span className={LABEL}>{t('profile:languageToggleLabel')}</span>
+              </div>
+              <div className="flex items-center gap-1 bg-theme-surface2 rounded-lg p-0.5">
+                <button
+                  onClick={() => handleLanguageChange('ko')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    currentLang === 'ko'
+                      ? 'bg-accent text-white'
+                      : 'text-theme-subtle hover:text-theme-primary'
+                  }`}
+                >
+                  {t('common:languageKo')}
+                </button>
+                <button
+                  onClick={() => handleLanguageChange('en')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    currentLang === 'en'
+                      ? 'bg-accent text-white'
+                      : 'text-theme-subtle hover:text-theme-primary'
+                  }`}
+                >
+                  {t('common:languageEn')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* 앱 다운로드 */}
         <div>
-          <p className={SECTION}>앱 다운로드</p>
+          <p className={SECTION}>{t('profile:appDownload')}</p>
           <div className={GROUP}>
             {/* Android */}
             <a
@@ -307,7 +351,7 @@ export default function SettingsPage() {
             >
               <div className="flex items-center gap-2">
                 <Smartphone size={13} className="text-[#3DDC84]" />
-                <span className={LABEL}>Android APK</span>
+                <span className={LABEL}>{t('profile:androidApk')}</span>
               </div>
               <Download size={14} className="text-theme-muted" />
             </a>
@@ -319,14 +363,19 @@ export default function SettingsPage() {
             >
               <div className="flex items-center gap-2">
                 <Smartphone size={13} className="text-blue-400" />
-                <span className={LABEL}>iPhone / iPad (PWA)</span>
+                <span className={LABEL}>{t('profile:iosPwa')}</span>
               </div>
               <ChevronDown size={14} className={`text-theme-muted transition-transform ${showIosGuide ? 'rotate-180' : ''}`} />
             </button>
 
             {showIosGuide && (
               <div className="px-4 pb-3 space-y-1.5">
-                {['1. Safari로 이 사이트에 접속', '2. 하단 공유 버튼(□↑) 탭', '3. "홈 화면에 추가" 선택', '4. "추가" 탭'].map((step) => (
+                {([
+                  t('profile:iosGuideStep1'),
+                  t('profile:iosGuideStep2'),
+                  t('profile:iosGuideStep3'),
+                  t('profile:iosGuideStep4'),
+                ] as string[]).map((step) => (
                   <p key={step} className="text-xs text-theme-subtle">{step}</p>
                 ))}
               </div>
@@ -336,23 +385,23 @@ export default function SettingsPage() {
 
         {/* 정보 */}
         <div>
-          <p className={SECTION}>정보</p>
+          <p className={SECTION}>{t('profile:info')}</p>
           <div className={GROUP}>
             <button
               onClick={() => navigate('/terms')}
               className={`w-full ${ROW} ${DIVIDER}`}
             >
-              <span className={LABEL}>이용약관</span>
+              <span className={LABEL}>{t('profile:terms')}</span>
               <ChevronRight size={14} className="text-theme-muted" />
             </button>
             <div className={ROW}>
-              <span className={LABEL}>버전</span>
+              <span className={LABEL}>{t('profile:version')}</span>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-theme-subtle font-mono">v{__APP_VERSION__}</span>
                 <button
                   onClick={() => window.location.reload()}
                   className="text-theme-subtle hover:text-theme-muted transition-colors active:opacity-50"
-                  aria-label="새로고침"
+                  aria-label={t('common:retry')}
                 >
                   <RefreshCw size={12} />
                 </button>
@@ -363,12 +412,12 @@ export default function SettingsPage() {
 
         {/* 개발자 */}
         <div>
-          <p className={SECTION}>개발자</p>
+          <p className={SECTION}>{t('profile:developer')}</p>
           <div className={GROUP}>
             <div className={ROW}>
               <div>
-                <span className={LABEL}>개발자 모드</span>
-                <p className="text-[11px] text-theme-muted mt-0.5">음성인식 디버그 정보 표시</p>
+                <span className={LABEL}>{t('profile:developerMode')}</span>
+                <p className="text-[11px] text-theme-muted mt-0.5">{t('profile:developerModeDesc')}</p>
               </div>
               <button
                 onClick={toggleDevMode}
@@ -387,7 +436,7 @@ export default function SettingsPage() {
           className="w-full flex items-center justify-center gap-2 rounded-xl bg-red-500/10 px-4 py-3.5 text-sm font-semibold text-red-400 hover:bg-red-500/20 active:opacity-70 transition-colors"
         >
           <LogOut size={15} strokeWidth={2} />
-          로그아웃
+          {t('profile:logout')}
         </button>
 
       </div>

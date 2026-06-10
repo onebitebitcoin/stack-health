@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { Copy, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import { LN_POLL_INTERVAL_MS, LN_LOGIN_EXPIRE_MS } from '../lib/constants'
 import { useAuthStore } from '../store/auth'
@@ -9,6 +10,7 @@ import type { User } from '../api/types'
 import LogoMark from '../components/LogoMark'
 
 export default function LightningLoginPage() {
+  const { t } = useTranslation('auth')
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
 
@@ -64,7 +66,7 @@ export default function LightningLoginPage() {
       })
       .catch(() => {
         setLnLoading(false)
-        setLnError('챌린지 생성에 실패했습니다')
+        setLnError(t('challengeFailed'))
       })
   }
 
@@ -96,22 +98,22 @@ export default function LightningLoginPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
       <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
-        <LogoMark aria-label="Stack Health 로고" role="img" size={40} />
+        <LogoMark aria-label={t('logoAlt')} role="img" size={40} />
       </div>
       <p className="mb-1 text-2xl font-bold text-accent">Stack Health</p>
-      <p className="mb-8 text-sm text-theme-muted">Lightning 로그인</p>
+      <p className="mb-8 text-sm text-theme-muted">{t('lightningLoginTitle')}</p>
 
       <div className="w-full max-w-sm flex flex-col gap-4">
-        {lnLoading && <p className="text-center text-sm text-theme-muted">QR 코드 생성 중...</p>}
+        {lnLoading && <p className="text-center text-sm text-theme-muted">{t('qrGenerating')}</p>}
         {lnError && <p className="text-center text-sm text-red-400">{lnError}</p>}
         {lnExpired && (
           <div className="text-center">
-            <p className="mb-2 text-sm text-theme-muted">QR 코드가 만료되었습니다</p>
+            <p className="mb-2 text-sm text-theme-muted">{t('qrExpired')}</p>
             <button
               onClick={startChallenge}
               className="text-sm text-accent underline"
             >
-              다시 생성
+              {t('regenerate')}
             </button>
           </div>
         )}
@@ -123,7 +125,7 @@ export default function LightningLoginPage() {
               </div>
             </div>
             <p className="text-center text-xs text-theme-muted">
-              Lightning 지갑으로 QR 코드를 스캔하세요
+              {t('scanQrCode')}
             </p>
             <button
               onClick={() => {
@@ -137,18 +139,18 @@ export default function LightningLoginPage() {
               {lnCopied ? (
                 <>
                   <Check size={15} className="text-green-500" />
-                  <span className="text-green-500">복사됨</span>
+                  <span className="text-green-500">{t('copied')}</span>
                 </>
               ) : (
                 <>
                   <Copy size={15} />
-                  LNURL 복사하기
+                  {t('copyLnurl')}
                 </>
               )}
             </button>
             <div className="flex items-center justify-center gap-2 text-xs text-theme-subtle">
               <div className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
-              인증 대기 중...
+              {t('waitingForAuth')}
             </div>
           </>
         )}

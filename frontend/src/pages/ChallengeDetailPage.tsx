@@ -5,6 +5,7 @@ import {
   ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays,
   Edit2, UserCircle, Droplets, Play, TrendingUp, CircleCheck,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { Challenge, ChallengeParticipant, ChallengeVideo } from '../api/types'
 import { toSweatL } from '../utils/sweat'
@@ -45,6 +46,7 @@ export default function ChallengeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  const { t } = useTranslation('challenge')
   const qc = useQueryClient()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
@@ -102,7 +104,7 @@ export default function ChallengeDetailPage() {
       qc.invalidateQueries({ queryKey: ['my-challenges'] }).catch(() => undefined)
       setActionError('')
     },
-    onError: (e: unknown) => setActionError(getApiErrorMessage(e, '참여에 실패했습니다')),
+    onError: (e: unknown) => setActionError(getApiErrorMessage(e, t('detail.joinError'))),
   })
 
   const leaveMutation = useMutation({
@@ -121,7 +123,7 @@ export default function ChallengeDetailPage() {
     },
     onError: (e: unknown) => {
       setShowLeaveConfirm(false)
-      setActionError(getApiErrorMessage(e, '참여 취소에 실패했습니다'))
+      setActionError(getApiErrorMessage(e, t('detail.leaveError')))
     },
   })
 
@@ -134,7 +136,7 @@ export default function ChallengeDetailPage() {
     },
     onError: (e: unknown) => {
       setShowDeleteConfirm(false)
-      setActionError(getApiErrorMessage(e, '삭제에 실패했습니다'))
+      setActionError(getApiErrorMessage(e, t('detail.deleteError')))
     },
   })
 
@@ -143,9 +145,9 @@ export default function ChallengeDetailPage() {
   if (isError || !challenge) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-2 bg-theme-page lg:max-w-2xl lg:mx-auto">
-        <p className="text-sm text-theme-muted">챌린지를 찾을 수 없습니다</p>
+        <p className="text-sm text-theme-muted">{t('detail.notFound')}</p>
         <button onClick={() => navigate('/challenges')} className="text-xs text-accent">
-          목록으로 돌아가기
+          {t('detail.backToList')}
         </button>
       </div>
     )
@@ -158,7 +160,7 @@ export default function ChallengeDetailPage() {
 
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
-      {/* 헤더 */}
+      {/* header */}
       <div className="px-4 pt-5 pb-3 flex items-center gap-2">
         <button onClick={() => navigate(-1)} className="text-theme-muted flex-shrink-0">
           <ArrowLeft size={20} />
@@ -167,19 +169,19 @@ export default function ChallengeDetailPage() {
         {isCreator && (
           <>
             <span className="text-xs bg-accent/15 text-accent px-2 py-0.5 rounded-full font-medium flex-shrink-0">
-              매니저
+              {t('detail.managerBadge')}
             </span>
             <button
               onClick={() => navigate(`/challenges/${id}/edit`)}
               className="text-theme-muted flex-shrink-0 p-1"
-              aria-label="챌린지 수정"
+              aria-label={t('detail.editLabel')}
             >
               <Edit2 size={17} />
             </button>
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="text-red-400 flex-shrink-0 p-1"
-              aria-label="챌린지 삭제"
+              aria-label={t('detail.deleteLabel')}
             >
               <Trash2 size={17} />
             </button>
@@ -187,7 +189,7 @@ export default function ChallengeDetailPage() {
         )}
       </div>
 
-      {/* 탭 (매니저만) */}
+      {/* tabs (manager only) */}
       {isCreator && (
         <div className="px-4 mb-2 flex gap-1">
           <button
@@ -198,7 +200,7 @@ export default function ChallengeDetailPage() {
                 : 'bg-theme-surface text-theme-muted'
             }`}
           >
-            정보
+            {t('detail.tabInfo')}
           </button>
           <button
             onClick={() => setActiveTab('manager')}
@@ -208,15 +210,15 @@ export default function ChallengeDetailPage() {
                 : 'bg-theme-surface text-theme-muted'
             }`}
           >
-            매니저
+            {t('detail.tabManager')}
           </button>
         </div>
       )}
 
-      {/* ─── 정보 탭 ─── */}
+      {/* info tab */}
       {activeTab === 'info' && (
         <div className="flex flex-col gap-4 px-4 pb-4">
-          {/* 이미지 */}
+          {/* image */}
           {(challenge.image_thumb_url ?? challenge.image_url) && (
             <div className="flex justify-center pt-1">
               <div className="h-20 w-20 rounded-full overflow-hidden bg-theme-surface2 ring-2 ring-theme-border">
@@ -231,27 +233,26 @@ export default function ChallengeDetailPage() {
             </div>
           )}
 
-          {/* 획득 타이틀 */}
+          {/* reward title */}
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-theme-muted">획득 타이틀</span>
+            <span className="text-xs text-theme-muted">{t('detail.rewardTitle')}</span>
             <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 px-3 py-1.5 self-start">
               <Dumbbell size={13} className="text-accent" />
               <span className="text-sm font-semibold text-accent">{challenge.reward_title}</span>
             </div>
           </div>
 
-          {/* 설명 */}
+          {/* description */}
           {challenge.description && (
             <DescriptionText text={challenge.description} />
           )}
 
-
-          {/* 챌린지 정보 */}
+          {/* challenge info */}
           <div className="rounded-2xl bg-theme-surface p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-theme-muted flex items-center gap-1.5">
                 <CalendarDays size={14} />
-                기간
+                {t('detail.period')}
               </span>
               <span className="text-theme-primary font-medium">
                 {formatDate(challenge.start_date)} ~ {formatDate(challenge.end_date)}
@@ -261,7 +262,7 @@ export default function ChallengeDetailPage() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-theme-muted flex items-center gap-1.5">
                   <CalendarDays size={14} />
-                  모집 기간
+                  {t('detail.recruitPeriod')}
                 </span>
                 <span className="text-theme-primary font-medium">
                   {challenge.recruit_start ? formatDate(challenge.recruit_start) + ' ~ ' : '~ '}
@@ -272,26 +273,26 @@ export default function ChallengeDetailPage() {
             <div className="flex items-center justify-between text-sm">
               <span className="text-theme-muted flex items-center gap-1.5">
                 <Users size={14} />
-                참여자
+                {t('detail.participants')}
               </span>
               <span className="text-theme-primary font-medium">
-                {challenge.participant_count}명
-                {challenge.max_participants ? ` / ${challenge.max_participants}명` : ''}
+                {challenge.participant_count}
+                {challenge.max_participants ? ` / ${challenge.max_participants}` : ''}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-theme-muted">모집 상태</span>
+              <span className="text-theme-muted">{t('detail.recruitStatus')}</span>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                 challenge.is_recruiting !== false
                   ? 'bg-accent/15 text-accent'
                   : 'bg-theme-surface2 text-theme-muted'
               }`}>
-                {challenge.is_recruiting !== false ? '모집 중' : '마감'}
+                {challenge.is_recruiting !== false ? t('detail.recruiting') : t('detail.closed')}
               </span>
             </div>
             {challenge.goal_description && (
               <div className="flex items-start justify-between text-sm gap-4">
-                <span className="text-theme-muted flex-shrink-0">목표</span>
+                <span className="text-theme-muted flex-shrink-0">{t('detail.goal')}</span>
                 <span className="text-theme-primary font-medium text-right">{challenge.goal_description}</span>
               </div>
             )}
@@ -299,27 +300,27 @@ export default function ChallengeDetailPage() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-theme-muted flex items-center gap-1.5">
                   <UserCircle size={14} />
-                  매니저
+                  {t('detail.manager')}
                 </span>
                 <span className="text-theme-primary font-medium">@{challenge.creator_username}</span>
               </div>
             )}
           </div>
 
-          {/* 내 진행 상황 */}
+          {/* my progress */}
           {challenge.joined && (
             <div className="rounded-2xl bg-theme-surface p-4">
               <div className="flex items-center justify-between text-xs text-theme-muted mb-2">
                 <span className="flex items-center gap-1">
                   <CheckCircle size={11} className="text-accent" />
-                  운동 인증
+                  {t('detail.myProgress')}
                 </span>
-                <span className="font-medium text-theme-primary">{challenge.my_upload_count}회</span>
+                <span className="font-medium text-theme-primary">{t('detail.myUploadCount', { count: challenge.my_upload_count })}</span>
               </div>
               {challenge.completed && (
                 <div className="mt-2.5 flex items-center gap-1.5 text-xs text-accent">
                   <CheckCircle size={13} />
-                  <span>타이틀 '{challenge.reward_title}' 획득!</span>
+                  <span>{t('detail.titleEarned', { title: challenge.reward_title })}</span>
                 </div>
               )}
             </div>
@@ -327,7 +328,7 @@ export default function ChallengeDetailPage() {
 
           {actionError && <p className="text-xs text-red-400">{actionError}</p>}
 
-          {/* 액션 버튼 */}
+          {/* action buttons */}
           {!challenge.joined && challenge.is_active && challenge.is_recruiting !== false && (
             <button
               onClick={() => {
@@ -338,12 +339,12 @@ export default function ChallengeDetailPage() {
               disabled={joinMutation.isPending}
               className="rounded-2xl bg-accent py-3 text-sm font-semibold text-accent-fg disabled:opacity-50"
             >
-              {joinMutation.isPending ? '참여 중...' : '챌린지 참여하기'}
+              {joinMutation.isPending ? t('detail.joining') : t('detail.joinButton')}
             </button>
           )}
           {!challenge.joined && challenge.is_active && challenge.is_recruiting === false && (
             <div className="rounded-2xl bg-theme-surface py-3 text-sm font-medium text-theme-muted text-center">
-              모집 마감
+              {t('detail.recruitClosed')}
             </div>
           )}
 
@@ -351,13 +352,13 @@ export default function ChallengeDetailPage() {
             <div className="flex gap-2">
               <div className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-accent/10 py-3">
                 <Dumbbell size={15} className="text-accent" />
-                <span className="text-sm font-semibold text-accent">참여 중</span>
+                <span className="text-sm font-semibold text-accent">{t('detail.participating')}</span>
               </div>
               <button
                 onClick={() => setShowLeaveConfirm(true)}
                 className="flex-1 rounded-2xl border border-red-400/30 py-3 text-sm text-red-400"
               >
-                참여 취소
+                {t('detail.cancelParticipation')}
               </button>
             </div>
           )}
@@ -365,44 +366,44 @@ export default function ChallengeDetailPage() {
           {challenge.completed && (
             <div className="flex items-center justify-center gap-1.5 rounded-2xl bg-accent/10 py-3">
               <CheckCircle size={15} className="text-accent" />
-              <span className="text-sm font-medium text-accent">완료한 챌린지</span>
+              <span className="text-sm font-medium text-accent">{t('detail.completedChallenge')}</span>
             </div>
           )}
 
         </div>
       )}
 
-      {/* ─── 매니저 탭 ─── */}
+      {/* manager tab */}
       {activeTab === 'manager' && isCreator && (
         <div className="flex flex-col gap-5 pb-6">
-          {/* 통계 */}
+          {/* stats */}
           <div className="px-4 grid grid-cols-3 gap-2">
             <div className="rounded-xl bg-theme-surface p-3 text-center">
               <Users size={16} className="text-accent mx-auto mb-1" />
               <p className="text-lg font-bold text-theme-primary">{participants.length}</p>
-              <p className="text-[10px] text-theme-muted">참여자</p>
+              <p className="text-[10px] text-theme-muted">{t('manager.statsParticipants')}</p>
             </div>
             <div className="rounded-xl bg-theme-surface p-3 text-center">
               <CheckCircle size={16} className="text-accent mx-auto mb-1" />
               <p className="text-lg font-bold text-theme-primary">{completedCount}</p>
-              <p className="text-[10px] text-theme-muted">완료</p>
+              <p className="text-[10px] text-theme-muted">{t('manager.statsCompleted')}</p>
             </div>
             <div className="rounded-xl bg-theme-surface p-3 text-center">
               <TrendingUp size={16} className="text-accent mx-auto mb-1" />
               <p className="text-lg font-bold text-theme-primary">{avgProgress}%</p>
-              <p className="text-[10px] text-theme-muted">평균 달성</p>
+              <p className="text-[10px] text-theme-muted">{t('manager.statsAvgProgress')}</p>
             </div>
           </div>
 
-          {/* 참여자 목록 */}
+          {/* participant list */}
           <div className="px-4">
-            <h2 className="text-sm font-semibold text-theme-primary mb-2">참여자 목록</h2>
+            <h2 className="text-sm font-semibold text-theme-primary mb-2">{t('manager.participantList')}</h2>
             {participantsLoading ? (
               <div className="flex justify-center py-8">
                 <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
               </div>
             ) : participants.length === 0 ? (
-              <p className="text-sm text-theme-muted py-6 text-center">아직 참여자가 없어요.</p>
+              <p className="text-sm text-theme-muted py-6 text-center">{t('manager.noParticipants')}</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {participants.map((p) => (
@@ -410,7 +411,7 @@ export default function ChallengeDetailPage() {
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-sm font-medium text-theme-primary truncate">{p.username}</span>
-                        <span className="text-[10px] text-theme-muted flex-shrink-0">인증 {p.post_count}회</span>
+                        <span className="text-[10px] text-theme-muted flex-shrink-0">{t('manager.certCount', { count: p.post_count })}</span>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <SweatCount count={p.upload_count} total={p.condition_value} />
@@ -424,7 +425,7 @@ export default function ChallengeDetailPage() {
                           }`}
                         >
                           <CircleCheck size={11} strokeWidth={2} />
-                          {p.completed_at !== null ? '완료' : '완료 처리'}
+                          {p.completed_at !== null ? t('manager.completed') : t('manager.markComplete')}
                         </button>
                       </div>
                     </div>
@@ -440,12 +441,12 @@ export default function ChallengeDetailPage() {
             )}
           </div>
 
-          {/* 업로드된 영상 */}
+          {/* uploaded videos */}
           <div className="px-4">
             <h2 className="text-sm font-semibold text-theme-primary mb-2">
-              업로드된 영상
+              {t('manager.videoList')}
               {challengeVideos.length > 0 && (
-                <span className="ml-1.5 text-xs font-normal text-theme-muted">{challengeVideos.length}개</span>
+                <span className="ml-1.5 text-xs font-normal text-theme-muted">{challengeVideos.length}</span>
               )}
             </h2>
             {videosLoading ? (
@@ -453,7 +454,7 @@ export default function ChallengeDetailPage() {
                 <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
               </div>
             ) : challengeVideos.length === 0 ? (
-              <p className="text-sm text-theme-muted py-6 text-center">아직 업로드된 영상이 없어요.</p>
+              <p className="text-sm text-theme-muted py-6 text-center">{t('manager.noVideos')}</p>
             ) : (
               <div className="grid grid-cols-3 gap-1.5">
                 {challengeVideos.map((v) => (
@@ -485,7 +486,7 @@ export default function ChallengeDetailPage() {
         </div>
       )}
 
-      {/* 삭제 확인 */}
+      {/* delete confirm */}
       {showDeleteConfirm && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
@@ -496,29 +497,29 @@ export default function ChallengeDetailPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div>
-              <p className="font-semibold text-theme-primary">챌린지를 삭제할까요?</p>
-              <p className="text-xs text-theme-muted mt-1">삭제하면 목록에서 사라집니다.</p>
+              <p className="font-semibold text-theme-primary">{t('detail.deleteConfirmTitle')}</p>
+              <p className="text-xs text-theme-muted mt-1">{t('detail.deleteConfirmDesc')}</p>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted"
               >
-                취소
+                {t('common:cancel')}
               </button>
               <button
                 onClick={() => deleteMutation.mutate()}
                 disabled={deleteMutation.isPending}
                 className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {deleteMutation.isPending ? '삭제 중...' : '삭제'}
+                {deleteMutation.isPending ? t('detail.deleting') : t('detail.delete')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 참여 취소 확인 */}
+      {/* leave confirm */}
       {showLeaveConfirm && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
@@ -529,9 +530,9 @@ export default function ChallengeDetailPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div>
-              <p className="font-semibold text-theme-primary">참여를 취소할까요?</p>
+              <p className="font-semibold text-theme-primary">{t('detail.leaveConfirmTitle')}</p>
               <p className="text-xs text-theme-muted mt-1">
-                지금까지의 진행 상황이 초기화됩니다. 다시 참여하더라도 처음부터 시작해야 합니다.
+                {t('detail.leaveConfirmDesc')}
               </p>
             </div>
             <div className="flex gap-3">
@@ -539,14 +540,14 @@ export default function ChallengeDetailPage() {
                 onClick={() => setShowLeaveConfirm(false)}
                 className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted"
               >
-                돌아가기
+                {t('detail.backButton')}
               </button>
               <button
                 onClick={() => leaveMutation.mutate()}
                 disabled={leaveMutation.isPending}
                 className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {leaveMutation.isPending ? '취소 중...' : '참여 취소'}
+                {leaveMutation.isPending ? t('detail.cancelling') : t('detail.cancelButton')}
               </button>
             </div>
           </div>

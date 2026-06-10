@@ -1,5 +1,26 @@
 # Stack Health — Claude Code 작업 지침
 
+## 탐색 인덱스 — 파일 탐색 전 필수 (MANDATORY)
+
+> **프로젝트 파일을 탐색(ls/glob/grep/디렉토리 순회)하기 전에 반드시 `docs/INDEX.md`를 먼저 읽는다.**
+> 인덱스에 "작업 유형 → 봐야 할 파일" 매핑이 있으므로, 대부분의 작업은 인덱스만 보고 대상 파일로 바로 이동할 수 있다.
+
+- 아키텍처 이해가 필요하면 `docs/ARCHITECTURE.md` 참조 (구성도, 데이터 흐름, 배포 구조).
+- 디렉토리/파일 구조를 바꾸면 `docs/INDEX.md`를 같은 커밋에서 갱신한다.
+- `.omc/` `.omx/` `archive-meta/` `output/` `tmp/` 등 세션 산출물 디렉토리는 탐색하지 않는다 (인덱스 하단 목록 참조).
+
+## 토큰 절감 규칙
+
+- **조사형 작업은 Explore 서브에이전트(haiku)에 위임**: "어디서 X를 하는지 찾아줘" 류의 광범위 탐색은 메인 컨텍스트에 파일 덤프를 쌓지 말고 Explore에 위임해 결론만 받는다. 단일 파일 확인은 직접 Read(offset/limit)로 필요한 부분만 읽는다.
+- 같은 파일을 같은 턴에 다시 읽지 않는다. 수정 후 재확인 Read 금지 (Edit 실패 시 에러가 난다).
+- 스크린샷/리포트 등 산출물은 루트가 아닌 `output/` 아래에 생성한다.
+
+## 사용량 로깅 + 코칭 (.claude/usage/)
+
+- UserPromptSubmit/Stop 훅이 질문·응답시간·토큰·재요청 여부를 `.claude/usage/usage-log.jsonl`에 자동 기록한다 (로컬 전용, gitignore).
+- `/usage-coach` 실행 시 리포트 + 프롬프트 개선 제안 + 모델 라우팅 가이드를 생성하고 `.claude/usage/coach-hints.md`를 갱신한다.
+- 훅 스크립트: `.claude/hooks/usage_prompt.py`, `usage_stop.py`, `usage_report.py`
+
 ## 배포 인프라 — 반드시 숙지
 
 ### Blue-Green 배포 구조

@@ -1,4 +1,5 @@
 import type { ChangeEvent, RefObject } from 'react'
+import { useTranslation } from 'react-i18next'
 import LogoMark from '../../components/LogoMark'
 
 interface Props {
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export default function StepSelectVideo({ fileInputRef, error, setError, onFileChange }: Props) {
+  const { t } = useTranslation('upload')
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
       <input
@@ -26,8 +29,8 @@ export default function StepSelectVideo({ fileInputRef, error, setError, onFileC
         }`}
       >
         <LogoMark size={48} />
-        <span>영상을 선택하세요</span>
-        <span className="text-xs">10~60초, 최대 50MB</span>
+        <span>{t('selectVideo.prompt')}</span>
+        <span className="text-xs">{t('selectVideo.hint')}</span>
       </label>
       {error && <p className="text-sm text-red-400 text-center">{error}</p>}
     </div>

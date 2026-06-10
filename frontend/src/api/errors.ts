@@ -1,4 +1,5 @@
 import { type AxiosError, isAxiosError } from 'axios'
+import i18n from '../i18n'
 
 type ApiErrorBody = {
   detail?: unknown
@@ -16,7 +17,9 @@ type ValidationIssue = {
   type?: unknown
 }
 
-const DEFAULT_NETWORK_ERROR = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.'
+function t(key: string, options?: Record<string, unknown>): string {
+  return i18n.t(key, { ns: 'errors', ...options })
+}
 
 function isKoreanUserMessage(value: string): boolean {
   const trimmed = value.trim()
@@ -28,13 +31,13 @@ function isKoreanUserMessage(value: string): boolean {
 
 function fieldName(loc: unknown[] | undefined): string {
   const field = loc?.[loc.length - 1]
-  if (field === 'email') return '이메일'
-  if (field === 'username') return '닉네임'
-  if (field === 'password') return '비밀번호'
-  if (field === 'lightning_address') return '라이트닝 주소'
-  if (field === 'caption') return '내용'
-  if (field === 'title') return '제목'
-  return '입력값'
+  if (field === 'email') return t('fieldEmail')
+  if (field === 'username') return t('fieldUsername')
+  if (field === 'password') return t('fieldPassword')
+  if (field === 'lightning_address') return t('fieldLightningAddress')
+  if (field === 'caption') return t('fieldCaption')
+  if (field === 'title') return t('fieldTitle')
+  return t('fieldDefault')
 }
 
 function validationIssueMessage(issue: ValidationIssue): string {
@@ -42,25 +45,29 @@ function validationIssueMessage(issue: ValidationIssue): string {
   const type = typeof issue.type === 'string' ? issue.type : ''
   const msg = typeof issue.msg === 'string' ? issue.msg : ''
 
-  if (name === '비밀번호' && (type.includes('string_too_short') || /at least 8|min_length/i.test(msg))) {
-    return '비밀번호는 8자 이상 입력해주세요.'
+  const isPassword = issue.loc?.includes('password')
+  const isUsername = issue.loc?.includes('username')
+  const isEmail = issue.loc?.includes('email')
+
+  if (isPassword && (type.includes('string_too_short') || /at least 8|min_length/i.test(msg))) {
+    return t('passwordTooShort')
   }
-  if (name === '비밀번호' && (type.includes('string_too_long') || /at most 100|max_length/i.test(msg))) {
-    return '비밀번호는 100자 이하로 입력해주세요.'
+  if (isPassword && (type.includes('string_too_long') || /at most 100|max_length/i.test(msg))) {
+    return t('passwordTooLong')
   }
-  if (name === '닉네임' && (type.includes('string_too_short') || /at least 2|min_length/i.test(msg))) {
-    return '닉네임은 2자 이상 입력해주세요.'
+  if (isUsername && (type.includes('string_too_short') || /at least 2|min_length/i.test(msg))) {
+    return t('usernameTooShort')
   }
-  if (name === '닉네임' && (type.includes('string_too_long') || /at most 30|max_length/i.test(msg))) {
-    return '닉네임은 30자 이하로 입력해주세요.'
+  if (isUsername && (type.includes('string_too_long') || /at most 30|max_length/i.test(msg))) {
+    return t('usernameTooLong')
   }
-  if (name === '이메일' || type.includes('value_error') || /email/i.test(msg)) {
-    return '이메일 형식이 올바르지 않습니다.'
+  if (isEmail || type.includes('value_error') || /email/i.test(msg)) {
+    return t('emailInvalid')
   }
-  if (type.includes('missing')) return `${name}을(를) 입력해주세요.`
-  if (type.includes('string_too_short')) return `${name}이(가) 너무 짧습니다.`
-  if (type.includes('string_too_long')) return `${name}이(가) 너무 깁니다.`
-  return `${name}을(를) 다시 확인해주세요.`
+  if (type.includes('missing')) return t('fieldMissing', { field: name })
+  if (type.includes('string_too_short')) return t('fieldTooShort', { field: name })
+  if (type.includes('string_too_long')) return t('fieldTooLong', { field: name })
+  return t('fieldInvalid', { field: name })
 }
 
 function isCodedError(value: unknown): value is CodedError {
@@ -103,15 +110,15 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
     if (bodyMessage) return bodyMessage
 
     const status = axiosError.response?.status
-    if (status === 400 || status === 422) return '입력값을 다시 확인해주세요.'
-    if (status === 401) return '로그인이 필요하거나 인증 정보가 올바르지 않습니다.'
-    if (status === 403) return '이 작업을 할 권한이 없습니다.'
-    if (status === 404) return '요청한 정보를 찾을 수 없습니다.'
-    if (status === 409) return '이미 처리되었거나 중복된 요청입니다.'
-    if (status === 413) return '파일 크기가 너무 큽니다.'
-    if (status === 429) return '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
-    if (status && status >= 500) return '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
-    if (!status) return DEFAULT_NETWORK_ERROR
+    if (status === 400 || status === 422) return t('invalidInput')
+    if (status === 401) return t('unauthorized')
+    if (status === 403) return t('forbidden')
+    if (status === 404) return t('notFound')
+    if (status === 409) return t('conflict')
+    if (status === 413) return t('fileTooLarge')
+    if (status === 429) return t('tooManyRequests')
+    if (status && status >= 500) return t('serverError')
+    if (!status) return t('networkError')
   }
 
   return fallback

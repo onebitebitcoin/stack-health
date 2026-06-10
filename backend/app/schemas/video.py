@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -29,6 +30,9 @@ class PresignedUrlResponse(BaseModel):
     r2_key: str
 
 
+SubtitleLanguage = Literal["ko", "en", "auto"]
+
+
 class ConfirmUploadRequest(BaseModel):
     r2_key: str
     duration_sec: int
@@ -38,6 +42,7 @@ class ConfirmUploadRequest(BaseModel):
     workout_start: str | None = None
     workout_end: str | None = None
     proof_image_url: str | None = None
+    subtitle_language: SubtitleLanguage = "ko"
 
 
 class PostSchema(BaseModel):

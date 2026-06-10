@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { FeedResponse } from '../api/types'
 import VideoCard from '../components/VideoCard'
@@ -16,6 +17,7 @@ async function fetchFeed(cursor?: number): Promise<FeedResponse> {
 }
 
 export default function FeedPage() {
+  const { t } = useTranslation('feed')
   const [activeIndex, setActiveIndex] = useState(0)
   const [showLogin, setShowLogin] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
@@ -87,9 +89,9 @@ export default function FeedPage() {
           <LogoMark aria-hidden="true" size={42} />
         </div>
         <div>
-          <p className="font-semibold text-theme-primary">아직 업로드된 영상이 없어요</p>
+          <p className="font-semibold text-theme-primary">{t('emptyTitle')}</p>
           <p className="mt-1 text-sm text-theme-muted">
-            첫 번째로 운동 영상을 올려보세요.
+            {t('emptySubtitle')}
           </p>
         </div>
       </div>

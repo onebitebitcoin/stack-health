@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import { useAuthStore } from '../store/auth'
@@ -7,6 +8,7 @@ import type { User } from '../api/types'
 import LogoMark from '../components/LogoMark'
 
 export default function RegisterPage() {
+  const { t } = useTranslation('auth')
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
 
@@ -26,7 +28,7 @@ export default function RegisterPage() {
     setEmailError('')
 
     if (lightningAddress.trim() && !isValidLightningAddress(lightningAddress.trim())) {
-      setEmailError('라이트닝 주소 형식이 올바르지 않습니다 (예: user@walletofsatoshi.com)')
+      setEmailError(t('lightningAddressInvalid'))
       return
     }
 
@@ -49,7 +51,7 @@ export default function RegisterPage() {
       }
       navigate('/')
     } catch (err: unknown) {
-      setEmailError(getApiErrorMessage(err, '오류가 발생했습니다'))
+      setEmailError(getApiErrorMessage(err, t('common:unknownError')))
     } finally {
       setEmailLoading(false)
     }
@@ -58,16 +60,16 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
       <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
-        <LogoMark aria-label="Stack Health 로고" role="img" size={40} />
+        <LogoMark aria-label={t('logoAlt')} role="img" size={40} />
       </div>
       <p className="mb-1 text-2xl font-bold text-accent">Stack Health</p>
-      <p className="mb-8 text-sm text-theme-muted">회원가입</p>
+      <p className="mb-8 text-sm text-theme-muted">{t('registerTitle')}</p>
 
       <div className="w-full max-w-sm">
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input
             type="email"
-            placeholder="이메일"
+            placeholder={t('emailPlaceholder')}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -75,7 +77,7 @@ export default function RegisterPage() {
           />
           <input
             type="text"
-            placeholder="닉네임"
+            placeholder={t('usernamePlaceholder')}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
@@ -83,19 +85,19 @@ export default function RegisterPage() {
           />
           <input
             type="text"
-            placeholder="라이트닝 주소 (선택, 예: user@walletofsatoshi.com)"
+            placeholder={t('lightningAddressPlaceholder')}
             value={lightningAddress}
             onChange={(e) => setLightningAddress(e.target.value)}
             className="w-full rounded-lg bg-theme-surface px-4 py-3 text-theme-primary placeholder-theme-subtle outline-none focus:ring-2 focus:ring-accent"
           />
           <div className="flex justify-end -mt-2">
             <Link to="/lightning-guide" className="text-xs text-accent underline underline-offset-2">
-              지갑 만드는 법
+              {t('howToCreateWallet')}
             </Link>
           </div>
           <input
             type="password"
-            placeholder="비밀번호"
+            placeholder={t('passwordPlaceholder')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -107,14 +109,14 @@ export default function RegisterPage() {
             disabled={emailLoading}
             className="w-full rounded-lg bg-accent py-3 font-semibold text-accent-fg transition-opacity disabled:opacity-60"
           >
-            {emailLoading ? '처리 중...' : '회원가입'}
+            {emailLoading ? t('processing') : t('registerButton')}
           </button>
           <button
             type="button"
             onClick={() => navigate(-1)}
             className="w-full text-sm text-theme-muted underline"
           >
-            이미 계정이 있어요
+            {t('alreadyHaveAccount')}
           </button>
         </form>
       </div>

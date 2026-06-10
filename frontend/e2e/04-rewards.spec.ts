@@ -6,17 +6,18 @@ test.describe('리워드/프로필/어드민', () => {
     await registerAndLogin(page)
   })
 
-  test('리워드 페이지', async ({ page }) => {
-    await page.goto('/rewards')
-    await page.screenshot({ path: 'e2e/screenshots/09-rewards.png', fullPage: true })
-
-    // 신규 유저는 summary API가 반환되면 이번 주 포인트 헤더가 표시됨
-    await expect(page.locator('text=이번 주 포인트').first()).toBeVisible({ timeout: 8000 })
-  })
-
-  test('프로필 페이지', async ({ page }) => {
+  test('프로필 페이지 — 주간 스탯 표시', async ({ page }) => {
+    // /rewards 라우트는 제거됨. 주간 포인트/스탯은 프로필 페이지에 표시된다.
     await page.goto('/profile')
     await page.screenshot({ path: 'e2e/screenshots/10-profile.png', fullPage: true })
+
+    await expect(page.locator('text=이번 주').first()).toBeVisible({ timeout: 8000 })
+  })
+
+  test('설정 페이지 — 로그아웃 버튼', async ({ page }) => {
+    // 로그아웃 버튼은 프로필 → 설정 페이지로 이동됨
+    await page.goto('/settings')
+    await page.screenshot({ path: 'e2e/screenshots/09-settings.png', fullPage: true })
 
     await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible()
   })

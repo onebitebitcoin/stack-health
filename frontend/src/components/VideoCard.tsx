@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock, Share2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
@@ -18,6 +19,7 @@ interface VideoCardProps {
 }
 
 export default function VideoCard({ post, onLoginRequired, onCommentClick, isMuted, onToggleMute }: VideoCardProps) {
+  const { t } = useTranslation('feed')
   const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -194,7 +196,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         preload="metadata"
       >
         {post.subtitle_url && post.subtitle_status !== 'completed' && (
-          <track kind="subtitles" src={post.subtitle_url} srcLang="ko" label="한국어" default />
+          <track kind="subtitles" src={post.subtitle_url} srcLang="ko" label={t('subtitleTrackLabel')} default />
         )}
       </video>
 
@@ -225,7 +227,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         onClick={(e) => { e.stopPropagation(); onToggleMute() }}
         className="absolute top-4 right-4 rounded-full bg-black/40 p-2 text-white backdrop-blur-sm"
         style={{ zIndex: 3 }}
-        aria-label={isMuted ? '소리 켜기' : '소리 끄기'}
+        aria-label={isMuted ? t('unmuteAria') : t('muteAria')}
       >
         {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
       </button>
@@ -279,10 +281,10 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
             const shareUrl = `${window.location.origin}/shorts/${post.share_token}`
             const copyToClipboard = () =>
               window.navigator.clipboard?.writeText(shareUrl)
-                .then(() => toast.success('링크가 복사됐어요!'))
-                .catch(() => toast('공유 링크: ' + shareUrl))
+                .then(() => toast.success(t('shareCopied')))
+                .catch(() => toast(t('shareLinkFallback') + shareUrl))
             if (typeof navigator !== 'undefined' && 'share' in navigator) {
-              navigator.share({ title: 'Stack Health', text: '나의 운동을 기록하자', url: shareUrl })
+              navigator.share({ title: 'Stack Health', text: t('shareText'), url: shareUrl })
                 .catch((err) => { if (!(err instanceof DOMException && err.name === 'AbortError')) copyToClipboard() })
             } else {
               copyToClipboard()
@@ -291,7 +293,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
           className="flex flex-col items-center gap-1"
         >
           <Share2 size={28} strokeWidth={1.5} className="text-white" />
-          <span className="text-xs font-semibold text-white drop-shadow">공유</span>
+          <span className="text-xs font-semibold text-white drop-shadow">{t('share')}</span>
         </button>
       </div>
 

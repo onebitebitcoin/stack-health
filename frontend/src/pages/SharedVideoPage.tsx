@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Heart, Eye, Dumbbell } from 'lucide-react'
 import client from '../api/client'
 import type { Post } from '../api/types'
@@ -28,6 +29,7 @@ function setMetaName(name: string, content: string) {
 }
 
 export default function SharedVideoPage() {
+  const { t } = useTranslation('feed')
   const { shareToken } = useParams<{ shareToken: string }>()
   const navigate = useNavigate()
   const token = useAuthStore((s) => s.token)
@@ -45,7 +47,7 @@ export default function SharedVideoPage() {
     if (!post) return
 
     const title = `@${post.username} - Stack Health`
-    const description = post.caption ?? '나의 운동을 기록하자'
+    const description = post.caption ?? t('appTagline')
     const image = post.thumbnail_url ?? `${window.location.origin}/og-image.png`
 
     document.title = title
@@ -61,15 +63,15 @@ export default function SharedVideoPage() {
     setMetaName('twitter:card', 'player')
 
     return () => {
-      document.title = 'Stack Health | 나의 운동을 기록하자'
+      document.title = `Stack Health | ${t('appTagline')}`
     }
-  }, [post])
+  }, [post, t])
 
   if (isLoading) return <LoadingScreen />
 
   if (!post) return (
     <div className="flex h-[100dvh] items-center justify-center bg-theme-page">
-      <p className="text-theme-muted">영상을 찾을 수 없습니다</p>
+      <p className="text-theme-muted">{t('videoNotFound')}</p>
     </div>
   )
 
@@ -92,7 +94,7 @@ export default function SharedVideoPage() {
         autoPlay playsInline controls
       >
         {post.subtitle_url && post.subtitle_status !== 'completed' && (
-          <track kind="subtitles" src={post.subtitle_url} srcLang="ko" label="한국어" default />
+          <track kind="subtitles" src={post.subtitle_url} srcLang="ko" label={t('subtitleTrackLabel')} default />
         )}
       </video>
 
@@ -112,7 +114,7 @@ export default function SharedVideoPage() {
             onClick={() => navigate('/login')}
             className="w-full rounded-xl bg-accent py-3 text-sm font-semibold text-accent-fg"
           >
-            로그인하고 더 보기
+            {t('loginCta')}
           </button>
         )}
       </div>

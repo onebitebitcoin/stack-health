@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Send, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import client from '../api/client'
@@ -15,6 +16,7 @@ interface CommentSheetProps {
 }
 
 export default function CommentSheet({ postId, open, onClose, onLoginRequired }: CommentSheetProps) {
+  const { t } = useTranslation('feed')
   const qc = useQueryClient()
   const token = useAuthStore((s) => s.token)
   const user = useAuthStore((s) => s.user)
@@ -142,7 +144,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-          <span className="font-semibold text-white">댓글 {comments.length}개</span>
+          <span className="font-semibold text-white">{t('commentCount', { count: comments.length })}</span>
           <button onClick={onClose} className="text-zinc-400 hover:text-white">
             <X size={20} />
           </button>
@@ -151,7 +153,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
         {/* Comments list */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">
           {comments.length === 0 && (
-            <p className="text-center text-zinc-500 py-8 text-sm">첫 댓글을 남겨보세요</p>
+            <p className="text-center text-zinc-500 py-8 text-sm">{t('commentEmpty')}</p>
           )}
           {comments.map((c) => (
             <div key={c.id} className="flex items-start gap-2">
@@ -189,7 +191,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
               isComposingRef.current = false
               setContent(e.currentTarget.value)
             }}
-            placeholder={token ? '댓글 입력...' : '로그인 후 댓글을 작성하세요'}
+            placeholder={token ? t('commentPlaceholder') : t('commentLoginPlaceholder')}
             className="flex-1 rounded-full bg-zinc-800 px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none"
             maxLength={500}
           />
