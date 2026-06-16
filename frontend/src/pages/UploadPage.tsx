@@ -373,7 +373,7 @@ export default function UploadPage() {
       const { data: { data: { job_id } } } = await client.post<{ data: { job_id: string } }>(
         '/videos/transcribe-subtitles',
         form,
-        { timeout: 60_000 },
+        { timeout: 180_000 },
       )
       // worker가 처리할 때까지 폴링
       await pollSubtitleJob(job_id)
