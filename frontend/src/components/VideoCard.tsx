@@ -279,12 +279,13 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
           onClick={(e) => {
             e.stopPropagation()
             const shareUrl = `${window.location.origin}/shorts/${post.share_token}`
+            const shareMessage = `${t('shareText')}\n${shareUrl}`
             const copyToClipboard = () =>
               window.navigator.clipboard?.writeText(shareUrl)
                 .then(() => toast.success(t('shareCopied')))
                 .catch(() => toast(t('shareLinkFallback') + shareUrl))
             if (typeof navigator !== 'undefined' && 'share' in navigator) {
-              navigator.share({ title: 'Stack Health', text: t('shareText'), url: shareUrl })
+              navigator.share({ title: 'Stack Health', text: shareMessage })
                 .catch((err) => { if (!(err instanceof DOMException && err.name === 'AbortError')) copyToClipboard() })
             } else {
               copyToClipboard()

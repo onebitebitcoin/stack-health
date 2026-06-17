@@ -425,6 +425,27 @@ def test_get_upload_job_completed(mock_job, client: TestClient) -> None:
     assert data["status"] == "completed"
     assert data["points_earned"] == 0.5
     assert data["cdn_url"] == "https://cdn/ok.mp4"
+    # post_id=5 게시물이 DB에 없으면 share_token은 빈 문자열
+    assert data["share_token"] == ""
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/share.mp4")
+def test_get_upload_job_returns_share_token(mock_cdn, client: TestClient) -> None:
+    """완료된 잡 응답에 영상 share_token이 포함된다 (공유 링크 생성용)."""
+    token, uid = _register(client, "jobshare@x.com", "jobshareuser")
+    headers = _auth(token)
+    confirm_res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/jobshare.mp4", "duration_sec": 20,
+    }, headers=headers)
+    assert confirm_res.status_code == 200
+    post = confirm_res.json()["data"]["post"]
+
+    with patch("app.routes.videos.get_job_status", return_value={
+        "status": "completed", "post_id": str(post["id"]), "points_earned": "0.5",
+    }):
+        res = client.get("/api/v1/videos/upload-job/done-job-id", headers=headers)
+    assert res.status_code == 200
+    assert res.json()["data"]["share_token"] == post["share_token"]
 
 
 @patch("app.routes.videos.get_job_status", return_value={"status": "failed", "error": "RuntimeError: R2 down"})
@@ -851,7 +872,6 @@ def test_upload_pipeline_subtitle_language_passed_to_enqueue(mock_upload, mock_e
     # (background tasks run synchronously in TestClient)
     assert mock_enqueue.called
     call_kwargs = mock_enqueue.call_args[1] if mock_enqueue.call_args[1] else {}
-    call_args = mock_enqueue.call_args[0] if mock_enqueue.call_args[0] else ()
     # subtitle_language should be passed as keyword arg
     assert call_kwargs.get("subtitle_language") == "en" or "en" in str(mock_enqueue.call_args)
 

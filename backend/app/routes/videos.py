@@ -926,6 +926,7 @@ async def upload_pipeline(
 def get_upload_job_status(
     job_id: str,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> dict:
     """upload-pipeline 잡 상태 폴링 엔드포인트."""
     job = get_job_status(job_id)
@@ -935,11 +936,20 @@ def get_upload_job_status(
 
     status = job.get("status", "unknown")
     points_earned = 0.0
+    share_token = ""
     if status == "completed":
         try:
             points_earned = float(job.get("points_earned", "0"))
         except (ValueError, TypeError):
             points_earned = 0.0
+        post_id = job.get("post_id", "")
+        if post_id:
+            try:
+                post = db.query(Post).filter(Post.id == int(post_id)).first()
+                if post:
+                    share_token = post.share_token
+            except (ValueError, TypeError):
+                share_token = ""
 
     return {
         "data": {
@@ -948,6 +958,7 @@ def get_upload_job_status(
             "pipeline_step": job.get("pipeline_step", ""),
             "cdn_url": job.get("cdn_url", ""),
             "post_id": job.get("post_id", ""),
+            "share_token": share_token,
             "points_earned": points_earned,
             "audio_merge_failed": job.get("audio_merge_failed", "") == "True",
             "subtitle_status": job.get("subtitle_status", ""),
