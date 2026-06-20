@@ -13,6 +13,8 @@
   "commentEmpty": "첫 댓글을 남겨보세요",
   "commentPlaceholder": "댓글 입력...",
   "commentLoginPlaceholder": "로그인 후 댓글을 작성하세요",
+  "commentTooShort": "댓글은 5자 이상 입력해주세요",
+  "commentSubmitError": "댓글 작성에 실패했습니다",
   "shareLinkFallback": "공유 링크: ",
   "subtitleTrackLabel": "자막"
 }

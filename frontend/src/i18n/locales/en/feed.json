@@ -13,6 +13,8 @@
   "commentEmpty": "Be the first to comment",
   "commentPlaceholder": "Add a comment...",
   "commentLoginPlaceholder": "Log in to comment",
+  "commentTooShort": "Comment must be at least 5 characters",
+  "commentSubmitError": "Failed to post comment",
   "shareLinkFallback": "Share link: ",
   "subtitleTrackLabel": "Subtitles"
 }

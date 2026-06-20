@@ -20,7 +20,8 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
   const qc = useQueryClient()
   const token = useAuthStore((s) => s.token)
   const user = useAuthStore((s) => s.user)
-  const [content, setContent] = useState('')
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [hasContent, setHasContent] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const isComposingRef = useRef(false)
@@ -87,9 +88,17 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       await client.post(`/feed/${postId}/comments`, { content: text })
     },
     onSuccess: () => {
-      setContent('')
+      if (inputRef.current) inputRef.current.value = ''
+      setHasContent(false)
+      setSubmitError(null)
       qc.invalidateQueries({ queryKey: ['comments', postId] }).catch(() => undefined)
       updateFeedCommentCount(1)
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { detail?: { message?: string } } } })
+          ?.response?.data?.detail?.message ?? t('commentSubmitError')
+      setSubmitError(msg)
     },
   })
 
@@ -113,8 +122,14 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       onLoginRequired()
       return
     }
-    const text = content.trim()
+    if (isComposingRef.current) return
+    const text = (inputRef.current?.value ?? '').trim()
     if (!text) return
+    if (text.length < 5) {
+      setSubmitError(t('commentTooShort'))
+      return
+    }
+    setSubmitError(null)
     addComment.mutate(text)
   }
 
@@ -181,27 +196,31 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
         </div>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="flex gap-2 px-4 py-3 border-t border-zinc-800 pb-safe">
+        <form onSubmit={handleSubmit} className="flex flex-col px-4 py-3 border-t border-zinc-800 pb-safe gap-1">
+          {submitError && (
+            <p className="text-xs text-red-400 px-1">{submitError}</p>
+          )}
+          <div className="flex gap-2">
           <input
             ref={inputRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onCompositionStart={() => { isComposingRef.current = true }}
-            onCompositionEnd={(e) => {
-              isComposingRef.current = false
-              setContent(e.currentTarget.value)
+            onInput={(e) => {
+              setHasContent(!!e.currentTarget.value.trim())
+              if (submitError) setSubmitError(null)
             }}
+            onCompositionStart={() => { isComposingRef.current = true }}
+            onCompositionEnd={() => { isComposingRef.current = false }}
             placeholder={token ? t('commentPlaceholder') : t('commentLoginPlaceholder')}
             className="flex-1 rounded-full bg-zinc-800 px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none"
             maxLength={500}
           />
           <button
             type="submit"
-            disabled={!content.trim() || addComment.isPending}
+            disabled={!hasContent || addComment.isPending}
             className="rounded-full bg-accent p-2 text-accent-fg disabled:opacity-40"
           >
             <Send size={16} />
           </button>
+          </div>
         </form>
       </div>
     </>
