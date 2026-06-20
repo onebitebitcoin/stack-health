@@ -31,6 +31,7 @@ from tasks.subtitle import (
     SUBTITLE_COMPRESSION_RATIO_MAX,
     SUBTITLE_MIN_CHARS_PER_SEC,
     SUBTITLE_NO_SPEECH_THRESHOLD,
+    _detect_silence_ranges,
     _extract_audio,
     _has_audio_stream,
     _plain_text_from_srt,
@@ -100,6 +101,25 @@ def run_subtitle_extract(job: dict) -> dict:
 
         duration = _probe_duration(source_audio)
         metrics["duration_sec"] = round(duration, 3)
+
+        # Guard against silence-driven hallucination: an almost-silent recording
+        # makes Whisper emit stock YouTube-outro phrases ("구독, 좋아요, 댓글
+        # 부탁드립니다"). generate_subtitle_for_video already skips these, but
+        # run_subtitle_extract (the live upload path) did not — which is how
+        # video 227 got a hallucinated burned-in subtitle.
+        silence_ranges = _detect_silence_ranges(source_audio, duration)
+        metrics["silence_ranges_detected"] = len(silence_ranges)
+        if silence_ranges and duration > 0:
+            total_silence = sum(end - start for start, end in silence_ranges)
+            silence_ratio = total_silence / duration
+            metrics["silence_ratio"] = round(silence_ratio, 3)
+            if silence_ratio >= 0.90:
+                logger.info(
+                    "subtitle-extract job=%s: audio %.0f%% silent — skipping to avoid hallucination",
+                    job.get("job_id"), silence_ratio * 100,
+                )
+                metrics["skipped"] = "mostly silent"
+                return {"srt": "", "plain_text": "", "metrics": json.dumps(metrics, ensure_ascii=False)}
 
         # 'auto' → pass language=None to Whisper so it auto-detects
         whisper_language: str | None = None if language == "auto" else language

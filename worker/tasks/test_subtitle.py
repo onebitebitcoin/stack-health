@@ -275,6 +275,34 @@ def test_segments_to_srt_drops_korean_hallucination_phrases() -> None:
     assert "오늘도 완주했습니다" in srt
 
 
+def test_segments_to_srt_drops_comma_separated_subscribe_hallucination() -> None:
+    """쉼표/조사로 분리된 환각('구독, 좋아요, 댓글')도 토큰 동시출현으로 차단된다.
+
+    video 227 회귀: '구독과 좋아요' 연속 문자열이 없어 기존 부분일치 필터를
+    통과해 burn-in 되었던 정확한 문구다.
+    """
+    from tasks.subtitle import _segments_to_srt
+
+    segments = [
+        {
+            "id": 0, "start": 0.0, "end": 12.0,
+            "text": "영상이 도움이 되셨다면 구독, 좋아요, 댓글 부탁드립니다.",
+            "no_speech_prob": 0.01, "avg_logprob": -0.2, "compression_ratio": 1.1,
+        },
+        {
+            "id": 1, "start": 12.0, "end": 15.0,
+            "text": "오늘도 완주했습니다",
+            "no_speech_prob": 0.01, "avg_logprob": -0.1, "compression_ratio": 1.0,
+        },
+    ]
+
+    srt = _segments_to_srt(segments, 0.45, -0.75, language="ko")
+
+    assert "구독" not in srt
+    assert "좋아요" not in srt
+    assert "오늘도 완주했습니다" in srt
+
+
 def test_segments_to_srt_en_applies_higher_chars_per_sec() -> None:
     """영어는 높은 chars_per_sec 임계치로 짧은 세그먼트를 더 엄격하게 필터링한다."""
     from tasks.subtitle import _segments_to_srt

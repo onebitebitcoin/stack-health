@@ -65,37 +65,46 @@ SUBTITLE_MIN_CHARS_PER_SEC = float(os.environ.get("SUBTITLE_MIN_CHARS_PER_SEC", 
 # Apply a ~2.5x multiplier so the chars_per_sec filter does not over-drop English.
 SUBTITLE_MIN_CHARS_PER_SEC_EN = float(os.environ.get("SUBTITLE_MIN_CHARS_PER_SEC_EN", "5.0"))
 
-# Korean hallucination stock phrases (YouTube-outro patterns)
-_HALLUCINATION_PHRASES_KO: frozenset[str] = frozenset({
-    "시청해주셔서 감사합니다",
-    "구독과 좋아요",
-    "좋아요와 구독",
-    "알림 설정",
-    "다음 영상에서 만나요",
-    "영상 시청",
-})
-# English hallucination stock phrases (YouTube-outro patterns)
-_HALLUCINATION_PHRASES_EN: frozenset[str] = frozenset({
-    "thanks for watching",
-    "please subscribe",
-    "like and subscribe",
-    "subscribe to my channel",
-    "don't forget to subscribe",
-    "hit the subscribe button",
-    "click the subscribe button",
-    "turn on notifications",
-    "see you in the next video",
-    "see you next time",
-})
+# Hallucination signatures: each entry is a tuple of tokens that must ALL appear
+# in the normalised text to flag a segment as a YouTube-outro hallucination.
+# Whisper renders these as "구독, 좋아요, 댓글 부탁드립니다" or "구독과 좋아요" etc.,
+# so substring matching on a single fixed phrase ("구독과 좋아요") missed the
+# comma-separated form. Token co-occurrence catches every separator/조사 variant.
+_HALLUCINATION_SIGNATURES_KO: tuple[tuple[str, ...], ...] = (
+    ("구독", "좋아요"),
+    ("구독", "부탁"),
+    ("좋아요", "부탁"),
+    ("구독", "알림"),
+    ("좋아요", "댓글"),
+    ("시청", "감사"),
+    ("채널", "구독"),
+    ("다음", "영상", "만나"),
+)
+# English hallucination signatures (YouTube-outro patterns)
+_HALLUCINATION_SIGNATURES_EN: tuple[tuple[str, ...], ...] = (
+    ("subscribe",),
+    ("thanks", "watching"),
+    ("like", "subscribe"),
+    ("see", "next", "video"),
+    ("turn", "notification"),
+    ("hit", "bell"),
+)
+
+# Collapse every non-word char (punctuation, whitespace) so that token membership
+# is independent of commas, particles, and spacing.
+_NON_WORD_RE = re.compile(r"[^0-9a-z가-힣]+")
+
+
+def _normalize_for_match(text: str) -> str:
+    return _NON_WORD_RE.sub(" ", text.lower()).strip()
 
 
 def _contains_hallucination_phrase(text: str, language: str | None) -> bool:
-    """Return True if text is dominated by a known hallucination stock phrase."""
-    lower = text.lower().strip()
-    if language == "en":
-        return any(phrase in lower for phrase in _HALLUCINATION_PHRASES_EN)
-    # For 'ko' and 'auto' check Korean phrases (conservative default)
-    return any(phrase in lower for phrase in _HALLUCINATION_PHRASES_KO)
+    """Return True if text matches a known hallucination signature (token co-occurrence)."""
+    norm = _normalize_for_match(text)
+    # For 'ko' and 'auto' use Korean signatures (conservative default).
+    signatures = _HALLUCINATION_SIGNATURES_EN if language == "en" else _HALLUCINATION_SIGNATURES_KO
+    return any(all(token in norm for token in signature) for signature in signatures)
 
 
 def _chars_per_sec_threshold(language: str | None, detected_language: str | None = None) -> float:
