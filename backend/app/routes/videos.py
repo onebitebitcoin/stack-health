@@ -185,6 +185,7 @@ def confirm_upload(
         cdn_url=cdn_url,
         file_hash=req.r2_key,
         duration_sec=req.duration_sec,
+        original_video_r2_key=req.r2_key,
     )
     db.add(video)
     db.flush()

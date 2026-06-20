@@ -367,7 +367,10 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     subtitle_error: str | None = None
     subtitle_metrics: str | None = None
 
+    # 원본 키는 처리 전 값으로 고정 — 이후 current_key가 변해도 유지
+    original_video_r2_key: str = job["r2_key"]
     audio_r2_key: str | None = job.get("audio_r2_key")
+    original_audio_r2_key: str | None = audio_r2_key
     if audio_r2_key:
         if status_callback:
             status_callback("audio_merge")
@@ -392,10 +395,12 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             merge_result = run_image_merge({"video_r2_key": current_key, "proof_r2_key": proof_r2_key})
         except Exception as e:
             raise RuntimeError("증거 사진 이미지 머지 실패 — 업로드 취소") from e
-        try:
-            r2.delete_object(Bucket=R2_BUCKET_NAME, Key=current_key)
-        except Exception:
-            pass
+        # 원본 영상은 보존 — 중간 산출물(오디오 머지 결과 등)만 삭제
+        if current_key != original_video_r2_key:
+            try:
+                r2.delete_object(Bucket=R2_BUCKET_NAME, Key=current_key)
+            except Exception:
+                pass
         current_key = merge_result["output_r2_key"]
         has_image_merged = True
         logger.info("[full-pipeline] job=%s proof merged → %s", job_id, current_key)
@@ -492,6 +497,8 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             subtitle_status=subtitle_status,
             subtitle_error=subtitle_error,
             subtitle_metrics=subtitle_metrics,
+            original_video_r2_key=original_video_r2_key,
+            original_audio_r2_key=original_audio_r2_key,
         )
         db.add(video)
         db.flush()

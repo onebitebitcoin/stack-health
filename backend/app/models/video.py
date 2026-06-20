@@ -25,6 +25,8 @@ class Video(Base):
     subtitle_status: Mapped[str] = mapped_column(String(20), default="skipped", nullable=False)
     subtitle_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     subtitle_metrics: Mapped[str | None] = mapped_column(Text, nullable=True)
+    original_video_r2_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    original_audio_r2_key: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="active", index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
