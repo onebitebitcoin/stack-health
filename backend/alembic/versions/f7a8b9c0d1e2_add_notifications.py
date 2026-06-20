@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("type", sa.String(20), nullable=False),
         sa.Column("post_id", sa.Integer(), sa.ForeignKey("posts.id"), nullable=False),
         sa.Column("comment_id", sa.Integer(), sa.ForeignKey("comments.id"), nullable=True),
-        sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("id"),
     )
