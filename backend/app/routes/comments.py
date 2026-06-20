@@ -142,7 +142,7 @@ def delete_comment(
         )
         .first()
     )
-    if reward:
+    if reward and comment.user_id == current_user.id:
         db.add(RewardPoint(
             user_id=comment.user_id,
             points=-POINTS_PER_COMMENT,
