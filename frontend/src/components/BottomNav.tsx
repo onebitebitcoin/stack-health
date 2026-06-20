@@ -3,12 +3,14 @@ import { Home, Plus, UserCircle, Users, Dumbbell } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../store/auth'
 import { useUiStore } from '../store/ui'
+import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
 
 export default function BottomNav() {
   const navigate = useNavigate()
   const { t } = useTranslation('common')
   const token = useAuthStore((s) => s.token)
   const commentOpen = useUiStore((s) => s.commentOpen)
+  const unreadCount = useUnreadNotifications()
 
   if (commentOpen) return null
 
@@ -58,7 +60,12 @@ export default function BottomNav() {
         </NavLink>
 
         <NavLink to="/profile" className={navItem}>
-          <UserCircle size={22} strokeWidth={1.5} />
+          <span className="relative">
+            <UserCircle size={22} strokeWidth={1.5} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500" />
+            )}
+          </span>
           <span>{t('nav.profile')}</span>
         </NavLink>
       </div>

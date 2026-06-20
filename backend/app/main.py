@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.models.post import Post
-from app.routes import admin, auth, challenges, comments, feed, history, rewards, users, videos
+from app.routes import admin, auth, challenges, comments, feed, history, notifications, rewards, users, videos
 from app.services.r2 import ensure_r2_cors
 from app.services.notify import notify_backend_error
 
@@ -148,6 +148,7 @@ app.include_router(comments.router)
 app.include_router(history.router)
 app.include_router(challenges.router)
 app.include_router(users.router)
+app.include_router(notifications.router)
 
 
 @app.get("/health")

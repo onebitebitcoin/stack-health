@@ -9,5 +9,6 @@ from app.models.lnauth_challenge import LNAuthChallenge
 from app.models.app_links import AppLinks
 from app.models.post_like import PostLike
 from app.models.post_view import PostView
+from app.models.notification import Notification
 
-__all__ = ["User", "Video", "Post", "RewardPoint", "Comment", "AdminLog", "Challenge", "ChallengeParticipation", "LNAuthChallenge", "AppLinks", "PostLike", "PostView"]
+__all__ = ["User", "Video", "Post", "RewardPoint", "Comment", "AdminLog", "Challenge", "ChallengeParticipation", "LNAuthChallenge", "AppLinks", "PostLike", "PostView", "Notification"]

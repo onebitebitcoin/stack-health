@@ -12,6 +12,7 @@ from app.models.reward import RewardPoint
 from app.models.user import User
 from app.routes.auth import get_current_user
 from app.services.reward import POINTS_PER_COMMENT, REWARD_STATUS_FIXED, add_points, _parse_tz
+from app.services.notification import create_notification
 from app.services.error_codes import (
     api_error,
     E_BANNED,
@@ -102,6 +103,7 @@ def create_comment(
     db.add(comment)
     db.flush()
     add_points(db, current_user.id, POINTS_PER_COMMENT, "comment", reference_id=comment.id)
+    create_notification(db, recipient_id=post.user_id, actor_id=current_user.id, type="comment", post_id=post_id, comment_id=comment.id)
     db.commit()
     db.refresh(comment)
     return {"data": {"comment": {

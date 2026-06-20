@@ -33,6 +33,8 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const LeaderboardPage = lazy(() => import('./pages/LeaderboardPage'))
 const SharedVideoPage = lazy(() => import('./pages/SharedVideoPage'))
 const LightningWalletGuidePage = lazy(() => import('./pages/LightningWalletGuidePage'))
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
+const PostDetailPage = lazy(() => import('./pages/PostDetailPage'))
 const LightningLoginPage = lazy(() => import('./pages/LightningLoginPage'))
 const EmailLoginPage = lazy(() => import('./pages/EmailLoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
@@ -48,6 +50,7 @@ const KNOWN_ROUTE_SEGMENTS = new Set([
   'login', 'upload', 'challenges', 'my-challenges',
   'profile', 'setup-username', 'users', 'admin', 'terms',
   'settings', 'team', 'leaderboard', 'share', 'register', 'lightning-guide',
+  'notifications', 'posts',
 ])
 
 function Layout() {
@@ -132,6 +135,8 @@ function Layout() {
         <Route path="/leaderboard" element={<RequireAuth><LeaderboardPage /></RequireAuth>} />
         <Route path="/shorts/:shareToken" element={<SharedVideoPage />} />
         <Route path="/lightning-guide" element={<LightningWalletGuidePage />} />
+        <Route path="/notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
+        <Route path="/posts/:postId" element={<RequireAuth><PostDetailPage /></RequireAuth>} />
         <Route path="/feed" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

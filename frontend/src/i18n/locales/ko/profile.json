@@ -70,5 +70,8 @@
   "shareTitle": "Stack Health 운동 리포트",
   "clipboardCopied": "클립보드에 복사됐어요!",
   "calendarYear": "{{year}}년 {{month}}월",
-  "daysOfWeek": ["월", "화", "수", "목", "금", "토", "일"]
+  "daysOfWeek": ["월", "화", "수", "목", "금", "토", "일"],
+  "shareProfile": "프로필 공유",
+  "shareProfileCopied": "프로필 링크가 복사됐어요!",
+  "shareProfileText": "Stack Health에서 {{username}}님의 프로필을 확인해보세요"
 }

@@ -1,13 +1,15 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, Plus, UserCircle, Users, Dumbbell } from 'lucide-react'
+import { Home, Plus, UserCircle, Users, Dumbbell, Bell } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../store/auth'
 import LogoMark from './LogoMark'
+import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
 
 export default function SideNav() {
   const navigate = useNavigate()
   const { t } = useTranslation('common')
   const token = useAuthStore((s) => s.token)
+  const unreadCount = useUnreadNotifications()
 
   function handleUpload() {
     navigate(token ? '/upload' : '/login')
@@ -52,6 +54,18 @@ export default function SideNav() {
         <NavLink to="/leaderboard" className={navItem}>
           <Users size={20} strokeWidth={1.5} />
           <span>{t('nav.users')}</span>
+        </NavLink>
+
+        <NavLink to="/notifications" className={navItem}>
+          <span className="relative">
+            <Bell size={20} strokeWidth={1.5} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </span>
+          <span>{t('nav.notifications')}</span>
         </NavLink>
 
         <NavLink to="/profile" className={navItem}>

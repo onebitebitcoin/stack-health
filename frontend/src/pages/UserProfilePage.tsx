@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Trophy, ArrowLeft, Dumbbell, Heart, Eye, MessageCircle } from 'lucide-react'
+import { Trophy, ArrowLeft, Dumbbell, Heart, Eye, MessageCircle, Share2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { UserProfile, PublicPost } from '../api/types'
 import UserAvatar from '../components/UserAvatar'
+import { shareProfileLink } from '../lib/share'
 
 type Tab = 'videos' | 'challenges' | 'titles'
 
@@ -118,6 +119,13 @@ export default function UserProfilePage() {
           <p className="text-sm font-semibold text-theme-primary leading-tight">@{user.username}</p>
           <p className="text-xs text-theme-muted">{t('uploadCount', { count: post_count })}</p>
         </div>
+        <button
+          onClick={() => shareProfileLink(user.id, user.username, t)}
+          className="flex-shrink-0 p-1.5 text-theme-muted hover:text-theme-primary transition-colors"
+          aria-label={t('shareProfile')}
+        >
+          <Share2 size={18} strokeWidth={1.5} />
+        </button>
       </div>
 
       <div className="flex gap-1.5 px-4 mb-4">

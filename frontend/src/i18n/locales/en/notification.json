@@ -1,0 +1,7 @@
+{
+  "title": "Notifications",
+  "empty": "No notifications yet",
+  "commented": "{{username}} commented on your video",
+  "liked": "{{username}} liked your video",
+  "markAllRead": "Mark all read"
+}

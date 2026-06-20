@@ -15,6 +15,7 @@ from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.video import PostSchema
 from app.services.reward import _utc_today_start
+from app.services.notification import create_notification
 from app.services.error_codes import (
     api_error,
     E_POST_NOT_FOUND,
@@ -140,6 +141,7 @@ def like_post(
     try:
         db.add(PostLike(user_id=current_user.id, post_id=post_id))
         db.execute(update(Post).where(Post.id == post_id).values(like_count=Post.like_count + 1))
+        create_notification(db, recipient_id=post.user_id, actor_id=current_user.id, type="like", post_id=post_id)
         db.commit()
     except IntegrityError:
         db.rollback()

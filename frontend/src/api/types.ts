@@ -222,3 +222,20 @@ export interface MonthlyPointsResponse {
 }
 
 export type SubtitleLanguage = 'ko' | 'en' | 'auto'
+
+export interface NotificationActor {
+  id: number
+  username: string
+  avatar_url: string | null
+  profile_color: string | null
+}
+
+export interface AppNotification {
+  id: number
+  type: 'comment' | 'like'
+  post_id: number
+  comment_id: number | null
+  is_read: boolean
+  created_at: string
+  actor: NotificationActor
+}

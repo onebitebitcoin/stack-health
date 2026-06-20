@@ -70,5 +70,8 @@
   "shareTitle": "Stack Health Workout Report",
   "clipboardCopied": "Copied to clipboard!",
   "calendarYear": "{{year}} / {{month}}",
-  "daysOfWeek": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+  "daysOfWeek": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  "shareProfile": "Share Profile",
+  "shareProfileCopied": "Profile link copied!",
+  "shareProfileText": "Check out {{username}}'s profile on Stack Health"
 }

@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Droplets, ShieldCheck, Settings,
+  Droplets, ShieldCheck, Settings, Share2, Bell,
   ChevronLeft, ChevronRight, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../store/auth'
+import { shareProfileLink } from '../lib/share'
+import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
 import type { MyStats, HistoryResponse, HistoryWorkoutPost, MonthlyPointsResponse } from '../api/types'
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
@@ -32,6 +34,7 @@ export default function ProfilePage() {
   const { t } = useTranslation('profile')
   const user = useAuthStore((s) => s.user)
   const navigate = useNavigate()
+  const unreadCount = useUnreadNotifications()
 
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -258,6 +261,23 @@ export default function ProfilePage() {
             </span>
           )}
         </div>
+        <button
+          onClick={() => user && shareProfileLink(user.id, user.username, t)}
+          className="flex-shrink-0 p-1.5 text-theme-muted hover:text-theme-primary transition-colors lg:hidden"
+          aria-label={t('shareProfile')}
+        >
+          <Share2 size={16} strokeWidth={1.5} />
+        </button>
+        <button
+          onClick={() => navigate('/notifications')}
+          className="relative flex-shrink-0 p-1.5 text-theme-muted hover:text-theme-primary transition-colors lg:hidden"
+          aria-label="알림"
+        >
+          <Bell size={16} strokeWidth={1.5} />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500" />
+          )}
+        </button>
         <button
           onClick={() => navigate('/settings')}
           className="flex-shrink-0 p-1.5 text-theme-muted hover:text-theme-primary transition-colors"
