@@ -33,12 +33,12 @@ from tasks.subtitle import (
     SUBTITLE_NO_SPEECH_THRESHOLD,
     _detect_silence_ranges,
     _extract_audio,
+    _filter_srt_by_silence,
     _has_audio_stream,
     _plain_text_from_srt,
     _probe_duration,
     _segments_to_srt,
     _transcribe_verbose_json,
-    _chars_per_sec_threshold,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,6 +162,11 @@ def run_subtitle_extract(job: dict) -> dict:
             language=language,
             detected_language=detected_language,
         )
+        # Same per-cue silence filter as generate_subtitle_for_video: drop cues
+        # whose midpoint lands in a detected pause (stock-phrase hallucination).
+        if srt.strip() and silence_ranges:
+            srt, silence_dropped = _filter_srt_by_silence(srt, silence_ranges)
+            metrics["segments_dropped_in_silence"] = silence_dropped
         kept_count = len([s for s in srt.strip().split("\n\n") if s.strip()]) if srt.strip() else 0
         metrics["segments_kept"] = kept_count
         metrics["segments_filtered"] = len(segments) - kept_count

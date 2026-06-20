@@ -94,32 +94,65 @@ _HALLUCINATION_SIGNATURES_EN: tuple[tuple[str, ...], ...] = (
 # is independent of commas, particles, and spacing.
 _NON_WORD_RE = re.compile(r"[^0-9a-z가-힣]+")
 
+# Whisper verbose_json reports the detected language as a full name ("english",
+# "korean"), while the UI/API passes short codes ("en", "ko", "auto"). Normalise
+# both forms to one code so every language-aware filter compares reliably.
+_LANGUAGE_ALIASES = {
+    "en": "en", "english": "en", "eng": "en",
+    "ko": "ko", "korean": "ko", "kor": "ko",
+}
+
+
+def _effective_language(language: str | None, detected_language: str | None = None) -> str | None:
+    """Resolve the language used by language-aware filters.
+
+    'auto' resolves to the Whisper-detected language when available, and both
+    full-name and short-code forms are normalised ('english' → 'en'). Without a
+    detection the value is returned as-is (so 'auto' stays the conservative KO
+    default downstream).
+    """
+    raw = detected_language if (language == "auto" and detected_language) else language
+    if not raw:
+        return raw
+    lowered = raw.lower()
+    return _LANGUAGE_ALIASES.get(lowered, lowered)
+
 
 def _normalize_for_match(text: str) -> str:
     return _NON_WORD_RE.sub(" ", text.lower()).strip()
 
 
-def _contains_hallucination_phrase(text: str, language: str | None) -> bool:
-    """Return True if text matches a known hallucination signature (token co-occurrence)."""
+def _contains_hallucination_phrase(
+    text: str, language: str | None, detected_language: str | None = None
+) -> bool:
+    """Return True if text matches a known hallucination signature (token co-occurrence).
+
+    The signature set is language-aware via the *effective* language: an 'auto'
+    job that Whisper detected as English must use the English signatures, else
+    English YouTube-outro hallucinations slip through (the KO set was previously
+    applied to every value that was not literally 'en').
+    """
     norm = _normalize_for_match(text)
-    # For 'ko' and 'auto' use Korean signatures (conservative default).
-    signatures = _HALLUCINATION_SIGNATURES_EN if language == "en" else _HALLUCINATION_SIGNATURES_KO
+    effective = _effective_language(language, detected_language)
+    signatures = _HALLUCINATION_SIGNATURES_EN if effective == "en" else _HALLUCINATION_SIGNATURES_KO
     return any(all(token in norm for token in signature) for signature in signatures)
 
 
-def _chars_per_sec_threshold(language: str | None, detected_language: str | None = None) -> float:
+def _chars_per_sec_threshold(
+    language: str | None,
+    detected_language: str | None = None,
+    ko_default: float = SUBTITLE_MIN_CHARS_PER_SEC,
+) -> float:
     """Return the appropriate chars_per_sec threshold for the given language.
 
     'auto' resolves to the Whisper-detected language when available.
     English gets a ~2.5x higher threshold than Korean because Latin text
-    has more characters per second than Korean syllable blocks.
+    has more characters per second than Korean syllable blocks. ``ko_default``
+    lets the caller override the non-English (Korean) threshold.
     """
-    effective = language
-    if language == "auto" and detected_language:
-        effective = detected_language
-    if effective == "en":
+    if _effective_language(language, detected_language) == "en":
         return SUBTITLE_MIN_CHARS_PER_SEC_EN
-    return SUBTITLE_MIN_CHARS_PER_SEC
+    return ko_default
 
 
 @dataclass(frozen=True)
@@ -154,6 +187,35 @@ def _ensure_tool(name: str) -> None:
         raise RuntimeError(f"required binary not found: {name}")
 
 
+_DECODE_TIME_RE = re.compile(r"time=\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)")
+
+
+def _probe_duration_by_decode(path: str) -> float:
+    """Recover duration by fully decoding the stream and reading the last timestamp.
+
+    MediaRecorder webm/opus uploads frequently lack duration metadata (it stays
+    'N/A' until the container is remuxed), so ffprobe's header probes return 0.
+    Decoding to null streams the whole file and ffmpeg prints a running
+    ``time=HH:MM:SS.ss`` on stderr; the maximum is the real duration. Best-effort:
+    any failure yields 0.0 so the caller can fall back to its own handling.
+    """
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-i", path, "-f", "null", "-"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning("decode-based duration probe failed for %s: %s", path, exc)
+        return 0.0
+    last = 0.0
+    for m in _DECODE_TIME_RE.finditer(result.stderr):
+        seconds = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+        last = max(last, seconds)
+    return last
+
+
 def _probe_duration(path: str) -> float:
     for extra in (
         ["-show_entries", "format=duration"],
@@ -174,7 +236,9 @@ def _probe_duration(path: str) -> float:
                     return value
             except ValueError:
                 pass
-    return 0.0
+    # Header probes failed (e.g. MediaRecorder webm without duration metadata):
+    # fall back to a decode pass so the silence guard is not silently disabled.
+    return _probe_duration_by_decode(path)
 
 
 def _has_audio_stream(video_path: str) -> bool:
@@ -377,7 +441,7 @@ def _segments_to_srt(
     if mean_no_speech >= avg_no_speech_global_threshold:
         return ""
 
-    effective_min_cps = _chars_per_sec_threshold(language, detected_language)
+    effective_min_cps = _chars_per_sec_threshold(language, detected_language, ko_default=min_chars_per_sec)
 
     kept: list[tuple[float, float, str]] = []
     for seg in segments:
@@ -390,7 +454,7 @@ def _segments_to_srt(
         text = seg.get("text", "").strip()
         if not text:
             continue
-        if _contains_hallucination_phrase(text, language):
+        if _contains_hallucination_phrase(text, language, detected_language):
             continue
         seg_duration = float(seg.get("end", 0)) - float(seg.get("start", 0))
         if seg_duration > 0 and len(text) / seg_duration < effective_min_cps:
@@ -429,7 +493,7 @@ def _filter_srt_by_silence(
     for block in blocks:
         lines = block.strip().splitlines()
         ts_line = next(
-            (l for l in lines if _SRT_TIMESTAMP_LINE_RE.search(l)),
+            (line for line in lines if _SRT_TIMESTAMP_LINE_RE.search(line)),
             None,
         )
         if ts_line is None:
@@ -750,6 +814,12 @@ def generate_subtitle_for_video(
             language=language,
             detected_language=detected_language,
         )
+        # Drop any cue whose midpoint sits inside a detected silence stretch: Whisper
+        # still emits stock phrases over pauses that the global 90% guard does not
+        # catch in a partially-silent recording.
+        if srt_text.strip() and silence_ranges:
+            srt_text, silence_dropped = _filter_srt_by_silence(srt_text, silence_ranges)
+            metrics["segments_dropped_in_silence"] = silence_dropped
         kept_count = len([s for s in srt_text.strip().split("\n\n") if s.strip()]) if srt_text.strip() else 0
         metrics["segments_kept"] = kept_count
         metrics["segments_filtered"] = len(segments) - kept_count

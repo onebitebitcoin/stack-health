@@ -346,3 +346,108 @@ def test_segments_to_srt_auto_language_uses_detected_language() -> None:
     # auto + detected=ko → ko threshold (2.0) → passes
     srt_auto_ko = _segments_to_srt(segments, 0.45, -0.75, language="auto", detected_language="ko")
     assert "Good" in srt_auto_ko
+
+
+# ──────────────────────────────────────────────
+# H1: auto 모드 영어 환각 필터 (detected_language 반영)
+# ──────────────────────────────────────────────
+
+def test_contains_hallucination_phrase_auto_uses_detected_language() -> None:
+    """auto + 감지=en 이면 영어 시그니처로, 감지=ko 이면 한국어 시그니처로 판정한다."""
+    from tasks.subtitle import _contains_hallucination_phrase
+
+    # 영어 환각: 명시 en, auto+en, auto+full-name 'english' 모두 차단되어야 한다.
+    assert _contains_hallucination_phrase("Thanks for watching!", "en") is True
+    assert _contains_hallucination_phrase("Thanks for watching!", "auto", "en") is True
+    assert _contains_hallucination_phrase("Thanks for watching!", "auto", "english") is True
+    # auto인데 감지 정보가 없으면 보수적으로 한국어 시그니처 → 영어 문구는 통과(미차단).
+    assert _contains_hallucination_phrase("Thanks for watching!", "auto", None) is False
+    # 한국어 환각은 auto+ko / full-name 'korean' 모두 차단.
+    assert _contains_hallucination_phrase("구독, 좋아요 부탁드려요", "auto", "ko") is True
+    assert _contains_hallucination_phrase("구독, 좋아요 부탁드려요", "auto", "korean") is True
+
+
+def test_segments_to_srt_auto_detected_en_drops_english_hallucination() -> None:
+    """video 227 회귀의 영어판: auto 모드에서 영어로 감지되면 영어 환각이 burn-in 되면 안 된다."""
+    from tasks.subtitle import _segments_to_srt
+
+    segments = [
+        {
+            "id": 0, "start": 0.0, "end": 3.0,
+            "text": "Please like and subscribe to my channel.",
+            "no_speech_prob": 0.01, "avg_logprob": -0.2, "compression_ratio": 1.1,
+        },
+        {
+            "id": 1, "start": 3.0, "end": 5.0,
+            "text": "I just ran five kilometres today.",
+            "no_speech_prob": 0.01, "avg_logprob": -0.1, "compression_ratio": 1.0,
+        },
+    ]
+
+    # 과거: language='auto' 면 항상 KO 시그니처 → 영어 환각 통과(버그).
+    srt = _segments_to_srt(segments, 0.45, -0.75, language="auto", detected_language="english")
+
+    assert "subscribe" not in srt.lower()
+    assert "I just ran five kilometres" in srt
+
+
+def test_effective_language_normalizes_aliases() -> None:
+    """full-name/short-code 모두 단일 코드로 정규화된다."""
+    from tasks.subtitle import _effective_language
+
+    assert _effective_language("auto", "english") == "en"
+    assert _effective_language("auto", "korean") == "ko"
+    assert _effective_language("en") == "en"
+    assert _effective_language("auto", None) == "auto"
+    assert _effective_language(None) is None
+
+
+# ──────────────────────────────────────────────
+# L1: chars_per_sec 임계치의 ko_default 오버라이드
+# ──────────────────────────────────────────────
+
+def test_chars_per_sec_threshold_ko_default_override() -> None:
+    """ko_default 인자로 한국어(비영어) 임계치를 덮어쓸 수 있고, 영어는 영향받지 않는다."""
+    from tasks.subtitle import _chars_per_sec_threshold, SUBTITLE_MIN_CHARS_PER_SEC_EN
+
+    assert _chars_per_sec_threshold("ko", ko_default=3.3) == 3.3
+    assert _chars_per_sec_threshold("auto", detected_language="ko", ko_default=3.3) == 3.3
+    # 영어는 ko_default와 무관하게 EN 임계치 유지.
+    assert _chars_per_sec_threshold("en", ko_default=3.3) == SUBTITLE_MIN_CHARS_PER_SEC_EN
+
+
+# ──────────────────────────────────────────────
+# M1: header 프로브 실패 시 디코드 기반 duration 복구
+# ──────────────────────────────────────────────
+
+def test_probe_duration_falls_back_to_decode_when_header_missing() -> None:
+    """ffprobe header가 N/A(예: MediaRecorder webm)면 디코드 패스로 duration을 복구한다."""
+    from tasks import subtitle
+
+    probe_result = type("R", (), {"stdout": "N/A\n", "returncode": 0})()
+    decode_stderr = (
+        "frame=  100 fps=0.0 q=-1.0 time=00:00:03.50 bitrate=N/A\n"
+        "frame=  200 fps=0.0 q=-1.0 time=00:00:07.25 bitrate=N/A\n"
+    )
+    decode_result = type("R", (), {"stderr": decode_stderr, "returncode": 1})()
+
+    calls: list = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd[0])
+        # ffprobe header probes → N/A, ffmpeg decode → timestamps
+        return decode_result if cmd[0] == "ffmpeg" else probe_result
+
+    with patch("tasks.subtitle.subprocess.run", side_effect=fake_run):
+        duration = subtitle._probe_duration("rec.webm")
+
+    assert duration == pytest.approx(7.25)
+    assert "ffmpeg" in calls  # decode fallback was actually exercised
+
+
+def test_probe_duration_by_decode_returns_zero_on_failure() -> None:
+    """디코드 폴백도 실패하면 0.0 (호출자가 자체 처리하도록)."""
+    from tasks.subtitle import _probe_duration_by_decode
+
+    with patch("tasks.subtitle.subprocess.run", side_effect=OSError("boom")):
+        assert _probe_duration_by_decode("rec.webm") == 0.0
