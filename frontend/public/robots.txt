@@ -1,0 +1,89 @@
+# Stack Health — https://stackhealth.life
+# robots.txt
+
+# ── 일반 크롤러 ──────────────────────────────────────────────
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /setup-username
+Disallow: /upload
+Disallow: /settings
+Disallow: /profile
+Disallow: /my-challenges
+
+# ── Google ───────────────────────────────────────────────────
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: Googlebot-Video
+Allow: /
+
+# Google AI (Gemini 학습용 크롤러)
+User-agent: Google-Extended
+Allow: /
+
+# ── AI 크롤러 (ChatGPT / Perplexity / Claude 등) ─────────────
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: omgili
+Allow: /
+
+# ── Bing / Microsoft ─────────────────────────────────────────
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+User-agent: msnbot
+Allow: /
+
+# ── SNS 미리보기 크롤러 ───────────────────────────────────────
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: Kakaotalk-Scrap
+Allow: /
+
+# ── 스팸/스크레이퍼 차단 ──────────────────────────────────────
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+# ── Sitemap ──────────────────────────────────────────────────
+Sitemap: https://stackhealth.life/sitemap.xml

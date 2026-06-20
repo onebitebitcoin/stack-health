@@ -6,8 +6,16 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <title>Stack Health | 나의 운동을 기록하자</title>
-    <meta name="description" content="나의 운동을 기록하자" />
+
+    <!-- ── 기본 SEO ──────────────────────────────────────────────── -->
+    <title>Stack Health | 운동하고 비트코인 받자 — 운동 영상 공유 피트니스 SNS</title>
+    <meta name="description" content="운동 영상을 업로드하고 비트코인(사토시)을 받으세요. 헬스·홈트·러닝 등 모든 운동을 기록하고, 챌린지에 참여하고, 커뮤니티와 함께 성장하는 피트니스 소셜 플랫폼." />
+    <meta name="keywords" content="운동 비트코인, 헬스 앱, 운동 영상 공유, 피트니스 SNS, 비트코인 리워드, 사토시, 헬스 챌린지, 운동 기록, 홈트레이닝, 스택헬스" />
+    <meta name="author" content="Stack Health" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <link rel="canonical" href="https://stackhealth.life/" />
+
+    <!-- ── 테마 / 아이콘 ──────────────────────────────────────────── -->
     <meta name="theme-color" content="#0D0D0D" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
@@ -16,18 +24,93 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Stack Health" />
     <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- ── Open Graph (SNS / 카카오톡 / 링크 미리보기) ─────────────── -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Stack Health" />
-    <meta property="og:title" content="Stack Health | 나의 운동을 기록하자" />
-    <meta property="og:description" content="나의 운동을 기록하자" />
-    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:url" content="https://stackhealth.life/" />
+    <meta property="og:title" content="Stack Health | 운동하고 비트코인 받자" />
+    <meta property="og:description" content="운동 영상을 업로드하고 비트코인(사토시)을 받으세요. 헬스·홈트·러닝 등 모든 운동을 기록하고, 챌린지에 참여하고, 커뮤니티와 함께 성장하는 피트니스 소셜 플랫폼." />
+    <meta property="og:image" content="https://stackhealth.life/og-image.png" />
+    <meta property="og:image:secure_url" content="https://stackhealth.life/og-image.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Stack Health — 운동하고 비트코인 받자" />
+
+    <!-- ── Twitter / X 카드 ──────────────────────────────────────── -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Stack Health" />
-    <meta name="twitter:description" content="나의 운동을 기록하자" />
-    <meta name="twitter:image" content="/og-image.png" />
+    <meta name="twitter:title" content="Stack Health | 운동하고 비트코인 받자" />
+    <meta name="twitter:description" content="운동 영상을 업로드하고 비트코인(사토시)을 받으세요. 헬스·홈트·러닝·챌린지 피트니스 SNS." />
+    <meta name="twitter:image" content="https://stackhealth.life/og-image.png" />
+    <meta name="twitter:image:alt" content="Stack Health — 운동하고 비트코인 받자" />
+
+    <!-- ── JSON-LD Structured Data ─────────────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://stackhealth.life/#website",
+          "url": "https://stackhealth.life/",
+          "name": "Stack Health",
+          "description": "운동 영상 공유 + 비트코인 리워드 피트니스 소셜 플랫폼",
+          "inLanguage": "ko-KR",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://stackhealth.life/?q={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://stackhealth.life/#organization",
+          "name": "Stack Health",
+          "url": "https://stackhealth.life/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://stackhealth.life/favicon-192.png",
+            "width": 192,
+            "height": 192
+          },
+          "description": "운동하고 비트코인 받자 — 운동 영상을 공유하고 비트코인 라이트닝 네트워크 기반 사토시 리워드를 받는 피트니스 소셜 플랫폼",
+          "sameAs": [
+            "https://stackhealth.life/team"
+          ]
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://stackhealth.life/#webapp",
+          "name": "Stack Health",
+          "url": "https://stackhealth.life/",
+          "applicationCategory": "HealthApplication",
+          "operatingSystem": "Web, Android, iOS",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "KRW"
+          },
+          "description": "운동 영상을 업로드하고 비트코인(사토시)을 받을 수 있는 피트니스 소셜 플랫폼. 헬스 챌린지 참여, 운동 기록 공유.",
+          "featureList": [
+            "운동 영상 업로드 및 공유",
+            "비트코인 라이트닝 리워드",
+            "헬스 챌린지",
+            "커뮤니티 피드",
+            "운동 기록 히스토리"
+          ],
+          "inLanguage": "ko-KR",
+          "publisher": {
+            "@id": "https://stackhealth.life/#organization"
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
