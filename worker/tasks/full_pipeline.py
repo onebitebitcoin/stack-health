@@ -395,7 +395,6 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
             merge_result = run_image_merge({"video_r2_key": current_key, "proof_r2_key": proof_r2_key})
         except Exception as e:
             raise RuntimeError("증거 사진 이미지 머지 실패 — 업로드 취소") from e
-        # 원본 영상은 보존 — 중간 산출물(오디오 머지 결과 등)만 삭제
         if current_key != original_video_r2_key:
             try:
                 r2.delete_object(Bucket=R2_BUCKET_NAME, Key=current_key)
@@ -416,10 +415,11 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     compress_result = _compress_video(r2, current_key, mute_video=mute_video_audio)
     if compress_result:
         compressed_key, pre_size_bytes, post_size_bytes, video_meta = compress_result
-        try:
-            r2.delete_object(Bucket=R2_BUCKET_NAME, Key=pre_compress_key)
-        except Exception:
-            pass
+        if pre_compress_key != original_video_r2_key:
+            try:
+                r2.delete_object(Bucket=R2_BUCKET_NAME, Key=pre_compress_key)
+            except Exception:
+                pass
         current_key = compressed_key
         logger.info("[full-pipeline] job=%s compressed → %s (%dB → %dB)", job_id, current_key, pre_size_bytes, post_size_bytes)
 
@@ -466,10 +466,11 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     subtitle_metrics = subtitle_metrics_json(subtitle_result)
     if subtitle_status == "completed" and subtitle_result.burned_video_r2_key:
         current_key = subtitle_result.burned_video_r2_key
-        try:
-            r2.delete_object(Bucket=R2_BUCKET_NAME, Key=pre_subtitle_key)
-        except Exception:
-            pass
+        if pre_subtitle_key != original_video_r2_key:
+            try:
+                r2.delete_object(Bucket=R2_BUCKET_NAME, Key=pre_subtitle_key)
+            except Exception:
+                pass
         logger.info("[full-pipeline] job=%s subtitle burn-in → %s", job_id, current_key)
     elif subtitle_status == "completed":
         subtitle_status = "failed"
