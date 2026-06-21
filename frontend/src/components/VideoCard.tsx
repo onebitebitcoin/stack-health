@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock, Share2 } from 'lucide-react'
+import { Heart, MessageCircle, Volume2, VolumeX, Pause, Play, Clock, Share2, Rewind, FastForward } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
 import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
@@ -9,6 +9,10 @@ import type { Post, FeedResponse } from '../api/types'
 import TagChip from './TagChip'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
+
+// 더블탭 시크: 왼쪽 -3초 / 오른쪽 +3초 (쇼츠 표준)
+const SEEK_SECONDS = 3
+const DOUBLE_TAP_MS = 280
 
 interface VideoCardProps {
   post: Post
@@ -35,10 +39,14 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   useEffect(() => { setLikeCount(post.like_count) }, [post.like_count])
   const [isPaused, setIsPaused] = useState(false)
   const [flashIcon, setFlashIcon] = useState<'play' | 'pause' | null>(null)
+  const [seekFlash, setSeekFlash] = useState<'left' | 'right' | null>(null)
   const [progress, setProgress] = useState(0)
   const [isScrubbing, setIsScrubbing] = useState(false)
   const [isLandscape, setIsLandscape] = useState(false)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const seekFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastTap = useRef<{ time: number; side: 'left' | 'right' } | null>(null)
   const isDragging = useRef(false)
   const progressBarRef = useRef<HTMLDivElement>(null)
   const isLikePending = useRef(false)
@@ -92,6 +100,8 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
 
   useEffect(() => () => {
     if (flashTimer.current) clearTimeout(flashTimer.current)
+    if (seekFlashTimer.current) clearTimeout(seekFlashTimer.current)
+    if (singleTapTimer.current) clearTimeout(singleTapTimer.current)
   }, [])
 
   const seekToRatio = useCallback((clientX: number) => {
@@ -141,6 +151,38 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
     if (flashTimer.current) clearTimeout(flashTimer.current)
     flashTimer.current = setTimeout(() => setFlashIcon(null), 600)
   }, [])
+
+  const seekBy = useCallback((side: 'left' | 'right') => {
+    const video = videoRef.current
+    if (!video || !video.duration) return
+    const delta = side === 'left' ? -SEEK_SECONDS : SEEK_SECONDS
+    video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + delta))
+    setSeekFlash(side)
+    if (seekFlashTimer.current) clearTimeout(seekFlashTimer.current)
+    seekFlashTimer.current = setTimeout(() => setSeekFlash(null), 500)
+  }, [])
+
+  // 영역 탭 처리: 같은 영역 DOUBLE_TAP_MS 이내 재탭이면 더블탭(시크), 아니면 단일탭(재생/일시정지)
+  const handleAreaTap = useCallback((side: 'left' | 'right') => {
+    const now = Date.now()
+    const prev = lastTap.current
+    if (prev && prev.side === side && now - prev.time < DOUBLE_TAP_MS) {
+      if (singleTapTimer.current) {
+        clearTimeout(singleTapTimer.current)
+        singleTapTimer.current = null
+      }
+      lastTap.current = null
+      seekBy(side)
+      return
+    }
+    lastTap.current = { time: now, side }
+    if (singleTapTimer.current) clearTimeout(singleTapTimer.current)
+    singleTapTimer.current = setTimeout(() => {
+      singleTapTimer.current = null
+      lastTap.current = null
+      handleTap()
+    }, DOUBLE_TAP_MS)
+  }, [seekBy, handleTap])
 
   const handleLike = useCallback(async () => {
     if (!token) {
@@ -200,12 +242,29 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
         )}
       </video>
 
-      {/* 탭 오버레이 */}
-      <div
-        className="absolute inset-0"
-        onClick={handleTap}
-        style={{ zIndex: 1 }}
-      />
+      {/* 탭 오버레이 — 좌/우 분리 (단일탭: 재생/일시정지, 더블탭: 시크) */}
+      <div className="absolute inset-0 flex" style={{ zIndex: 1 }}>
+        <div className="flex-1" onClick={() => handleAreaTap('left')} />
+        <div className="flex-1" onClick={() => handleAreaTap('right')} />
+      </div>
+
+      {/* 더블탭 시크 플래시 */}
+      {seekFlash && (
+        <div
+          className={clsx(
+            'absolute inset-y-0 flex w-1/2 items-center justify-center pointer-events-none',
+            seekFlash === 'left' ? 'left-0' : 'right-0',
+          )}
+          style={{ zIndex: 2 }}
+        >
+          <div className="flex flex-col items-center gap-1 rounded-full bg-black/50 px-5 py-4 animate-ping-once">
+            {seekFlash === 'left'
+              ? <Rewind size={32} className="text-white fill-white" />
+              : <FastForward size={32} className="text-white fill-white" />}
+            <span className="text-xs font-semibold text-white">{SEEK_SECONDS}s</span>
+          </div>
+        </div>
+      )}
 
       {/* 일시정지/재생 아이콘 플래시 */}
       {flashIcon && (
