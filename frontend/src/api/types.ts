@@ -75,11 +75,13 @@ export interface Comment {
   id: number
   post_id: number
   user_id: number
+  parent_id: number | null
   username: string
   avatar_url: string | null
   profile_color: string | null
   content: string
   created_at: string
+  replies?: Comment[]
 }
 
 export interface HistoryWorkoutPost {

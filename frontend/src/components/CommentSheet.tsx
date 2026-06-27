@@ -15,6 +15,47 @@ interface CommentSheetProps {
   onLoginRequired: () => void
 }
 
+interface CommentRowProps {
+  comment: Comment
+  canDelete: boolean
+  onReply: (c: Comment) => void
+  onDelete: (c: Comment) => void
+}
+
+function CommentRow({ comment, canDelete, onReply, onDelete }: CommentRowProps) {
+  const { t } = useTranslation('feed')
+  return (
+    <div className="flex items-start gap-2">
+      <UserAvatar
+        username={comment.username}
+        avatarUrl={comment.avatar_url}
+        profileColor={comment.profile_color}
+        size={28}
+        className="shrink-0 mt-0.5"
+      />
+      <div className="flex-1 min-w-0">
+        <span className="text-xs font-semibold text-zinc-300">@{comment.username}</span>
+        <p className="text-sm text-white mt-0.5 break-words">{comment.content}</p>
+        <button
+          type="button"
+          onClick={() => onReply(comment)}
+          className="text-xs text-zinc-500 hover:text-zinc-300 mt-1"
+        >
+          {t('replyButton')}
+        </button>
+      </div>
+      {canDelete && (
+        <button
+          onClick={() => onDelete(comment)}
+          className="text-zinc-600 hover:text-red-400 mt-1 shrink-0"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function CommentSheet({ postId, open, onClose, onLoginRequired }: CommentSheetProps) {
   const { t } = useTranslation('feed')
   const qc = useQueryClient()
@@ -22,6 +63,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
   const user = useAuthStore((s) => s.user)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [hasContent, setHasContent] = useState(false)
+  const [replyTo, setReplyTo] = useState<{ id: number; username: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const isComposingRef = useRef(false)
@@ -59,6 +101,9 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
     enabled: open,
   })
 
+  // 답글 포함 전체 개수 (헤더 표시용)
+  const totalCount = comments.reduce((sum, c) => sum + 1 + (c.replies?.length ?? 0), 0)
+
   function updateFeedCommentCount(delta: number) {
     qc.setQueriesData<InfiniteData<FeedResponse>>(
       { queryKey: ['feed'] },
@@ -84,13 +129,17 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
   }
 
   const addComment = useMutation({
-    mutationFn: async (text: string) => {
-      await client.post(`/feed/${postId}/comments`, { content: text })
+    mutationFn: async ({ text, parentId }: { text: string; parentId: number | null }) => {
+      await client.post(`/feed/${postId}/comments`, {
+        content: text,
+        parent_id: parentId ?? undefined,
+      })
     },
     onSuccess: () => {
       if (inputRef.current) inputRef.current.value = ''
       setHasContent(false)
       setSubmitError(null)
+      setReplyTo(null)
       qc.invalidateQueries({ queryKey: ['comments', postId] }).catch(() => undefined)
       updateFeedCommentCount(1)
     },
@@ -103,18 +152,34 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
   })
 
   const deleteComment = useMutation({
-    mutationFn: async (commentId: number) => {
-      await client.delete(`/feed/${postId}/comments/${commentId}`)
+    mutationFn: async (c: Comment) => {
+      await client.delete(`/feed/${postId}/comments/${c.id}`)
+      // 최상위 댓글 삭제 시 딸린 답글도 함께 삭제되므로 그 수만큼 차감
+      return 1 + (c.replies?.length ?? 0)
     },
-    onSuccess: () => {
+    onSuccess: (removed) => {
       qc.invalidateQueries({ queryKey: ['comments', postId] }).catch(() => undefined)
-      updateFeedCommentCount(-1)
+      updateFeedCommentCount(-removed)
     },
   })
 
   useEffect(() => {
     if (open) inputRef.current?.focus()
   }, [open])
+
+  // 시트가 닫히면 답글 상태 초기화
+  useEffect(() => {
+    if (!open) setReplyTo(null)
+  }, [open])
+
+  function startReply(c: Comment) {
+    if (!token) {
+      onLoginRequired()
+      return
+    }
+    setReplyTo({ id: c.id, username: c.username })
+    inputRef.current?.focus()
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -130,7 +195,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       return
     }
     setSubmitError(null)
-    addComment.mutate(text)
+    addComment.mutate({ text, parentId: replyTo?.id ?? null })
   }
 
   return (
@@ -159,7 +224,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-          <span className="font-semibold text-white">{t('commentCount', { count: comments.length })}</span>
+          <span className="font-semibold text-white">{t('commentCount', { count: totalCount })}</span>
           <button onClick={onClose} className="text-zinc-400 hover:text-white">
             <X size={20} />
           </button>
@@ -171,25 +236,25 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
             <p className="text-center text-zinc-500 py-8 text-sm">{t('commentEmpty')}</p>
           )}
           {comments.map((c) => (
-            <div key={c.id} className="flex items-start gap-2">
-              <UserAvatar
-                username={c.username}
-                avatarUrl={c.avatar_url}
-                profileColor={c.profile_color}
-                size={28}
-                className="shrink-0 mt-0.5"
+            <div key={c.id} className="space-y-2">
+              <CommentRow
+                comment={c}
+                canDelete={!!user && user.id === c.user_id}
+                onReply={startReply}
+                onDelete={(target) => deleteComment.mutate(target)}
               />
-              <div className="flex-1">
-                <span className="text-xs font-semibold text-zinc-300">@{c.username}</span>
-                <p className="text-sm text-white mt-0.5 break-words">{c.content}</p>
-              </div>
-              {user && user.id === c.user_id && (
-                <button
-                  onClick={() => deleteComment.mutate(c.id)}
-                  className="text-zinc-600 hover:text-red-400 mt-1 shrink-0"
-                >
-                  <Trash2 size={14} />
-                </button>
+              {c.replies && c.replies.length > 0 && (
+                <div className="ml-8 space-y-2 border-l border-zinc-800 pl-3">
+                  {c.replies.map((r) => (
+                    <CommentRow
+                      key={r.id}
+                      comment={r}
+                      canDelete={!!user && user.id === r.user_id}
+                      onReply={startReply}
+                      onDelete={(target) => deleteComment.mutate(target)}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           ))}
@@ -197,6 +262,18 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
 
         {/* Input */}
         <form onSubmit={handleSubmit} className="flex flex-col px-4 py-3 border-t border-zinc-800 pb-safe gap-1">
+          {replyTo && (
+            <div className="flex items-center justify-between px-1 text-xs text-zinc-400">
+              <span>{t('replyingTo', { username: replyTo.username })}</span>
+              <button
+                type="button"
+                onClick={() => setReplyTo(null)}
+                className="text-zinc-500 hover:text-white"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
           {submitError && (
             <p className="text-xs text-red-400 px-1">{submitError}</p>
           )}
@@ -209,7 +286,13 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
             }}
             onCompositionStart={() => { isComposingRef.current = true }}
             onCompositionEnd={() => { isComposingRef.current = false }}
-            placeholder={token ? t('commentPlaceholder') : t('commentLoginPlaceholder')}
+            placeholder={
+              !token
+                ? t('commentLoginPlaceholder')
+                : replyTo
+                  ? t('replyPlaceholder')
+                  : t('commentPlaceholder')
+            }
             className="flex-1 rounded-full bg-zinc-800 px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none"
             maxLength={500}
           />

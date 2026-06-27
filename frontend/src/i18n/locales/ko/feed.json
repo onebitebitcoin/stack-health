@@ -15,6 +15,9 @@
   "commentLoginPlaceholder": "로그인 후 댓글을 작성하세요",
   "commentTooShort": "댓글은 5자 이상 입력해주세요",
   "commentSubmitError": "댓글 작성에 실패했습니다",
+  "replyButton": "답글",
+  "replyingTo": "@{{username}}에게 답글",
+  "replyPlaceholder": "답글 입력...",
   "shareLinkFallback": "공유 링크: ",
   "subtitleTrackLabel": "자막"
 }
