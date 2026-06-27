@@ -12,6 +12,7 @@ from app.config import settings as app_settings
 from app.database import get_db
 from app.models.challenge import ChallengeParticipation
 from app.models.comment import Comment
+from app.models.notification import Notification
 from app.models.post import Post
 from app.models.post_like import PostLike
 from app.models.post_view import PostView
@@ -441,6 +442,7 @@ def delete_post(
 
     video = db.query(Video).filter(Video.id == post.video_id).first()
 
+    db.query(Notification).filter(Notification.post_id == post_id).delete()
     db.query(PostView).filter(PostView.post_id == post_id).delete()
     db.query(PostLike).filter(PostLike.post_id == post_id).delete()
     db.query(Comment).filter(Comment.post_id == post_id).delete()

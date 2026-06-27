@@ -11,6 +11,7 @@ from app.models.admin_log import AdminLog
 from app.models.app_links import AppLinks
 from app.models.challenge import Challenge, ChallengeParticipation
 from app.models.comment import Comment
+from app.models.notification import Notification
 from app.models.post import Post
 from app.models.post_like import PostLike
 from app.models.post_view import PostView
@@ -146,6 +147,7 @@ def delete_video(
 
     post = db.query(Post).filter(Post.video_id == video_id).first()
     if post:
+        db.query(Notification).filter(Notification.post_id == post.id).delete()
         db.query(PostView).filter(PostView.post_id == post.id).delete()
         db.query(PostLike).filter(PostLike.post_id == post.id).delete()
         db.query(Comment).filter(Comment.post_id == post.id).delete()
@@ -289,6 +291,9 @@ def delete_user(
     r2_keys = [v.r2_key for v in videos]
 
     video_ids = [v.id for v in videos]
+    db.query(Notification).filter(
+        or_(Notification.user_id == user_id, Notification.actor_id == user_id)
+    ).delete(synchronize_session=False)
     if video_ids:
         post_id_subq = db.query(Post.id).filter(Post.video_id.in_(video_ids))
         db.query(PostView).filter(PostView.post_id.in_(post_id_subq)).delete(synchronize_session=False)
