@@ -179,7 +179,8 @@ def test_weekly_leaderboard_ignores_client_timezone_header(client: TestClient, d
 
     token, user = _register(client, "tzboard@x.com", "tzboard")
     assert token
-    week_start_utc, _week_end_utc = get_week_range(UTC)
+    from app.services.reward import KST
+    week_start_utc, _week_end_utc = get_week_range(KST)
     db.add(RewardPoint(
         user_id=user["id"],
         points=12,
