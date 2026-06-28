@@ -33,5 +33,15 @@
   "userDetailAccumPoints": "누적 포인트",
   "userDetailChallenges": "챌린지 ({{count}})",
   "userDetailVideoCount": "총 업로드: {{count}}개",
-  "challengeProgress": "{{upload}}/{{total}}"
+  "challengeProgress": "{{upload}}/{{total}}",
+  "tabChallenges": "챌린지",
+  "noChallenges": "챌린지가 없습니다",
+  "totalChallenges": "전체 {{count}}개",
+  "challengeParticipants": "{{count}}명 참여",
+  "challengeStatusActive": "진행중",
+  "challengeStatusClosed": "종료됨",
+  "closeChallengeButton": "종료",
+  "closingChallenge": "종료 중...",
+  "closeChallengeTitle": "챌린지 종료",
+  "closeChallengeBody": "종료하면 새로운 참여가 불가능해지며 되돌릴 수 없습니다."
 }

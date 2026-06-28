@@ -1,13 +1,28 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft, RefreshCw, ClipboardList } from 'lucide-react'
+import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft, RefreshCw, ClipboardList, Dumbbell, XCircle } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { AdminVideo, AdminUsersResponse } from '../api/types'
 import { useAuthStore } from '../store/auth'
 
-type TabId = 'users' | 'videos'
+type TabId = 'users' | 'videos' | 'challenges'
+
+interface AdminChallenge {
+  id: number
+  title: string
+  creator_username: string | null
+  is_active: boolean
+  participant_count: number
+  created_at: string | null
+  end_date: string | null
+}
+
+interface AdminChallengesResponse {
+  challenges: AdminChallenge[]
+  total: number
+}
 
 interface AdminVideosResponse {
   videos: AdminVideo[]
@@ -105,6 +120,7 @@ export default function AdminPage() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [deleteVideoConfirmId, setDeleteVideoConfirmId] = useState<number | null>(null)
   const [deleteUserConfirm, setDeleteUserConfirm] = useState<{ id: number; username: string } | null>(null)
+  const [closeChallengeConfirm, setCloseChallengeConfirm] = useState<{ id: number; title: string } | null>(null)
   const [userPage, setUserPage] = useState(1)
   const [userSearchInput, setUserSearchInput] = useState('')
   const [userSearch, setUserSearch] = useState('')
@@ -164,6 +180,25 @@ export default function AdminPage() {
     },
   })
 
+  const { data: challengesData, isLoading: challengesLoading, isError: challengesError } = useQuery<AdminChallengesResponse>({
+    queryKey: ['admin-challenges'],
+    queryFn: async () => {
+      const res = await client.get<{ data: AdminChallengesResponse }>('/admin/challenges')
+      return res.data.data
+    },
+    enabled: isAdmin && activeTab === 'challenges',
+  })
+  const challenges = challengesData?.challenges ?? []
+
+  const closeChallenge = useMutation({
+    mutationFn: (id: number) => client.delete(`/challenges/${id}`),
+    onSuccess: (_, id) => {
+      qc.setQueryData<AdminChallengesResponse>(['admin-challenges'], (old) =>
+        old ? { ...old, challenges: old.challenges.map((c) => c.id === id ? { ...c, is_active: false } : c) } : old
+      )
+    },
+  })
+
   if (!isAdmin) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page">
@@ -175,6 +210,7 @@ export default function AdminPage() {
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'users', label: t('tabUsers'), icon: <User size={14} /> },
     { id: 'videos', label: t('tabVideos'), icon: <Video size={14} /> },
+    { id: 'challenges', label: t('tabChallenges'), icon: <Dumbbell size={14} /> },
   ]
 
   return (
@@ -429,6 +465,52 @@ export default function AdminPage() {
         </div>
       )}
 
+      {activeTab === 'challenges' && (
+        <div className="space-y-3">
+          {!challengesLoading && !challengesError && challengesData && (
+            <p className="text-xs text-theme-muted px-1">{t('totalChallenges', { count: challengesData.total })}</p>
+          )}
+          {challengesLoading && <p className="text-center text-theme-muted py-10">{t('loading')}</p>}
+          {!challengesLoading && challengesError && <p className="text-center text-red-400 py-10">{t('loadFailed')}</p>}
+          {!challengesLoading && !challengesError && challenges.length === 0 && (
+            <p className="text-center text-theme-subtle py-10">{t('noChallenges')}</p>
+          )}
+          {challenges.map((c) => (
+            <div key={c.id} className="rounded-xl bg-theme-surface p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-theme-primary truncate">{c.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-theme-muted">
+                    {c.creator_username && <span>@{c.creator_username}</span>}
+                    <span>·</span>
+                    <span>{t('challengeParticipants', { count: c.participant_count })}</span>
+                    {c.end_date && (
+                      <>
+                        <span>·</span>
+                        <span>{new Date(c.end_date).toLocaleDateString('ko-KR')}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${c.is_active ? 'bg-accent/15 text-accent' : 'bg-zinc-700/50 text-theme-muted'}`}>
+                  {c.is_active ? t('challengeStatusActive') : t('challengeStatusClosed')}
+                </span>
+              </div>
+              {c.is_active && (
+                <button
+                  onClick={() => setCloseChallengeConfirm({ id: c.id, title: c.title })}
+                  disabled={closeChallenge.isPending}
+                  className="flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  <XCircle size={12} />
+                  {t('closeChallengeButton')}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {selectedUserId !== null && (
         <UserDetailPanel userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
       )}
@@ -446,6 +528,26 @@ export default function AdminPage() {
                 className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {deleteVideo.isPending ? t('deletingVideo') : t('deleteButton')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {closeChallengeConfirm !== null && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setCloseChallengeConfirm(null)}>
+          <div className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-bold text-theme-primary mb-1">{t('closeChallengeTitle')}</p>
+            <p className="text-sm text-theme-muted mb-1">"{closeChallengeConfirm.title}"</p>
+            <p className="text-sm text-theme-muted mb-5">{t('closeChallengeBody')}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setCloseChallengeConfirm(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">{t('cancel')}</button>
+              <button
+                onClick={() => { closeChallenge.mutate(closeChallengeConfirm.id); setCloseChallengeConfirm(null) }}
+                disabled={closeChallenge.isPending}
+                className="flex-1 rounded-xl bg-orange-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {closeChallenge.isPending ? t('closingChallenge') : t('closeChallengeButton')}
               </button>
             </div>
           </div>

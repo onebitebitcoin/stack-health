@@ -33,5 +33,15 @@
   "userDetailAccumPoints": "Total Points",
   "userDetailChallenges": "Challenges ({{count}})",
   "userDetailVideoCount": "Total uploads: {{count}}",
-  "challengeProgress": "{{upload}}/{{total}}"
+  "challengeProgress": "{{upload}}/{{total}}",
+  "tabChallenges": "Challenges",
+  "noChallenges": "No challenges yet",
+  "totalChallenges": "{{count}} total",
+  "challengeParticipants": "{{count}} participants",
+  "challengeStatusActive": "Active",
+  "challengeStatusClosed": "Closed",
+  "closeChallengeButton": "Close",
+  "closingChallenge": "Closing...",
+  "closeChallengeTitle": "Close Challenge",
+  "closeChallengeBody": "This will prevent new participants from joining and cannot be undone."
 }

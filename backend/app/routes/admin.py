@@ -407,6 +407,43 @@ def get_user_detail(
     }
 
 
+@router.get("/challenges")
+def admin_list_challenges(
+    db: Session = Depends(get_db),
+    _: User | None = Depends(require_admin),
+) -> dict:
+    challenges = db.query(Challenge).order_by(Challenge.created_at.desc()).all()
+
+    creator_ids = list({c.creator_id for c in challenges if c.creator_id})
+    creator_map: dict[int, User] = {}
+    if creator_ids:
+        creator_map = {u.id: u for u in db.query(User).filter(User.id.in_(creator_ids)).all()}
+
+    participant_counts: dict[int, int] = dict(
+        db.query(ChallengeParticipation.challenge_id, func.count(ChallengeParticipation.id))
+        .group_by(ChallengeParticipation.challenge_id)
+        .all()
+    )
+
+    return {
+        "data": {
+            "challenges": [
+                {
+                    "id": c.id,
+                    "title": c.title,
+                    "creator_username": creator_map[c.creator_id].username if c.creator_id and c.creator_id in creator_map else None,
+                    "is_active": c.is_active,
+                    "participant_count": participant_counts.get(c.id, 0),
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
+                    "end_date": c.end_date.isoformat() if c.end_date else None,
+                }
+                for c in challenges
+            ],
+            "total": len(challenges),
+        }
+    }
+
+
 @router.get("/weekly-summary")
 def weekly_summary(
     page: int = 1,
