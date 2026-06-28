@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Dumbbell, Users, CheckCircle, CalendarDays,
-  Edit2, UserCircle, Droplets, Play, TrendingUp, CircleCheck, XCircle,
+  Edit2, UserCircle, Droplets, Play, TrendingUp, CircleCheck, XCircle, Trash2,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
@@ -48,6 +48,7 @@ export default function ChallengeDetailPage() {
   const user = useAuthStore((s) => s.user)
   const { t } = useTranslation('challenge')
   const qc = useQueryClient()
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [actionError, setActionError] = useState('')
@@ -127,6 +128,19 @@ export default function ChallengeDetailPage() {
     },
   })
 
+  const closeMutation = useMutation({
+    mutationFn: () => client.patch(`/challenges/${id}/close`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['challenges'] }).catch(() => undefined)
+      qc.invalidateQueries({ queryKey: ['my-challenges'] }).catch(() => undefined)
+      navigate('/challenges', { replace: true })
+    },
+    onError: (e: unknown) => {
+      setShowDeleteConfirm(false)
+      setActionError(getApiErrorMessage(e, t('detail.deleteError')))
+    },
+  })
+
   const deleteMutation = useMutation({
     mutationFn: () => client.delete(`/challenges/${id}`),
     onSuccess: () => {
@@ -136,7 +150,7 @@ export default function ChallengeDetailPage() {
     },
     onError: (e: unknown) => {
       setShowDeleteConfirm(false)
-      setActionError(getApiErrorMessage(e, t('detail.deleteError')))
+      setActionError(getApiErrorMessage(e, t('detail.hardDeleteError')))
     },
   })
 
@@ -178,13 +192,23 @@ export default function ChallengeDetailPage() {
             >
               <Edit2 size={17} />
             </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="text-orange-400 flex-shrink-0 p-1"
-              aria-label={t('detail.deleteLabel')}
-            >
-              <XCircle size={17} />
-            </button>
+            {challenge.is_active ? (
+              <button
+                onClick={() => setShowCloseConfirm(true)}
+                className="text-orange-400 flex-shrink-0 p-1"
+                aria-label={t('detail.closeLabel')}
+              >
+                <XCircle size={17} />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-red-400 flex-shrink-0 p-1"
+                aria-label={t('detail.deleteLabel')}
+              >
+                <Trash2 size={17} />
+              </button>
+            )}
           </>
         )}
       </div>
@@ -486,7 +510,37 @@ export default function ChallengeDetailPage() {
         </div>
       )}
 
-      {/* delete confirm */}
+      {/* close confirm */}
+      {showCloseConfirm && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowCloseConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl bg-theme-surface p-5 flex flex-col gap-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <p className="font-semibold text-theme-primary">{t('detail.closeConfirmTitle')}</p>
+              <p className="text-xs text-theme-muted mt-1">{t('detail.closeConfirmDesc')}</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowCloseConfirm(false)} className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted">
+                {t('common:cancel')}
+              </button>
+              <button
+                onClick={() => closeMutation.mutate()}
+                disabled={closeMutation.isPending}
+                className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {closeMutation.isPending ? t('detail.closing') : t('detail.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* hard delete confirm */}
       {showDeleteConfirm && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
@@ -501,10 +555,7 @@ export default function ChallengeDetailPage() {
               <p className="text-xs text-theme-muted mt-1">{t('detail.deleteConfirmDesc')}</p>
             </div>
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted"
-              >
+              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 rounded-xl bg-theme-surface2 py-2.5 text-sm text-theme-muted">
                 {t('common:cancel')}
               </button>
               <button

@@ -190,11 +190,22 @@ export default function AdminPage() {
   })
   const challenges = challengesData?.challenges ?? []
 
+  const [deleteAdminChallengeConfirm, setDeleteAdminChallengeConfirm] = useState<{ id: number; title: string } | null>(null)
+
   const closeChallenge = useMutation({
-    mutationFn: (id: number) => client.delete(`/challenges/${id}`),
+    mutationFn: (id: number) => client.patch(`/challenges/${id}/close`),
     onSuccess: (_, id) => {
       qc.setQueryData<AdminChallengesResponse>(['admin-challenges'], (old) =>
         old ? { ...old, challenges: old.challenges.map((c) => c.id === id ? { ...c, is_active: false } : c) } : old
+      )
+    },
+  })
+
+  const deleteAdminChallenge = useMutation({
+    mutationFn: (id: number) => client.delete(`/challenges/${id}`),
+    onSuccess: (_, id) => {
+      qc.setQueryData<AdminChallengesResponse>(['admin-challenges'], (old) =>
+        old ? { ...old, challenges: old.challenges.filter((c) => c.id !== id), total: (old.total ?? 1) - 1 } : old
       )
     },
   })
@@ -496,16 +507,28 @@ export default function AdminPage() {
                   {c.is_active ? t('challengeStatusActive') : t('challengeStatusClosed')}
                 </span>
               </div>
-              {c.is_active && (
-                <button
-                  onClick={() => setCloseChallengeConfirm({ id: c.id, title: c.title })}
-                  disabled={closeChallenge.isPending}
-                  className="flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-                >
-                  <XCircle size={12} />
-                  {t('closeChallengeButton')}
-                </button>
-              )}
+              <div className="flex gap-2">
+                {c.is_active && (
+                  <button
+                    onClick={() => setCloseChallengeConfirm({ id: c.id, title: c.title })}
+                    disabled={closeChallenge.isPending}
+                    className="flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    <XCircle size={12} />
+                    {t('closeChallengeButton')}
+                  </button>
+                )}
+                {!c.is_active && (
+                  <button
+                    onClick={() => setDeleteAdminChallengeConfirm({ id: c.id, title: c.title })}
+                    disabled={deleteAdminChallenge.isPending}
+                    className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    <Trash2 size={12} />
+                    {t('deleteChallengeButton')}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -548,6 +571,26 @@ export default function AdminPage() {
                 className="flex-1 rounded-xl bg-orange-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {closeChallenge.isPending ? t('closingChallenge') : t('closeChallengeButton')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteAdminChallengeConfirm !== null && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteAdminChallengeConfirm(null)}>
+          <div className="w-full max-w-lg rounded-3xl bg-theme-surface px-6 pt-5 pb-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-bold text-theme-primary mb-1">{t('deleteChallengeTitle')}</p>
+            <p className="text-sm text-theme-muted mb-1">"{deleteAdminChallengeConfirm.title}"</p>
+            <p className="text-sm text-theme-muted mb-5">{t('deleteChallengeBody')}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteAdminChallengeConfirm(null)} className="flex-1 rounded-xl bg-theme-surface2 py-3 text-sm text-theme-muted">{t('cancel')}</button>
+              <button
+                onClick={() => { deleteAdminChallenge.mutate(deleteAdminChallengeConfirm.id); setDeleteAdminChallengeConfirm(null) }}
+                disabled={deleteAdminChallenge.isPending}
+                className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {deleteAdminChallenge.isPending ? t('deletingChallenge') : t('deleteChallengeButton')}
               </button>
             </div>
           </div>

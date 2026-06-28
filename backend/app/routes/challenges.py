@@ -654,6 +654,25 @@ def update_challenge(
     return {"data": {"challenge": _to_schema(challenge, uid, db)}}
 
 
+@router.patch("/{challenge_id}/close")
+def close_challenge(
+    challenge_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+    if not challenge:
+        raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
+    if challenge.creator_id != current_user.id and not current_user.is_admin:
+        raise api_error(403, E_FORBIDDEN, "종료 권한이 없습니다")
+    if not challenge.is_active:
+        raise api_error(400, "ALREADY_CLOSED", "이미 종료된 챌린지입니다")
+    challenge.is_active = False
+    db.commit()
+    logger.info("Challenge closed: id=%s by user_id=%s", challenge_id, current_user.id)
+    return {"data": {"closed": True}}
+
+
 @router.delete("/{challenge_id}")
 def delete_challenge(
     challenge_id: int,
@@ -665,9 +684,12 @@ def delete_challenge(
         raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     if challenge.creator_id != current_user.id and not current_user.is_admin:
         raise api_error(403, E_FORBIDDEN, "삭제 권한이 없습니다")
-    challenge.is_active = False
+    if challenge.is_active and not current_user.is_admin:
+        raise api_error(400, "CHALLENGE_STILL_ACTIVE", "진행 중인 챌린지는 삭제할 수 없습니다. 먼저 종료해 주세요.")
+    db.query(ChallengeParticipation).filter(ChallengeParticipation.challenge_id == challenge_id).delete()
+    db.delete(challenge)
     db.commit()
-    logger.info("Challenge deleted: id=%s by user_id=%s", challenge_id, current_user.id)
+    logger.info("Challenge permanently deleted: id=%s by user_id=%s", challenge_id, current_user.id)
     return {"data": {"deleted": True}}
 
 

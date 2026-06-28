@@ -43,5 +43,9 @@
   "closeChallengeButton": "Close",
   "closingChallenge": "Closing...",
   "closeChallengeTitle": "Close Challenge",
-  "closeChallengeBody": "This will prevent new participants from joining and cannot be undone."
+  "closeChallengeBody": "This will prevent new participants from joining and cannot be undone.",
+  "deleteChallengeButton": "Permanently Delete",
+  "deletingChallenge": "Deleting...",
+  "deleteChallengeTitle": "Permanently Delete Challenge",
+  "deleteChallengeBody": "All data including participation records will be permanently deleted. This cannot be undone."
 }

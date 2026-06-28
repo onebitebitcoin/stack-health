@@ -43,5 +43,9 @@
   "closeChallengeButton": "종료",
   "closingChallenge": "종료 중...",
   "closeChallengeTitle": "챌린지 종료",
-  "closeChallengeBody": "종료하면 새로운 참여가 불가능해지며 되돌릴 수 없습니다."
+  "closeChallengeBody": "종료하면 새로운 참여가 불가능해지며 되돌릴 수 없습니다.",
+  "deleteChallengeButton": "영구 삭제",
+  "deletingChallenge": "삭제 중...",
+  "deleteChallengeTitle": "챌린지 영구 삭제",
+  "deleteChallengeBody": "참여 기록을 포함한 모든 데이터가 영구적으로 삭제됩니다. 되돌릴 수 없습니다."
 }
