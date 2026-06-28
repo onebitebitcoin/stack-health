@@ -1,0 +1,118 @@
+{
+  "title": "Survey",
+  "loading": "Loading survey...",
+  "notFound": "Survey not found.",
+  "intro": {
+    "startButton": "Start Survey"
+  },
+  "form": {
+    "nextButton": "Next",
+    "prevButton": "Back",
+    "requiredError": "Please answer all required questions.",
+    "optionalPlaceholder": "Optional"
+  },
+  "review": {
+    "title": "Review Your Answers",
+    "editButton": "Edit",
+    "submitButton": "Submit",
+    "submittingButton": "Submitting..."
+  },
+  "done": {
+    "title": "Thank You!",
+    "message": "Your response has been recorded."
+  },
+  "closed": {
+    "title": "Survey Closed",
+    "message": "This survey is no longer accepting responses."
+  },
+  "alreadyDone": {
+    "title": "Already Submitted",
+    "message": "You have already completed this survey. Thank you!"
+  },
+  "error": {
+    "load": "Failed to load survey.",
+    "submit": "Submission failed. Please try again."
+  },
+  "empty": "-",
+  "admin": {
+    "adminOnly": "Admin access required.",
+    "title": "Survey Management",
+    "newSurvey": "New Survey",
+    "colTitle": "Title",
+    "colStatus": "Status",
+    "colResponses": "Responses",
+    "colClosesAt": "Closes At",
+    "noSurveys": "No surveys yet.",
+    "active": "Active",
+    "inactive": "Closed",
+    "open": "Open",
+    "closed": "Closed",
+    "editButton": "Edit",
+    "responsesButton": "Responses",
+    "closeButton": "Close",
+    "deleteButton": "Delete",
+    "copyLinkButton": "Copy Link",
+    "linkCopied": "Link copied!",
+    "closeConfirmTitle": "Close this survey?",
+    "closeConfirmMessage": "No more responses will be accepted after closing.",
+    "deleteConfirmTitle": "Delete this survey?",
+    "deleteConfirmMessage": "The survey and all responses will be permanently deleted.",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "loadFailed": "Failed to load.",
+    "closeSuccess": "Survey closed.",
+    "closeFailed": "Failed to close survey.",
+    "deleteSuccess": "Survey deleted.",
+    "deleteFailed": "Failed to delete survey.",
+    "editor": {
+      "newTitle": "New Survey",
+      "editTitle": "Edit Survey",
+      "titleLabel": "Survey Title",
+      "titlePlaceholder": "Survey title",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Description (optional)",
+      "closesAtLabel": "Closes at",
+      "questionsLabel": "Questions",
+      "addQuestion": "Add Question",
+      "questionTitlePlaceholder": "Question text",
+      "questionType": "Type",
+      "required": "Required",
+      "optional": "Optional",
+      "addOption": "Add Option",
+      "optionPlaceholder": "Option text",
+      "scaleMin": "Min",
+      "scaleMax": "Max",
+      "scaleMinLabel": "Left label",
+      "scaleMaxLabel": "Right label",
+      "deleteQuestion": "Delete",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "saveButton": "Save",
+      "saving": "Saving...",
+      "saveFailed": "Failed to save.",
+      "saveSuccess": "Saved successfully.",
+      "emptyTitle": "Please enter a survey title.",
+      "types": {
+        "scale": "Scale",
+        "single": "Single choice",
+        "multi": "Multiple choice",
+        "text": "Text"
+      }
+    },
+    "responses": {
+      "title": "Responses",
+      "totalCount": "{{count}} responses",
+      "aggregateLabel": "Summary",
+      "individualLabel": "Individual",
+      "noResponses": "No responses yet.",
+      "avgLabel": "Average",
+      "countLabel": "Count",
+      "distributionLabel": "Distribution",
+      "responseNumber": "Response #{{n}}",
+      "submittedAt": "Submitted at",
+      "loading": "Loading...",
+      "loadFailed": "Failed to load."
+    }
+  }
+}

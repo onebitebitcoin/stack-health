@@ -11,6 +11,7 @@ import koProfile from './locales/ko/profile.json'
 import koAdmin from './locales/ko/admin.json'
 import koErrors from './locales/ko/errors.json'
 import koNotification from './locales/ko/notification.json'
+import koSurvey from './locales/ko/survey.json'
 
 import enCommon from './locales/en/common.json'
 import enAuth from './locales/en/auth.json'
@@ -21,6 +22,7 @@ import enProfile from './locales/en/profile.json'
 import enAdmin from './locales/en/admin.json'
 import enErrors from './locales/en/errors.json'
 import enNotification from './locales/en/notification.json'
+import enSurvey from './locales/en/survey.json'
 
 i18n
   .use(LanguageDetector)
@@ -37,6 +39,7 @@ i18n
         admin: koAdmin,
         errors: koErrors,
         notification: koNotification,
+        survey: koSurvey,
       },
       en: {
         common: enCommon,
@@ -48,12 +51,13 @@ i18n
         admin: enAdmin,
         errors: enErrors,
         notification: enNotification,
+        survey: enSurvey,
       },
     },
     fallbackLng: 'ko',
     supportedLngs: ['ko', 'en'],
     defaultNS: 'common',
-    ns: ['common', 'auth', 'feed', 'upload', 'challenge', 'profile', 'admin', 'errors', 'notification'],
+    ns: ['common', 'auth', 'feed', 'upload', 'challenge', 'profile', 'admin', 'errors', 'notification', 'survey'],
     detection: {
       order: ['localStorage', 'navigator'],
       lookupLocalStorage: 'app-language',

@@ -34,6 +34,7 @@ stack_health/
 | 전역 상태 (auth/theme/ui) | `frontend/src/store/auth.ts`, `theme.ts`, `ui.ts` (Zustand) |
 | 어드민 기능 | `backend/app/routes/admin.py` + `frontend/src/pages/AdminPage.tsx` + `backend/tests/test_admin.py` |
 | 챌린지 기능 | `backend/app/{routes,models,schemas}/challenge*.py` + `frontend/src/pages/Challenge*.tsx` |
+| 설문 기능 | `backend/app/{models,schemas,routes}/survey.py` + `frontend/src/pages/SurveyPage.tsx` + `AdminSurveys*.tsx` |
 | 배포/인프라 | `scripts/deploy.sh` + `Dockerfile` + `CLAUDE.md`(blue-green 주의사항) |
 | 워커 배포 | `worker/DEPLOY.md`, `worker/stackhealth-worker.service`, `worker/deploy.sh` |
 | 에러 코드 | `ERR_CODE.md` + `backend/app/services/error_codes.py` |
@@ -44,9 +45,9 @@ stack_health/
 - **진입점**: `app/main.py` — FastAPI app, 라우터 등록, 정적 SPA fallback
 - **설정**: `app/config.py` (pydantic settings, `.env` 로드)
 - **DB**: `app/database.py` / 마이그레이션 `alembic/`
-- **routes/** (도메인별 API): `auth` `videos` `feed` `rewards` `admin` `comments` `history` `challenges` `users`
-- **models/** (SQLAlchemy): `user` `video` `post` `post_like` `post_view` `comment` `reward` `challenge` `admin_log` `lnauth_challenge` `app_links`
-- **schemas/** (Pydantic): `user` `video` `reward` `challenge`
+- **routes/** (도메인별 API): `auth` `videos` `feed` `rewards` `admin` `comments` `history` `challenges` `users` `survey`
+- **models/** (SQLAlchemy): `user` `video` `post` `post_like` `post_view` `comment` `reward` `challenge` `admin_log` `lnauth_challenge` `app_links` `survey` `survey_response`
+- **schemas/** (Pydantic): `user` `video` `reward` `challenge` `survey`
 - **services/** (비즈니스 로직):
   - `auth.py` JWT / `google_oauth.py` Google 로그인 / `lnauth.py` Lightning 로그인(LNURL-auth)
   - `reward.py` 리워드 지급 (Blink Lightning) / `share_token.py` 공유 링크 토큰
@@ -61,6 +62,8 @@ stack_health/
   - `/` FeedPage, `/upload` UploadPage(+`upload/Step*.tsx`), `/profile` ProfilePage
   - `/login` LoginPage (`/login/lightning` `/login/email` `/login/register`)
   - `/challenges` ChallengePage (`create` `:id` `:id/edit` `:id/dashboard`, `/my-challenges`)
+  - `/survey/:slug` SurveyPage (공개 익명 설문, 비로그인 접근)
+  - `/admin/surveys` AdminSurveysListPage / `/admin/surveys/new` & `/:id/edit` AdminSurveyEditorPage / `/:id/responses` AdminSurveyResponsesPage
   - `/admin` AdminPage, `/leaderboard`, `/settings`, `/team`, `/terms`
   - `/shorts/:shareToken` SharedVideoPage (비로그인 공유), `/users/:userId` UserProfilePage
 - **components/**: `VideoCard` `CommentSheet` `BottomNav` `SideNav` `UpdateBanner` 등 공용 UI

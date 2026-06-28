@@ -64,6 +64,11 @@ E_CHALLENGE_CREATE_FAILED = "E_CHALLENGE_CREATE_FAILED"
 E_ADMIN_SELF_DELETE = "E_ADMIN_SELF_DELETE"
 E_ADMIN_API_KEY_DELETE = "E_ADMIN_API_KEY_DELETE"
 
+# ── Survey ───────────────────────────────────────────────────────────────────
+E_SURVEY_NOT_FOUND = "E_SURVEY_NOT_FOUND"
+E_SURVEY_CLOSED = "E_SURVEY_CLOSED"
+E_SURVEY_INVALID_ANSWER = "E_SURVEY_INVALID_ANSWER"
+
 
 def api_error(status_code: int, code: str, message: str) -> HTTPException:
     """Return an HTTPException whose detail carries both a machine-readable code

@@ -241,3 +241,58 @@ export interface AppNotification {
   created_at: string
   actor: NotificationActor
 }
+
+export interface SurveyQuestion {
+  id: string
+  type: 'scale' | 'single' | 'multi' | 'text'
+  title: string
+  description: string | null
+  required: boolean
+  options: string[] | null
+  scale_min: number | null
+  scale_max: number | null
+  scale_min_label: string | null
+  scale_max_label: string | null
+}
+
+export interface Survey {
+  id: number
+  slug: string
+  title: string
+  description: string | null
+  questions: SurveyQuestion[]
+  is_active: boolean
+  is_open: boolean
+  closes_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SurveyListItem {
+  id: number
+  slug: string
+  title: string
+  is_open: boolean
+  is_active: boolean
+  closes_at: string | null
+  response_count: number
+  created_at: string
+}
+
+export interface SurveyResponse {
+  id: number
+  answers: Record<string, unknown>
+  created_at: string
+}
+
+export type SurveyAggregateScaleValue = {
+  avg: number
+  count: number
+  distribution: Record<string, number>
+}
+
+export type SurveyAggregateOptionValue = Record<string, number>
+
+export type SurveyAggregateValue = SurveyAggregateScaleValue | SurveyAggregateOptionValue
+
+export type SurveyAggregate = Record<string, SurveyAggregateValue>

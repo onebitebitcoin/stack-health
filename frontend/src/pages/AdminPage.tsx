@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft, RefreshCw } from 'lucide-react'
+import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft, RefreshCw, ClipboardList } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
@@ -192,6 +192,17 @@ export default function AdminPage() {
             <p className="text-xs text-theme-muted">@{user?.username}</p>
           </div>
         </div>
+
+        <button
+          onClick={() => navigate('/admin/surveys')}
+          className="flex w-full items-center justify-between rounded-xl bg-theme-surface px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <ClipboardList size={15} className="text-theme-muted" />
+            <span className="text-sm font-semibold text-theme-primary">설문 관리</span>
+          </div>
+          <ChevronRight size={15} className="text-theme-muted" />
+        </button>
 
         <div className="flex rounded-xl bg-theme-surface overflow-hidden">
           {tabs.map((tab) => (

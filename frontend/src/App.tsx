@@ -38,6 +38,10 @@ const PostDetailPage = lazy(() => import('./pages/PostDetailPage'))
 const LightningLoginPage = lazy(() => import('./pages/LightningLoginPage'))
 const EmailLoginPage = lazy(() => import('./pages/EmailLoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const SurveyPage = lazy(() => import('./pages/SurveyPage'))
+const AdminSurveysListPage = lazy(() => import('./pages/AdminSurveysListPage'))
+const AdminSurveyEditorPage = lazy(() => import('./pages/AdminSurveyEditorPage'))
+const AdminSurveyResponsesPage = lazy(() => import('./pages/AdminSurveyResponsesPage'))
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token)
@@ -45,12 +49,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 const HIDE_NAV = ['/login', '/login/lightning', '/login/email', '/login/register', '/admin', '/terms', '/team', '/setup-username', '/lightning-guide']
-const HIDE_NAV_PREFIXES = ['/shorts/']
+const HIDE_NAV_PREFIXES = ['/shorts/', '/survey/']
 const KNOWN_ROUTE_SEGMENTS = new Set([
   'login', 'upload', 'challenges', 'my-challenges',
   'profile', 'setup-username', 'users', 'admin', 'terms',
   'settings', 'team', 'leaderboard', 'share', 'register', 'lightning-guide',
-  'notifications', 'posts',
+  'notifications', 'posts', 'survey',
 ])
 
 function Layout() {
@@ -137,6 +141,11 @@ function Layout() {
         <Route path="/lightning-guide" element={<LightningWalletGuidePage />} />
         <Route path="/notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
         <Route path="/posts/:postId" element={<RequireAuth><PostDetailPage /></RequireAuth>} />
+        <Route path="/survey/:slug" element={<SurveyPage />} />
+        <Route path="/admin/surveys" element={<AdminSurveysListPage />} />
+        <Route path="/admin/surveys/new" element={<AdminSurveyEditorPage />} />
+        <Route path="/admin/surveys/:id/edit" element={<AdminSurveyEditorPage />} />
+        <Route path="/admin/surveys/:id/responses" element={<AdminSurveyResponsesPage />} />
         <Route path="/feed" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
