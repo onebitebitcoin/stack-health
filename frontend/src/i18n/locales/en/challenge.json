@@ -5,21 +5,24 @@
   "filter": {
     "all": "All",
     "joined": "Joined",
-    "available": "Available"
+    "available": "Available",
+    "closed": "Ended"
   },
   "searchPlaceholder": "Search challenges...",
   "empty": {
     "joined": "No challenges joined yet",
     "available": "No available challenges",
     "search": "No results found",
-    "default": "No active challenges"
+    "default": "No active challenges",
+    "closed": "No ended challenges"
   },
   "card": {
     "certCount": "{{count}} workouts",
     "participantCount": "{{count}}",
     "completed": "Completed",
     "joined": "Joined",
-    "join": "Join"
+    "join": "Join",
+    "ended": "Ended"
   },
   "create": {
     "title": "Create Challenge",
@@ -60,7 +63,7 @@
   "detail": {
     "managerBadge": "Manager",
     "editLabel": "Edit challenge",
-    "deleteLabel": "Delete challenge",
+    "deleteLabel": "Close challenge",
     "tabInfo": "Info",
     "tabManager": "Manager",
     "rewardTitle": "Reward Title",
@@ -85,11 +88,11 @@
     "backToList": "Back to list",
     "joinError": "Failed to join",
     "leaveError": "Failed to leave",
-    "deleteError": "Failed to delete",
-    "deleteConfirmTitle": "Delete this challenge?",
-    "deleteConfirmDesc": "It will be removed from the list.",
-    "deleting": "Deleting...",
-    "delete": "Delete",
+    "deleteError": "Failed to close challenge",
+    "deleteConfirmTitle": "Close this challenge?",
+    "deleteConfirmDesc": "New participants won't be able to join and it will be removed from the active list.",
+    "deleting": "Closing...",
+    "delete": "Close",
     "leaveConfirmTitle": "Leave this challenge?",
     "leaveConfirmDesc": "Your progress will be reset. You'll start over if you rejoin.",
     "backButton": "Go back",

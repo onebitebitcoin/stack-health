@@ -42,7 +42,10 @@ function ChallengeCard({
         {/* title + completed icon */}
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-semibold text-theme-primary text-sm leading-tight truncate">{challenge.title}</h3>
-          {challenge.completed && <CheckCircle size={15} className="text-accent flex-shrink-0" />}
+          {!challenge.is_active && (
+            <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-zinc-700/50 text-theme-muted">{t('card.ended')}</span>
+          )}
+          {challenge.is_active && challenge.completed && <CheckCircle size={15} className="text-accent flex-shrink-0" />}
         </div>
 
         {/* description */}
@@ -86,7 +89,7 @@ export default function ChallengePage() {
   const user = useAuthStore((s) => s.user)
   const { t } = useTranslation('challenge')
   const [q, setQ] = useState('')
-  const [filter, setFilter] = useState<'all' | 'joined' | 'available'>('all')
+  const [filter, setFilter] = useState<'all' | 'joined' | 'available' | 'closed'>('all')
 
   const { data: challenges = [], isLoading } = useQuery<Challenge[]>({
     queryKey: ['challenges', q, filter],
@@ -95,6 +98,7 @@ export default function ChallengePage() {
       if (q) params.q = q
       if (filter === 'joined') params.joined = true
       if (filter === 'available') params.available = true
+      if (filter === 'closed') params.closed = true
       const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params })
       return res.data.data.challenges
     },
@@ -121,7 +125,7 @@ export default function ChallengePage() {
       {/* filters */}
       {user && (
         <div className="px-4 mb-3 flex gap-2">
-          {(['all', 'joined', 'available'] as const).map((f) => (
+          {(['all', 'joined', 'available', 'closed'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -161,6 +165,8 @@ export default function ChallengePage() {
               ? t('empty.joined')
               : filter === 'available'
               ? t('empty.available')
+              : filter === 'closed'
+              ? t('empty.closed')
               : q
               ? t('empty.search')
               : t('empty.default')}

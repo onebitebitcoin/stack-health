@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, Dumbbell, Users, CheckCircle, Trash2, CalendarDays,
-  Edit2, UserCircle, Droplets, Play, TrendingUp, CircleCheck,
+  ArrowLeft, Dumbbell, Users, CheckCircle, CalendarDays,
+  Edit2, UserCircle, Droplets, Play, TrendingUp, CircleCheck, XCircle,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
@@ -180,10 +180,10 @@ export default function ChallengeDetailPage() {
             </button>
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="text-red-400 flex-shrink-0 p-1"
+              className="text-orange-400 flex-shrink-0 p-1"
               aria-label={t('detail.deleteLabel')}
             >
-              <Trash2 size={17} />
+              <XCircle size={17} />
             </button>
           </>
         )}

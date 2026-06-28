@@ -170,12 +170,16 @@ def list_challenges(
     category: str | None = Query(None),
     joined: bool | None = Query(None),
     available: bool | None = Query(None),
+    closed: bool | None = Query(None),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ) -> dict:
-    query = db.query(Challenge).filter(Challenge.is_active == True)  # noqa: E712
+    if closed:
+        query = db.query(Challenge).filter(Challenge.is_active == False)  # noqa: E712
+    else:
+        query = db.query(Challenge).filter(Challenge.is_active == True)  # noqa: E712
     if q:
         query = query.filter(Challenge.title.ilike(f"%{q}%"))
     if category:

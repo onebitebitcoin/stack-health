@@ -5,21 +5,24 @@
   "filter": {
     "all": "전체",
     "joined": "참여중",
-    "available": "참여 가능"
+    "available": "참여 가능",
+    "closed": "종료됨"
   },
   "searchPlaceholder": "챌린지 검색...",
   "empty": {
     "joined": "참여 중인 챌린지가 없어요",
     "available": "참여 가능한 챌린지가 없어요",
     "search": "검색 결과가 없어요",
-    "default": "현재 진행 중인 챌린지가 없어요"
+    "default": "현재 진행 중인 챌린지가 없어요",
+    "closed": "종료된 챌린지가 없어요"
   },
   "card": {
     "certCount": "{{count}}회 인증",
     "participantCount": "{{count}}명",
     "completed": "완료",
     "joined": "참여중",
-    "join": "참여하기"
+    "join": "참여하기",
+    "ended": "종료됨"
   },
   "create": {
     "title": "챌린지 만들기",
@@ -60,7 +63,7 @@
   "detail": {
     "managerBadge": "매니저",
     "editLabel": "챌린지 수정",
-    "deleteLabel": "챌린지 삭제",
+    "deleteLabel": "챌린지 종료",
     "tabInfo": "정보",
     "tabManager": "매니저",
     "rewardTitle": "획득 타이틀",
@@ -85,11 +88,11 @@
     "backToList": "목록으로 돌아가기",
     "joinError": "참여에 실패했습니다",
     "leaveError": "참여 취소에 실패했습니다",
-    "deleteError": "삭제에 실패했습니다",
-    "deleteConfirmTitle": "챌린지를 삭제할까요?",
-    "deleteConfirmDesc": "삭제하면 목록에서 사라집니다.",
-    "deleting": "삭제 중...",
-    "delete": "삭제",
+    "deleteError": "종료에 실패했습니다",
+    "deleteConfirmTitle": "챌린지를 종료할까요?",
+    "deleteConfirmDesc": "종료하면 새 참여가 불가능해지며 목록에서 사라집니다.",
+    "deleting": "종료 중...",
+    "delete": "종료",
     "leaveConfirmTitle": "참여를 취소할까요?",
     "leaveConfirmDesc": "지금까지의 진행 상황이 초기화됩니다. 다시 참여하더라도 처음부터 시작해야 합니다.",
     "backButton": "돌아가기",
