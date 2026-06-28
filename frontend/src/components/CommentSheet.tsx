@@ -66,6 +66,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
   const [replyTo, setReplyTo] = useState<{ id: number; username: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const isComposingRef = useRef(false)
 
   // 키보드가 올라올 때 시트 위치 + 높이 동적 조정
@@ -73,13 +74,20 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
     const vv = window.visualViewport
     if (!vv || !open) return
     const sheet = sheetRef.current
+    const form = formRef.current
     const reposition = () => {
-      const keyboardHeight = Math.max(0, window.innerHeight - vv.offsetTop - vv.height)
+      // vv.offsetTop 제외: iOS Safari에서 항상 0이며 포함 시 부정확
+      const keyboardHeight = Math.max(0, window.innerHeight - vv.height)
       if (sheet) {
         sheet.style.bottom = `${keyboardHeight}px`
         sheet.style.maxHeight = `${vv.height - 16}px`
       }
+      // 키보드가 올라와 있을 때 safe-area 패딩 제거 (키보드가 이미 safe area 흡수)
+      if (form) {
+        form.style.paddingBottom = keyboardHeight > 0 ? '0' : ''
+      }
     }
+    reposition() // 시트 오픈 즉시 실행 (이미 키보드가 올라온 경우 대응)
     vv.addEventListener('resize', reposition)
     vv.addEventListener('scroll', reposition)
     return () => {
@@ -88,6 +96,9 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       if (sheet) {
         sheet.style.bottom = ''
         sheet.style.maxHeight = ''
+      }
+      if (form) {
+        form.style.paddingBottom = ''
       }
     }
   }, [open])
@@ -261,7 +272,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
         </div>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="flex flex-col px-4 py-3 border-t border-zinc-800 pb-safe gap-1">
+        <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col px-4 py-3 border-t border-zinc-800 pb-safe gap-1">
           {replyTo && (
             <div className="flex items-center justify-between px-1 text-xs text-zinc-400">
               <span>{t('replyingTo', { username: replyTo.username })}</span>

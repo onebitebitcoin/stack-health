@@ -114,7 +114,7 @@ function Layout() {
     <div className="relative h-full">
       {showNav && <SideNav />}
       {updateAvailable && !isFlutter && <UpdateBanner serverVersion={serverVersion} />}
-      <div key={location.key} className={`absolute inset-0 page-enter${showNav ? ' lg:left-60' : ''}`}>
+      <div key={location.key} className={`absolute inset-0 overflow-y-auto page-enter${showNav ? ' lg:left-60' : ''}`}>
       <Suspense fallback={<LoadingScreen />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
