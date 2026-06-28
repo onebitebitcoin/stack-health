@@ -236,10 +236,11 @@ export default function SurveyPage() {
 
         {step === 'form' && (
           <div className="space-y-8">
-            {survey.questions.map((q) => (
+            {survey.questions.map((q, idx) => (
               <div key={q.id} className="space-y-3">
                 <div>
                   <p className="text-sm font-semibold text-theme-primary">
+                    <span className="mr-1.5 text-theme-muted">{idx + 1}.</span>
                     {q.title}
                     {q.required && <span className="ml-1 text-xs text-red-400">*</span>}
                   </p>
@@ -271,9 +272,9 @@ export default function SurveyPage() {
           <div className="space-y-6">
             <h2 className="text-lg font-bold text-theme-primary">{t('review.title')}</h2>
             <div className="space-y-3">
-              {survey.questions.map((q) => (
+              {survey.questions.map((q, idx) => (
                 <div key={q.id} className="rounded-xl bg-theme-surface px-4 py-3 space-y-1">
-                  <p className="text-xs font-semibold text-theme-muted">{q.title}</p>
+                  <p className="text-xs font-semibold text-theme-muted"><span className="mr-1">{idx + 1}.</span>{q.title}</p>
                   <p className="text-sm text-theme-primary">{formatAnswer(q, answers[q.id])}</p>
                 </div>
               ))}
