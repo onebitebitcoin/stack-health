@@ -18,7 +18,7 @@ export default function StepSelectVideo({ fileInputRef, error, setError, onFileC
         ref={fileInputRef}
         id="video-file-input"
         type="file"
-        accept="video/*"
+        accept="video/mp4,video/quicktime"
         className="hidden"
         onChange={(e) => { setError(''); onFileChange(e) }}
       />

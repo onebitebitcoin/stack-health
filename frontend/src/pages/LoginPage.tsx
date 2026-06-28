@@ -33,7 +33,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-theme-page px-6">
       <div className="relative mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-theme-surface text-accent ring-1 ring-white/5">
         <div className="absolute inset-0 rounded-3xl bg-accent opacity-15 blur-2xl scale-[2] pointer-events-none" />
         <LogoMark aria-label={t('logoAlt')} role="img" size={44} />

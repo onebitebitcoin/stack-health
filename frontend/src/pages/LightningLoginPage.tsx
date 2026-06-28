@@ -80,23 +80,15 @@ export default function LightningLoginPage() {
   }, [])
 
   async function copyToClipboard(text: string): Promise<void> {
-    if (navigator.clipboard && window.isSecureContext) {
+    try {
       await navigator.clipboard.writeText(text)
-    } else {
-      const el = document.createElement('textarea')
-      el.value = text
-      el.style.position = 'fixed'
-      el.style.left = '-9999px'
-      document.body.appendChild(el)
-      el.focus()
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
+    } catch {
+      window.prompt('아래 주소를 복사하세요:', text)
     }
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-theme-page px-6">
       <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
         <LogoMark aria-label={t('logoAlt')} role="img" size={40} />
       </div>

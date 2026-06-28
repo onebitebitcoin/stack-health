@@ -304,7 +304,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
                   ? t('replyPlaceholder')
                   : t('commentPlaceholder')
             }
-            className="flex-1 rounded-full bg-zinc-800 px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none"
+            className="flex-1 rounded-full bg-zinc-800 px-4 py-2 text-base text-white placeholder-zinc-500 outline-none"
             maxLength={500}
           />
           <button

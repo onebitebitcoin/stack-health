@@ -58,7 +58,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-theme-page px-6">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-theme-page px-6">
       <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-2xl bg-theme-surface text-accent">
         <LogoMark aria-label={t('logoAlt')} role="img" size={40} />
       </div>

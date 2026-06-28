@@ -284,7 +284,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       {/* 음소거 토글 — 우상단 */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggleMute() }}
-        className="absolute top-4 right-4 rounded-full bg-black/40 p-2 text-white backdrop-blur-sm"
+        className="absolute top-4 right-4 rounded-full bg-black/60 p-2 text-white"
         style={{ zIndex: 3 }}
         aria-label={isMuted ? t('unmuteAria') : t('muteAria')}
       >

@@ -579,7 +579,7 @@ export default function ProfilePage() {
 
           <div
             ref={scrollContainerRef}
-            className="h-full w-full overflow-y-scroll"
+            className="h-full w-full overflow-y-scroll scroll-momentum"
             style={{ scrollSnapType: 'y mandatory', scrollbarWidth: 'none' }}
           >
             {selectedPosts.map((post, i) => (
