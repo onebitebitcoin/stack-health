@@ -97,7 +97,7 @@ export default function UploadPage() {
   const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('bottom')
   const [subtitleLanguage, setSubtitleLanguage] = useState<SubtitleLanguage>('ko')
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
-  const [muteOriginalAudio, setMuteOriginalAudio] = useState(true)
+  const [muteOriginalAudio, setMuteOriginalAudio] = useState(false)
   const [videoAudioStatus, setVideoAudioStatus] = useState<'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'>('idle')
   const [subtitleDebugMetrics, setSubtitleDebugMetrics] = useState<Record<string, unknown> | null>(null)
   const stepTwoInitRef = useRef(false)
@@ -289,7 +289,7 @@ export default function UploadPage() {
       mr.onstop = async () => {
         streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null
         audioBlobRef.current = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current })
-        setRecording(false); setRecordingDone(true)
+        setRecording(false); setRecordingDone(true); setMuteOriginalAudio(true)
       }
       mr.start(); setRecording(true)
       intervalRef.current = setInterval(() => {
@@ -319,7 +319,7 @@ export default function UploadPage() {
     if (recording) {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
       streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null
-      setRecording(false); audioBlobRef.current = null; setRecordingDone(false)
+      setRecording(false); audioBlobRef.current = null; setRecordingDone(false); setMuteOriginalAudio(false)
     }
     setStep((prev) => prev - 1)
   }
@@ -621,7 +621,7 @@ export default function UploadPage() {
           onExtractFromAudio={() => extractSubtitles('audio')}
           onClearSubtitle={clearSubtitle}
           startRecording={startRecording} stopRecording={stopRecording}
-          onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0) }}
+          onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0); setMuteOriginalAudio(false) }}
           onNext={() => setStep(3)}
           muteOriginalAudio={muteOriginalAudio}
           setMuteOriginalAudio={setMuteOriginalAudio}
