@@ -77,29 +77,27 @@ export default function SurveyPage() {
       case 'scale': {
         const min = q.scale_min ?? 1
         const max = q.scale_max ?? 5
-        const vals = Array.from({ length: max - min + 1 }, (_, i) => min + i)
+        const current = (answers[q.id] as number | undefined)
         return (
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {vals.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: v }))}
-                  className={`h-10 w-10 rounded-xl text-sm font-semibold transition-colors ${
-                    answers[q.id] === v
-                      ? 'bg-accent text-accent-fg'
-                      : 'bg-theme-surface2 text-theme-muted hover:bg-theme-surface'
-                  }`}
-                >
-                  {v}
-                </button>
-              ))}
+          <div className="space-y-3">
+            <div className="flex items-center gap-4">
+              <input
+                type="range"
+                min={min}
+                max={max}
+                step={1}
+                value={current ?? min}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: Number(e.target.value) }))}
+                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-theme-surface2 accent-accent"
+              />
+              <span className="w-8 shrink-0 text-center text-lg font-bold text-accent">
+                {current ?? <span className="text-theme-muted text-sm">—</span>}
+              </span>
             </div>
             {(q.scale_min_label || q.scale_max_label) && (
               <div className="flex justify-between text-xs text-theme-muted">
-                <span>{q.scale_min_label}</span>
-                <span>{q.scale_max_label}</span>
+                <span>{min} · {q.scale_min_label}</span>
+                <span>{q.scale_max_label} · {max}</span>
               </div>
             )}
           </div>
