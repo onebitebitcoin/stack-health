@@ -26,7 +26,7 @@ def upgrade() -> None:
     sa.Column('title', sa.String(length=200), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('questions', sa.JSON(), server_default='[]', nullable=False),
-    sa.Column('is_open', sa.Boolean(), server_default=sa.text('1'), nullable=False),
+    sa.Column('is_open', sa.Boolean(), server_default=sa.text('true'), nullable=False),
     sa.Column('closes_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('created_by', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
