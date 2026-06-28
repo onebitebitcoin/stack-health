@@ -606,7 +606,7 @@ def get_challenge(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ) -> dict:
-    challenge = db.query(Challenge).filter(Challenge.id == challenge_id, Challenge.is_active == True).first()  # noqa: E712
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
     if not challenge:
         raise api_error(404, E_CHALLENGE_NOT_FOUND, "챌린지를 찾을 수 없습니다")
     uid = current_user.id if current_user else None

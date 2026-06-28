@@ -180,6 +180,11 @@ export default function ChallengeDetailPage() {
           <ArrowLeft size={20} />
         </button>
         <h1 className="text-lg font-bold text-theme-primary flex-1 truncate">{challenge.title}</h1>
+        {!challenge.is_active && (
+          <span className="text-xs bg-gray-400/15 text-gray-400 px-2 py-0.5 rounded-full font-medium flex-shrink-0">
+            {t('detail.closedBadge')}
+          </span>
+        )}
         {isCreator && (
           <>
             <span className="text-xs bg-accent/15 text-accent px-2 py-0.5 rounded-full font-medium flex-shrink-0">

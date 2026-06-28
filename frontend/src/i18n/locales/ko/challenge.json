@@ -62,6 +62,7 @@
   },
   "detail": {
     "managerBadge": "매니저",
+    "closedBadge": "종료됨",
     "editLabel": "챌린지 수정",
     "closeLabel": "챌린지 종료",
     "deleteLabel": "챌린지 삭제",

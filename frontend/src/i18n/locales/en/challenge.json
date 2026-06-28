@@ -62,6 +62,7 @@
   },
   "detail": {
     "managerBadge": "Manager",
+    "closedBadge": "Ended",
     "editLabel": "Edit challenge",
     "closeLabel": "Close challenge",
     "deleteLabel": "Delete challenge",
