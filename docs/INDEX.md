@@ -35,6 +35,9 @@ stack_health/
 | 전역 상태 (auth/theme/ui) | `frontend/src/store/auth.ts`, `theme.ts`, `ui.ts` (Zustand) |
 | 어드민 기능 | `backend/app/routes/admin.py` + `frontend/src/pages/AdminPage.tsx` + `backend/tests/test_admin.py` |
 | 챌린지 기능 | `backend/app/{routes,models,schemas}/challenge*.py` + `frontend/src/pages/Challenge*.tsx` |
+| 게시물 글 수정 | `PATCH /videos/posts/{id}` (`backend/app/routes/videos.py`, `PostUpdateRequest`) + `frontend/src/pages/PostEditPage.tsx` (`/posts/:id/edit`) |
+| 팔로우 | `backend/app/models/follow.py` + `app/routes/users.py`(follow/followers/following) + `frontend/src/pages/{UserProfilePage,FollowListPage}.tsx` |
+| 친구 초대 (referral) | `backend/app/services/referral.py` + `users.referral_code/referred_by_id` + `GET /users/me/referral` + `frontend/src/pages/InvitePage.tsx` (`/invite`), `?ref=` 캡처는 `App.tsx` |
 | 설문 기능 | `backend/app/{models,schemas,routes}/survey.py` + `frontend/src/pages/SurveyPage.tsx` + `AdminSurveys*.tsx` |
 | 배포/인프라 | `scripts/deploy.sh` + `Dockerfile` + `CLAUDE.md`(blue-green 주의사항) |
 | 워커 배포 | `worker/DEPLOY.md`, `worker/stackhealth-worker.service`, `worker/deploy.sh` |

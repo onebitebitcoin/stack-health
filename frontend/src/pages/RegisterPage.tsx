@@ -34,10 +34,14 @@ export default function RegisterPage() {
 
     setEmailLoading(true)
     try {
+      const referralCode = (() => {
+        try { return localStorage.getItem('referral_code') } catch { return null }
+      })()
       const res = await client.post<{ data: { access_token: string; user: User } }>(
         '/auth/register',
-        { email, username, password },
+        { email, username, password, ...(referralCode ? { referral_code: referralCode } : {}) },
       )
+      try { localStorage.removeItem('referral_code') } catch { /* ignore */ }
       const { access_token, user: registeredUser } = res.data.data
       if (lightningAddress.trim()) {
         const updated = await client.patch<{ data: User }>(

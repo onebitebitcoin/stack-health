@@ -1,4 +1,4 @@
-import { ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2, RefreshCw, Globe } from 'lucide-react'
+import { ChevronLeft, Check, X, Smartphone, Download, ChevronRight, ChevronDown, LogOut, Pencil, Camera, Loader2, RefreshCw, Globe, UserPlus } from 'lucide-react'
 import { useState, useRef, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -387,6 +387,13 @@ export default function SettingsPage() {
         <div>
           <p className={SECTION}>{t('profile:info')}</p>
           <div className={GROUP}>
+            <button
+              onClick={() => navigate('/invite')}
+              className={`w-full ${ROW} ${DIVIDER}`}
+            >
+              <span className={`${LABEL} flex items-center gap-2`}><UserPlus size={15} className="text-theme-muted" /> {t('profile:inviteFriends')}</span>
+              <ChevronRight size={14} className="text-theme-muted" />
+            </button>
             <button
               onClick={() => navigate('/terms')}
               className={`w-full ${ROW} ${DIVIDER}`}

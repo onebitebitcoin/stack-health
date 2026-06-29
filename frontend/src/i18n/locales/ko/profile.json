@@ -80,5 +80,14 @@
   "followBtn": "팔로우",
   "followingBtn": "팔로잉",
   "noFollowers": "아직 팔로워가 없어요",
-  "noFollowing": "아직 팔로우한 사람이 없어요"
+  "noFollowing": "아직 팔로우한 사람이 없어요",
+  "inviteFriends": "친구 초대",
+  "inviteTitle": "친구 초대",
+  "inviteDescription": "초대 링크를 공유해 친구를 Stack Health로 데려오세요.",
+  "invitedCount": "초대한 친구",
+  "inviteLink": "초대 링크",
+  "inviteShare": "초대 링크 공유",
+  "inviteCopied": "초대 링크가 복사됐어요!",
+  "inviteCopyAria": "링크 복사",
+  "inviteShareText": "Stack Health에서 함께 운동하고 비트코인 받자!"
 }

@@ -33,6 +33,7 @@ from app.services.google_oauth import exchange_code, generate_oauth_state, get_g
 from app.services.lnauth import encode_lnurl, generate_k1, verify_signature
 from app.services.rate_limit import check_rate_limit
 from app.services.notify import notify_new_user
+from app.services.referral import generate_referral_code
 from app.services.error_codes import (
     api_error,
     E_AUTH_EMAIL_TAKEN,
@@ -131,11 +132,20 @@ async def register(req: RegisterRequest, request: Request, db: Session = Depends
     loop = asyncio.get_running_loop()
     password_hash = await loop.run_in_executor(None, hash_password, req.password)
 
+    # 초대 코드: 유효하면 referred_by 기록 (보상 없음, 신규 가입에만 적용)
+    referred_by_id: int | None = None
+    if req.referral_code:
+        inviter = db.query(User).filter(User.referral_code == req.referral_code.strip()).first()
+        if inviter:
+            referred_by_id = inviter.id
+
     user = User(
         email=req.email,
         username=req.username,
         password_hash=password_hash,
         app_settings={"profile_color": _random_profile_color()},
+        referral_code=generate_referral_code(db),
+        referred_by_id=referred_by_id,
     )
     db.add(user)
     db.commit()
@@ -295,6 +305,7 @@ async def google_callback(code: str | None = None, error: str | None = None, sta
             oauth_sub=google_sub,
             avatar_url=avatar,
             app_settings={"needs_username": True, "profile_color": _random_profile_color()},
+            referral_code=generate_referral_code(db),
         )
         db.add(user)
         db.commit()
@@ -373,6 +384,7 @@ def lnauth_callback(
             oauth_provider="lnauth",
             oauth_sub=key,
             app_settings={"needs_username": True, "profile_color": _random_profile_color()},
+            referral_code=generate_referral_code(db),
         )
         db.add(user)
         db.flush()

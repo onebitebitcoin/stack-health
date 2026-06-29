@@ -16,6 +16,7 @@ from app.models.video import Video
 from app.routes.auth import get_active_user, get_optional_user
 from app.routes.auth import get_current_user as get_required_user
 from app.services.notification import create_notification
+from app.services.referral import generate_referral_code
 from app.services.reward import (
     KST,
     REWARD_STATUS_FIXED,
@@ -76,6 +77,26 @@ class ActiveChallengeSchema(BaseModel):
     title: str
     upload_count: int
     condition_value: int
+
+
+@router.get("/me/referral")
+def get_my_referral(
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """내 초대 코드·링크·초대 수 반환 (보상 없음)."""
+    if not current_user.referral_code:
+        current_user.referral_code = generate_referral_code(db)
+        db.commit()
+    invited_count = (
+        db.query(sqlfunc.count(User.id)).filter(User.referred_by_id == current_user.id).scalar() or 0
+    )
+    return {
+        "data": {
+            "referral_code": current_user.referral_code,
+            "invited_count": invited_count,
+        }
+    }
 
 
 @router.get("/me/stats")

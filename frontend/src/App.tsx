@@ -37,6 +37,7 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage'))
 const PostEditPage = lazy(() => import('./pages/PostEditPage'))
 const FollowListPage = lazy(() => import('./pages/FollowListPage'))
+const InvitePage = lazy(() => import('./pages/InvitePage'))
 const LightningLoginPage = lazy(() => import('./pages/LightningLoginPage'))
 const EmailLoginPage = lazy(() => import('./pages/EmailLoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
@@ -56,7 +57,7 @@ const KNOWN_ROUTE_SEGMENTS = new Set([
   'login', 'upload', 'challenges', 'my-challenges',
   'profile', 'setup-username', 'users', 'admin', 'terms',
   'settings', 'team', 'leaderboard', 'share', 'register', 'lightning-guide',
-  'notifications', 'posts', 'survey',
+  'notifications', 'posts', 'survey', 'invite',
 ])
 
 function Layout() {
@@ -68,6 +69,15 @@ function Layout() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
   const { token, setUser } = useAuthStore()
+
+  // 초대 링크(?ref=CODE) 캡처 — 가입 경로와 무관하게 localStorage에 보관
+  useEffect(() => {
+    const ref = new URLSearchParams(location.search).get('ref')
+    if (ref) {
+      try { localStorage.setItem('referral_code', ref) } catch { /* ignore */ }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!token) return
@@ -146,6 +156,7 @@ function Layout() {
         <Route path="/posts/:postId/edit" element={<RequireAuth><PostEditPage /></RequireAuth>} />
         <Route path="/users/:userId/followers" element={<RequireAuth><FollowListPage mode="followers" /></RequireAuth>} />
         <Route path="/users/:userId/following" element={<RequireAuth><FollowListPage mode="following" /></RequireAuth>} />
+        <Route path="/invite" element={<RequireAuth><InvitePage /></RequireAuth>} />
         <Route path="/survey/:slug" element={<SurveyPage />} />
         <Route path="/admin/surveys" element={<AdminSurveysListPage />} />
         <Route path="/admin/surveys/new" element={<AdminSurveyEditorPage />} />

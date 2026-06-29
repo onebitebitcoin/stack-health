@@ -138,11 +138,16 @@
 - 기존 회귀: backend `pytest` 전체 GREEN(커버리지 ≥75%), frontend `vitest`+`tsc`+`eslint`+build GREEN.
 - 각 단계 마이그레이션 후 `alembic upgrade head` 검증.
 
-## 4. 미결 / 확인 필요
-1. **태그 메인 카테고리 변경 + fixed 리워드**: 거부(권장) vs 차액 조정 — 거부로 진행해도 되는지.
-2. **팔로우 알림 위치**: 기존 알림 페이지/컴포넌트 명칭 확인 후 통합.
-3. **초대 OAuth(ref)**: 1차 email-only로 좁히고 Google/Lightning은 후속으로 분리할지.
-4. 초대 링크 도착 경로: `/login/register?ref=` vs 루트 `/?ref=` (앱/웹 라우팅 확인).
+## 4. 확정 / 구현 결과
+1. **태그 메인 카테고리 변경 + fixed 리워드**: **거부** (queued만 재산정) — 구현 완료.
+2. **팔로우 알림**: 기존 `NotificationsPage` + `notification` 네임스페이스에 `follow` 타입 통합.
+3. **초대 OAuth(ref)**: 1차 **email register만 ref 기록**. Google/Lightning 가입은 referral_code 발급만(코드 부여), ref 기록은 후속. `?ref=`는 App에서 localStorage 캡처되므로 OAuth 가입에 ref 기록을 붙이는 후속 작업은 작음.
+4. **초대 링크 경로**: `/login/register?ref=CODE` 확정.
+
+## 구현 결과 요약 (전 단계 완료)
+- 단계 A: `PATCH /videos/posts/{id}` + `PostEditPage`(`/posts/:id/edit`) — backend 10 테스트.
+- 단계 B: `follows` 테이블 + `notifications.post_id` nullable, follow API, `FollowListPage`, 프로필 카운트·버튼 — backend 9 테스트.
+- 단계 C: `users.referral_code`(백필)·`referred_by_id`, `/users/me/referral`, `InvitePage`(`/invite`), `?ref=` 캡처 — backend 6 테스트.
 
 ---
 

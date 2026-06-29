@@ -80,5 +80,14 @@
   "followBtn": "Follow",
   "followingBtn": "Following",
   "noFollowers": "No followers yet",
-  "noFollowing": "Not following anyone yet"
+  "noFollowing": "Not following anyone yet",
+  "inviteFriends": "Invite Friends",
+  "inviteTitle": "Invite Friends",
+  "inviteDescription": "Share your invite link to bring friends to Stack Health.",
+  "invitedCount": "Friends invited",
+  "inviteLink": "Invite link",
+  "inviteShare": "Share invite link",
+  "inviteCopied": "Invite link copied!",
+  "inviteCopyAria": "Copy link",
+  "inviteShareText": "Work out and earn Bitcoin with me on Stack Health!"
 }
