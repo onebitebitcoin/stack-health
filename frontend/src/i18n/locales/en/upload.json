@@ -114,6 +114,14 @@
     "proofPhotoPreviewAlt": "Photo preview",
     "uploadStart": "Start upload"
   },
+  "edit": {
+    "title": "Edit Post",
+    "loading": "Loading...",
+    "save": "Save",
+    "saving": "Saving...",
+    "saved": "Updated",
+    "failed": "Failed to update"
+  },
   "processing": {
     "uploading": "Uploading...",
     "processing": "Processing video...",

@@ -47,6 +47,7 @@
   "deleting": "삭제 중...",
   "myPostsLabel": "내 영상",
   "deleteAriaLabel": "삭제",
+  "editAriaLabel": "수정",
   "userNotFound": "존재하지 않는 사용자예요",
   "uploadCount": "{{count}}개 업로드",
   "tabVideos": "영상",

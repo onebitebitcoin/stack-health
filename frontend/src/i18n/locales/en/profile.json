@@ -47,6 +47,7 @@
   "deleting": "Deleting...",
   "myPostsLabel": "My Videos",
   "deleteAriaLabel": "Delete",
+  "editAriaLabel": "Edit",
   "userNotFound": "This user doesn't exist",
   "uploadCount": "{{count}} uploads",
   "tabVideos": "Videos",

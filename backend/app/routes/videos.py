@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import tempfile
 import logging
 import uuid
@@ -24,16 +25,19 @@ from app.routes.challenges import increment_challenge_upload
 from app.schemas.video import (
     ConfirmUploadRequest,
     PostSchema,
+    PostUpdateRequest,
     PresignedUrlRequest,
     PresignedUrlResponse,
     SubtitleLanguage,
 )
+from app.models.reward import RewardPoint
 from app.services import r2 as r2_service
 from app.services.subtitles import sanitize_srt
 from app.services.share_token import generate_share_token
 from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_image_merge_job, enqueue_merge_job, enqueue_multi_pipeline, enqueue_subtitle_extract_job, fail_job, get_job_status, reserve_job_id
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
+    REWARD_STATUS_QUEUED,
     add_points,
     get_daily_upload_count,
     points_for_tags,
@@ -423,6 +427,113 @@ def get_post(
         subtitle_status=video.subtitle_status,
         avatar_url=user.avatar_url,
         profile_color=(user.app_settings or {}).get("profile_color"),
+        challenge_id=post.challenge_id,
+    )
+    return {"data": {"post": post_schema}}
+
+
+_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+@router.patch("/posts/{post_id}")
+def update_post(
+    post_id: int,
+    req: PostUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """본인(또는 admin) 게시물의 캡션·태그·운동시간 수정.
+
+    영상·자막(burn-in)·썸네일은 변경하지 않는다.
+    메인 카테고리(tags[0]) 변경 시 업로드 리워드를 재산정하되,
+    이미 확정(fixed)된 리워드의 영상은 메인 카테고리 변경을 거부한다.
+    """
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise api_error(404, E_POST_NOT_FOUND, "게시물을 찾을 수 없습니다")
+    if post.user_id != current_user.id and not current_user.is_admin:
+        raise api_error(403, E_FORBIDDEN, "이 작업을 수행할 권한이 없습니다")
+
+    fields = req.model_dump(exclude_unset=True)
+
+    if "caption" in fields:
+        caption = fields["caption"]
+        if caption is not None and len(caption) > 140:
+            raise api_error(400, E_VIDEO_FORMAT_INVALID, "설명은 140자 이하여야 합니다")
+        post.caption = caption
+
+    for time_field in ("workout_start", "workout_end"):
+        if time_field in fields:
+            value = fields[time_field]
+            if value is not None and value != "" and not _TIME_RE.match(value):
+                raise api_error(400, E_VIDEO_DURATION_INVALID, "운동 시간 형식이 올바르지 않습니다 (HH:MM)")
+            setattr(post, time_field, value or None)
+
+    if "tags" in fields and fields["tags"] is not None:
+        new_tags = [t for t in fields["tags"] if isinstance(t, str) and t.strip()]
+        old_tags = _parse_tags(post.tags)
+        old_main = old_tags[0] if old_tags else None
+        new_main = new_tags[0] if new_tags else None
+
+        if new_main != old_main:
+            # 메인 카테고리 변경 → 포인트 재산정 (queued만 허용)
+            queued = (
+                db.query(RewardPoint)
+                .filter(
+                    RewardPoint.reason == "upload",
+                    RewardPoint.reference_id == post.video_id,
+                    RewardPoint.status == REWARD_STATUS_QUEUED,
+                )
+                .first()
+            )
+            fixed_exists = (
+                db.query(RewardPoint)
+                .filter(
+                    RewardPoint.reason == "upload",
+                    RewardPoint.reference_id == post.video_id,
+                    RewardPoint.status != REWARD_STATUS_QUEUED,
+                )
+                .first()
+            )
+            if fixed_exists and not queued:
+                raise api_error(
+                    400, E_FORBIDDEN,
+                    "포인트가 확정되어 운동 종류를 변경할 수 없습니다 (설명·세부태그·시간은 수정 가능)",
+                )
+            if queued:
+                new_points = points_for_tags(new_tags)
+                if queued.points != new_points:
+                    queued.points = new_points
+
+        post.tags = json.dumps(new_tags, ensure_ascii=False)
+
+    db.commit()
+    db.refresh(post)
+
+    video = db.query(Video).filter(Video.id == post.video_id).first()
+    user = db.query(User).filter(User.id == post.user_id).first()
+    comment_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
+    post_schema = PostSchema(
+        id=post.id,
+        video_id=post.video_id,
+        user_id=post.user_id,
+        caption=post.caption,
+        tags=_parse_tags(post.tags),
+        like_count=post.like_count,
+        view_count=post.view_count,
+        comment_count=comment_count,
+        created_at=post.created_at,
+        cdn_url=video.cdn_url if video else "",
+        username=user.username if user else "",
+        workout_start=post.workout_start,
+        workout_end=post.workout_end,
+        share_token=post.share_token,
+        thumbnail_url=post.thumbnail_url,
+        subtitle_url=video.subtitle_url if video else None,
+        subtitle_text=video.subtitle_text if video else None,
+        subtitle_status=video.subtitle_status if video else "skipped",
+        avatar_url=user.avatar_url if user else None,
+        profile_color=(user.app_settings or {}).get("profile_color") if user else None,
         challenge_id=post.challenge_id,
     )
     return {"data": {"post": post_schema}}

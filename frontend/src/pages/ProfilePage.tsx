@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Droplets, ShieldCheck, Settings, Share2, Bell,
-  ChevronLeft, ChevronRight, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2,
+  ChevronLeft, ChevronRight, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2, Pencil,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -496,13 +496,22 @@ export default function ProfilePage() {
                   {isPending && (
                     <div className="absolute top-1.5 left-1.5 h-2 w-2 rounded-full bg-yellow-400" />
                   )}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(post.id) }}
-                    className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white/80"
-                    aria-label={t('deleteAriaLabel')}
-                  >
-                    <Trash2 size={11} strokeWidth={2} />
-                  </button>
+                  <div className="absolute top-1.5 right-1.5 flex gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/posts/${post.id}/edit`) }}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white/80"
+                      aria-label={t('editAriaLabel')}
+                    >
+                      <Pencil size={11} strokeWidth={2} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(post.id) }}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white/80"
+                      aria-label={t('deleteAriaLabel')}
+                    >
+                      <Trash2 size={11} strokeWidth={2} />
+                    </button>
+                  </div>
                   <div className="absolute bottom-1.5 right-1 flex flex-col items-end gap-0.5 text-white/90">
                     <div className="flex items-center gap-0.5">
                       <Heart size={9} strokeWidth={2} />
