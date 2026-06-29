@@ -358,6 +358,12 @@ export default function AdminPage() {
                     <span>{t('challengeCountLabel', { count: u.challenge_count })}</span>
                     <span>{Number(u.total_points).toFixed(2)}L</span>
                   </div>
+                  {(u.referred_by_username || u.referred_count > 0) && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-accent/80">
+                      {u.referred_by_username && <span>{t('referredByLabel', { username: u.referred_by_username })}</span>}
+                      {u.referred_count > 0 && <span>{t('referredCountLabel', { count: u.referred_count })}</span>}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mt-3 flex gap-2">

@@ -59,6 +59,8 @@ export interface AdminUser {
   video_count: number
   total_points: number
   challenge_count: number
+  referred_count: number
+  referred_by_username: string | null
   lightning_address: string | null
   created_at: string
 }

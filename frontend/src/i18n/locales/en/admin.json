@@ -14,6 +14,8 @@
   "noEmail": "No email",
   "videoCountLabel": "{{count}} videos",
   "challengeCountLabel": "{{count}} challenges",
+  "referredByLabel": "Invited by @{{username}}",
+  "referredCountLabel": "{{count}} invited",
   "detailButton": "Details",
   "deleteButton": "Delete",
   "totalVideos": "{{total}} total · page {{page}}/{{totalPages}}",

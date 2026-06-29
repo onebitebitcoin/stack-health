@@ -141,3 +141,29 @@ def test_admin_app_upload_url_and_confirm(mock_upload_url, mock_cdn, client: Tes
     )
     assert confirm_res.status_code == 200
     assert confirm_res.json()["data"]["android_filename"] == "app.apk"
+
+
+def test_admin_users_shows_referral_tracking(client: TestClient, db: Session) -> None:
+    """admin 유저 목록에서 누가 누구를 초대했는지(referred_by_username)와
+    각 유저가 데려온 가입자 수(referred_count)를 확인할 수 있다."""
+    admin_token = _reg_admin(client, db)
+
+    # 초대자 가입 → referral_code 확보
+    inviter_token, inviter = _reg(client, email="inv@x.com", username="inviter")
+    code = client.get("/api/v1/users/me/referral", headers=_auth(inviter_token)).json()["data"]["referral_code"]
+
+    # 피초대자 2명이 초대 코드로 가입
+    client.post("/api/v1/auth/register", json={"email": "in1@x.com", "username": "invitee1", "password": "password123", "referral_code": code})
+    client.post("/api/v1/auth/register", json={"email": "in2@x.com", "username": "invitee2", "password": "password123", "referral_code": code})
+
+    res = client.get("/api/v1/admin/users", headers=_auth(admin_token), params={"limit": 100})
+    assert res.status_code == 200
+    users = {u["username"]: u for u in res.json()["data"]["users"]}
+
+    # 초대자: 2명 데려옴
+    assert users["inviter"]["referred_count"] == 2
+    # 피초대자: inviter가 초대자로 표시됨
+    assert users["invitee1"]["referred_by_username"] == "inviter"
+    assert users["invitee2"]["referred_by_username"] == "inviter"
+    # 일반 가입자: 초대자 없음
+    assert users["invitee1"]["referred_count"] == 0

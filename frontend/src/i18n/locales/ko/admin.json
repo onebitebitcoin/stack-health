@@ -14,6 +14,8 @@
   "noEmail": "이메일 없음",
   "videoCountLabel": "영상 {{count}}개",
   "challengeCountLabel": "챌린지 {{count}}개",
+  "referredByLabel": "초대: @{{username}}",
+  "referredCountLabel": "초대한 친구 {{count}}명",
   "detailButton": "상세",
   "deleteButton": "삭제",
   "totalVideos": "총 {{total}}개 · {{page}}/{{totalPages}} 페이지",

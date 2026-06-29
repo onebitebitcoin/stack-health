@@ -200,6 +200,8 @@ def list_users(
     video_counts: dict = {}
     point_totals: dict = {}
     challenge_counts: dict = {}
+    referred_counts: dict = {}
+    inviter_names: dict = {}
     if user_ids:
         video_counts = dict(
             db.query(Video.user_id, func.count(Video.id))
@@ -222,6 +224,19 @@ def list_users(
             .group_by(ChallengeParticipation.user_id)
             .all()
         )
+        # 이 유저들이 각각 데려온 가입자 수 (referred_by_id == 이 유저)
+        referred_counts = dict(
+            db.query(User.referred_by_id, func.count(User.id))
+            .filter(User.referred_by_id.in_(user_ids))
+            .group_by(User.referred_by_id)
+            .all()
+        )
+        # 이 유저들을 초대한 사람(inviter)의 username
+        inviter_ids = {u.referred_by_id for u in users if u.referred_by_id is not None}
+        if inviter_ids:
+            inviter_names = dict(
+                db.query(User.id, User.username).filter(User.id.in_(inviter_ids)).all()
+            )
 
     def _auth_provider(u: User) -> str:
         if u.oauth_provider == "google":
@@ -242,6 +257,8 @@ def list_users(
             "video_count": video_counts.get(u.id, 0),
             "total_points": point_totals.get(u.id, 0),
             "challenge_count": challenge_counts.get(u.id, 0),
+            "referred_count": referred_counts.get(u.id, 0),
+            "referred_by_username": inviter_names.get(u.referred_by_id) if u.referred_by_id else None,
             "created_at": u.created_at.isoformat(),
         }
         for u in users
