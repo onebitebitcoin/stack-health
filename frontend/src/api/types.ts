@@ -193,6 +193,17 @@ export interface UserProfile {
   posts: PublicPost[]
   titles: EarnedTitle[]
   active_challenges: ActiveChallenge[]
+  follower_count: number
+  following_count: number
+  is_following: boolean
+}
+
+export interface FollowUser {
+  id: number
+  username: string
+  avatar_url: string | null
+  profile_color: string | null
+  is_following: boolean
 }
 
 export interface MyStats {
@@ -234,8 +245,8 @@ export interface NotificationActor {
 
 export interface AppNotification {
   id: number
-  type: 'comment' | 'like'
-  post_id: number
+  type: 'comment' | 'like' | 'follow'
+  post_id: number | null
   comment_id: number | null
   is_read: boolean
   created_at: string

@@ -74,5 +74,11 @@
   "daysOfWeek": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
   "shareProfile": "Share Profile",
   "shareProfileCopied": "Profile link copied!",
-  "shareProfileText": "Check out {{username}}'s profile on Stack Health"
+  "shareProfileText": "Check out {{username}}'s profile on Stack Health",
+  "followers": "Followers",
+  "following": "Following",
+  "followBtn": "Follow",
+  "followingBtn": "Following",
+  "noFollowers": "No followers yet",
+  "noFollowing": "Not following anyone yet"
 }

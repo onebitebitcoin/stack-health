@@ -11,5 +11,6 @@ from app.models.post_like import PostLike
 from app.models.post_view import PostView
 from app.models.notification import Notification
 from app.models.survey import Survey, SurveyResponse
+from app.models.follow import Follow
 
-__all__ = ["User", "Video", "Post", "RewardPoint", "Comment", "AdminLog", "Challenge", "ChallengeParticipation", "LNAuthChallenge", "AppLinks", "PostLike", "PostView", "Notification", "Survey", "SurveyResponse"]
+__all__ = ["User", "Video", "Post", "RewardPoint", "Comment", "AdminLog", "Challenge", "ChallengeParticipation", "LNAuthChallenge", "AppLinks", "PostLike", "PostView", "Notification", "Survey", "SurveyResponse", "Follow"]

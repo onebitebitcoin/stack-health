@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Trophy, ArrowLeft, Dumbbell, Heart, Eye, MessageCircle, Share2 } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Trophy, ArrowLeft, Dumbbell, Heart, Eye, MessageCircle, Share2, UserPlus, UserCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { UserProfile, PublicPost } from '../api/types'
 import UserAvatar from '../components/UserAvatar'
 import { shareProfileLink } from '../lib/share'
+import { useAuthStore } from '../store/auth'
 
 type Tab = 'videos' | 'challenges' | 'titles'
 
@@ -21,6 +22,9 @@ export default function UserProfilePage() {
   const videoItemRefs = useRef<(HTMLDivElement | null)[]>([])
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
+  const qc = useQueryClient()
+  const currentUser = useAuthStore((s) => s.user)
+
   const { data, isLoading, isError } = useQuery<UserProfile>({
     queryKey: ['user-profile', userId],
     queryFn: async () => {
@@ -28,6 +32,32 @@ export default function UserProfilePage() {
       return res.data.data
     },
     enabled: !!userId,
+  })
+
+  const followMutation = useMutation({
+    mutationFn: async (follow: boolean) => {
+      if (follow) await client.post(`/users/${userId}/follow`)
+      else await client.delete(`/users/${userId}/follow`)
+      return follow
+    },
+    onMutate: async (follow: boolean) => {
+      await qc.cancelQueries({ queryKey: ['user-profile', userId] })
+      const prev = qc.getQueryData<UserProfile>(['user-profile', userId])
+      if (prev) {
+        qc.setQueryData<UserProfile>(['user-profile', userId], {
+          ...prev,
+          is_following: follow,
+          follower_count: prev.follower_count + (follow ? 1 : -1),
+        })
+      }
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['user-profile', userId], ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['user-profile', userId] })
+    },
   })
 
   const posts: PublicPost[] = data?.posts ?? []
@@ -117,8 +147,26 @@ export default function UserProfilePage() {
         <UserAvatar username={user.username} avatarUrl={user.avatar_url} size={40} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-theme-primary leading-tight">@{user.username}</p>
-          <p className="text-xs text-theme-muted">{t('uploadCount', { count: post_count })}</p>
+          <div className="flex items-center gap-3 text-xs text-theme-muted mt-0.5">
+            <button onClick={() => navigate(`/users/${user.id}/followers`)} className="hover:text-theme-primary">
+              <span className="font-semibold text-theme-primary">{data.follower_count}</span> {t('followers')}
+            </button>
+            <button onClick={() => navigate(`/users/${user.id}/following`)} className="hover:text-theme-primary">
+              <span className="font-semibold text-theme-primary">{data.following_count}</span> {t('following')}
+            </button>
+          </div>
         </div>
+        {currentUser && currentUser.id !== user.id && (
+          <button
+            onClick={() => followMutation.mutate(!data.is_following)}
+            disabled={followMutation.isPending}
+            className={`flex-shrink-0 flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
+              data.is_following ? 'bg-theme-surface2 text-theme-muted' : 'bg-accent text-accent-fg'
+            }`}
+          >
+            {data.is_following ? <><UserCheck size={14} /> {t('followingBtn')}</> : <><UserPlus size={14} /> {t('followBtn')}</>}
+          </button>
+        )}
         <button
           onClick={() => shareProfileLink(user.id, user.username, t)}
           className="flex-shrink-0 p-1.5 text-theme-muted hover:text-theme-primary transition-colors"

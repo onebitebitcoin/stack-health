@@ -36,6 +36,7 @@ const LightningWalletGuidePage = lazy(() => import('./pages/LightningWalletGuide
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage'))
 const PostEditPage = lazy(() => import('./pages/PostEditPage'))
+const FollowListPage = lazy(() => import('./pages/FollowListPage'))
 const LightningLoginPage = lazy(() => import('./pages/LightningLoginPage'))
 const EmailLoginPage = lazy(() => import('./pages/EmailLoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
@@ -143,6 +144,8 @@ function Layout() {
         <Route path="/notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
         <Route path="/posts/:postId" element={<RequireAuth><PostDetailPage /></RequireAuth>} />
         <Route path="/posts/:postId/edit" element={<RequireAuth><PostEditPage /></RequireAuth>} />
+        <Route path="/users/:userId/followers" element={<RequireAuth><FollowListPage mode="followers" /></RequireAuth>} />
+        <Route path="/users/:userId/following" element={<RequireAuth><FollowListPage mode="following" /></RequireAuth>} />
         <Route path="/survey/:slug" element={<SurveyPage />} />
         <Route path="/admin/surveys" element={<AdminSurveysListPage />} />
         <Route path="/admin/surveys/new" element={<AdminSurveyEditorPage />} />

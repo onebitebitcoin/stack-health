@@ -16,9 +16,10 @@ class Notification(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     # 행위자 (댓글/좋아요를 한 사람)
     actor_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    # "comment" | "like"
+    # "comment" | "like" | "follow"
     type: Mapped[str] = mapped_column(String(20), nullable=False)
-    post_id: Mapped[int] = mapped_column(Integer, ForeignKey("posts.id"), nullable=False)
+    # follow 알림은 게시물이 없으므로 nullable
+    post_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("posts.id"), nullable=True)
     # 댓글 알림만 사용, 좋아요 알림은 NULL
     comment_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("comments.id"), nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

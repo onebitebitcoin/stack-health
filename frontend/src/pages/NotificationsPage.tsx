@@ -42,6 +42,10 @@ export default function NotificationsPage() {
   }, [])
 
   function handleClick(n: AppNotification) {
+    if (n.type === 'follow') {
+      navigate(`/users/${n.actor.id}`)
+      return
+    }
     const path = n.type === 'comment'
       ? `/posts/${n.post_id}?comment=1`
       : `/posts/${n.post_id}`
@@ -99,6 +103,8 @@ export default function NotificationsPage() {
                 <p className="text-sm text-theme-primary leading-snug">
                   {n.type === 'comment'
                     ? t('commented', { username: n.actor.username })
+                    : n.type === 'follow'
+                    ? t('followed', { username: n.actor.username })
                     : t('liked', { username: n.actor.username })}
                 </p>
                 <p className="text-xs text-theme-muted mt-0.5">{timeAgo(n.created_at)}</p>

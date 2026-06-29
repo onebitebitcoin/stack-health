@@ -3,5 +3,6 @@
   "empty": "아직 알림이 없어요",
   "commented": "{{username}}님이 회원님의 영상에 댓글을 달았어요",
   "liked": "{{username}}님이 회원님의 영상을 좋아해요",
+  "followed": "{{username}}님이 회원님을 팔로우했어요",
   "markAllRead": "모두 읽음"
 }

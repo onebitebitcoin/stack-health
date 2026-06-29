@@ -3,5 +3,6 @@
   "empty": "No notifications yet",
   "commented": "{{username}} commented on your video",
   "liked": "{{username}} liked your video",
+  "followed": "{{username}} started following you",
   "markAllRead": "Mark all read"
 }

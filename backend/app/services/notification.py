@@ -11,7 +11,7 @@ def create_notification(
     recipient_id: int,
     actor_id: int,
     type: str,
-    post_id: int,
+    post_id: int | None = None,
     comment_id: int | None = None,
 ) -> None:
     """알림 생성 헬퍼. 자기 게시물에 자기가 행동하면 알림을 생성하지 않는다.

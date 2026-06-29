@@ -74,5 +74,11 @@
   "daysOfWeek": ["월", "화", "수", "목", "금", "토", "일"],
   "shareProfile": "프로필 공유",
   "shareProfileCopied": "프로필 링크가 복사됐어요!",
-  "shareProfileText": "Stack Health에서 {{username}}님의 프로필을 확인해보세요"
+  "shareProfileText": "Stack Health에서 {{username}}님의 프로필을 확인해보세요",
+  "followers": "팔로워",
+  "following": "팔로잉",
+  "followBtn": "팔로우",
+  "followingBtn": "팔로잉",
+  "noFollowers": "아직 팔로워가 없어요",
+  "noFollowing": "아직 팔로우한 사람이 없어요"
 }
