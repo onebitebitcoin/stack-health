@@ -4,7 +4,32 @@
     "selectVideo": "영상 선택",
     "tagChallenge": "태그·챌린지",
     "record": "음성 녹음",
-    "caption": "설명·사진"
+    "caption": "설명·사진",
+    "media": "미디어",
+    "subtitle": "음성·자막",
+    "meta": "챌린지·정보"
+  },
+  "media": {
+    "title": "영상 또는 사진을 올리세요",
+    "hint": "영상 1개 또는 사진 최대 5장. 사진은 3초씩, 올린 순서대로 이어붙여요. 끌어서 순서를 바꿀 수 있어요.",
+    "addPrompt": "미디어 추가",
+    "counter": "사진 {{images}}/{{maxImages}} · 영상 {{video}}/1",
+    "estimatedLength": "예상 길이 약 {{seconds}}초",
+    "tooLong": "최대 {{max}}초까지 가능해요",
+    "next": "다음",
+    "videoLimit": "영상은 1개만 올릴 수 있어요.",
+    "imageLimit": "사진은 최대 {{max}}장까지 올릴 수 있어요.",
+    "unsupported": "지원하지 않는 파일 형식이에요."
+  },
+  "subtitle": {
+    "title": "음성·자막",
+    "optional": "(선택)",
+    "hint": "영상 음성 추출 · 녹음 · 직접 입력 중 하나로 자막을 만들 수 있어요.",
+    "sourceVideo": "영상 음성",
+    "sourceRecord": "녹음",
+    "sourceText": "직접 입력",
+    "textHint": "운동 후기를 적으면 영상 전체에 자막으로 나눠 담아드려요.",
+    "textPlaceholder": "예) 오늘 3km 러닝 완료! 다음엔 5km 도전한다"
   },
   "selectVideo": {
     "prompt": "영상을 선택하세요",

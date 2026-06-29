@@ -69,20 +69,18 @@ def run_subtitle_extract(job: dict) -> dict:
         raise RuntimeError("OPENAI_API_KEY not configured")
 
     r2 = _get_r2()
-    video_r2_key: str = job["video_r2_key"]
+    video_r2_key: str | None = job.get("video_r2_key")
     audio_r2_key: str | None = job.get("audio_r2_key")
     language: str = job.get("language") or DEFAULT_TRANSCRIPTION_LANGUAGE or "ko"
+    if not video_r2_key and not audio_r2_key:
+        raise RuntimeError("자막 추출: 영상 또는 오디오가 필요합니다")
 
     tmp_video = tmp_audio = tmp_extracted = None
     try:
-        tmp_video = _make_tmp(".mp4")
-        resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=video_r2_key)
-        with open(tmp_video, "wb") as f:
-            f.write(resp["Body"].read())
-
         metrics: dict = {"model": DEFAULT_TRANSCRIPTION_MODEL, "language": language}
 
         if audio_r2_key:
+            # 오디오(녹음)가 있으면 그것을 자막 소스로 사용 — 영상은 다운로드하지 않는다.
             suffix = ".mp4" if audio_r2_key.endswith(".mp4") else ".webm"
             tmp_audio = _make_tmp(suffix)
             resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=audio_r2_key)
@@ -91,6 +89,10 @@ def run_subtitle_extract(job: dict) -> dict:
             source_audio = tmp_audio
             metrics["source"] = "user_audio"
         else:
+            tmp_video = _make_tmp(".mp4")
+            resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=video_r2_key)
+            with open(tmp_video, "wb") as f:
+                f.write(resp["Body"].read())
             if not _has_audio_stream(tmp_video):
                 logger.info("subtitle-extract job=%s: no audio stream", job.get("job_id"))
                 return {"srt": "", "plain_text": "", "metrics": json.dumps({"skipped": "no audio stream"})}

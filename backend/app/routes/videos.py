@@ -31,7 +31,7 @@ from app.schemas.video import (
 from app.services import r2 as r2_service
 from app.services.subtitles import sanitize_srt
 from app.services.share_token import generate_share_token
-from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_image_merge_job, enqueue_merge_job, enqueue_subtitle_extract_job, fail_job, get_job_status, reserve_job_id
+from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_image_merge_job, enqueue_merge_job, enqueue_multi_pipeline, enqueue_subtitle_extract_job, fail_job, get_job_status, reserve_job_id
 from app.services.reward import (
     DAILY_MAX_UPLOADS,
     add_points,
@@ -615,7 +615,7 @@ def merge_proof(
 @router.post("/transcribe-subtitles")
 async def transcribe_subtitles(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(None),
     audio: UploadFile | None = File(None),
     language: str = Form("ko"),
     subtitle_language: SubtitleLanguage = Form("ko"),
@@ -623,17 +623,26 @@ async def transcribe_subtitles(
 ) -> dict:
     """파일을 R2에 올리고 자막 추출 잡을 큐에 등록. job_id 즉시 반환.
 
+    영상(file) 또는 오디오(audio) 중 최소 하나가 있어야 한다. 둘 다 있으면 오디오 우선.
+    이미지만 업로드한 멀티 케이스에서 녹음만으로 자막을 만들 때 file 없이 호출된다.
     subtitle_language (ko|en|auto, 기본 ko) 로 Whisper 언어를 지정한다.
     legacy `language` 파라미터가 있으면 subtitle_language보다 우선 적용된다.
     """
-    content_type = file.content_type or "video/mp4"
-    if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
-        raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 파일 형식입니다: {content_type}")
+    if file is None and audio is None:
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, "영상 또는 오디오가 필요합니다")
 
     # subtitle_language가 명시된 경우 우선 사용, 그 외 legacy language 필드 사용
     effective_language: str = subtitle_language if subtitle_language != "ko" else (language or "ko")
 
-    video_path, _ = await _spool_upload_to_temp(file, r2_service.MAX_FILE_SIZE, "자막영상")
+    video_path: str | None = None
+    video_ct: str | None = None
+    if file is not None:
+        content_type = file.content_type or "video/mp4"
+        if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
+            raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 파일 형식입니다: {content_type}")
+        video_path, _ = await _spool_upload_to_temp(file, r2_service.MAX_FILE_SIZE, "자막영상")
+        video_ct = content_type
+
     audio_path: str | None = None
     audio_ct: str | None = None
     if audio is not None:
@@ -643,7 +652,7 @@ async def transcribe_subtitles(
     job_id = reserve_job_id(current_user.id, job_type="subtitle-extract")
     background_tasks.add_task(
         _r2_upload_and_enqueue_subtitle,
-        job_id, video_path, file.content_type or "video/mp4",
+        job_id, video_path, video_ct,
         audio_path, audio_ct, current_user.id, effective_language,
     )
     return {"data": {"job_id": job_id}}
@@ -678,8 +687,8 @@ async def get_subtitle_job(
 
 def _r2_upload_and_enqueue_subtitle(
     job_id: str,
-    video_path: str,
-    video_content_type: str,
+    video_path: str | None,
+    video_content_type: str | None,
     audio_path: str | None,
     audio_content_type: str | None,
     user_id: int,
@@ -688,15 +697,17 @@ def _r2_upload_and_enqueue_subtitle(
     temp_paths = [p for p in (video_path, audio_path) if p]
     try:
         r2_client = r2_service.get_r2_client()
-        video_r2_key = f"subtitle-tmp/{uuid.uuid4()}.mp4"
-        with open(video_path, "rb") as f:
-            r2_client.put_object(
-                Bucket=app_settings.r2_bucket_name,
-                Key=video_r2_key,
-                Body=f,
-                ContentType=video_content_type,
-                CacheControl="private, max-age=3600",
-            )
+        video_r2_key: str | None = None
+        if video_path:
+            video_r2_key = f"subtitle-tmp/{uuid.uuid4()}.mp4"
+            with open(video_path, "rb") as f:
+                r2_client.put_object(
+                    Bucket=app_settings.r2_bucket_name,
+                    Key=video_r2_key,
+                    Body=f,
+                    ContentType=video_content_type or "video/mp4",
+                    CacheControl="private, max-age=3600",
+                )
 
         audio_r2_key: str | None = None
         if audio_path and audio_content_type:
@@ -971,3 +982,202 @@ def get_upload_job_status(
             "error": "영상 처리에 실패했습니다. 다시 시도해주세요." if status == "failed" else "",
         }
     }
+
+
+# ---------------------------------------------------------------------------
+# 다중 미디어 업로드 (영상 ≤1 + 이미지 ≤5) — 신규 멀티 경로
+# 기존 /upload-pipeline 은 그대로 두고 별도 경로로 신설한다.
+# ---------------------------------------------------------------------------
+
+MAX_MEDIA_IMAGES = 5
+
+
+def _r2_upload_and_enqueue_multi(
+    job_id: str,
+    spooled: list[tuple[str, str, str, str]],  # (kind, path, content_type, filename)
+    audio_path: str | None,
+    audio_content_type: str,
+    user_id: int,
+    caption: str | None,
+    tags_list: list[str],
+    challenge_id: int | None,
+    workout_start: str | None,
+    workout_end: str | None,
+    audio_duration_sec: int,
+    subtitle_srt: str | None,
+    subtitle_text: str | None,
+    subtitle_size: str | None,
+    subtitle_position: str | None,
+    subtitle_language: str,
+    mute_video_audio: bool,
+) -> None:
+    temp_paths = [p for _, p, _, _ in spooled] + ([audio_path] if audio_path else [])
+    try:
+        items: list[dict] = []
+        for kind, path, content_type, filename in spooled:
+            with open(path, "rb") as fobj:
+                r2_key, _ = r2_service.upload_fileobj(fobj, content_type, filename, user_id)
+            items.append({"kind": kind, "r2_key": r2_key})
+
+        audio_r2_key: str | None = None
+        if audio_path:
+            audio_ext = "mp4" if "mp4" in audio_content_type else "webm"
+            with open(audio_path, "rb") as audio_file:
+                audio_r2_key, _ = r2_service.upload_fileobj(
+                    audio_file, audio_content_type, f"audio.{audio_ext}", user_id
+                )
+
+        subtitle_srt_r2_key: str | None = None
+        if subtitle_srt:
+            cleaned_srt = sanitize_srt(subtitle_srt)
+            subtitle_srt_r2_key = f"subtitles/{user_id}/{uuid.uuid4()}.srt"
+            r2_client = r2_service.get_r2_client()
+            r2_client.put_object(
+                Bucket=app_settings.r2_bucket_name,
+                Key=subtitle_srt_r2_key,
+                Body=cleaned_srt.encode("utf-8"),
+                ContentType="application/x-subrip; charset=utf-8",
+                CacheControl="private, max-age=86400",
+            )
+
+        enqueue_multi_pipeline(
+            items,
+            user_id=user_id,
+            caption=caption,
+            tags=tags_list,
+            challenge_id=challenge_id,
+            workout_start=workout_start,
+            workout_end=workout_end,
+            audio_r2_key=audio_r2_key,
+            audio_duration_sec=audio_duration_sec,
+            audio_content_type=audio_content_type,
+            subtitle_srt_r2_key=subtitle_srt_r2_key,
+            # SRT(영상음성/녹음 결과)가 있으면 그것을 우선, 없을 때만 텍스트 후기 사용
+            subtitle_text=None if subtitle_srt_r2_key else subtitle_text,
+            subtitle_size=subtitle_size,
+            subtitle_position=subtitle_position,
+            subtitle_language=subtitle_language,
+            mute_video_audio=mute_video_audio,
+            job_id=job_id,
+        )
+    except Exception as e:
+        logger.error("Background multi R2 upload failed job_id=%s: %s", job_id, e)
+        fail_job(job_id, str(e))
+    finally:
+        for path in temp_paths:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+
+@router.post("/upload-multi")
+async def upload_multi(
+    files: list[UploadFile] = File(...),
+    items_meta: str = Form(...),
+    caption: str | None = Form(None),
+    tags: str = Form("[]"),
+    challenge_id: int | None = Form(None),
+    workout_start: str | None = Form(None),
+    workout_end: str | None = Form(None),
+    audio: UploadFile | None = File(None),
+    audio_duration_sec: int = Form(0),
+    subtitle_srt: str | None = Form(None),
+    subtitle_text: str | None = Form(None),
+    subtitle_size: str | None = Form(None),
+    subtitle_position: str | None = Form(None),
+    subtitle_language: SubtitleLanguage = Form("ko"),
+    mute_video: bool = Form(False),
+    current_user: User = Depends(get_active_user),
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = ...,
+    x_client_timezone: str = Header(default="UTC"),
+) -> dict:
+    """다중 미디어(영상 ≤1 + 이미지 ≤5)를 순서대로 받아 합성 파이프라인에 등록한다.
+
+    items_meta: JSON 배열 `[{"kind": "image"|"video"}, ...]` — files 순서와 1:1 대응.
+    파일 수신 즉시 job_id 반환, R2 업로드 + 처리는 백그라운드.
+    """
+    try:
+        meta = json.loads(items_meta)
+    except (json.JSONDecodeError, TypeError):
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, "items_meta 형식이 올바르지 않습니다")
+
+    if not isinstance(meta, list) or not files or len(meta) != len(files):
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, "items_meta와 파일 수가 일치하지 않습니다")
+
+    kinds = [str(m.get("kind")) if isinstance(m, dict) else "" for m in meta]
+    n_video = sum(1 for k in kinds if k == "video")
+    n_image = sum(1 for k in kinds if k == "image")
+    if n_video > 1:
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, "영상은 1개까지만 업로드할 수 있습니다")
+    if n_image > MAX_MEDIA_IMAGES:
+        raise api_error(400, E_IMAGE_FORMAT_INVALID, f"이미지는 최대 {MAX_MEDIA_IMAGES}장까지 업로드할 수 있습니다")
+    if n_video + n_image != len(files) or (n_video + n_image) == 0:
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, "지원하지 않는 미디어 구성입니다")
+
+    if get_daily_upload_count(db, current_user.id, _parse_tz(x_client_timezone)) >= DAILY_MAX_UPLOADS:
+        raise api_error(429, E_VIDEO_DAILY_LIMIT, f"하루 업로드 한도({DAILY_MAX_UPLOADS}회)를 초과했습니다")
+
+    tags_list = _parse_tags(tags)
+
+    spooled: list[tuple[str, str, str, str]] = []  # (kind, path, content_type, filename)
+    audio_path: str | None = None
+    audio_content_type = "audio/webm"
+    try:
+        for upload, kind in zip(files, kinds):
+            content_type = upload.content_type or ("video/mp4" if kind == "video" else "image/jpeg")
+            if kind == "video":
+                if content_type not in r2_service.ALLOWED_CONTENT_TYPES:
+                    raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 영상 형식입니다: {content_type}")
+                path, _ = await _spool_upload_to_temp(upload, r2_service.MAX_FILE_SIZE, "영상")
+            elif kind == "image":
+                if content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
+                    raise api_error(400, E_IMAGE_FORMAT_INVALID, f"지원하지 않는 이미지 형식입니다: {content_type}")
+                path, _ = await _spool_upload_to_temp(upload, MAX_IMAGE_SIZE, "이미지")
+            else:
+                raise api_error(400, E_VIDEO_FORMAT_INVALID, f"알 수 없는 미디어 종류: {kind}")
+            spooled.append((kind, path, content_type, upload.filename or f"{kind}"))
+
+        if audio is not None:
+            audio_content_type = audio.content_type or "audio/webm"
+            audio_path, _ = await _spool_upload_to_temp(audio, r2_service.MAX_FILE_SIZE, "오디오")
+
+        job_id = reserve_job_id(current_user.id, job_type="multi-pipeline")
+    except Exception:
+        for _, p, _, _ in spooled:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+        if audio_path:
+            try:
+                os.unlink(audio_path)
+            except OSError:
+                pass
+        raise
+
+    logger.info("upload_multi: user_id=%s job_id=%s items=%d", current_user.id, job_id, len(spooled))
+
+    background_tasks.add_task(
+        _r2_upload_and_enqueue_multi,
+        job_id=job_id,
+        spooled=spooled,
+        audio_path=audio_path,
+        audio_content_type=audio_content_type,
+        user_id=current_user.id,
+        caption=caption,
+        tags_list=tags_list,
+        challenge_id=challenge_id,
+        workout_start=workout_start,
+        workout_end=workout_end,
+        audio_duration_sec=audio_duration_sec,
+        subtitle_srt=subtitle_srt,
+        subtitle_text=subtitle_text,
+        subtitle_size=subtitle_size,
+        subtitle_position=subtitle_position,
+        subtitle_language=subtitle_language,
+        mute_video_audio=mute_video,
+    )
+
+    return {"data": {"job_id": job_id, "status": "processing"}}

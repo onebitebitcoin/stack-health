@@ -4,7 +4,32 @@
     "selectVideo": "Select Video",
     "tagChallenge": "Tags & Challenge",
     "record": "Voice Recording",
-    "caption": "Caption & Photo"
+    "caption": "Caption & Photo",
+    "media": "Media",
+    "subtitle": "Voice & Subtitle",
+    "meta": "Challenge & Info"
+  },
+  "media": {
+    "title": "Add a video or photos",
+    "hint": "One video or up to 5 photos. Photos play 3s each, joined in order. Drag to reorder.",
+    "addPrompt": "Add media",
+    "counter": "Photos {{images}}/{{maxImages}} · Video {{video}}/1",
+    "estimatedLength": "Estimated length ~{{seconds}}s",
+    "tooLong": "Up to {{max}}s allowed",
+    "next": "Next",
+    "videoLimit": "You can add only 1 video.",
+    "imageLimit": "You can add up to {{max}} photos.",
+    "unsupported": "Unsupported file type."
+  },
+  "subtitle": {
+    "title": "Voice & Subtitle",
+    "optional": "(optional)",
+    "hint": "Create subtitles from the video's audio, a recording, or by typing.",
+    "sourceVideo": "Video audio",
+    "sourceRecord": "Record",
+    "sourceText": "Type",
+    "textHint": "Write your workout note and we'll split it into subtitles across the video.",
+    "textPlaceholder": "e.g. Finished a 3km run today! Next up: 5km"
   },
   "selectVideo": {
     "prompt": "Select a video",

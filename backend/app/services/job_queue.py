@@ -142,6 +142,68 @@ def enqueue_full_upload_pipeline(
     return job_id
 
 
+def enqueue_multi_pipeline(
+    items: list[dict],
+    *,
+    user_id: int,
+    caption: str | None = None,
+    tags: list[str] | None = None,
+    challenge_id: int | None = None,
+    workout_start: str | None = None,
+    workout_end: str | None = None,
+    audio_r2_key: str | None = None,
+    audio_duration_sec: int = 0,
+    audio_content_type: str = "audio/webm",
+    subtitle_srt_r2_key: str | None = None,
+    subtitle_text: str | None = None,
+    subtitle_size: str | None = None,
+    subtitle_position: str | None = None,
+    subtitle_language: str = "ko",
+    mute_video_audio: bool = False,
+    job_id: str | None = None,
+) -> str:
+    """다중 미디어(영상 ≤1 + 이미지) 업로드 파이프라인을 Redis 큐에 등록.
+
+    items: [{"kind": "image"|"video", "r2_key": "..."}] — 전송 순서 그대로.
+    """
+    if job_id is None:
+        job_id = str(uuid.uuid4())
+    created_at = datetime.now(timezone.utc).isoformat()
+
+    payload = {
+        "job_id": job_id,
+        "job_type": "multi-pipeline",
+        "created_at": created_at,
+        "items": items,
+        "user_id": user_id,
+        "caption": caption,
+        "tags": tags or [],
+        "challenge_id": challenge_id,
+        "workout_start": workout_start,
+        "workout_end": workout_end,
+        "audio_r2_key": audio_r2_key,
+        "audio_duration_sec": audio_duration_sec,
+        "audio_content_type": audio_content_type,
+        "subtitle_srt_r2_key": subtitle_srt_r2_key,
+        "subtitle_text": subtitle_text,
+        "subtitle_size": subtitle_size,
+        "subtitle_position": subtitle_position,
+        "subtitle_language": subtitle_language,
+        "mute_video_audio": mute_video_audio,
+    }
+
+    r = get_redis_client()
+    _set_job_status(r, job_id,
+        status="pending",
+        job_type="multi-pipeline",
+        user_id=str(user_id),
+        created_at=created_at,
+    )
+    r.lpush(QUEUE_NAME, json.dumps(payload))
+    logger.info("Enqueued multi-pipeline job %s for user %s (%d items)", job_id, user_id, len(items))
+    return job_id
+
+
 def reserve_job_id(user_id: int, job_type: str = "full-pipeline") -> str:
     """job_id를 미리 예약하고 Redis에 'pending' 상태로 등록. 파일 수신 즉시 응답 가능하도록."""
     job_id = str(uuid.uuid4())
@@ -158,13 +220,16 @@ def reserve_job_id(user_id: int, job_type: str = "full-pipeline") -> str:
 
 
 def enqueue_subtitle_extract_job(
-    video_r2_key: str,
+    video_r2_key: str | None,
     audio_r2_key: str | None,
     language: str,
     user_id: int,
     job_id: str | None = None,
 ) -> str:
-    """자막 추출 작업을 Redis 큐에 등록. job_id 즉시 반환."""
+    """자막 추출 작업을 Redis 큐에 등록. job_id 즉시 반환.
+
+    video_r2_key / audio_r2_key 중 최소 하나는 있어야 한다(오디오 우선).
+    """
     if job_id is None:
         job_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
@@ -172,10 +237,11 @@ def enqueue_subtitle_extract_job(
         "job_id": job_id,
         "job_type": "subtitle-extract",
         "created_at": created_at,
-        "video_r2_key": video_r2_key,
         "language": language,
         "user_id": user_id,
     }
+    if video_r2_key:
+        payload["video_r2_key"] = video_r2_key
     if audio_r2_key:
         payload["audio_r2_key"] = audio_r2_key
     r = get_redis_client()

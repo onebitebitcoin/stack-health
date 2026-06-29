@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, type ChangeEvent } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { ChevronLeft, Flame, Share2, Check } from 'lucide-react'
@@ -11,10 +11,9 @@ import { getApiErrorMessage } from '../api/errors'
 import { MERGE_POLL_INTERVAL_MS } from '../lib/constants'
 import type { Challenge, SubtitleLanguage } from '../api/types'
 import { isAxiosError } from 'axios'
-import StepSelectVideo from './upload/StepSelectVideo'
-import StepTagChallenge, { type MainCategory } from './upload/StepTagChallenge'
-import StepRecord from './upload/StepRecord'
-import StepCaption from './upload/StepCaption'
+import StepMedia, { type MediaItem, MAX_IMAGES, IMAGE_CLIP_SECONDS } from './upload/StepMedia'
+import StepSubtitle, { type SubtitleSource } from './upload/StepSubtitle'
+import StepMeta, { type MainCategory } from './upload/StepMeta'
 
 function useCountUp(target: number, duration = 800) {
   const [val, setVal] = useState(0)
@@ -32,7 +31,7 @@ function useCountUp(target: number, duration = 800) {
   return val
 }
 
-const STEPS_KEYS = ['selectVideo', 'tagChallenge', 'record', 'caption'] as const
+const STEPS_KEYS = ['media', 'subtitle', 'meta'] as const
 const MAX_RECORD_SECONDS = 60
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
@@ -42,11 +41,17 @@ const PIPELINE_JOB_MAX_AGE_MS = 23 * 60 * 60 * 1000
 const CONFETTI_COLORS = ['#B5FF2E', '#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FF9FF3']
 
 const STEP_CONFIG: Record<string, { start: number; ceiling: number; interval: number }> = {
-  audio_merge: { start: 73, ceiling: 75,  interval: 1500 },
-  image_merge: { start: 76, ceiling: 88,  interval: 5000 },
+  compose:     { start: 72, ceiling: 80, interval: 3000 },
+  audio_merge: { start: 80, ceiling: 82, interval: 1500 },
+  image_merge: { start: 82, ceiling: 88, interval: 5000 },
   subtitle_burn: { start: 86, ceiling: 90, interval: 3000 },
-  compress:    { start: 91, ceiling: 94,  interval: 1500 },
-  db_save:     { start: 95, ceiling: 98,  interval: 1500 },
+  compress:    { start: 91, ceiling: 94, interval: 1500 },
+  db_save:     { start: 95, ceiling: 98, interval: 1500 },
+}
+
+function genId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return `m-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 function saveJob(jobId: string) {
@@ -80,17 +85,19 @@ export default function UploadPage() {
   const navigate = useNavigate()
   const { t } = useTranslation('upload')
   const qc = useQueryClient()
-  const user = useAuthStore((s) => s.user)
-  const devMode = !!(user?.app_settings?.developer_mode)
+  useAuthStore((s) => s.user)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState(0)
-  const [file, setFile] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
+
   const [mainCategory, setMainCategoryState] = useState<MainCategory | null>('가벼운 활동')
   const [subCategory, setSubCategoryState] = useState<string | null>(null)
   const [subCategoryInput, setSubCategoryInput] = useState('')
   const [caption, setCaption] = useState('')
+
+  const [subtitleSource, setSubtitleSource] = useState<SubtitleSource>('none')
+  const [subtitleRawText, setSubtitleRawText] = useState('')
   const [subtitleText, setSubtitleText] = useState('')
   const [subtitlePlainText, setSubtitlePlainText] = useState('')
   const [subtitleSize, setSubtitleSize] = useState<'small' | 'medium' | 'large'>('medium')
@@ -99,16 +106,15 @@ export default function UploadPage() {
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
   const [muteOriginalAudio, setMuteOriginalAudio] = useState(false)
   const [videoAudioStatus, setVideoAudioStatus] = useState<'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'>('idle')
-  const [subtitleDebugMetrics, setSubtitleDebugMetrics] = useState<Record<string, unknown> | null>(null)
-  const stepTwoInitRef = useRef(false)
+  const videoSubtitleTriedRef = useRef(false)
+
   const [hasChallenge, setHasChallenge] = useState<boolean | null>(false)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
   const [showChallengeModal, setShowChallengeModal] = useState(false)
   const [challengeSearch, setChallengeSearch] = useState('')
   const [workoutStart, setWorkoutStart] = useState(() => {
-    const d = new Date()
-    d.setMinutes(d.getMinutes() - 30)
+    const d = new Date(); d.setMinutes(d.getMinutes() - 30)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   })
   const [workoutEnd, setWorkoutEnd] = useState(() => {
@@ -131,10 +137,6 @@ export default function UploadPage() {
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const uploadAbortRef = useRef<AbortController | null>(null)
 
-  const proofImageRef = useRef<HTMLInputElement>(null)
-  const proofFileRef = useRef<File | null>(null)
-  const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null)
-
   const audioBlobRef = useRef<Blob | null>(null)
   const audioMimeTypeRef = useRef('audio/webm')
   const [recording, setRecording] = useState(false)
@@ -146,15 +148,85 @@ export default function UploadPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const recordedSecondsRef = useRef(0)
 
+  const hasVideo = useMemo(() => mediaItems.some((m) => m.kind === 'video'), [mediaItems])
+  const estimatedSeconds = useMemo(
+    () => mediaItems.reduce((sum, m) => sum + (m.kind === 'image' ? IMAGE_CLIP_SECONDS : (m.durationSec ?? 0)), 0),
+    [mediaItems],
+  )
+
+  // 미디어 길이 측정
+  const measureVideo = useCallback((id: string, url: string) => {
+    const v = document.createElement('video')
+    v.preload = 'metadata'; v.src = url; v.load()
+    v.onloadedmetadata = () => {
+      const d = isFinite(v.duration) ? v.duration : 0
+      setMediaItems((prev) => prev.map((m) => (m.id === id ? { ...m, durationSec: d } : m)))
+    }
+  }, [])
+
+  const resetSubtitles = useCallback(() => {
+    setSubtitleText(''); setSubtitlePlainText(''); setVideoAudioStatus('idle')
+    videoSubtitleTriedRef.current = false
+  }, [])
+
+  function handleAddFiles(files: FileList) {
+    setError('')
+    let hasVid = mediaItems.some((m) => m.kind === 'video')
+    let imgs = mediaItems.filter((m) => m.kind === 'image').length
+    const additions: MediaItem[] = []
+    let errMsg = ''
+    for (const f of Array.from(files)) {
+      const isVideo = f.type.startsWith('video/')
+      const isImage = f.type.startsWith('image/')
+      if (isVideo) {
+        if (hasVid) { errMsg = t('media.videoLimit'); continue }
+        hasVid = true
+        additions.push({ id: genId(), kind: 'video', file: f, previewUrl: URL.createObjectURL(f) })
+      } else if (isImage) {
+        if (imgs >= MAX_IMAGES) { errMsg = t('media.imageLimit', { max: MAX_IMAGES }); continue }
+        imgs++
+        additions.push({ id: genId(), kind: 'image', file: f, previewUrl: URL.createObjectURL(f) })
+      } else {
+        errMsg = t('media.unsupported')
+      }
+    }
+    if (errMsg) setError(errMsg)
+    if (additions.length) {
+      setMediaItems((prev) => [...prev, ...additions])
+      additions.filter((a) => a.kind === 'video').forEach((a) => measureVideo(a.id, a.previewUrl))
+      resetSubtitles()
+    }
+  }
+
+  function handleRemoveMedia(id: string) {
+    setMediaItems((prev) => {
+      const target = prev.find((m) => m.id === id)
+      if (target) URL.revokeObjectURL(target.previewUrl)
+      return prev.filter((m) => m.id !== id)
+    })
+    resetSubtitles()
+  }
+
+  function handleReorderMedia(items: MediaItem[]) {
+    setMediaItems(items)
+  }
+
+  // 자막 단계 진입 시 소스 기본값 결정
   useEffect(() => {
-    if (step === 2 && file && !stepTwoInitRef.current) {
-      stepTwoInitRef.current = true
+    if (step === 1 && subtitleSource === 'none') {
+      setSubtitleSource(hasVideo ? 'video' : 'text')
+    }
+  }, [step, hasVideo, subtitleSource])
+
+  // 영상 음성 자동 추출
+  useEffect(() => {
+    if (step === 1 && subtitleSource === 'video' && hasVideo && !videoSubtitleTriedRef.current) {
+      videoSubtitleTriedRef.current = true
       setVideoAudioStatus('analyzing')
       extractSubtitles('video')
     }
-    if (step !== 2) stepTwoInitRef.current = false
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, file])
+  }, [step, subtitleSource, hasVideo])
 
   useEffect(() => {
     const savedJobId = loadJob()
@@ -168,7 +240,7 @@ export default function UploadPage() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (pollTimerRef.current) clearInterval(pollTimerRef.current)
-      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current?.getTracks().forEach((tr) => tr.stop())
       uploadAbortRef.current?.abort()
       window.removeEventListener('pagehide', handlePageHide)
       window.removeEventListener('pageshow', handlePageShow)
@@ -181,7 +253,7 @@ export default function UploadPage() {
 
   const handleJobCompleted = useCallback((pts: number, token: string) => {
     stopPolling(); clearJob(); setPointsEarned(pts); setShareToken(token); setDone(true)
-    for (const key of ['my-stats','my-posts','my-weekly-points','history','leaderboard-week','challenges','my-challenges-upload','feed'])
+    for (const key of ['my-stats', 'my-posts', 'my-weekly-points', 'history', 'leaderboard-week', 'challenges', 'my-challenges-upload', 'feed'])
       qc.invalidateQueries({ queryKey: [key] }).catch(() => undefined)
   }, [stopPolling, qc])
 
@@ -192,7 +264,7 @@ export default function UploadPage() {
   const pollJob = useCallback(async (jobId: string) => {
     try {
       const res = await client.get<{ data: { status: string; pipeline_step?: string; points_earned?: number; share_token?: string; error?: string } }>(
-        `/videos/upload-job/${jobId}`
+        `/videos/upload-job/${jobId}`,
       )
       const { status, pipeline_step, points_earned, share_token, error: jobError } = res.data.data
       setPipelineStatus(status)
@@ -204,8 +276,7 @@ export default function UploadPage() {
       if (status === 'completed') { setUploadProgress(100); handleJobCompleted(points_earned ?? 0, share_token ?? '') }
       else if (status === 'failed') abortJob(jobError || t('error.processingError'))
     } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 404)
-        abortJob(t('error.jobNotFound'))
+      if (isAxiosError(err) && err.response?.status === 404) abortJob(t('error.jobNotFound'))
     }
   }, [handleJobCompleted, abortJob, t])
 
@@ -230,47 +301,16 @@ export default function UploadPage() {
     }
   }, [pipelineJobId, done, pollJob])
 
-  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (!f) return
-    const url = URL.createObjectURL(f)
-    const videoEl = document.createElement('video')
-    videoEl.preload = 'metadata'
-    videoEl.src = url
-    videoEl.load() // iOS Safari requires explicit load() to trigger onloadedmetadata
-    videoEl.onloadedmetadata = () => {
-      // duration may be Infinity on iOS Live Photos / screen recordings — let server validate
-      if (isFinite(videoEl.duration) && (videoEl.duration < 10 || videoEl.duration > 60)) {
-        URL.revokeObjectURL(url); e.target.value = ''
-        const secs = Math.round(videoEl.duration)
-        setError(secs < 10
-          ? t('error.tooShort', { secs })
-          : t('error.tooLong', { secs }))
-        return
-      }
-      setVideoAudioStatus('idle')
-      stepTwoInitRef.current = false
-      setError(''); setFile(f); setPreviewUrl(url); setStep(1)
-    }
-    videoEl.onerror = () => { setFile(f); setPreviewUrl(url); setStep(1) }
-  }
-
   function selectMainCategory(cat: MainCategory) {
-    setMainCategoryState(cat)
-    setSubCategoryState(null)
-    setSubCategoryInput('')
+    setMainCategoryState(cat); setSubCategoryState(null); setSubCategoryInput('')
   }
-
   function selectSubCategory(sub: string) {
-    setSubCategoryState((prev) => prev === sub ? null : sub)
-    setSubCategoryInput('')
+    setSubCategoryState((prev) => (prev === sub ? null : sub)); setSubCategoryInput('')
   }
-
   function addSubCategoryFromInput() {
     const trimmed = subCategoryInput.trim()
     if (!trimmed) return
-    setSubCategoryState(trimmed)
-    setSubCategoryInput('')
+    setSubCategoryState(trimmed); setSubCategoryInput('')
   }
 
   async function startRecording() {
@@ -287,7 +327,7 @@ export default function UploadPage() {
       mediaRecorderRef.current = mr
       mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       mr.onstop = async () => {
-        streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null
+        streamRef.current?.getTracks().forEach((tr) => tr.stop()); streamRef.current = null
         audioBlobRef.current = new Blob(audioChunksRef.current, { type: audioMimeTypeRef.current })
         setRecording(false); setRecordingDone(true); setMuteOriginalAudio(true)
       }
@@ -300,10 +340,8 @@ export default function UploadPage() {
         })
       }, 1000)
     } catch (err) {
-      if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'))
-        setError(t('error.micNotAllowed'))
-      else if (err instanceof DOMException && err.name === 'NotFoundError')
-        setError(t('error.micNotFound'))
+      if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) setError(t('error.micNotAllowed'))
+      else if (err instanceof DOMException && err.name === 'NotFoundError') setError(t('error.micNotFound'))
       else setError(t('error.micRequired'))
     }
   }
@@ -313,12 +351,11 @@ export default function UploadPage() {
     mediaRecorderRef.current?.stop()
   }
 
-
   function handleBack() {
     if (step === 0) return
     if (recording) {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
-      streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null
+      streamRef.current?.getTracks().forEach((tr) => tr.stop()); streamRef.current = null
       setRecording(false); audioBlobRef.current = null; setRecordingDone(false); setMuteOriginalAudio(false)
     }
     setStep((prev) => prev - 1)
@@ -327,11 +364,7 @@ export default function UploadPage() {
   function clearChallenge() {
     setSelectedChallengeId(null); setSelectedChallenge(null); setHasChallenge(false)
   }
-
-  function openChallengeModal() {
-    setChallengeSearch(''); setShowChallengeModal(true)
-  }
-
+  function openChallengeModal() { setChallengeSearch(''); setShowChallengeModal(true) }
   function selectChallenge(c: Challenge) {
     setSelectedChallengeId(c.id); setSelectedChallenge(c); setShowChallengeModal(false); setChallengeSearch('')
   }
@@ -344,7 +377,6 @@ export default function UploadPage() {
     },
     enabled: showChallengeModal,
   })
-
   const { data: searchChallenges = [] } = useQuery<Challenge[]>({
     queryKey: ['challenges-upload-search', challengeSearch],
     queryFn: async () => {
@@ -353,16 +385,16 @@ export default function UploadPage() {
     },
     enabled: showChallengeModal && challengeSearch.length > 0,
   })
-
-  const displayedChallenges = (challengeSearch ? searchChallenges : allChallenges).filter(c => c.joined)
+  const displayedChallenges = (challengeSearch ? searchChallenges : allChallenges).filter((c) => c.joined)
 
   async function extractSubtitles(source: 'video' | 'audio') {
-    if (!file) return
+    const videoItem = mediaItems.find((m) => m.kind === 'video')
+    if (source === 'video' && !videoItem) return
     setError('')
     setExtractingSubtitles(true)
     try {
       const form = new FormData()
-      form.append('file', file, file.name)
+      if (videoItem) form.append('file', videoItem.file, videoItem.file.name)
       if (source === 'audio') {
         const ab = audioBlobRef.current
         if (ab && ab.size > 0) {
@@ -372,11 +404,8 @@ export default function UploadPage() {
       }
       form.append('subtitle_language', subtitleLanguage)
       const { data: { data: { job_id } } } = await client.post<{ data: { job_id: string } }>(
-        '/videos/transcribe-subtitles',
-        form,
-        { timeout: 180_000 },
+        '/videos/transcribe-subtitles', form, { timeout: 180_000 },
       )
-      // worker가 처리할 때까지 폴링
       await pollSubtitleJob(job_id)
     } catch (err) {
       setError(getApiErrorMessage(err, t('error.subtitleFailed')))
@@ -386,62 +415,47 @@ export default function UploadPage() {
   }
 
   async function pollSubtitleJob(jobId: string) {
-    const MAX_ATTEMPTS = 60  // 2초 간격 × 60 = 최대 2분
+    const MAX_ATTEMPTS = 60
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
       await new Promise((r) => setTimeout(r, 2000))
       try {
-        const res = await client.get<{ data: { status: string; srt: string; plain_text: string; error: string; metrics?: Record<string, unknown> } }>(
-          `/videos/subtitle-job/${jobId}`
+        const res = await client.get<{ data: { status: string; srt: string; plain_text: string; error: string } }>(
+          `/videos/subtitle-job/${jobId}`,
         )
-        const { status, srt, plain_text, error: jobError, metrics } = res.data.data
-        if (metrics) setSubtitleDebugMetrics(metrics)
+        const { status, srt, plain_text } = res.data.data
         if (status === 'completed') {
-          setSubtitleText(srt)
-          setSubtitlePlainText(plain_text)
-          setVideoAudioStatus('has_audio')
-          setExtractingSubtitles(false)
-          return
+          setSubtitleText(srt); setSubtitlePlainText(plain_text)
+          setVideoAudioStatus('has_audio'); setExtractingSubtitles(false); return
         }
-        if (status === 'skipped') {
-          setVideoAudioStatus('no_audio')
-          setExtractingSubtitles(false)
-          return
-        }
+        if (status === 'skipped') { setVideoAudioStatus('no_audio'); setExtractingSubtitles(false); return }
         if (status === 'failed') {
-          setVideoAudioStatus('error')
-          setError(jobError || t('error.subtitleFailed'))
-          setExtractingSubtitles(false)
-          return
+          setVideoAudioStatus('error'); setError(t('error.subtitleFailed')); setExtractingSubtitles(false); return
         }
       } catch {
-        // 일시적 네트워크 오류 무시, 계속 폴링
+        // 일시적 네트워크 오류 무시
       }
     }
-    setVideoAudioStatus('error')
-    setError(t('error.subtitleTimeout'))
-    setExtractingSubtitles(false)
+    setVideoAudioStatus('error'); setError(t('error.subtitleTimeout')); setExtractingSubtitles(false)
   }
 
-  function clearSubtitle() {
-    setSubtitleText('')
-    setSubtitlePlainText('')
-  }
+  function clearSubtitle() { setSubtitleText(''); setSubtitlePlainText('') }
 
   async function handleUpload() {
-    if (!file) return
+    if (mediaItems.length === 0) return
     setError(''); setUploading(true); setUploadProgress(0)
     const ctrl = new AbortController(); uploadAbortRef.current = ctrl
     try {
-      let duration = 15
-      if (previewUrl) {
-        const v = document.createElement('video'); v.src = previewUrl
-        duration = await new Promise<number>((res) => { v.onloadedmetadata = () => res(Math.round(v.duration)); v.onerror = () => res(15) })
-      }
       const form = new FormData()
-      form.append('file', file, file.name)
-      form.append('duration_sec', String(Math.min(60, Math.max(5, duration))))
+      mediaItems.forEach((m) => form.append('files', m.file, m.file.name))
+      form.append('items_meta', JSON.stringify(mediaItems.map((m) => ({ kind: m.kind }))))
       if (caption) form.append('caption', caption)
-      if (subtitleText.trim()) {
+      const useText = subtitleSource === 'text' && subtitleRawText.trim() !== ''
+      if (useText) {
+        form.append('subtitle_text', subtitleRawText)
+        form.append('subtitle_size', subtitleSize)
+        form.append('subtitle_position', subtitlePosition)
+        form.append('subtitle_language', subtitleLanguage)
+      } else if (subtitleText.trim()) {
         form.append('subtitle_srt', subtitleText)
         form.append('subtitle_size', subtitleSize)
         form.append('subtitle_position', subtitlePosition)
@@ -452,9 +466,8 @@ export default function UploadPage() {
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       if (workoutStart) form.append('workout_start', workoutStart)
       if (workoutEnd) form.append('workout_end', workoutEnd)
-      if (proofFileRef.current) form.append('proof_image', proofFileRef.current, proofFileRef.current.name)
       const { data: { data: { job_id } } } = await client.post<{ data: { job_id: string } }>(
-        '/videos/upload-pipeline', form,
+        '/videos/upload-multi', form,
         { signal: ctrl.signal, timeout: 300_000, onUploadProgress: (e) => { if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 70)) } },
       )
       saveJob(job_id); setPipelineJobId(job_id); setPipelineStatus('pending'); setUploadProgress(70)
@@ -469,22 +482,15 @@ export default function UploadPage() {
     const shareUrl = shareToken ? `${window.location.origin}/shorts/${shareToken}` : window.location.origin
     const shareText = `${t('done.shareText')}\n${shareUrl}`
     const confettiItems = Array.from({ length: 20 }, (_, i) => ({
-      id: i,
-      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-      left: `${(i / 20) * 100}%`,
-      delay: `${(i * 0.1) % 1.5}s`,
-      duration: `${1.5 + (i % 5) * 0.3}s`,
-      size: i % 3 === 0 ? 10 : 6,
+      id: i, color: CONFETTI_COLORS[i % CONFETTI_COLORS.length], left: `${(i / 20) * 100}%`,
+      delay: `${(i * 0.1) % 1.5}s`, duration: `${1.5 + (i % 5) * 0.3}s`, size: i % 3 === 0 ? 10 : 6,
     }))
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-6 bg-theme-page px-6 lg:max-w-2xl lg:mx-auto overflow-hidden relative">
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-10">
           {confettiItems.map((c) => (
-            <span
-              key={c.id}
-              className="absolute top-0 rounded-sm animate-confetti-fall"
-              style={{ left: c.left, width: c.size, height: c.size, backgroundColor: c.color, animationDuration: c.duration, animationDelay: c.delay }}
-            />
+            <span key={c.id} className="absolute top-0 rounded-sm animate-confetti-fall"
+              style={{ left: c.left, width: c.size, height: c.size, backgroundColor: c.color, animationDuration: c.duration, animationDelay: c.delay }} />
           ))}
         </div>
         <div className="w-full max-w-sm rounded-2xl bg-theme-surface p-6 relative z-20">
@@ -497,9 +503,7 @@ export default function UploadPage() {
             <span className="text-xs text-theme-muted">{t('done.sweatLabel')}</span>
             <span className="text-lg font-bold text-accent">+{displayPoints.toFixed(1)} L</span>
           </div>
-          <p className="text-xs text-theme-subtle mt-3 leading-relaxed">
-            {t('done.pendingNote')}
-          </p>
+          <p className="text-xs text-theme-subtle mt-3 leading-relaxed">{t('done.pendingNote')}</p>
         </div>
         <div className="flex w-full max-w-sm flex-col gap-3 relative z-20">
           <button
@@ -538,10 +542,8 @@ export default function UploadPage() {
         {error && (
           <div className="w-full max-w-sm rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400 text-center">
             {error}
-            <button
-              onClick={() => { clearJob(); setError(''); setPipelineJobId(null); setPipelineStatus(null) }}
-              className="block mx-auto mt-2 text-xs text-theme-muted underline"
-            >{t('processing.reset')}</button>
+            <button onClick={() => { clearJob(); setError(''); setPipelineJobId(null); setPipelineStatus(null) }}
+              className="block mx-auto mt-2 text-xs text-theme-muted underline">{t('processing.reset')}</button>
           </div>
         )}
       </div>
@@ -552,7 +554,6 @@ export default function UploadPage() {
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
-      {/* 헤더 + 스텝 바 */}
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-center gap-2 mb-3">
           {step > 0 ? (
@@ -589,56 +590,55 @@ export default function UploadPage() {
       </div>
 
       {step === 0 && (
-        <StepSelectVideo fileInputRef={fileInputRef} error={error} setError={setError} onFileChange={handleFileChange} />
+        <StepMedia
+          fileInputRef={fileInputRef}
+          items={mediaItems}
+          onAddFiles={handleAddFiles}
+          onRemove={handleRemoveMedia}
+          onReorder={handleReorderMedia}
+          estimatedSeconds={estimatedSeconds}
+          error={error}
+          onNext={() => setStep(1)}
+        />
       )}
       {step === 1 && (
-        <StepTagChallenge
-          previewUrl={previewUrl}
+        <StepSubtitle
+          hasVideo={hasVideo}
+          subtitleSource={subtitleSource} setSubtitleSource={setSubtitleSource}
+          videoAudioStatus={videoAudioStatus}
+          subtitleText={subtitleText} setSubtitleText={setSubtitleText}
+          subtitlePlainText={subtitlePlainText} subtitleExtracting={extractingSubtitles}
+          onExtractFromAudio={() => extractSubtitles('audio')}
+          onClearSubtitle={clearSubtitle}
+          subtitleRawText={subtitleRawText} setSubtitleRawText={setSubtitleRawText}
+          recording={recording} recordedSeconds={recordedSeconds} recordingDone={recordingDone}
+          progressPct={progressPct} maxSeconds={MAX_RECORD_SECONDS}
+          startRecording={startRecording} stopRecording={stopRecording}
+          onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0); setMuteOriginalAudio(false); clearSubtitle() }}
+          subtitleSize={subtitleSize} subtitlePosition={subtitlePosition}
+          onSubtitleSizeChange={setSubtitleSize} onSubtitlePositionChange={setSubtitlePosition}
+          subtitleLanguage={subtitleLanguage} onSubtitleLanguageChange={setSubtitleLanguage}
+          muteOriginalAudio={muteOriginalAudio} setMuteOriginalAudio={setMuteOriginalAudio}
+          error={error}
+          onNext={() => setStep(2)}
+        />
+      )}
+      {step === 2 && (
+        <StepMeta
           mainCategory={mainCategory} setMainCategory={selectMainCategory}
           subCategory={subCategory} setSubCategory={selectSubCategory}
           subCategoryInput={subCategoryInput} setSubCategoryInput={setSubCategoryInput}
           addSubCategoryFromInput={addSubCategoryFromInput}
           hasChallenge={hasChallenge} setHasChallenge={setHasChallenge}
           selectedChallenge={selectedChallenge} selectedChallengeId={selectedChallengeId}
-          limitError={limitError} setLimitError={setLimitError}
-          clearChallenge={clearChallenge} onNext={() => setStep(2)}
-          openChallengeModal={openChallengeModal}
+          clearChallenge={clearChallenge} openChallengeModal={openChallengeModal}
           showChallengeModal={showChallengeModal} setShowChallengeModal={setShowChallengeModal}
           challengeSearch={challengeSearch} setChallengeSearch={setChallengeSearch}
           displayedChallenges={displayedChallenges} selectChallenge={selectChallenge}
-        />
-      )}
-      {step === 2 && (
-        <StepRecord
-          previewUrl={previewUrl} recording={recording} recordedSeconds={recordedSeconds}
-          recordingDone={recordingDone} progressPct={progressPct} error={error}
-          maxSeconds={MAX_RECORD_SECONDS}
-          videoAudioStatus={videoAudioStatus}
-          subtitleText={subtitleText}
-          setSubtitleText={setSubtitleText}
-          subtitlePlainText={subtitlePlainText}
-          subtitleExtracting={extractingSubtitles}
-          onExtractFromAudio={() => extractSubtitles('audio')}
-          onClearSubtitle={clearSubtitle}
-          startRecording={startRecording} stopRecording={stopRecording}
-          onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0); setMuteOriginalAudio(false) }}
-          onNext={() => setStep(3)}
-          muteOriginalAudio={muteOriginalAudio}
-          setMuteOriginalAudio={setMuteOriginalAudio}
-          devMode={devMode}
-          subtitleDebugMetrics={subtitleDebugMetrics}
-        />
-      )}
-      {step === 3 && (
-        <StepCaption
-          proofImageRef={proofImageRef} proofPreviewUrl={proofPreviewUrl} setProofPreviewUrl={setProofPreviewUrl}
-          proofFileRef={proofFileRef} caption={caption} setCaption={setCaption}
-          subtitleText={subtitleText}
-          subtitleSize={subtitleSize} subtitlePosition={subtitlePosition}
-          onSubtitleSizeChange={setSubtitleSize} onSubtitlePositionChange={setSubtitlePosition}
-          subtitleLanguage={subtitleLanguage} onSubtitleLanguageChange={setSubtitleLanguage}
           workoutStart={workoutStart} setWorkoutStart={setWorkoutStart}
           workoutEnd={workoutEnd} setWorkoutEnd={setWorkoutEnd}
+          caption={caption} setCaption={setCaption}
+          limitError={limitError} setLimitError={setLimitError}
           error={error} uploading={uploading} onUpload={handleUpload}
         />
       )}

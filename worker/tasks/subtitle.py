@@ -647,6 +647,66 @@ def _plain_text_from_srt(srt_text: str) -> str:
     return " ".join(lines).strip()
 
 
+_SENTENCE_SPLIT_RE = re.compile(r"[^.!?。！？\n]+[.!?。！？]?")
+TEXT_SUBTITLE_MAX_CHARS = 24
+TEXT_SUBTITLE_MAX_INPUT = 500
+
+
+def _chunk_by_chars(part: str, max_chars: int) -> list[str]:
+    """한 조각을 공백 경계 기준 max_chars 이하 청크로 나눈다(긴 단어는 강제 절단)."""
+    if len(part) <= max_chars:
+        return [part]
+    chunks: list[str] = []
+    cur = ""
+    for word in part.split(" "):
+        cand = word if not cur else f"{cur} {word}"
+        if len(cand) <= max_chars:
+            cur = cand
+            continue
+        if cur:
+            chunks.append(cur)
+            cur = ""
+        while len(word) > max_chars:
+            chunks.append(word[:max_chars])
+            word = word[max_chars:]
+        cur = word
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
+def build_srt_from_text(text: str, total_sec: float, *, max_chars: int = TEXT_SUBTITLE_MAX_CHARS) -> str:
+    """사용자가 입력한 운동 후기 텍스트를 영상 길이에 균등 분배한 SRT로 변환한다.
+
+    - 줄바꿈/문장 종결부호로 1차 분할 후, 각 조각을 max_chars 이하로 재분할한다.
+    - 조각 수 M으로 total_sec를 균등 분배한다(마지막 조각의 끝은 total_sec에 정확히 맞춤).
+    - 빈 텍스트면 빈 문자열을 반환한다(자막 skip).
+    """
+    text = (text or "").strip()[:TEXT_SUBTITLE_MAX_INPUT]
+    if not text:
+        return ""
+
+    segments: list[str] = []
+    for piece in _SENTENCE_SPLIT_RE.findall(text):
+        piece = " ".join(piece.split())  # 내부 공백/줄바꿈 정규화
+        if piece:
+            segments.extend(_chunk_by_chars(piece, max_chars))
+    if not segments:
+        return ""
+
+    m = len(segments)
+    per = (total_sec / m) if total_sec and total_sec > 0 else 2.0
+    out: list[str] = []
+    for i, seg in enumerate(segments):
+        start = i * per
+        end = total_sec if (i == m - 1 and total_sec and total_sec > 0) else (i + 1) * per
+        out.append(str(i + 1))
+        out.append(f"{_format_srt_timestamp(start)} --> {_format_srt_timestamp(end)}")
+        out.append(seg)
+        out.append("")
+    return "\n".join(out).strip() + "\n"
+
+
 def burn_user_srt(
     r2,
     video_key: str,

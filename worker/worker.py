@@ -8,6 +8,7 @@ from config import LOG_LEVEL, MAX_FFMPEG_CONCURRENT, QUEUE_NAME
 from queue_client import ack_job, dequeue_job, get_redis_client, set_job_status
 from notify import notify_video_failure, notify_video_success, notify_worker_error
 from tasks.full_pipeline import run_full_pipeline
+from tasks.full_pipeline_multi import run_multi_pipeline
 from tasks.image_merge import run_image_merge
 from tasks.merge import run_merge
 from tasks.subtitle_extract import run_subtitle_extract
@@ -78,6 +79,11 @@ def _process_job(r, job: dict) -> None:
                 current_step[0] = step
                 set_job_status(r, job_id, pipeline_step=step)
             result = run_full_pipeline(job, status_callback=_step_cb)
+        elif job_type == "multi-pipeline":
+            def _step_cb(step: str) -> None:
+                current_step[0] = step
+                set_job_status(r, job_id, pipeline_step=step)
+            result = run_multi_pipeline(job, status_callback=_step_cb)
         elif job_type == "subtitle-extract":
             result = run_subtitle_extract(job)
         elif job_type == "proof-merge":
@@ -87,12 +93,12 @@ def _process_job(r, job: dict) -> None:
 
         set_job_status(r, job_id, status="completed", **result)
         logger.info("Job %s completed", job_id)
-        if job_type == "full-pipeline":
+        if job_type in ("full-pipeline", "multi-pipeline"):
             notify_video_success(job, result)
     except Exception as e:
         logger.exception("Job %s failed: %s", job_id, e)
         set_job_status(r, job_id, status="failed", error=str(e))
-        if job_type == "full-pipeline":
+        if job_type in ("full-pipeline", "multi-pipeline"):
             notify_video_failure(job, e, 1, 0, current_step[0])
     finally:
         _release_ffmpeg_slot(r, slot_token)

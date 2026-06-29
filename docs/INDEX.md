@@ -26,7 +26,8 @@ stack_health/
 | 인증 (JWT/Google/Lightning) | `backend/app/services/auth.py`, `google_oauth.py`, `lnauth.py` + `backend/app/routes/auth.py` |
 | 비트코인 리워드/정산 | `backend/app/services/reward.py` + `backend/app/routes/rewards.py` (Blink Lightning API) |
 | 영상 업로드/스토리지 | `backend/app/routes/videos.py` + `backend/app/services/r2.py` (Cloudflare R2) |
-| 영상 인코딩/병합/자막 처리 | `worker/tasks/full_pipeline.py`, `merge.py`, `subtitle_extract.py` + `backend/app/services/job_queue.py` (Redis 큐 enqueue) |
+| 영상 인코딩/병합/자막 처리 | `worker/tasks/full_pipeline.py`(단일), `full_pipeline_multi.py`(다중 미디어), `compose.py`(영상+이미지 concat), `merge.py`, `subtitle_extract.py` + `backend/app/services/job_queue.py` (Redis 큐 enqueue) |
+| 다중 미디어 업로드 (영상≤1+이미지≤5) | `frontend/src/pages/upload/Step{Media,Subtitle,Meta}.tsx` → `POST /videos/upload-multi` → `worker/tasks/full_pipeline_multi.py` (`docs/PLAN-2026-06-29-upload-multi-media.md`) |
 | 자막 (Whisper 환각 필터 등) | `backend/app/services/subtitles.py` + `worker/tasks/subtitle.py` |
 | 프론트 페이지 수정 | `frontend/src/pages/<페이지>.tsx` (라우팅: `frontend/src/App.tsx`) |
 | 업로드 플로우 (단계별 UI) | `frontend/src/pages/upload/Step*.tsx` + `UploadPage.tsx` |
@@ -76,7 +77,7 @@ stack_health/
 ## Worker (`worker/`)
 
 - **진입점**: `worker.py` — Redis 큐 폴링, ffmpeg 동시실행 리스 세마포어(Lua)
-- **tasks/**: `full_pipeline.py`(업로드 전체 파이프라인) `merge.py`(영상+오디오 병합) `image_merge.py` `subtitle_extract.py` `subtitle.py` + `backfill_*.py`(일회성 백필)
+- **tasks/**: `full_pipeline.py`(단일 영상 업로드 파이프라인) `full_pipeline_multi.py`(다중 미디어 파이프라인) `compose.py`(영상≤1+이미지≤5 순서대로 concat) `merge.py`(영상+오디오 병합) `image_merge.py` `subtitle_extract.py` `subtitle.py`(+`build_srt_from_text` 텍스트→자막) + `backfill_*.py`(일회성 백필)
 - `queue_client.py` Redis 잡 dequeue/ack / `notify.py` 텔레그램 / `health_check.py`
 - 배포: `stackhealth-worker.service`(systemd) + `deploy.sh`, 문서 `DEPLOY.md`
 
