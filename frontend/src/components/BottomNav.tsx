@@ -63,7 +63,9 @@ export default function BottomNav() {
           <span className="relative">
             <UserCircle size={22} strokeWidth={1.5} />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500" />
+              <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             )}
           </span>
           <span>{t('nav.profile')}</span>
