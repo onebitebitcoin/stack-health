@@ -37,21 +37,22 @@ export default function LightningLoginPage() {
 
         pollRef.current = setInterval(async () => {
           try {
-            const r = await client.get<{ data: { verified: boolean; token?: string; is_new_user?: boolean } }>(
+            const r = await client.get<{ data: { verified: boolean; token?: string; refresh_token?: string; is_new_user?: boolean } }>(
               `/auth/lnauth/verify?k1=${k1}`,
             )
             if (r.data.data.verified && r.data.data.token) {
               if (pollRef.current) clearInterval(pollRef.current)
               if (timeoutRef.current) clearTimeout(timeoutRef.current)
               const token = r.data.data.token
+              const refreshToken = r.data.data.refresh_token ?? ''
               if (r.data.data.is_new_user) {
-                navigate(`/setup-username?token=${encodeURIComponent(token)}`)
+                navigate(`/setup-username?token=${encodeURIComponent(token)}&refresh=${encodeURIComponent(refreshToken)}`)
                 return
               }
               const me = await client.get<{ data: User }>('/auth/me', {
                 headers: { Authorization: `Bearer ${token}` },
               })
-              login(token, me.data.data)
+              login(token, me.data.data, refreshToken)
               navigate('/')
             }
           } catch {

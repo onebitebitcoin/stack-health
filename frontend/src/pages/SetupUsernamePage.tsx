@@ -21,6 +21,7 @@ export default function SetupUsernamePage() {
   const login = useAuthStore((s) => s.login)
 
   const token = searchParams.get('token')
+  const refreshToken = searchParams.get('refresh')
 
   const [username, setUsername] = useState('')
   const [lightningAddress, setLightningAddress] = useState('')
@@ -125,7 +126,7 @@ export default function SetupUsernamePage() {
       const me = await client.get<{ data: User }>('/auth/me', {
         headers: { Authorization: `Bearer ${token}` },
       })
-      login(token, me.data.data)
+      login(token, me.data.data, refreshToken)
       navigate('/', { replace: true })
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, t('profileSetupFailed')))

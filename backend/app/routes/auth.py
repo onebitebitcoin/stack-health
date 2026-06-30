@@ -15,6 +15,8 @@ from app.models.lnauth_challenge import LNAuthChallenge
 from app.models.user import User
 from app.schemas.user import (
     LoginRequest,
+    RefreshRequest,
+    RefreshResponse,
     RegisterRequest,
     TokenResponse,
     UpdateProfileRequest,
@@ -22,6 +24,7 @@ from app.schemas.user import (
 )
 from app.services.auth import (
     create_access_token,
+    create_refresh_token,
     decode_token,
     get_user_by_email,
     get_user_by_id,
@@ -152,8 +155,9 @@ async def register(req: RegisterRequest, request: Request, db: Session = Depends
     db.refresh(user)
 
     token = create_access_token(user.id)
+    refresh = create_refresh_token(user.id)
     notify_new_user(user.username, user.email, "email")
-    return {"data": TokenResponse(access_token=token, user=UserSchema.model_validate(user))}
+    return {"data": TokenResponse(access_token=token, refresh_token=refresh, user=UserSchema.model_validate(user))}
 
 
 _DUMMY_HASH = "$2b$10$bUTcbia9bmP44rUY1VwI6ug8a0fR68wtSzXIBzHxCsfh5DiI54e4e"
@@ -171,7 +175,25 @@ async def login(req: LoginRequest, request: Request, db: Session = Depends(get_d
         raise api_error(401, E_AUTH_INVALID_CREDENTIALS, "이메일 또는 비밀번호가 올바르지 않습니다")
 
     token = create_access_token(user.id)
-    return {"data": TokenResponse(access_token=token, user=UserSchema.model_validate(user))}
+    refresh = create_refresh_token(user.id)
+    return {"data": TokenResponse(access_token=token, refresh_token=refresh, user=UserSchema.model_validate(user))}
+
+
+@router.post("/refresh")
+def refresh_token(req: RefreshRequest, db: Session = Depends(get_db)) -> dict:
+    user_id = decode_token(req.refresh_token, expected_type="refresh")
+    if user_id is None:
+        raise api_error(status.HTTP_401_UNAUTHORIZED, E_AUTH_INVALID_TOKEN, "유효하지 않은 토큰입니다")
+    user = get_user_by_id(db, user_id)
+    if user is None:
+        raise api_error(status.HTTP_401_UNAUTHORIZED, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
+    # sliding window: 갱신할 때마다 refresh도 새로 발급해 만료 연장
+    return {
+        "data": RefreshResponse(
+            access_token=create_access_token(user.id),
+            refresh_token=create_refresh_token(user.id),
+        )
+    }
 
 
 @router.get("/me")
@@ -320,9 +342,10 @@ async def google_callback(code: str | None = None, error: str | None = None, sta
         db.commit()
 
     token = create_access_token(user.id)
+    refresh = create_refresh_token(user.id)
     # Use fragment (#) instead of query string to keep JWT out of server logs and referrer headers
     new_param = "&new_user=1" if is_new else ""
-    redirect_url = f"{settings.app_base_url}/#google_token={token}{new_param}"
+    redirect_url = f"{settings.app_base_url}/#google_token={token}&google_refresh={refresh}{new_param}"
     return RedirectResponse(url=redirect_url)
 
 
@@ -416,4 +439,5 @@ def lnauth_verify(k1: str, db: Session = Depends(get_db)) -> dict:
 
     is_new_user = bool((user.app_settings or {}).get("needs_username", False))
     token = create_access_token(user.id)
-    return {"data": {"verified": True, "token": token, "is_new_user": is_new_user}}
+    refresh = create_refresh_token(user.id)
+    return {"data": {"verified": True, "token": token, "refresh_token": refresh, "is_new_user": is_new_user}}

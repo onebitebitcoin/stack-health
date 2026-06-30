@@ -22,11 +22,11 @@ export default function EmailLoginPage() {
     setEmailError('')
     setEmailLoading(true)
     try {
-      const res = await client.post<{ data: { access_token: string; user: User } }>(
+      const res = await client.post<{ data: { access_token: string; refresh_token: string; user: User } }>(
         '/auth/login',
         { email, password },
       )
-      login(res.data.data.access_token, res.data.data.user)
+      login(res.data.data.access_token, res.data.data.user, res.data.data.refresh_token)
       navigate('/')
     } catch (err: unknown) {
       setEmailError(getApiErrorMessage(err, t('common:unknownError')))

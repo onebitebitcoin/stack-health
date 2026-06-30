@@ -199,3 +199,60 @@ def test_register_invalid_email_returns_user_friendly_message(client: TestClient
     assert res.status_code == 422
     assert res.json()["detail"] == "이메일 형식이 올바르지 않습니다."
     assert "value is not" not in str(res.json())
+
+
+# ── Refresh token ─────────────────────────────────────────────────────
+
+def _register(client: TestClient, email: str = "refresh@example.com") -> dict:
+    res = client.post("/api/v1/auth/register", json={
+        "email": email, "username": email.split("@")[0], "password": "password123",
+    })
+    assert res.status_code == 200
+    return res.json()["data"]
+
+
+def test_register_returns_refresh_token(client: TestClient) -> None:
+    data = _register(client)
+    assert data["refresh_token"]
+    assert data["access_token"] != data["refresh_token"]
+
+
+def test_login_returns_refresh_token(client: TestClient) -> None:
+    client.post("/api/v1/auth/register", json={
+        "email": "loginref@example.com", "username": "loginref", "password": "password123",
+    })
+    res = client.post("/api/v1/auth/login", json={
+        "email": "loginref@example.com", "password": "password123",
+    })
+    assert res.json()["data"]["refresh_token"]
+
+
+def test_refresh_issues_new_tokens(client: TestClient) -> None:
+    refresh = _register(client, "r1@example.com")["refresh_token"]
+    res = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["access_token"]
+    assert data["refresh_token"]
+    # 새 access token으로 /me 접근 가능
+    me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {data['access_token']}"})
+    assert me.status_code == 200
+
+
+def test_refresh_rejects_access_token(client: TestClient) -> None:
+    # access token을 refresh 엔드포인트에 쓰면 거부 (type 검증)
+    access = _register(client, "r2@example.com")["access_token"]
+    res = client.post("/api/v1/auth/refresh", json={"refresh_token": access})
+    assert res.status_code == 401
+
+
+def test_access_endpoint_rejects_refresh_token(client: TestClient) -> None:
+    # refresh token으로 보호된 엔드포인트 접근 불가 (type 검증)
+    refresh = _register(client, "r3@example.com")["refresh_token"]
+    res = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {refresh}"})
+    assert res.status_code == 401
+
+
+def test_refresh_rejects_garbage_token(client: TestClient) -> None:
+    res = client.post("/api/v1/auth/refresh", json={"refresh_token": "not-a-jwt"})
+    assert res.status_code == 401

@@ -9,7 +9,8 @@ class Settings(BaseSettings):
 
     # JWT
     secret_key: str
-    access_token_expire_minutes: int = 10080
+    access_token_expire_minutes: int = 1440  # 1일 (refresh 토큰으로 자동 갱신)
+    refresh_token_expire_minutes: int = 129600  # 90일
 
     # Cloudflare R2
     r2_account_id: str = ""

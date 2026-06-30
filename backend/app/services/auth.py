@@ -23,15 +23,29 @@ def create_access_token(user_id: int) -> str:
         minutes=settings.access_token_expire_minutes
     )
     return jwt.encode(
-        {"sub": str(user_id), "exp": expire},
+        {"sub": str(user_id), "exp": expire, "type": "access"},
         settings.secret_key,
         algorithm=ALGORITHM,
     )
 
 
-def decode_token(token: str) -> int | None:
+def create_refresh_token(user_id: int) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.refresh_token_expire_minutes
+    )
+    return jwt.encode(
+        {"sub": str(user_id), "exp": expire, "type": "refresh"},
+        settings.secret_key,
+        algorithm=ALGORITHM,
+    )
+
+
+def decode_token(token: str, expected_type: str = "access") -> int | None:
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+        # 하위호환: type 클레임이 없는 기존 토큰은 access로 간주
+        if payload.get("type", "access") != expected_type:
+            return None
         user_id = payload.get("sub")
         if user_id is None:
             return None

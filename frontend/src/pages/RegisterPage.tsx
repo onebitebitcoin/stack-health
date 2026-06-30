@@ -37,21 +37,21 @@ export default function RegisterPage() {
       const referralCode = (() => {
         try { return localStorage.getItem('referral_code') } catch { return null }
       })()
-      const res = await client.post<{ data: { access_token: string; user: User } }>(
+      const res = await client.post<{ data: { access_token: string; refresh_token: string; user: User } }>(
         '/auth/register',
         { email, username, password, ...(referralCode ? { referral_code: referralCode } : {}) },
       )
       try { localStorage.removeItem('referral_code') } catch { /* ignore */ }
-      const { access_token, user: registeredUser } = res.data.data
+      const { access_token, refresh_token, user: registeredUser } = res.data.data
       if (lightningAddress.trim()) {
         const updated = await client.patch<{ data: User }>(
           '/auth/me',
           { lightning_address: lightningAddress.trim() },
           { headers: { Authorization: `Bearer ${access_token}` } },
         )
-        login(access_token, updated.data.data)
+        login(access_token, updated.data.data, refresh_token)
       } else {
-        login(access_token, registeredUser)
+        login(access_token, registeredUser, refresh_token)
       }
       navigate('/')
     } catch (err: unknown) {

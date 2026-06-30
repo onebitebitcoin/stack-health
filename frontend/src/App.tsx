@@ -95,10 +95,11 @@ function Layout() {
     const params = new URLSearchParams(hash)
     const googleToken = params.get('google_token')
     if (!googleToken) return
+    const googleRefresh = params.get('google_refresh') ?? ''
     const isNew = params.get('new_user') === '1'
     if (isNew) {
       window.history.replaceState({}, '', '/')
-      navigate(`/setup-username?token=${encodeURIComponent(googleToken)}`, { replace: true })
+      navigate(`/setup-username?token=${encodeURIComponent(googleToken)}&refresh=${encodeURIComponent(googleRefresh)}`, { replace: true })
       return
     }
     client
@@ -106,7 +107,7 @@ function Layout() {
         headers: { Authorization: `Bearer ${googleToken}` },
       })
       .then((res) => {
-        login(googleToken, res.data.data)
+        login(googleToken, res.data.data, googleRefresh)
         window.history.replaceState({}, '', '/')
         navigate('/', { replace: true })
       })
