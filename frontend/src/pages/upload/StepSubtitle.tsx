@@ -255,9 +255,9 @@ export default function StepSubtitle(props: Props) {
             </div>
           </div>
           <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16', maxHeight: '180px' }}>
-            <div className={`relative w-full h-full flex flex-col items-center ${POSITION_FLEX_CLASS[subtitlePosition]}`}>
-              <div className="px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
-                <span className={`text-white font-medium ${SIZE_TEXT_CLASS[subtitleSize]}`}>{previewText}</span>
+            <div className={`relative w-full h-full flex flex-col items-center px-2 ${POSITION_FLEX_CLASS[subtitlePosition]}`}>
+              <div className="px-2 py-0.5 rounded max-w-full text-center" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                <span className={`text-white font-medium break-words ${SIZE_TEXT_CLASS[subtitleSize]}`}>{previewText}</span>
               </div>
             </div>
           </div>

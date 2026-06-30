@@ -42,8 +42,8 @@ export default function MediaPreviewBox({
           )}
           {hasSubtitle && (
             <div className={`absolute inset-0 flex flex-col items-center px-2 ${POSITION_FLEX_CLASS[subtitlePosition]}`}>
-              <div className="px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
-                <span className={`text-white font-medium ${SIZE_TEXT_CLASS[subtitleSize]}`}>{previewText}</span>
+              <div className="px-2 py-0.5 rounded max-w-full text-center" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                <span className={`text-white font-medium break-words ${SIZE_TEXT_CLASS[subtitleSize]}`}>{previewText}</span>
               </div>
             </div>
           )}

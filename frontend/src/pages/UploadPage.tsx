@@ -100,7 +100,7 @@ export default function UploadPage() {
   const [subtitleText, setSubtitleText] = useState('')
   const [subtitlePlainText, setSubtitlePlainText] = useState('')
   const [subtitleSize, setSubtitleSize] = useState<'small' | 'large'>('small')
-  const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('bottom')
+  const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('center')
   const [subtitleLanguage, setSubtitleLanguage] = useState<SubtitleLanguage>('ko')
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
   const [muteOriginalAudio, setMuteOriginalAudio] = useState(false)
