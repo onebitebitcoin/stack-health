@@ -98,3 +98,6 @@ playwright-report-prod/
 /*.png
 .worktrees/
 nginx/upstream.conf
+
+# Session/demo artifacts
+output/
