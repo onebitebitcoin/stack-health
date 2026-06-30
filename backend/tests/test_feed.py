@@ -33,7 +33,9 @@ def test_feed_unauthenticated(client: TestClient) -> None:
     assert len(res.json()["data"]["posts"]) == 1
 
 
-def test_feed_pagination_cursor(client: TestClient) -> None:
+@patch("app.routes.videos.get_daily_upload_count", return_value=0)
+def test_feed_pagination_cursor(_mock_count, client: TestClient) -> None:
+    # 페이지네이션 검증은 업로드 한도와 무관 — 한도를 우회해 3개 게시물 생성
     token, user = _make_user(client, "b@x.com", "userb")
     posts = []
     for i in range(3):
