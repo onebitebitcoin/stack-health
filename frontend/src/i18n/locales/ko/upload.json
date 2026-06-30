@@ -73,7 +73,7 @@
     "noAudio": "이 영상에는 음성이 없어요.",
     "extractFailed": "자막 추출에 실패했어요.",
     "muteOriginal": "원본 음성 제거됨",
-    "keepOriginal": "원본 음성 포함",
+    "keepOriginal": "원본 오디오 포함",
     "shareExperience": "운동 경험을 공유해보세요",
     "recordingHint": "녹음하면 자막으로 영상에 담아드려요. 최대 {{maxSeconds}}초.",
     "recordingHintShort": "녹음하면 자막으로 영상에 담아드려요",
