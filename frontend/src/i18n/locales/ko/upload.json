@@ -90,7 +90,7 @@
   "caption": {
     "workoutTime": "운동 시간대",
     "workoutTimeOptional": "(선택)",
-    "subtitleStyle": "자막 스타일",
+    "subtitleStyle": "고급 설정",
     "subtitleSize": "크기",
     "subtitlePosition": "위치",
     "subtitleSizeSmall": "작게",

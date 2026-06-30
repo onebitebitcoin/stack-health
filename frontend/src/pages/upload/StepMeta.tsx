@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Trophy, X, Search, Check, Plus, ChevronDown, Clock, Eye } from 'lucide-react'
+import { Trophy, X, Search, Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Challenge } from '../../api/types'
 import client from '../../api/client'
@@ -9,19 +8,9 @@ import MediaPreviewBox from './MediaPreviewBox'
 export const MAIN_CATEGORIES = ['가벼운 활동', '땀 흘리는 운동'] as const
 export type MainCategory = typeof MAIN_CATEGORIES[number]
 
-export const SUB_CATEGORIES: Record<MainCategory, string[]> = {
-  '가벼운 활동': ['계단 오르기', '산책'],
-  '땀 흘리는 운동': ['런닝', '조깅', '웨이트'],
-}
-
 interface Props {
   mainCategory: MainCategory | null
   setMainCategory: (cat: MainCategory) => void
-  subCategory: string | null
-  setSubCategory: (sub: string) => void
-  subCategoryInput: string
-  setSubCategoryInput: (v: string) => void
-  addSubCategoryFromInput: () => void
   hasChallenge: boolean | null
   setHasChallenge: (v: boolean | null) => void
   selectedChallenge: Challenge | null
@@ -54,8 +43,7 @@ interface Props {
 }
 
 export default function StepMeta({
-  mainCategory, setMainCategory, subCategory, setSubCategory,
-  subCategoryInput, setSubCategoryInput, addSubCategoryFromInput,
+  mainCategory, setMainCategory,
   hasChallenge, setHasChallenge, selectedChallenge, selectedChallengeId,
   clearChallenge, openChallengeModal, showChallengeModal, setShowChallengeModal,
   challengeSearch, setChallengeSearch, displayedChallenges, selectChallenge,
@@ -64,21 +52,11 @@ export default function StepMeta({
   items, subtitleSource, subtitleLines, subtitleSize, subtitlePosition,
 }: Props) {
   const { t } = useTranslation('upload')
-  const [showWorkoutTime, setShowWorkoutTime] = useState<boolean>(!!workoutStart || !!workoutEnd)
-  const [showPreview, setShowPreview] = useState(false)
 
   const MAIN_CATEGORY_LABELS: Record<MainCategory, string> = {
     '가벼운 활동': t('tagChallenge.mainCategoryLight'),
     '땀 흘리는 운동': t('tagChallenge.mainCategorySweat'),
   }
-  const SUB_CATEGORY_LABEL_MAP: Record<string, string> = {
-    '계단 오르기': t('tagChallenge.subCategoryStairs'),
-    '산책': t('tagChallenge.subCategoryWalk'),
-    '런닝': t('tagChallenge.subCategoryRunning'),
-    '조깅': t('tagChallenge.subCategoryJogging'),
-    '웨이트': t('tagChallenge.subCategoryWeight'),
-  }
-  const getSubLabel = (sub: string): string => SUB_CATEGORY_LABEL_MAP[sub] ?? sub
 
   async function handleUpload() {
     setLimitError('')
@@ -120,43 +98,6 @@ export default function StepMeta({
             ))}
           </div>
 
-          {mainCategory && (
-            <>
-              <p className="mb-2 text-xs font-medium text-theme-subtle">{t('tagChallenge.subCategory')}</p>
-              {subCategory && (
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  <div className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-fg">
-                    {getSubLabel(subCategory)}
-                    <button onClick={() => setSubCategory(subCategory)} className="flex-shrink-0"><X size={11} strokeWidth={2.5} /></button>
-                  </div>
-                </div>
-              )}
-              <div className="flex flex-wrap gap-2 mb-3">
-                {SUB_CATEGORIES[mainCategory].map((sub) => (
-                  <button
-                    key={sub}
-                    onClick={() => setSubCategory(sub)}
-                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                      subCategory === sub ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-theme-surface2 text-theme-muted'
-                    }`}
-                  >
-                    {getSubLabel(sub)}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={subCategoryInput}
-                  onChange={(e) => setSubCategoryInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSubCategoryFromInput() } }}
-                  placeholder={t('tagChallenge.subCategoryPlaceholder')}
-                  className="flex-1 rounded-xl bg-theme-surface px-3 py-2 text-sm text-theme-primary placeholder-theme-subtle outline-none"
-                />
-                <button onClick={addSubCategoryFromInput} disabled={!subCategoryInput.trim()} className="flex h-9 w-9 items-center justify-center rounded-xl bg-theme-surface text-theme-muted disabled:opacity-40"><Plus size={16} /></button>
-              </div>
-            </>
-          )}
         </div>
 
         {/* 챌린지 */}
@@ -183,21 +124,14 @@ export default function StepMeta({
           )}
         </div>
 
-        {/* 운동 시간대 (기본 접힘) */}
-        <div className="rounded-xl bg-theme-surface px-4 py-3">
-          <button type="button" onClick={() => setShowWorkoutTime((v) => !v)} className="flex w-full items-center justify-between">
-            <span className="flex items-center gap-1.5 text-xs font-medium text-theme-muted">
-              <Clock size={13} /> {t('caption.workoutTime')} <span className="text-theme-subtle">{t('caption.workoutTimeOptional')}</span>
-            </span>
-            <ChevronDown size={15} className={`text-theme-muted transition-transform ${showWorkoutTime ? 'rotate-180' : ''}`} />
-          </button>
-          {showWorkoutTime && (
-            <div className="flex items-center gap-2 mt-2.5">
-              <input type="time" value={workoutStart} onChange={(e) => setWorkoutStart(e.target.value)} className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent" />
-              <span className="text-theme-muted text-sm">~</span>
-              <input type="time" value={workoutEnd} onChange={(e) => setWorkoutEnd(e.target.value)} className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent" />
-            </div>
-          )}
+        {/* 운동 시간대 */}
+        <div>
+          <p className="mb-2 text-sm font-semibold text-theme-primary">{t('caption.workoutTime')} <span className="text-xs font-normal text-theme-subtle">{t('caption.workoutTimeOptional')}</span></p>
+          <div className="flex items-center gap-2">
+            <input type="time" value={workoutStart} onChange={(e) => setWorkoutStart(e.target.value)} className="flex-1 rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent" />
+            <span className="text-theme-muted text-sm">~</span>
+            <input type="time" value={workoutEnd} onChange={(e) => setWorkoutEnd(e.target.value)} className="flex-1 rounded-xl bg-theme-surface px-3 py-2.5 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent" />
+          </div>
         </div>
 
         {/* 설명 */}
@@ -214,26 +148,17 @@ export default function StepMeta({
           <p className="text-right text-xs text-theme-subtle">{caption.length}/140</p>
         </div>
 
-        {/* 업로드 전 미리보기 (기본 접힘) */}
+        {/* 업로드 전 미리보기 */}
         {items.length > 0 && (
-          <div className="rounded-xl bg-theme-surface px-4 py-3">
-            <button type="button" onClick={() => setShowPreview((v) => !v)} className="flex w-full items-center justify-between">
-              <span className="flex items-center gap-1.5 text-sm font-medium text-theme-primary">
-                <Eye size={14} /> {t('preview.title')}
-              </span>
-              <ChevronDown size={16} className={`text-theme-muted transition-transform ${showPreview ? 'rotate-180' : ''}`} />
-            </button>
-            {showPreview && (
-              <div className="mt-3">
-                <MediaPreviewBox
-                  items={items}
-                  subtitleSource={subtitleSource}
-                  subtitleLines={subtitleLines}
-                  subtitleSize={subtitleSize}
-                  subtitlePosition={subtitlePosition}
-                />
-              </div>
-            )}
+          <div>
+            <p className="mb-2 text-sm font-semibold text-theme-primary">{t('preview.title')}</p>
+            <MediaPreviewBox
+              items={items}
+              subtitleSource={subtitleSource}
+              subtitleLines={subtitleLines}
+              subtitleSize={subtitleSize}
+              subtitlePosition={subtitlePosition}
+            />
           </div>
         )}
 

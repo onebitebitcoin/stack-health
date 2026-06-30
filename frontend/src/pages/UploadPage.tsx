@@ -13,7 +13,7 @@ import type { Challenge, SubtitleLanguage } from '../api/types'
 import { isAxiosError } from 'axios'
 import StepMedia, { type MediaItem, MAX_IMAGES, IMAGE_CLIP_SECONDS } from './upload/StepMedia'
 import StepSubtitle, { type SubtitleSource } from './upload/StepSubtitle'
-import StepMeta, { type MainCategory, SUB_CATEGORIES } from './upload/StepMeta'
+import StepMeta, { type MainCategory } from './upload/StepMeta'
 import { srtToTextLines } from '../utils/subtitles'
 
 function useCountUp(target: number, duration = 800) {
@@ -92,9 +92,7 @@ export default function UploadPage() {
   const [step, setStep] = useState(0)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
 
-  const [mainCategory, setMainCategoryState] = useState<MainCategory | null>('가벼운 활동')
-  const [subCategory, setSubCategoryState] = useState<string | null>(null)
-  const [subCategoryInput, setSubCategoryInput] = useState('')
+  const [mainCategory, setMainCategory] = useState<MainCategory | null>('가벼운 활동')
   const [caption, setCaption] = useState('')
 
   const [subtitleSource, setSubtitleSource] = useState<SubtitleSource>('none')
@@ -109,7 +107,7 @@ export default function UploadPage() {
   const [videoAudioStatus, setVideoAudioStatus] = useState<'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'>('idle')
   const videoSubtitleTriedRef = useRef(false)
 
-  const [hasChallenge, setHasChallenge] = useState<boolean | null>(false)
+  const [hasChallenge, setHasChallenge] = useState<boolean | null>(null)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
   const [showChallengeModal, setShowChallengeModal] = useState(false)
@@ -311,19 +309,6 @@ export default function UploadPage() {
     }
   }, [pipelineJobId, done, pollJob])
 
-  function selectMainCategory(cat: MainCategory) {
-    // 메인 선택 시 첫 세부 분류를 기본값으로 자동 선택(탭 1회 절약)
-    setMainCategoryState(cat); setSubCategoryState(SUB_CATEGORIES[cat][0] ?? null); setSubCategoryInput('')
-  }
-  function selectSubCategory(sub: string) {
-    setSubCategoryState((prev) => (prev === sub ? null : sub)); setSubCategoryInput('')
-  }
-  function addSubCategoryFromInput() {
-    const trimmed = subCategoryInput.trim()
-    if (!trimmed) return
-    setSubCategoryState(trimmed); setSubCategoryInput('')
-  }
-
   async function startRecording() {
     if (typeof MediaRecorder === 'undefined') { setError(t('error.micUnsupported')); return }
     try {
@@ -380,13 +365,12 @@ export default function UploadPage() {
     setSelectedChallengeId(c.id); setSelectedChallenge(c); setShowChallengeModal(false); setChallengeSearch('')
   }
 
-  const { data: allChallenges = [] } = useQuery<Challenge[]>({
-    queryKey: ['challenges-upload-top10'],
+  const { data: joinedChallenges = [] } = useQuery<Challenge[]>({
+    queryKey: ['challenges-upload-joined'],
     queryFn: async () => {
-      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params: { limit: 20 } })
+      const res = await client.get<{ data: { challenges: Challenge[] } }>('/challenges', { params: { joined: true, limit: 20 } })
       return res.data.data.challenges
     },
-    enabled: showChallengeModal,
   })
   const { data: searchChallenges = [] } = useQuery<Challenge[]>({
     queryKey: ['challenges-upload-search', challengeSearch],
@@ -396,7 +380,15 @@ export default function UploadPage() {
     },
     enabled: showChallengeModal && challengeSearch.length > 0,
   })
-  const displayedChallenges = (challengeSearch ? searchChallenges : allChallenges).filter((c) => c.joined)
+  const displayedChallenges = challengeSearch ? searchChallenges.filter((c) => c.joined) : joinedChallenges
+
+  // 참여중 챌린지가 있으면 첫 번째를 기본 선택(사용자가 '없음'을 명시 선택하지 않은 경우에만)
+  useEffect(() => {
+    if (joinedChallenges.length > 0 && selectedChallengeId == null && hasChallenge !== false) {
+      const first = joinedChallenges[0]
+      setSelectedChallengeId(first.id); setSelectedChallenge(first); setHasChallenge(true)
+    }
+  }, [joinedChallenges, selectedChallengeId, hasChallenge])
 
   async function extractSubtitles(source: 'video' | 'audio') {
     const videoItem = mediaItems.find((m) => m.kind === 'video')
@@ -473,7 +465,7 @@ export default function UploadPage() {
         form.append('subtitle_language', subtitleLanguage)
       }
       if (muteOriginalAudio) form.append('mute_video', 'true')
-      form.append('tags', JSON.stringify([mainCategory, subCategory].filter((v): v is string => Boolean(v))))
+      form.append('tags', JSON.stringify(mainCategory ? [mainCategory] : []))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       if (workoutStart) form.append('workout_start', workoutStart)
       if (workoutEnd) form.append('workout_end', workoutEnd)
@@ -636,10 +628,7 @@ export default function UploadPage() {
       )}
       {step === 2 && (
         <StepMeta
-          mainCategory={mainCategory} setMainCategory={selectMainCategory}
-          subCategory={subCategory} setSubCategory={selectSubCategory}
-          subCategoryInput={subCategoryInput} setSubCategoryInput={setSubCategoryInput}
-          addSubCategoryFromInput={addSubCategoryFromInput}
+          mainCategory={mainCategory} setMainCategory={setMainCategory}
           hasChallenge={hasChallenge} setHasChallenge={setHasChallenge}
           selectedChallenge={selectedChallenge} selectedChallengeId={selectedChallengeId}
           clearChallenge={clearChallenge} openChallengeModal={openChallengeModal}

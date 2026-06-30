@@ -221,12 +221,12 @@ export default function StepSubtitle(props: Props) {
         </button>
       )}
 
-      {/* 자막 스타일 */}
+      {/* 고급 설정 (자막 스타일) — 링크로 펼침 */}
       {showStyle && (
-        <div className="rounded-xl bg-theme-surface px-4 py-3">
-          <button type="button" onClick={() => setShowStyleDetail((v) => !v)} className="flex w-full items-center justify-between">
-            <span className="text-sm font-semibold text-theme-primary">{t('caption.subtitleStyle')}</span>
-            <ChevronDown size={16} className={`text-theme-muted transition-transform ${showStyleDetail ? 'rotate-180' : ''}`} />
+        <div>
+          <button type="button" onClick={() => setShowStyleDetail((v) => !v)} className="flex items-center gap-1 text-xs text-theme-muted underline underline-offset-2">
+            {t('caption.subtitleStyle')}
+            <ChevronDown size={13} className={`transition-transform ${showStyleDetail ? 'rotate-180' : ''}`} />
           </button>
           {showStyleDetail && (
           <div className="space-y-3 mt-3">
