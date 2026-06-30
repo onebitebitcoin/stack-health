@@ -445,7 +445,7 @@ def run_full_pipeline(job: dict, status_callback=None) -> dict:
     pre_subtitle_key = current_key
 
     subtitle_srt_r2_key = job.get("subtitle_srt_r2_key")
-    subtitle_font_size = FONT_SIZE_MAP.get(job.get("subtitle_size", "medium"), 26)
+    subtitle_font_size = FONT_SIZE_MAP.get(job.get("subtitle_size") or "small", 14)
     subtitle_alignment = ALIGNMENT_MAP.get(job.get("subtitle_position", "bottom"), 2)
     subtitle_margin_v = MARGIN_V_MAP.get(job.get("subtitle_position", "bottom"), 90)
 

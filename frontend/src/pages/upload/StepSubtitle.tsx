@@ -6,7 +6,7 @@ import type { SubtitleLanguage } from '../../api/types'
 
 export type SubtitleSource = 'none' | 'video' | 'record' | 'text'
 type VideoAudioStatus = 'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'
-type SubtitleSize = 'small' | 'medium' | 'large'
+type SubtitleSize = 'small' | 'large'
 type SubtitlePosition = 'top' | 'center' | 'bottom'
 
 interface Props {
@@ -43,7 +43,7 @@ interface Props {
 }
 
 const SIZE_TEXT_CLASS: Record<SubtitleSize, string> = {
-  small: 'text-[9px]', medium: 'text-xs', large: 'text-sm',
+  small: 'text-[9px]', large: 'text-sm',
 }
 const POSITION_FLEX_CLASS: Record<SubtitlePosition, string> = {
   top: 'justify-start pt-3', center: 'justify-center', bottom: 'justify-end pb-3',
@@ -87,7 +87,7 @@ export default function StepSubtitle(props: Props) {
   const showStyle = (subtitleSource === 'video' || subtitleSource === 'record') ? hasExtracted : hasTextSubtitle
 
   const SIZE_LABELS: Record<SubtitleSize, string> = {
-    small: t('caption.subtitleSizeSmall'), medium: t('caption.subtitleSizeMedium'), large: t('caption.subtitleSizeLarge'),
+    small: t('caption.subtitleSizeSmall'), large: t('caption.subtitleSizeLarge'),
   }
   const POSITION_LABELS: Record<SubtitlePosition, string> = {
     top: t('caption.subtitlePositionTop'), center: t('caption.subtitlePositionCenter'), bottom: t('caption.subtitlePositionBottom'),
@@ -227,7 +227,7 @@ export default function StepSubtitle(props: Props) {
           <div className="flex items-center gap-3">
             <span className="text-xs text-theme-muted w-10 flex-shrink-0">{t('caption.subtitleSize')}</span>
             <div className="flex gap-1.5">
-              {(['small', 'medium', 'large'] as SubtitleSize[]).map((s) => (
+              {(['small', 'large'] as SubtitleSize[]).map((s) => (
                 <button key={s} type="button" onClick={() => onSubtitleSizeChange(s)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${subtitleSize === s ? 'bg-accent text-accent-fg' : 'bg-theme-surface2 text-theme-muted'}`}>{SIZE_LABELS[s]}</button>
               ))}
             </div>

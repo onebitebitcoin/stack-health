@@ -589,7 +589,9 @@ def _escape_filter_path(path: str) -> str:
     return path.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
-FONT_SIZE_MAP = {"small": 10, "medium": 14, "large": 18}
+FONT_SIZE_MAP = {"small": 14, "large": 18}
+# 폰트가 클수록 한 줄 글자수를 줄여 자막이 항상 한 줄에 들어가게 한다(어절 중간 끊김 방지).
+SUBTITLE_MAX_CHARS_MAP = {"small": 12, "large": 9}
 ALIGNMENT_MAP = {"bottom": 2, "center": 10, "top": 6}
 MARGIN_V_MAP = {"bottom": SUBTITLE_BURN_IN_MARGIN_V, "center": 0, "top": 40}
 

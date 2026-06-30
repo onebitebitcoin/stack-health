@@ -28,6 +28,7 @@ from tasks.subtitle import (
     ALIGNMENT_MAP,
     FONT_SIZE_MAP,
     MARGIN_V_MAP,
+    SUBTITLE_MAX_CHARS_MAP,
     SubtitleResult,
     build_srt_from_text,
     burn_user_srt,
@@ -141,7 +142,8 @@ def run_multi_pipeline(job: dict, status_callback=None) -> dict:
     subtitle_metrics: str | None = None
     pre_subtitle_key = current_key
 
-    font_size = FONT_SIZE_MAP.get(job.get("subtitle_size", "medium"), 26)
+    subtitle_size = job.get("subtitle_size") or "small"
+    font_size = FONT_SIZE_MAP.get(subtitle_size, 14)
     alignment = ALIGNMENT_MAP.get(job.get("subtitle_position", "bottom"), 2)
     margin_v = MARGIN_V_MAP.get(job.get("subtitle_position", "bottom"), 90)
 
@@ -151,7 +153,9 @@ def run_multi_pipeline(job: dict, status_callback=None) -> dict:
     if not subtitle_srt_r2_key and text_subtitle:
         # 텍스트 후기 → 현재 영상 길이에 균등 분배한 SRT 생성 후 R2 저장
         measured = _probe_duration_safe(r2, current_key) or total_duration
-        generated_srt = build_srt_from_text(text_subtitle, measured)
+        generated_srt = build_srt_from_text(
+            text_subtitle, measured, max_chars=SUBTITLE_MAX_CHARS_MAP.get(subtitle_size, 12)
+        )
         if generated_srt.strip():
             subtitle_srt_r2_key = f"subtitles/{user_id}/{uuid.uuid4()}.srt"
             r2.put_object(
