@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, MicOff, X, ChevronRight, Loader2, VolumeX, Volume2, AlertCircle, Video, Type } from 'lucide-react'
+import { Mic, MicOff, X, ChevronRight, ChevronDown, Loader2, VolumeX, Volume2, AlertCircle, Video, Type } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { srtToTextLines, applyTextLinesToSrt } from '../../utils/subtitles'
 import type { SubtitleLanguage } from '../../api/types'
@@ -65,6 +65,7 @@ export default function StepSubtitle(props: Props) {
   const { t } = useTranslation('upload')
   const prevSrtRef = useRef(subtitleText)
   const [editLines, setEditLines] = useState(() => srtToTextLines(subtitleText).join('\n'))
+  const [showStyleDetail, setShowStyleDetail] = useState(false)
 
   useEffect(() => {
     if (prevSrtRef.current !== subtitleText) {
@@ -222,8 +223,13 @@ export default function StepSubtitle(props: Props) {
 
       {/* 자막 스타일 */}
       {showStyle && (
-        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-3">
-          <p className="text-sm font-semibold text-theme-primary">{t('caption.subtitleStyle')}</p>
+        <div className="rounded-xl bg-theme-surface px-4 py-3">
+          <button type="button" onClick={() => setShowStyleDetail((v) => !v)} className="flex w-full items-center justify-between">
+            <span className="text-sm font-semibold text-theme-primary">{t('caption.subtitleStyle')}</span>
+            <ChevronDown size={16} className={`text-theme-muted transition-transform ${showStyleDetail ? 'rotate-180' : ''}`} />
+          </button>
+          {showStyleDetail && (
+          <div className="space-y-3 mt-3">
           <div className="flex items-center gap-3">
             <span className="text-xs text-theme-muted w-10 flex-shrink-0">{t('caption.subtitleSize')}</span>
             <div className="flex gap-1.5">
@@ -255,6 +261,8 @@ export default function StepSubtitle(props: Props) {
               </div>
             </div>
           </div>
+          </div>
+          )}
         </div>
       )}
 

@@ -6,7 +6,7 @@ test.describe('업로드 플로우', () => {
     await registerAndLogin(page)
   })
 
-  test('업로드 페이지 4단계 진행바', async ({ page }) => {
+  test('업로드 페이지 3단계 진행바', async ({ page }) => {
     await page.goto('/upload')
     await page.screenshot({ path: 'e2e/screenshots/07-upload-step0.png', fullPage: true })
 
@@ -14,7 +14,6 @@ test.describe('업로드 플로우', () => {
     await expect(stepBar.locator('text=미디어')).toBeVisible()
     await expect(stepBar.locator('text=자막')).toBeVisible()
     await expect(stepBar.locator('text=설명')).toBeVisible()
-    await expect(stepBar.locator('text=미리보기')).toBeVisible()
   })
 
   test('업로드 Step 0: 미디어 선택 UI', async ({ page }) => {

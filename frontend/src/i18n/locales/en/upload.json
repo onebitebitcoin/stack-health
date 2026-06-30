@@ -7,8 +7,7 @@
     "caption": "Caption & Photo",
     "media": "Media",
     "subtitle": "Subtitle",
-    "meta": "Description",
-    "preview": "Preview"
+    "meta": "Description"
   },
   "media": {
     "title": "Add a video or photos",
@@ -151,18 +150,6 @@
     "clipboardCopied": "Copied to clipboard!"
   },
   "preview": {
-    "title": "Preview",
-    "hint": "Your media plays in order with subtitles applied. The final video is processed after upload.",
-    "media": "Media",
-    "mediaCount": "{{images}} photos · {{videos}} video · ~{{seconds}}s",
-    "category": "Category",
-    "challenge": "Challenge",
-    "workoutTime": "Workout time",
-    "subtitle": "Subtitle",
-    "subtitleCount": "{{count}} lines",
-    "subtitleNone": "None",
-    "caption": "Description",
-    "upload": "Upload",
-    "uploading": "Uploading..."
+    "title": "Preview"
   }
 }

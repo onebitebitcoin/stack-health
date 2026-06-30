@@ -13,8 +13,7 @@ import type { Challenge, SubtitleLanguage } from '../api/types'
 import { isAxiosError } from 'axios'
 import StepMedia, { type MediaItem, MAX_IMAGES, IMAGE_CLIP_SECONDS } from './upload/StepMedia'
 import StepSubtitle, { type SubtitleSource } from './upload/StepSubtitle'
-import StepMeta, { type MainCategory } from './upload/StepMeta'
-import StepPreview from './upload/StepPreview'
+import StepMeta, { type MainCategory, SUB_CATEGORIES } from './upload/StepMeta'
 import { srtToTextLines } from '../utils/subtitles'
 
 function useCountUp(target: number, duration = 800) {
@@ -33,7 +32,7 @@ function useCountUp(target: number, duration = 800) {
   return val
 }
 
-const STEPS_KEYS = ['media', 'subtitle', 'meta', 'preview'] as const
+const STEPS_KEYS = ['media', 'subtitle', 'meta'] as const
 const MAX_RECORD_SECONDS = 60
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
@@ -313,7 +312,8 @@ export default function UploadPage() {
   }, [pipelineJobId, done, pollJob])
 
   function selectMainCategory(cat: MainCategory) {
-    setMainCategoryState(cat); setSubCategoryState(null); setSubCategoryInput('')
+    // 메인 선택 시 첫 세부 분류를 기본값으로 자동 선택(탭 1회 절약)
+    setMainCategoryState(cat); setSubCategoryState(SUB_CATEGORIES[cat][0] ?? null); setSubCategoryInput('')
   }
   function selectSubCategory(sub: string) {
     setSubCategoryState((prev) => (prev === sub ? null : sub)); setSubCategoryInput('')
@@ -650,26 +650,12 @@ export default function UploadPage() {
           workoutEnd={workoutEnd} setWorkoutEnd={setWorkoutEnd}
           caption={caption} setCaption={setCaption}
           limitError={limitError} setLimitError={setLimitError}
-          error={error} uploading={uploading} onUpload={() => setStep(3)}
-        />
-      )}
-      {step === 3 && (
-        <StepPreview
+          error={error} uploading={uploading} onUpload={handleUpload}
           items={mediaItems}
           subtitleSource={subtitleSource}
           subtitleLines={subtitleLines}
           subtitleSize={subtitleSize}
           subtitlePosition={subtitlePosition}
-          estimatedSeconds={estimatedSeconds}
-          mainCategory={mainCategory}
-          subCategory={subCategory}
-          challengeTitle={selectedChallenge?.title ?? null}
-          workoutStart={workoutStart}
-          workoutEnd={workoutEnd}
-          caption={caption}
-          error={error}
-          uploading={uploading}
-          onUpload={handleUpload}
         />
       )}
     </div>

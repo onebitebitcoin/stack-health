@@ -1,0 +1,74 @@
+import { useState } from 'react'
+import type { MediaItem } from './StepMedia'
+
+type SubtitleSize = 'small' | 'large'
+type SubtitlePosition = 'top' | 'center' | 'bottom'
+
+// StepSubtitle의 자막 미리보기와 동일한 매핑(크기·위치)을 재사용해 실제 burn 결과에 근접시킨다.
+const SIZE_TEXT_CLASS: Record<SubtitleSize, string> = {
+  small: 'text-[9px]', large: 'text-sm',
+}
+const POSITION_FLEX_CLASS: Record<SubtitlePosition, string> = {
+  top: 'justify-start pt-3', center: 'justify-center', bottom: 'justify-end pb-3',
+}
+
+interface Props {
+  items: MediaItem[]
+  subtitleSource: string
+  subtitleLines: string[]
+  subtitleSize: SubtitleSize
+  subtitlePosition: SubtitlePosition
+}
+
+/** 미디어를 9:16 박스에 순서대로 보여주고 자막을 오버레이하는 근사 미리보기(업로드/요약 없음). */
+export default function MediaPreviewBox({
+  items, subtitleSource, subtitleLines, subtitleSize, subtitlePosition,
+}: Props) {
+  const [active, setActive] = useState(0)
+  const current = items[Math.min(active, items.length - 1)]
+  const hasSubtitle = subtitleSource !== 'none' && subtitleLines.length > 0
+  const previewText = hasSubtitle ? subtitleLines[0] : ''
+
+  if (!current) return null
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-full max-w-[200px] rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
+        <div className="relative w-full h-full">
+          {current.kind === 'video' ? (
+            <video src={current.previewUrl} className="w-full h-full object-contain" muted playsInline controls />
+          ) : (
+            <img src={current.previewUrl} className="w-full h-full object-contain" alt="" />
+          )}
+          {hasSubtitle && (
+            <div className={`absolute inset-0 flex flex-col items-center px-2 ${POSITION_FLEX_CLASS[subtitlePosition]}`}>
+              <div className="px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+                <span className={`text-white font-medium ${SIZE_TEXT_CLASS[subtitleSize]}`}>{previewText}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {items.length > 1 && (
+        <div className="flex gap-2 justify-center flex-wrap">
+          {items.map((m, i) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setActive(i)}
+              className={`relative w-9 h-14 rounded-lg overflow-hidden border-2 ${i === active ? 'border-accent' : 'border-transparent'}`}
+            >
+              {m.kind === 'video' ? (
+                <video src={m.previewUrl} className="w-full h-full object-cover" muted playsInline />
+              ) : (
+                <img src={m.previewUrl} className="w-full h-full object-cover" alt="" />
+              )}
+              <span className="absolute bottom-0 right-0 bg-black/70 text-white text-[9px] px-1 rounded-tl">{i + 1}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

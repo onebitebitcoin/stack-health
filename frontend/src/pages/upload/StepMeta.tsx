@@ -1,12 +1,15 @@
-import { Trophy, X, Search, Check, Plus } from 'lucide-react'
+import { useState } from 'react'
+import { Trophy, X, Search, Check, Plus, ChevronDown, Clock, Eye } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Challenge } from '../../api/types'
 import client from '../../api/client'
+import type { MediaItem } from './StepMedia'
+import MediaPreviewBox from './MediaPreviewBox'
 
 export const MAIN_CATEGORIES = ['가벼운 활동', '땀 흘리는 운동'] as const
 export type MainCategory = typeof MAIN_CATEGORIES[number]
 
-const SUB_CATEGORIES: Record<MainCategory, string[]> = {
+export const SUB_CATEGORIES: Record<MainCategory, string[]> = {
   '가벼운 활동': ['계단 오르기', '산책'],
   '땀 흘리는 운동': ['런닝', '조깅', '웨이트'],
 }
@@ -42,6 +45,12 @@ interface Props {
   error: string
   uploading: boolean
   onUpload: () => void
+  // 업로드 전 접이식 미리보기용
+  items: MediaItem[]
+  subtitleSource: string
+  subtitleLines: string[]
+  subtitleSize: 'small' | 'large'
+  subtitlePosition: 'top' | 'center' | 'bottom'
 }
 
 export default function StepMeta({
@@ -52,8 +61,11 @@ export default function StepMeta({
   challengeSearch, setChallengeSearch, displayedChallenges, selectChallenge,
   workoutStart, setWorkoutStart, workoutEnd, setWorkoutEnd,
   caption, setCaption, limitError, setLimitError, error, uploading, onUpload,
+  items, subtitleSource, subtitleLines, subtitleSize, subtitlePosition,
 }: Props) {
   const { t } = useTranslation('upload')
+  const [showWorkoutTime, setShowWorkoutTime] = useState<boolean>(!!workoutStart || !!workoutEnd)
+  const [showPreview, setShowPreview] = useState(false)
 
   const MAIN_CATEGORY_LABELS: Record<MainCategory, string> = {
     '가벼운 활동': t('tagChallenge.mainCategoryLight'),
@@ -171,14 +183,21 @@ export default function StepMeta({
           )}
         </div>
 
-        {/* 운동 시간대 */}
-        <div className="rounded-xl bg-theme-surface px-4 py-3 space-y-2">
-          <p className="text-xs font-medium text-theme-muted">{t('caption.workoutTime')} <span className="text-theme-subtle">{t('caption.workoutTimeOptional')}</span></p>
-          <div className="flex items-center gap-2">
-            <input type="time" value={workoutStart} onChange={(e) => setWorkoutStart(e.target.value)} className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent" />
-            <span className="text-theme-muted text-sm">~</span>
-            <input type="time" value={workoutEnd} onChange={(e) => setWorkoutEnd(e.target.value)} className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent" />
-          </div>
+        {/* 운동 시간대 (기본 접힘) */}
+        <div className="rounded-xl bg-theme-surface px-4 py-3">
+          <button type="button" onClick={() => setShowWorkoutTime((v) => !v)} className="flex w-full items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-theme-muted">
+              <Clock size={13} /> {t('caption.workoutTime')} <span className="text-theme-subtle">{t('caption.workoutTimeOptional')}</span>
+            </span>
+            <ChevronDown size={15} className={`text-theme-muted transition-transform ${showWorkoutTime ? 'rotate-180' : ''}`} />
+          </button>
+          {showWorkoutTime && (
+            <div className="flex items-center gap-2 mt-2.5">
+              <input type="time" value={workoutStart} onChange={(e) => setWorkoutStart(e.target.value)} className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent" />
+              <span className="text-theme-muted text-sm">~</span>
+              <input type="time" value={workoutEnd} onChange={(e) => setWorkoutEnd(e.target.value)} className="flex-1 rounded-lg bg-theme-surface2 px-3 py-2 text-sm text-theme-primary outline-none focus:ring-2 focus:ring-accent" />
+            </div>
+          )}
         </div>
 
         {/* 설명 */}
@@ -194,6 +213,29 @@ export default function StepMeta({
           />
           <p className="text-right text-xs text-theme-subtle">{caption.length}/140</p>
         </div>
+
+        {/* 업로드 전 미리보기 (기본 접힘) */}
+        {items.length > 0 && (
+          <div className="rounded-xl bg-theme-surface px-4 py-3">
+            <button type="button" onClick={() => setShowPreview((v) => !v)} className="flex w-full items-center justify-between">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-theme-primary">
+                <Eye size={14} /> {t('preview.title')}
+              </span>
+              <ChevronDown size={16} className={`text-theme-muted transition-transform ${showPreview ? 'rotate-180' : ''}`} />
+            </button>
+            {showPreview && (
+              <div className="mt-3">
+                <MediaPreviewBox
+                  items={items}
+                  subtitleSource={subtitleSource}
+                  subtitleLines={subtitleLines}
+                  subtitleSize={subtitleSize}
+                  subtitlePosition={subtitlePosition}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {limitError && <p className="text-sm text-red-400">{limitError}</p>}
         {error && <p className="text-sm text-red-400">{error}</p>}
