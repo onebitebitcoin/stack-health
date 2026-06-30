@@ -6,8 +6,8 @@
     "record": "음성 녹음",
     "caption": "설명·사진",
     "media": "미디어",
-    "subtitle": "음성·자막",
-    "meta": "챌린지·정보"
+    "subtitle": "자막",
+    "meta": "설명"
   },
   "media": {
     "title": "영상 또는 사진을 올리세요",
@@ -22,7 +22,7 @@
     "unsupported": "지원하지 않는 파일 형식이에요."
   },
   "subtitle": {
-    "title": "음성·자막",
+    "title": "자막",
     "optional": "(선택)",
     "hint": "영상 음성 추출 · 녹음 · 직접 입력 중 하나로 자막을 만들 수 있어요.",
     "sourceVideo": "영상 음성",
