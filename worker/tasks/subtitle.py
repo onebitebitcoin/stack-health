@@ -42,7 +42,7 @@ SUBTITLE_MAX_DURATION_SEC = float(os.environ.get("SUBTITLE_MAX_DURATION_SEC", "6
 SUBTITLE_HTTP_TIMEOUT_SEC = int(os.environ.get("SUBTITLE_HTTP_TIMEOUT_SEC", "300"))
 SUBTITLE_SILENCE_NOISE_DB = float(os.environ.get("SUBTITLE_SILENCE_NOISE_DB", "-30"))
 SUBTITLE_SILENCE_MIN_DURATION_SEC = float(os.environ.get("SUBTITLE_SILENCE_MIN_DURATION_SEC", "1.0"))
-SUBTITLE_BURN_IN_FONT_SIZE = int(os.environ.get("SUBTITLE_BURN_IN_FONT_SIZE", "26"))
+SUBTITLE_BURN_IN_FONT_SIZE = int(os.environ.get("SUBTITLE_BURN_IN_FONT_SIZE", "14"))
 SUBTITLE_BURN_IN_MARGIN_V = int(os.environ.get("SUBTITLE_BURN_IN_MARGIN_V", "90"))
 # 좌우 여백(px, libass PlayRes 좌표계). 세로 영상에서 자막이 화면 끝까지 퍼져
 # 좌우가 잘리는 것을 막기 위해 안쪽으로 들인다. (이전 하드코딩 30 → 50)
@@ -648,7 +648,10 @@ def _plain_text_from_srt(srt_text: str) -> str:
 
 
 _SENTENCE_SPLIT_RE = re.compile(r"[^.!?。！？\n]+[.!?。！？]?")
-TEXT_SUBTITLE_MAX_CHARS = 24
+# 한 cue = 한 줄로 만들어 libass의 글자단위 자동 줄바꿈(어절 중간 끊김)을 막는다.
+# 14pt 기준 세로영상 한 줄에 안전하게 들어가는 폭. _chunk_by_chars가 어절(공백)
+# 경계로 나누므로, 이 값을 넘는 문장은 어절 단위로 분할되어 다음 cue로 넘어간다.
+TEXT_SUBTITLE_MAX_CHARS = 12
 TEXT_SUBTITLE_MAX_INPUT = 500
 
 
