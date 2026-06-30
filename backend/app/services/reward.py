@@ -19,7 +19,7 @@ def points_for_tags(tags: list[str]) -> float:
     if tags and tags[0] == LIGHT_ACTIVITY_LABEL:
         return POINTS_LIGHT_ACTIVITY
     return POINTS_SWEATY_EXERCISE
-DAILY_MAX_UPLOADS = 3
+DAILY_MAX_UPLOADS = 2
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
 REWARD_STATUS_REVOKED = "revoked"

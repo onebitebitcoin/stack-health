@@ -46,16 +46,16 @@ def test_presigned_url_success(mock_r2, client: TestClient) -> None:
 
 @patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/v.mp4")
 def test_workout_upload_daily_limit(mock_cdn, client: TestClient) -> None:
-    """운동 태그 업로드는 하루 3개 한도 적용."""
+    """운동 태그 업로드는 하루 2개 한도 적용."""
     token, uid = _register(client)
     headers = _auth(token)
-    for i in range(3):
+    for i in range(2):
         res = client.post("/api/v1/videos/confirm", json={
             "r2_key": f"videos/{uid}/v{i}.mp4", "duration_sec": 20,
             "tags": ["홈트"],
         }, headers=headers)
         assert res.status_code == 200
-    # 4th workout upload blocked
+    # 3rd workout upload blocked
     res = client.post("/api/v1/videos/confirm", json={
         "r2_key": f"videos/{uid}/v3.mp4", "duration_sec": 20,
         "tags": ["홈트"],
@@ -68,7 +68,7 @@ def test_all_tags_subject_to_daily_limit(mock_cdn, client: TestClient) -> None:
     """모든 태그(운동/비운동)가 동일한 일일 한도 적용."""
     token, uid = _register(client, "nolimit@x.com", "nolimituser")
     headers = _auth(token)
-    for i in range(3):
+    for i in range(2):
         res = client.post("/api/v1/videos/confirm", json={
             "r2_key": f"videos/{uid}/v{i}.mp4", "duration_sec": 20,
             "tags": ["일상"],
@@ -88,7 +88,7 @@ def test_workout_limit_eased_after_delete(mock_cdn, client: TestClient) -> None:
     headers = _auth(token)
     post_ids: list[int] = []
 
-    for i in range(3):
+    for i in range(2):
         confirm_res = client.post("/api/v1/videos/confirm", json={
             "r2_key": f"videos/{uid}/delete-v{i}.mp4", "duration_sec": 20,
             "tags": ["러닝"],
@@ -119,7 +119,7 @@ def test_confirm_upload_uses_active_content_limit(mock_cdn, client: TestClient) 
     token, uid = _register(client, "confirm-limit@x.com", "confirmlimit")
     headers = _auth(token)
 
-    for i in range(3):
+    for i in range(2):
         res = client.post("/api/v1/videos/confirm", json={
             "r2_key": f"videos/{uid}/confirm-limit-{i}.mp4",
             "duration_sec": 20,
@@ -145,10 +145,10 @@ def test_daily_limit_endpoint(mock_cdn, client: TestClient) -> None:
     assert res.status_code == 200
     data = res.json()["data"]
     assert data["count"] == 0
-    assert data["limit"] == 3
+    assert data["limit"] == 2
     assert data["reached"] is False
 
-    # 운동 업로드 2개 후
+    # 운동 업로드 2개(=하루 한도) 후 — 한도 도달
     for i in range(2):
         client.post("/api/v1/videos/confirm", json={
             "r2_key": f"videos/{uid}/dl-{i}.mp4", "duration_sec": 20,
@@ -158,7 +158,7 @@ def test_daily_limit_endpoint(mock_cdn, client: TestClient) -> None:
     res = client.get("/api/v1/videos/daily-limit", headers=headers)
     data = res.json()["data"]
     assert data["count"] == 2
-    assert data["reached"] is False
+    assert data["reached"] is True
 
 
 def test_presigned_url_file_too_large(client: TestClient) -> None:
