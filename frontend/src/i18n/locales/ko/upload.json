@@ -7,7 +7,8 @@
     "caption": "설명·사진",
     "media": "미디어",
     "subtitle": "자막",
-    "meta": "설명"
+    "meta": "설명",
+    "preview": "미리보기"
   },
   "media": {
     "title": "영상 또는 사진을 올리세요",
@@ -148,5 +149,20 @@
     "jobNotFound": "업로드 결과를 확인할 수 없습니다. 피드에서 영상을 확인해주세요.",
     "uploadFailed": "업로드 실패",
     "clipboardCopied": "클립보드에 복사됐어요!"
+  },
+  "preview": {
+    "title": "미리보기",
+    "hint": "미디어가 순서대로 이어지고 자막이 입혀집니다. 실제 영상은 업로드 후 처리돼요.",
+    "media": "미디어",
+    "mediaCount": "사진 {{images}} · 영상 {{videos}} · 약 {{seconds}}초",
+    "category": "분류",
+    "challenge": "챌린지",
+    "workoutTime": "운동 시간",
+    "subtitle": "자막",
+    "subtitleCount": "{{count}}줄 적용",
+    "subtitleNone": "없음",
+    "caption": "설명",
+    "upload": "업로드",
+    "uploading": "업로드 중..."
   }
 }

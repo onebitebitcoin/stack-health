@@ -14,6 +14,8 @@ import { isAxiosError } from 'axios'
 import StepMedia, { type MediaItem, MAX_IMAGES, IMAGE_CLIP_SECONDS } from './upload/StepMedia'
 import StepSubtitle, { type SubtitleSource } from './upload/StepSubtitle'
 import StepMeta, { type MainCategory } from './upload/StepMeta'
+import StepPreview from './upload/StepPreview'
+import { srtToTextLines } from '../utils/subtitles'
 
 function useCountUp(target: number, duration = 800) {
   const [val, setVal] = useState(0)
@@ -31,7 +33,7 @@ function useCountUp(target: number, duration = 800) {
   return val
 }
 
-const STEPS_KEYS = ['media', 'subtitle', 'meta'] as const
+const STEPS_KEYS = ['media', 'subtitle', 'meta', 'preview'] as const
 const MAX_RECORD_SECONDS = 60
 const PREFERRED_AUDIO_MIME_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'] as const
 const AUDIO_BITS_PER_SECOND = 128_000
@@ -153,6 +155,15 @@ export default function UploadPage() {
     () => mediaItems.reduce((sum, m) => sum + (m.kind === 'image' ? IMAGE_CLIP_SECONDS : (m.durationSec ?? 0)), 0),
     [mediaItems],
   )
+
+  // 미리보기용 자막 라인 — 텍스트 소스는 원문 줄, 그 외(추출/녹음 SRT)는 SRT에서 추출
+  const subtitleLines = useMemo(() => {
+    if (subtitleSource === 'none') return []
+    if (subtitleSource === 'text') {
+      return subtitleRawText.split('\n').map((l) => l.trim()).filter(Boolean)
+    }
+    return srtToTextLines(subtitleText)
+  }, [subtitleSource, subtitleRawText, subtitleText])
 
   // 미디어 길이 측정
   const measureVideo = useCallback((id: string, url: string) => {
@@ -639,7 +650,26 @@ export default function UploadPage() {
           workoutEnd={workoutEnd} setWorkoutEnd={setWorkoutEnd}
           caption={caption} setCaption={setCaption}
           limitError={limitError} setLimitError={setLimitError}
-          error={error} uploading={uploading} onUpload={handleUpload}
+          error={error} uploading={uploading} onUpload={() => setStep(3)}
+        />
+      )}
+      {step === 3 && (
+        <StepPreview
+          items={mediaItems}
+          subtitleSource={subtitleSource}
+          subtitleLines={subtitleLines}
+          subtitleSize={subtitleSize}
+          subtitlePosition={subtitlePosition}
+          estimatedSeconds={estimatedSeconds}
+          mainCategory={mainCategory}
+          subCategory={subCategory}
+          challengeTitle={selectedChallenge?.title ?? null}
+          workoutStart={workoutStart}
+          workoutEnd={workoutEnd}
+          caption={caption}
+          error={error}
+          uploading={uploading}
+          onUpload={handleUpload}
         />
       )}
     </div>
