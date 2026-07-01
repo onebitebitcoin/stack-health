@@ -245,7 +245,7 @@ export default function ProfilePage() {
   return (
     <div className="flex flex-col h-[100dvh] overflow-y-auto bg-theme-page pb-nav-safe lg:max-w-2xl lg:mx-auto">
 
-      <div className="flex items-center gap-3 px-4 pt-5 pb-4">
+      <div className="flex items-center gap-3 px-4 pt-safe pt-5 pb-4">
         <UserAvatar
           username={user?.username ?? '?'}
           avatarUrl={user?.avatar_url}

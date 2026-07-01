@@ -65,6 +65,9 @@
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
   .pb-nav-safe {
     /* BottomNav(4rem) + safe area */
     padding-bottom: calc(4rem + env(safe-area-inset-bottom));
