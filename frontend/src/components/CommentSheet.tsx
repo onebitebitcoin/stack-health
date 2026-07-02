@@ -76,8 +76,9 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
     const sheet = sheetRef.current
     const form = formRef.current
     const reposition = () => {
-      // vv.offsetTop 제외: iOS Safari에서 항상 0이며 포함 시 부정확
-      const keyboardHeight = Math.max(0, window.innerHeight - vv.height)
+      // Android Chrome은 키보드가 열리면 visual viewport를 아래로 패닝(offsetTop > 0)하므로
+      // offsetTop을 빼야 시트가 키보드 바로 위에 붙는다. iOS Safari는 offsetTop이 항상 0이라 영향 없음.
+      const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
       if (sheet) {
         sheet.style.bottom = `${keyboardHeight}px`
         sheet.style.maxHeight = `${vv.height - 16}px`
