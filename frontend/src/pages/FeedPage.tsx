@@ -23,6 +23,8 @@ export default function FeedPage() {
   const [isMuted, setIsMuted] = useState(true)
   const [commentPostId, setCommentPostId] = useState<number | null>(null)
   const setCommentOpen = useUiStore((s) => s.setCommentOpen)
+  // 시트 열린 채 라우트 이탈(뒤로가기 등) 시 전역 commentOpen 잔류 → BottomNav 영구 숨김 방지
+  useEffect(() => () => setCommentOpen(false), [setCommentOpen])
   const containerRef = useRef<HTMLDivElement>(null)
   const touchStartY = useRef(0)
 

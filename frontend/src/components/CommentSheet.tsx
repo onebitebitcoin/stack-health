@@ -147,7 +147,11 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
       })
     },
     onSuccess: () => {
-      if (inputRef.current) inputRef.current.value = ''
+      if (inputRef.current) {
+        inputRef.current.value = ''
+        // 키보드 내림 — 등록 후 시트가 키보드 높이만큼 떠 있는 현상 방지
+        inputRef.current.blur()
+      }
       setHasContent(false)
       setSubmitError(null)
       setReplyTo(null)

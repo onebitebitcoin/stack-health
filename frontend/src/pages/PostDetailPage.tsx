@@ -17,6 +17,9 @@ export default function PostDetailPage() {
   const [isMuted, setIsMuted] = useState(true)
   const [commentOpen, setLocalCommentOpen] = useState(false)
 
+  // 시트 열린 채 라우트 이탈(뒤로가기 등) 시 전역 commentOpen 잔류 → BottomNav 영구 숨김 방지
+  useEffect(() => () => setCommentOpen(false), [setCommentOpen])
+
   const { data: post, isLoading, isError } = useQuery<Post>({
     queryKey: ['post', postId],
     queryFn: async () => {
