@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Droplets, ShieldCheck, Settings, Share2, Bell,
+  Droplets, ShieldCheck, Settings, Share2, Bell, Zap,
   ChevronLeft, ChevronRight, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2, Pencil,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../store/auth'
 import { shareProfileLink } from '../lib/share'
 import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
-import type { MyStats, HistoryResponse, HistoryWorkoutPost, MonthlyPointsResponse } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost, MonthlyPointsResponse, HashrateResponse } from '../api/types'
 import client from '../api/client'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
@@ -94,6 +94,17 @@ export default function ProfilePage() {
 
     return () => observer.disconnect()
   }, [selectedDate, selectedPosts])
+
+  const { data: hashrate } = useQuery<HashrateResponse>({
+    queryKey: ['my-hashrate'],
+    queryFn: async () => {
+      const res = await client.get<{ data: HashrateResponse }>('/users/me/hashrate')
+      return res.data.data
+    },
+    // 일반 사용자 공개 전 — 관리자만 미리보기 (공개 시 !!user 로 변경)
+    enabled: !!user?.is_admin,
+    refetchInterval: 60_000,
+  })
 
   const { data: myStats, isLoading } = useQuery<MyStats>({
     queryKey: ['my-stats'],
@@ -285,6 +296,21 @@ export default function ProfilePage() {
           <Settings size={16} strokeWidth={1.5} />
         </button>
       </div>
+
+      {user?.is_admin && hashrate && (
+        <div className="mx-4 mb-3 flex items-center justify-between rounded-xl bg-theme-surface px-4 py-3">
+          <span className="flex items-center gap-1.5 text-sm text-theme-muted">
+            <Zap size={14} className="text-accent" />
+            {t('hashrateTitle')}
+          </span>
+          <span className="text-sm font-semibold text-theme-primary">
+            {hashrate.percent}%
+            <span className="ml-1.5 text-xs font-normal text-theme-muted">
+              {hashrate.my_points} / {hashrate.total_points}
+            </span>
+          </span>
+        </div>
+      )}
 
       {user?.is_admin && (
         <div className="mx-4 mb-3">

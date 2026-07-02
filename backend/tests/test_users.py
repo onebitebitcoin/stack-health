@@ -175,7 +175,7 @@ def test_leaderboard_ranks_fixed_positive_rewards(client: TestClient, db: Sessio
 
 def test_weekly_leaderboard_ignores_client_timezone_header(client: TestClient, db: Session) -> None:
     from app.models.reward import RewardPoint
-    from app.services.reward import UTC, get_week_range
+    from app.services.reward import get_week_range
 
     token, user = _register(client, "tzboard@x.com", "tzboard")
     assert token

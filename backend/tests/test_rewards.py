@@ -192,8 +192,6 @@ def test_upload_sweaty_exercise_earns_05(client: TestClient) -> None:
 
 
 def test_comment_earns_001_points(client: TestClient) -> None:
-    from app.models.reward import RewardPoint
-    from sqlalchemy.orm import Session
 
     token, user = _reg(client, "commenter@x.com", "commenter")
     key = f"videos/{user['id']}/c.mp4"
@@ -270,3 +268,42 @@ def test_reward_summary_ignores_client_timezone_header(client: TestClient, db: S
 
     assert res.status_code == 200
     assert res.json()["data"]["current_week_points"] == 0.5
+
+
+def test_points_for_tags_image_only_weights() -> None:
+    from app.services.reward import (
+        POINTS_LIGHT_IMAGE_ONLY,
+        POINTS_SWEATY_IMAGE_ONLY,
+        points_for_tags,
+    )
+
+    assert points_for_tags(["땀 흘리는 운동"], has_video=False) == POINTS_SWEATY_IMAGE_ONLY
+    assert points_for_tags(["가벼운 활동"], has_video=False) == POINTS_LIGHT_IMAGE_ONLY
+    assert points_for_tags([], has_video=False) == POINTS_SWEATY_IMAGE_ONLY
+
+
+def test_hashrate_empty_week(client: TestClient) -> None:
+    token, _ = _reg(client, "hash0@x.com", "hashzero")
+    res = client.get("/api/v1/users/me/hashrate", headers=_auth(token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data == {"my_points": 0.0, "total_points": 0.0, "percent": 0.0}
+
+
+def test_hashrate_share_of_total(client: TestClient) -> None:
+    token_a, user_a = _reg(client, "hasha@x.com", "hashusera")
+    token_b, user_b = _reg(client, "hashb@x.com", "hashuserb")
+    _upload(client, token_a, user_a["id"], "a.mp4")   # 0.5 (queued 포함)
+    _upload(client, token_b, user_b["id"], "b.mp4")   # 0.5
+
+    res = client.get("/api/v1/users/me/hashrate", headers=_auth(token_a))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["my_points"] == 0.5
+    assert data["total_points"] == 1.0
+    assert data["percent"] == 50.0
+
+
+def test_hashrate_requires_auth(client: TestClient) -> None:
+    res = client.get("/api/v1/users/me/hashrate")
+    assert res.status_code in (401, 403)

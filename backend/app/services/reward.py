@@ -9,16 +9,22 @@ from app.models.video import Video
 
 POINTS_LIGHT_ACTIVITY = 0.25
 POINTS_SWEATY_EXERCISE = 0.5
+POINTS_LIGHT_IMAGE_ONLY = 0.1
+POINTS_SWEATY_IMAGE_ONLY = 0.3
 POINTS_PER_COMMENT = 0.01
 
 LIGHT_ACTIVITY_LABEL = "가벼운 활동"
 
 
-def points_for_tags(tags: list[str]) -> float:
-    """Return upload points based on the main category tag."""
-    if tags and tags[0] == LIGHT_ACTIVITY_LABEL:
-        return POINTS_LIGHT_ACTIVITY
-    return POINTS_SWEATY_EXERCISE
+def points_for_tags(tags: list[str], has_video: bool = True) -> float:
+    """Return upload points based on the main category tag.
+
+    has_video=False(이미지만 인증)면 감액 가중치를 적용한다.
+    """
+    is_light = bool(tags) and tags[0] == LIGHT_ACTIVITY_LABEL
+    if has_video:
+        return POINTS_LIGHT_ACTIVITY if is_light else POINTS_SWEATY_EXERCISE
+    return POINTS_LIGHT_IMAGE_ONLY if is_light else POINTS_SWEATY_IMAGE_ONLY
 DAILY_MAX_UPLOADS = 2
 REWARD_STATUS_QUEUED = "queued"
 REWARD_STATUS_FIXED = "fixed"
@@ -80,6 +86,22 @@ def get_weekly_points(db: Session, user_id: int, tz: ZoneInfo = UTC) -> float:
         .scalar()
     )
     return result or 0
+
+
+def get_weekly_hashrate(db: Session, user_id: int) -> tuple[float, float]:
+    """이번 주(UTC ISO week) (내 점수, 전체 점수) 반환 — 전체 대비 참여 비중 계산용.
+
+    참여도는 즉시 반영되도록 queued+fixed 모두 포함, revoked만 제외한다.
+    """
+    week_start_utc, week_end_utc = get_week_range(UTC)
+    base = db.query(func.sum(RewardPoint.points)).filter(
+        RewardPoint.created_at >= week_start_utc,
+        RewardPoint.created_at < week_end_utc,
+        RewardPoint.status != REWARD_STATUS_REVOKED,
+    )
+    total = base.scalar() or 0.0
+    mine = base.filter(RewardPoint.user_id == user_id).scalar() or 0.0
+    return mine, total
 
 
 def get_weekly_queued_points(db: Session, user_id: int) -> float:

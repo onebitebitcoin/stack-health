@@ -49,5 +49,9 @@
   "deleteChallengeButton": "Permanently Delete",
   "deletingChallenge": "Deleting...",
   "deleteChallengeTitle": "Permanently Delete Challenge",
-  "deleteChallengeBody": "All data including participation records will be permanently deleted. This cannot be undone."
+  "deleteChallengeBody": "All data including participation records will be permanently deleted. This cannot be undone.",
+  "tabHashrate": "Hashrate",
+  "noHashrate": "No active users this week",
+  "hashrateTotal": "{{count}} active this week · {{points}}P total",
+  "hashrateActivity": "{{uploads}} uploads · {{comments}} comments"
 }

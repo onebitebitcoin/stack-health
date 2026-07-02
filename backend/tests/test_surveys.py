@@ -1,7 +1,6 @@
 """Survey API 테스트 (스펙 §10 백엔드 케이스 전체)."""
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 

@@ -234,7 +234,12 @@ def run_multi_pipeline(job: dict, status_callback=None) -> dict:
         if challenge_id is not None:
             increment_challenge_upload(db, user_id, int(challenge_id))
 
-        rp = add_points(db, user_id, points_for_tags(job.get("tags", [])), "upload", reference_id=video.id)
+        has_video = any(it.get("kind") == "video" for it in items)
+        rp = add_points(
+            db, user_id,
+            points_for_tags(job.get("tags", []), has_video=has_video),
+            "upload", reference_id=video.id,
+        )
         points_earned = rp.points if rp else 0.0
 
         user = db.query(User).filter(User.id == user_id).first()
@@ -244,7 +249,6 @@ def run_multi_pipeline(job: dict, status_callback=None) -> dict:
         db.commit()
         elapsed_sec = time.time() - start_time
         n_images = sum(1 for it in items if it.get("kind") == "image")
-        has_video = any(it.get("kind") == "video" for it in items)
         merge_type = f"multi({'video+' if has_video else ''}{n_images}img)"
         if has_audio_merged:
             merge_type += " + audio"

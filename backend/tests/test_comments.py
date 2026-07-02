@@ -95,7 +95,6 @@ def test_create_comment_minimum_length_passes(client: TestClient) -> None:
 
 def test_daily_comment_limit(client: TestClient) -> None:
     from unittest.mock import patch as _patch
-    from datetime import datetime, timezone
 
     token, user = _reg(client, "climit@x.com", "culimit")
     post_id = _make_post(client, token, user["id"])

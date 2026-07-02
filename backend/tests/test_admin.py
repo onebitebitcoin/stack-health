@@ -167,3 +167,40 @@ def test_admin_users_shows_referral_tracking(client: TestClient, db: Session) ->
     assert users["invitee2"]["referred_by_username"] == "inviter"
     # 일반 가입자: 초대자 없음
     assert users["invitee1"]["referred_count"] == 0
+
+
+def test_admin_hashrate_requires_admin(client: TestClient) -> None:
+    token, _ = _reg(client, "plainhash@x.com", "plainhash")
+    res = client.get("/api/v1/admin/hashrate", headers=_auth(token))
+    assert res.status_code == 403
+
+
+def test_admin_hashrate_lists_share(client: TestClient, db: Session) -> None:
+    admin_token = _reg_admin(client, db, "hashadmin@x.com", "hashadmin")
+    user_token, user = _reg(client, "hashmember@x.com", "hashmember")
+
+    # 업로드 1건(0.5) + 댓글 1건(0.01)
+    key = f"videos/{user['id']}/hr.mp4"
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/hr.mp4"):
+        post_res = client.post(
+            "/api/v1/videos/confirm",
+            json={"r2_key": key, "duration_sec": 20},
+            headers=_auth(user_token),
+        )
+    post_id = post_res.json()["data"]["post"]["id"]
+    client.post(
+        f"/api/v1/feed/{post_id}/comments",
+        json={"content": "오운완 인증 댓글"},
+        headers=_auth(user_token),
+    )
+
+    res = client.get("/api/v1/admin/hashrate", headers=_auth(admin_token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["total_points"] == 0.51
+    assert len(data["items"]) == 1
+    item = data["items"][0]
+    assert item["username"] == "hashmember"
+    assert item["upload_count"] == 1
+    assert item["comment_count"] == 1
+    assert item["percent"] == 100.0

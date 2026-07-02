@@ -25,6 +25,7 @@ from app.services.reward import (
     _parse_tz,
     get_month_range,
     get_week_range,
+    get_weekly_hashrate,
     get_weekly_points,
     get_weekly_queued_points,
     settle_queued_rewards,
@@ -95,6 +96,23 @@ def get_my_referral(
         "data": {
             "referral_code": current_user.referral_code,
             "invited_count": invited_count,
+        }
+    }
+
+
+@router.get("/me/hashrate")
+def get_my_hashrate(
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """이번 주 해시레이트(전체 점수 대비 내 점수 비중 %) 반환."""
+    my_points, total_points = get_weekly_hashrate(db, current_user.id)
+    percent = (my_points / total_points * 100) if total_points > 0 else 0.0
+    return {
+        "data": {
+            "my_points": round(my_points, 2),
+            "total_points": round(total_points, 2),
+            "percent": round(percent, 1),
         }
     }
 

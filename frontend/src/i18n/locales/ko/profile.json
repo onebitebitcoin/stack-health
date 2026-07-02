@@ -71,7 +71,15 @@
   "shareTitle": "Stack Health 운동 리포트",
   "clipboardCopied": "클립보드에 복사됐어요!",
   "calendarYear": "{{year}}년 {{month}}월",
-  "daysOfWeek": ["월", "화", "수", "목", "금", "토", "일"],
+  "daysOfWeek": [
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일"
+  ],
   "shareProfile": "프로필 공유",
   "shareProfileCopied": "프로필 링크가 복사됐어요!",
   "shareProfileText": "Stack Health에서 {{username}}님의 프로필을 확인해보세요",
@@ -89,5 +97,6 @@
   "inviteShare": "초대 링크 공유",
   "inviteCopied": "초대 링크가 복사됐어요!",
   "inviteCopyAria": "링크 복사",
-  "inviteShareText": "Stack Health에서 함께 운동하고 비트코인 받자!"
+  "inviteShareText": "Stack Health에서 함께 운동하고 비트코인 받자!",
+  "hashrateTitle": "이번주 해시레이트"
 }

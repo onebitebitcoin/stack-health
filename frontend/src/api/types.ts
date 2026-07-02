@@ -236,6 +236,12 @@ export interface MonthlyPointsResponse {
   month_points: number
 }
 
+export interface HashrateResponse {
+  my_points: number
+  total_points: number
+  percent: number
+}
+
 export type SubtitleLanguage = 'ko' | 'en' | 'auto'
 
 export interface NotificationActor {

@@ -3,7 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -23,6 +23,7 @@ from app.services import r2 as r2_service
 from app.schemas.video import VideoSchema
 from app.services.reward import (
     REWARD_STATUS_FIXED,
+    REWARD_STATUS_REVOKED,
     UTC,
     get_week_range,
     revoke_queued_upload_reward,
@@ -459,6 +460,57 @@ def admin_list_challenges(
             "total": len(challenges),
         }
     }
+
+
+@router.get("/hashrate")
+def admin_hashrate(
+    db: Session = Depends(get_db),
+    _: User | None = Depends(require_admin),
+) -> dict:
+    """이번 주(UTC ISO week) 활동 사용자별 포인트·비중(%) 목록.
+
+    프로필 해시레이트와 동일 기준: queued+fixed 포함, revoked 제외.
+    """
+    week_start_utc, week_end_utc = get_week_range(UTC)
+    rows = (
+        db.query(
+            RewardPoint.user_id,
+            User.username,
+            func.sum(RewardPoint.points).label("points"),
+            func.sum(case((RewardPoint.reason == "upload", 1), else_=0)).label("upload_count"),
+            func.sum(
+                case(
+                    (RewardPoint.reason == "comment", 1),
+                    (RewardPoint.reason == "comment_revoke", -1),
+                    else_=0,
+                )
+            ).label("comment_count"),
+        )
+        .join(User, User.id == RewardPoint.user_id)
+        .filter(
+            RewardPoint.created_at >= week_start_utc,
+            RewardPoint.created_at < week_end_utc,
+            RewardPoint.status != REWARD_STATUS_REVOKED,
+        )
+        .group_by(RewardPoint.user_id, User.username)
+        .order_by(func.sum(RewardPoint.points).desc(), RewardPoint.user_id.asc())
+        .all()
+    )
+    # ponytail: 페이지네이션 없음 — 주간 활동 사용자 규모가 수십 명 수준. 수백 명 넘으면 추가.
+    total = float(sum(row.points for row in rows))
+    items = [
+        {
+            "rank": idx + 1,
+            "user_id": row.user_id,
+            "username": row.username,
+            "points": round(float(row.points), 2),
+            "upload_count": int(row.upload_count),
+            "comment_count": int(row.comment_count),
+            "percent": round(float(row.points) / total * 100, 1) if total > 0 else 0.0,
+        }
+        for idx, row in enumerate(rows)
+    ]
+    return {"data": {"items": items, "total_points": round(total, 2)}}
 
 
 @router.get("/weekly-summary")
