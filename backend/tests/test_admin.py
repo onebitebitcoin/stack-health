@@ -204,3 +204,41 @@ def test_admin_hashrate_lists_share(client: TestClient, db: Session) -> None:
     assert item["upload_count"] == 1
     assert item["comment_count"] == 1
     assert item["percent"] == 100.0
+
+
+def test_admin_hashrate_user_detail(client: TestClient, db: Session) -> None:
+    admin_token = _reg_admin(client, db, "hrdadmin@x.com", "hrdadmin")
+    user_token, user = _reg(client, "hrdmember@x.com", "hrdmember")
+
+    key = f"videos/{user['id']}/hrd.mp4"
+    with patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/hrd.mp4"):
+        post_res = client.post(
+            "/api/v1/videos/confirm",
+            json={"r2_key": key, "duration_sec": 20, "caption": "오운완", "tags": ["가벼운 활동"]},
+            headers=_auth(user_token),
+        )
+    post_id = post_res.json()["data"]["post"]["id"]
+    client.post(
+        f"/api/v1/feed/{post_id}/comments",
+        json={"content": "상세 확인용 댓글"},
+        headers=_auth(user_token),
+    )
+
+    res = client.get(f"/api/v1/admin/hashrate/{user['id']}", headers=_auth(admin_token))
+    assert res.status_code == 200
+    data = res.json()["data"]
+    assert data["username"] == "hrdmember"
+    assert data["total_points"] == 0.26
+    assert len(data["uploads"]) == 1
+    assert data["uploads"][0]["caption"] == "오운완"
+    assert data["uploads"][0]["tags"] == ["가벼운 활동"]
+    assert data["uploads"][0]["points"] == 0.25
+    assert len(data["comments"]) == 1
+    assert data["comments"][0]["content"] == "상세 확인용 댓글"
+    assert data["comments"][0]["points"] == 0.01
+
+
+def test_admin_hashrate_user_detail_404(client: TestClient, db: Session) -> None:
+    admin_token = _reg_admin(client, db, "hrd404@x.com", "hrd404admin")
+    res = client.get("/api/v1/admin/hashrate/999999", headers=_auth(admin_token))
+    assert res.status_code == 404

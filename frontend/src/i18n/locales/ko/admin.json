@@ -53,5 +53,11 @@
   "tabHashrate": "해시레이트",
   "noHashrate": "이번 주 활동한 사용자가 없어요",
   "hashrateTotal": "이번주 활동 {{count}}명 · 전체 {{points}}P",
-  "hashrateActivity": "업로드 {{uploads}} · 댓글 {{comments}}"
+  "hashrateActivity": "업로드 {{uploads}} · 댓글 {{comments}}",
+  "hashrateDetailWeekPoints": "이번주 {{points}}P",
+  "hashrateDetailUploads": "업로드 {{count}}건",
+  "hashrateDetailComments": "댓글 {{count}}건",
+  "hashrateDetailNone": "없음",
+  "hashrateDeletedComment": "삭제된 댓글",
+  "hashrateDeletedPost": "삭제된 게시물"
 }

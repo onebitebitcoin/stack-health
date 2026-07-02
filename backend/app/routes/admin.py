@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -511,6 +512,68 @@ def admin_hashrate(
         for idx, row in enumerate(rows)
     ]
     return {"data": {"items": items, "total_points": round(total, 2)}}
+
+
+@router.get("/hashrate/{user_id}")
+def admin_hashrate_user_detail(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User | None = Depends(require_admin),
+) -> dict:
+    """이번 주 특정 사용자의 활동 상세 — 업로드 영상·댓글 목록 (포인트 항목 기준)."""
+    target = db.get(User, user_id)
+    if target is None:
+        raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
+
+    week_start_utc, week_end_utc = get_week_range(UTC)
+    rows = (
+        db.query(RewardPoint)
+        .filter(
+            RewardPoint.user_id == user_id,
+            RewardPoint.created_at >= week_start_utc,
+            RewardPoint.created_at < week_end_utc,
+            RewardPoint.status != REWARD_STATUS_REVOKED,
+        )
+        .order_by(RewardPoint.created_at.desc())
+        .all()
+    )
+
+    # ponytail: 주간 개인 활동은 수십 건 수준이라 건별 조회로 충분. 느려지면 일괄 join.
+    uploads = []
+    comments = []
+    for rp in rows:
+        if rp.reason == "upload":
+            video = db.get(Video, rp.reference_id) if rp.reference_id else None
+            post = video.post if video else None
+            uploads.append({
+                "post_id": post.id if post else None,
+                "caption": post.caption if post else None,
+                "tags": json.loads(post.tags) if post and post.tags else [],
+                "thumbnail_url": post.thumbnail_url if post else None,
+                "share_token": post.share_token if post else None,
+                "points": rp.points,
+                "status": rp.status,
+                "created_at": rp.created_at,
+            })
+        elif rp.reason in ("comment", "comment_revoke"):
+            comment = db.get(Comment, rp.reference_id) if rp.reference_id else None
+            comments.append({
+                "content": comment.content if comment else None,  # None = 삭제된 댓글
+                "post_id": comment.post_id if comment else None,
+                "points": rp.points,
+                "created_at": rp.created_at,
+            })
+
+    total = float(sum(rp.points for rp in rows))
+    return {
+        "data": {
+            "user_id": user_id,
+            "username": target.username,
+            "total_points": round(total, 2),
+            "uploads": uploads,
+            "comments": comments,
+        }
+    }
 
 
 @router.get("/weekly-summary")
