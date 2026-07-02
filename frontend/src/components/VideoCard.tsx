@@ -42,7 +42,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   const [seekFlash, setSeekFlash] = useState<'left' | 'right' | null>(null)
   const [progress, setProgress] = useState(0)
   const [isScrubbing, setIsScrubbing] = useState(false)
-  const [isLandscape, setIsLandscape] = useState(false)
+  const [fitContain, setFitContain] = useState(false)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const seekFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -88,7 +88,9 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       if (video.duration) setProgress((video.currentTime / video.duration) * 100)
     }
     const onMeta = () => {
-      setIsLandscape(video.videoWidth > video.videoHeight)
+      // 9:16(0.5625)보다 눈에 띄게 넓은 비율(1:1 이미지 합성, 4:3 사진, 가로 영상)은
+      // cover로 채우면 좌우가 크게 잘려 확대돼 보이므로 contain으로 전체 표시
+      setFitContain(video.videoWidth / video.videoHeight > 0.65)
     }
     video.addEventListener('timeupdate', onTimeUpdate)
     video.addEventListener('loadedmetadata', onMeta)
@@ -231,7 +233,7 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       <video
         ref={videoRef}
         src={post.cdn_url}
-        className={`h-full w-full ${isLandscape ? 'object-contain' : 'object-cover'}`}
+        className={`h-full w-full ${fitContain ? 'object-contain' : 'object-cover'}`}
         loop
         muted={isMuted}
         playsInline
