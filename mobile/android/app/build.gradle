@@ -26,6 +26,17 @@ android {
         versionName "1.0.0"
     }
 
+    signingConfigs {
+        debug {
+            // ponytail: 고정 debug keystore. CI 러너가 매번 새 랜덤 키로 서명하면
+            // 이전 설치와 서명이 달라져 업데이트 설치가 실패한다 (구버전이 화면에 남음).
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
     buildTypes {
         release {
             signingConfig signingConfigs.debug

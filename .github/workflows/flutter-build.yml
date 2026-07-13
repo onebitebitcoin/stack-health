@@ -41,6 +41,21 @@ jobs:
           echo "flutter.sdk=$FLUTTER_ROOT" > mobile/android/local.properties
           echo "sdk.dir=$ANDROID_HOME" >> mobile/android/local.properties
 
+      - name: "Ensure CI debug keystore exists"
+        working-directory: mobile
+        run: |
+          if [ ! -f android/app/debug.keystore ]; then
+            keytool -genkeypair -v -keystore android/app/debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10950 \
+              -dname "CN=Android Debug,O=Android,C=US"
+            git config user.email "action@github.com"
+            git config user.name "GitHub Actions"
+            git add android/app/debug.keystore
+            git commit -m "chore: CI 공용 debug keystore 추가 (서명 고정으로 업데이트 설치 안정화)"
+            git push
+          fi
+
       - name: "Flutter pub get"
         working-directory: mobile
         run: flutter pub get
