@@ -307,3 +307,22 @@ def test_hashrate_share_of_total(client: TestClient) -> None:
 def test_hashrate_requires_auth(client: TestClient) -> None:
     res = client.get("/api/v1/users/me/hashrate")
     assert res.status_code in (401, 403)
+
+
+def test_hashrate_week_range_clipped_by_month() -> None:
+    from datetime import datetime, timezone as _tz
+    from unittest.mock import patch as _patch
+    from app.services.reward import get_hashrate_week_range
+
+    # 2026-07-02(목) UTC: ISO 주 시작은 6/29(월)이지만 월 시작 7/1로 잘려야 한다
+    fake_now = datetime(2026, 7, 2, 12, 0, tzinfo=_tz.utc)
+
+    class _FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fake_now.astimezone(tz) if tz else fake_now
+
+    with _patch("app.services.reward.datetime", _FakeDatetime):
+        start, end = get_hashrate_week_range()
+    assert start == datetime(2026, 7, 1, tzinfo=_tz.utc)
+    assert end == datetime(2026, 7, 6, tzinfo=_tz.utc)  # 다음 월요일 (7월 내)

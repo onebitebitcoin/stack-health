@@ -26,6 +26,7 @@ from app.services.reward import (
     REWARD_STATUS_FIXED,
     REWARD_STATUS_REVOKED,
     UTC,
+    get_hashrate_week_range,
     get_week_range,
     revoke_queued_upload_reward,
     settle_queued_rewards,
@@ -472,7 +473,7 @@ def admin_hashrate(
 
     프로필 해시레이트와 동일 기준: queued+fixed 포함, revoked 제외.
     """
-    week_start_utc, week_end_utc = get_week_range(UTC)
+    week_start_utc, week_end_utc = get_hashrate_week_range(UTC)
     rows = (
         db.query(
             RewardPoint.user_id,
@@ -525,7 +526,7 @@ def admin_hashrate_user_detail(
     if target is None:
         raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
 
-    week_start_utc, week_end_utc = get_week_range(UTC)
+    week_start_utc, week_end_utc = get_hashrate_week_range(UTC)
     rows = (
         db.query(RewardPoint)
         .filter(

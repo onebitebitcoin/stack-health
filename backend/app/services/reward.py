@@ -88,12 +88,22 @@ def get_weekly_points(db: Session, user_id: int, tz: ZoneInfo = UTC) -> float:
     return result or 0
 
 
+def get_hashrate_week_range(tz: ZoneInfo = UTC) -> tuple[datetime, datetime]:
+    """해시레이트용 이번 주 범위 — 월이 주 중간에 시작/종료되면 월 경계로 자른다.
+
+    예: 7/2(수) 기준 ISO 주는 6/29(월) 시작이지만, 7월이 7/1에 시작했으므로 7/1부터 집계.
+    """
+    week_start, week_end = get_week_range(tz)
+    month_start, month_end = get_month_range(tz)
+    return max(week_start, month_start), min(week_end, month_end)
+
+
 def get_weekly_hashrate(db: Session, user_id: int) -> tuple[float, float]:
-    """이번 주(UTC ISO week) (내 점수, 전체 점수) 반환 — 전체 대비 참여 비중 계산용.
+    """이번 주(월 경계 반영) (내 점수, 전체 점수) 반환 — 전체 대비 참여 비중 계산용.
 
     참여도는 즉시 반영되도록 queued+fixed 모두 포함, revoked만 제외한다.
     """
-    week_start_utc, week_end_utc = get_week_range(UTC)
+    week_start_utc, week_end_utc = get_hashrate_week_range(UTC)
     base = db.query(func.sum(RewardPoint.points)).filter(
         RewardPoint.created_at >= week_start_utc,
         RewardPoint.created_at < week_end_utc,
