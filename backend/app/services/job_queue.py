@@ -160,6 +160,7 @@ def enqueue_multi_pipeline(
     subtitle_position: str | None = None,
     subtitle_language: str = "ko",
     mute_video_audio: bool = False,
+    video_filter: str | None = None,
     job_id: str | None = None,
 ) -> str:
     """다중 미디어(영상 ≤1 + 이미지) 업로드 파이프라인을 Redis 큐에 등록.
@@ -190,6 +191,7 @@ def enqueue_multi_pipeline(
         "subtitle_position": subtitle_position,
         "subtitle_language": subtitle_language,
         "mute_video_audio": mute_video_audio,
+        "video_filter": video_filter,
     }
 
     r = get_redis_client()

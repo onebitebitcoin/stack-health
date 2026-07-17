@@ -1,6 +1,7 @@
-import { useRef, type ChangeEvent, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ImagePlus, Film, X, GripVertical } from 'lucide-react'
+import { ImagePlus, Film, X, GripVertical, Loader2, Wand2 } from 'lucide-react'
+import client from '../../api/client'
 import {
   DndContext,
   PointerSensor,
@@ -41,6 +42,30 @@ interface Props {
   estimatedSeconds: number
   error: string
   onNext: () => void
+  cartoonFilter: boolean
+  setCartoonFilter: (on: boolean) => void
+}
+
+/** 첫 미디어에서 프리뷰용 프레임 1장을 JPEG Blob으로 캡처 (이미지는 파일 그대로). */
+async function captureFrame(item: MediaItem): Promise<Blob> {
+  if (item.kind === 'image') return item.file
+  const video = document.createElement('video')
+  video.src = item.previewUrl
+  video.muted = true
+  video.playsInline = true
+  await new Promise<void>((res, rej) => {
+    video.onloadeddata = () => res()
+    video.onerror = () => rej(new Error('video load failed'))
+  })
+  video.currentTime = Math.min(0.5, (video.duration || 1) / 2)
+  await new Promise<void>((res) => { video.onseeked = () => res() })
+  const canvas = document.createElement('canvas')
+  canvas.width = video.videoWidth
+  canvas.height = video.videoHeight
+  canvas.getContext('2d')?.drawImage(video, 0, 0)
+  return await new Promise<Blob>((res, rej) =>
+    canvas.toBlob((b) => (b ? res(b) : rej(new Error('capture failed'))), 'image/jpeg', 0.85),
+  )
 }
 
 function SortableCard({ item, onRemove }: { item: MediaItem; onRemove: (id: string) => void }) {
@@ -88,10 +113,40 @@ function SortableCard({ item, onRemove }: { item: MediaItem; onRemove: (id: stri
 
 export default function StepMedia({
   fileInputRef, items, onAddFiles, onRemove, onReorder, estimatedSeconds, error, onNext,
+  cartoonFilter, setCartoonFilter,
 }: Props) {
   const { t } = useTranslation('upload')
   const localInputRef = useRef<HTMLInputElement>(null)
   const inputRef = fileInputRef ?? localInputRef
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState(false)
+  const firstItemId = items[0]?.id
+
+  useEffect(() => {
+    if (!cartoonFilter || !items[0]) {
+      setPreviewUrl((old) => { if (old) URL.revokeObjectURL(old); return null })
+      setPreviewError(false)
+      return
+    }
+    let cancelled = false
+    setPreviewLoading(true)
+    setPreviewError(false)
+    ;(async () => {
+      const frame = await captureFrame(items[0])
+      const form = new FormData()
+      form.append('frame', frame, 'frame.jpg')
+      const res = await client.post<Blob>('/videos/filter-preview', form, {
+        responseType: 'blob', timeout: 30_000,
+      })
+      if (cancelled) return
+      setPreviewUrl((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(res.data) })
+    })().catch(() => { if (!cancelled) setPreviewError(true) })
+      .finally(() => { if (!cancelled) setPreviewLoading(false) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartoonFilter, firstItemId])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -164,6 +219,57 @@ export default function StepMedia({
           {t('media.estimatedLength', { seconds: Math.round(estimatedSeconds) })}
           {overLimit && ` — ${t('media.tooLong', { max: MAX_TOTAL_SECONDS })}`}
         </p>
+      )}
+
+      {items.length > 0 && (
+        <div className="rounded-2xl bg-theme-surface p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Wand2 size={16} className="text-accent" />
+              <div>
+                <p className="text-sm font-semibold text-theme-primary">{t('filter.title')}</p>
+                <p className="text-xs text-theme-muted mt-0.5 leading-relaxed">{t('filter.hint')}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={cartoonFilter}
+              aria-label={t('filter.title')}
+              onClick={() => setCartoonFilter(!cartoonFilter)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                cartoonFilter ? 'bg-accent' : 'bg-theme-surface2'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                  cartoonFilter ? 'translate-x-[22px]' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
+          {cartoonFilter && (
+            <div className="mt-3 flex flex-col items-center gap-2">
+              {previewLoading && (
+                <div className="flex items-center gap-2 py-6 text-xs text-theme-muted">
+                  <Loader2 size={14} className="animate-spin" />
+                  {t('filter.previewLoading')}
+                </div>
+              )}
+              {!previewLoading && previewUrl && (
+                <img
+                  src={previewUrl}
+                  alt={t('filter.previewLabel')}
+                  className="max-h-56 rounded-xl object-contain"
+                />
+              )}
+              {!previewLoading && previewError && (
+                <p className="py-2 text-xs text-theme-muted">{t('filter.previewFailed')}</p>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {error && <p className="text-sm text-red-400 text-center">{error}</p>}

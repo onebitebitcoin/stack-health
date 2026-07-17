@@ -116,6 +116,78 @@ def test_upload_multi_unauthenticated(client: TestClient) -> None:
     assert res.status_code in (401, 403)
 
 
+@patch("app.routes.videos.reserve_job_id", return_value="multi-filter-1")
+@patch("app.routes.videos._r2_upload_and_enqueue_multi")
+def test_upload_multi_cartoon_filter_accepted(mock_bg, mock_reserve, client: TestClient) -> None:
+    token = _register_and_token(client, "mf1@x.com", "mfuser1")
+    res = client.post(
+        "/api/v1/videos/upload-multi",
+        data={"items_meta": json.dumps([{"kind": "video"}]), "video_filter": "cartoon"},
+        files=[("files", _vid("a.mp4"))],
+        headers=_auth(token),
+    )
+    assert res.status_code == 200, res.text
+    assert mock_bg.call_args.kwargs["video_filter"] == "cartoon"
+
+
+def test_upload_multi_unknown_filter_rejected(client: TestClient) -> None:
+    token = _register_and_token(client, "mf2@x.com", "mfuser2")
+    res = client.post(
+        "/api/v1/videos/upload-multi",
+        data={"items_meta": json.dumps([{"kind": "video"}]), "video_filter": "sepia"},
+        files=[("files", _vid("a.mp4"))],
+        headers=_auth(token),
+    )
+    assert res.status_code == 400
+
+
+class TestFilterPreview:
+    def test_unauthenticated(self, client: TestClient) -> None:
+        res = client.post(
+            "/api/v1/videos/filter-preview",
+            files={"frame": ("f.jpg", b"data", "image/jpeg")},
+        )
+        assert res.status_code in (401, 403)
+
+    def test_returns_cartoonized_jpeg(self, client: TestClient) -> None:
+        import cv2
+        import numpy as np
+
+        token = _register_and_token(client, "fp1@x.com", "fpuser1")
+        rng = np.random.default_rng(3)
+        img = rng.integers(40, 220, (120, 160, 3), dtype=np.uint8)
+        ok, buf = cv2.imencode(".jpg", img)
+        assert ok
+        res = client.post(
+            "/api/v1/videos/filter-preview",
+            files={"frame": ("f.jpg", buf.tobytes(), "image/jpeg")},
+            headers=_auth(token),
+        )
+        assert res.status_code == 200, res.text
+        assert res.headers["content-type"] == "image/jpeg"
+        out = cv2.imdecode(np.frombuffer(res.content, np.uint8), cv2.IMREAD_COLOR)
+        assert out is not None
+        assert out.shape == img.shape  # 1280px 이하는 해상도 유지
+
+    def test_invalid_file_rejected(self, client: TestClient) -> None:
+        token = _register_and_token(client, "fp2@x.com", "fpuser2")
+        res = client.post(
+            "/api/v1/videos/filter-preview",
+            files={"frame": ("f.jpg", b"not-an-image", "image/jpeg")},
+            headers=_auth(token),
+        )
+        assert res.status_code == 400
+
+    def test_empty_file_rejected(self, client: TestClient) -> None:
+        token = _register_and_token(client, "fp3@x.com", "fpuser3")
+        res = client.post(
+            "/api/v1/videos/filter-preview",
+            files={"frame": ("f.jpg", b"", "image/jpeg")},
+            headers=_auth(token),
+        )
+        assert res.status_code == 400
+
+
 @patch("app.routes.videos.reserve_job_id", return_value="multi-text-1")
 @patch("app.routes.videos._r2_upload_and_enqueue_multi")
 def test_upload_multi_with_text_subtitle(mock_bg, mock_reserve, client: TestClient) -> None:

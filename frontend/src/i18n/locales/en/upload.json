@@ -151,5 +151,12 @@
   },
   "preview": {
     "title": "Preview"
+  },
+  "filter": {
+    "title": "Cartoon filter",
+    "hint": "Turns your video and photos into a cartoon look. Faces and backgrounds are softly simplified.",
+    "previewLoading": "Generating preview...",
+    "previewFailed": "Couldn't load the preview. The filter will still be applied.",
+    "previewLabel": "Cartoon preview"
   }
 }

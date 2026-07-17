@@ -47,6 +47,44 @@ def _delete_quietly(r2, key: str) -> None:
         pass
 
 
+def _apply_cartoon_filter(r2, video_key: str) -> str | None:
+    """합성 영상에 카툰 필터를 적용해 새 R2 키를 반환. 실패 시 None (원본 유지).
+
+    backend와 동일한 렌더러(`app.services.cartoon`)를 사용해 미리보기 룩과 일치시킨다.
+    """
+    import os
+    import tempfile
+    import uuid as _uuid
+
+    from app.services.cartoon import cartoonize_video
+
+    tmp_input = tmp_output = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+            tmp_input = f.name
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+            tmp_output = f.name
+
+        resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=video_key)
+        with open(tmp_input, "wb") as f:
+            f.write(resp["Body"].read())
+
+        cartoonize_video(tmp_input, tmp_output)
+
+        filtered_key = f"videos/f-{_uuid.uuid4()}.mp4"
+        with open(tmp_output, "rb") as f:
+            r2.put_object(Bucket=R2_BUCKET_NAME, Key=filtered_key, Body=f, ContentType="video/mp4",
+                          CacheControl="public, max-age=31536000, immutable")
+        return filtered_key
+    except Exception as e:
+        logger.warning("Cartoon filter failed (using original): %s", e)
+        return None
+    finally:
+        for tmp in [tmp_input, tmp_output]:
+            if tmp and os.path.exists(tmp):
+                os.unlink(tmp)
+
+
 def run_multi_pipeline(job: dict, status_callback=None) -> dict:
     """다중 미디어 업로드 파이프라인."""
     from app.models.post import Post
@@ -115,6 +153,24 @@ def run_multi_pipeline(job: dict, status_callback=None) -> dict:
             _delete_quietly(r2, pre_compress_key)
         current_key = compressed_key
         logger.info("[multi-pipeline] job=%s compressed → %s", job_id, current_key)
+
+    # 4.5) video filter — 카툰 등. 실패해도 원본으로 계속 진행 (subtitle과 동일한 정책)
+    filter_status = "skipped"
+    video_filter = job.get("video_filter")
+    if video_filter == "cartoon":
+        if status_callback:
+            status_callback("filter")
+        pre_filter_key = current_key
+        filtered_key = _apply_cartoon_filter(r2, current_key)
+        if filtered_key:
+            if pre_filter_key != original_video_r2_key:
+                _delete_quietly(r2, pre_filter_key)
+            current_key = filtered_key
+            filter_status = "completed"
+            logger.info("[multi-pipeline] job=%s cartoon filter → %s", job_id, current_key)
+        else:
+            filter_status = "failed"
+            logger.warning("[multi-pipeline] job=%s cartoon filter failed — 원본으로 진행", job_id)
 
     # 5) 일일 한도 체크 (썸네일 전)
     if status_callback:
@@ -270,6 +326,7 @@ def run_multi_pipeline(job: dict, status_callback=None) -> dict:
             "subtitle_url": subtitle_url or "",
             "subtitle_text": subtitle_text or "",
             "subtitle_error": subtitle_error or "",
+            "filter_status": filter_status,
         }
     except Exception:
         if compressed_key:

@@ -1121,6 +1121,7 @@ def _r2_upload_and_enqueue_multi(
     subtitle_position: str | None,
     subtitle_language: str,
     mute_video_audio: bool,
+    video_filter: str | None = None,
 ) -> None:
     temp_paths = [p for _, p, _, _ in spooled] + ([audio_path] if audio_path else [])
     try:
@@ -1169,6 +1170,7 @@ def _r2_upload_and_enqueue_multi(
             subtitle_position=subtitle_position,
             subtitle_language=subtitle_language,
             mute_video_audio=mute_video_audio,
+            video_filter=video_filter,
             job_id=job_id,
         )
     except Exception as e:
@@ -1180,6 +1182,52 @@ def _r2_upload_and_enqueue_multi(
                 os.unlink(path)
             except OSError:
                 pass
+
+
+MAX_PREVIEW_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB — canvas 캡처 프레임 1장
+PREVIEW_MAX_WIDTH = 1280
+ALLOWED_VIDEO_FILTERS = {"cartoon"}
+
+
+@router.post("/filter-preview")
+async def filter_preview(
+    frame: UploadFile = File(...),
+    current_user: User = Depends(get_active_user),
+):
+    """업로드 미리보기: 프레임 1장에 카툰 필터를 적용해 JPEG로 반환한다.
+
+    워커 파이프라인과 동일한 렌더러(`app.services.cartoon`)를 사용하므로
+    미리보기 룩과 최종 결과물이 일치한다.
+    """
+    import cv2
+    import numpy as np
+
+    from app.services.cartoon import adaptive_gamma, cartoon_frame
+
+    raw = await frame.read()
+    if len(raw) == 0:
+        raise api_error(400, E_IMAGE_FORMAT_INVALID, "빈 파일입니다")
+    if len(raw) > MAX_PREVIEW_IMAGE_SIZE:
+        raise api_error(413, E_IMAGE_TOO_LARGE, "미리보기 프레임이 너무 큽니다 (최대 10MB)")
+
+    img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        raise api_error(400, E_IMAGE_FORMAT_INVALID, "이미지를 디코드할 수 없습니다")
+
+    h, w = img.shape[:2]
+    if w > PREVIEW_MAX_WIDTH:
+        img = cv2.resize(
+            img, (PREVIEW_MAX_WIDTH, int(h * PREVIEW_MAX_WIDTH / w)), interpolation=cv2.INTER_AREA
+        )
+
+    out = cartoon_frame(img, adaptive_gamma(img))
+    ok, buf = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    if not ok:
+        raise api_error(500, E_VIDEO_PROCESS_FAILED, "미리보기 생성에 실패했습니다")
+
+    from fastapi.responses import Response
+
+    return Response(content=buf.tobytes(), media_type="image/jpeg")
 
 
 @router.post("/upload-multi")
@@ -1199,6 +1247,7 @@ async def upload_multi(
     subtitle_position: str | None = Form(None),
     subtitle_language: SubtitleLanguage = Form("ko"),
     mute_video: bool = Form(False),
+    video_filter: str | None = Form(None),
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = ...,
@@ -1207,8 +1256,11 @@ async def upload_multi(
     """다중 미디어(영상 ≤1 + 이미지 ≤5)를 순서대로 받아 합성 파이프라인에 등록한다.
 
     items_meta: JSON 배열 `[{"kind": "image"|"video"}, ...]` — files 순서와 1:1 대응.
+    video_filter: 합성본 전체에 적용할 영상 필터 (현재 "cartoon"만 지원).
     파일 수신 즉시 job_id 반환, R2 업로드 + 처리는 백그라운드.
     """
+    if video_filter is not None and video_filter not in ALLOWED_VIDEO_FILTERS:
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 필터입니다: {video_filter}")
     try:
         meta = json.loads(items_meta)
     except (json.JSONDecodeError, TypeError):
@@ -1289,6 +1341,7 @@ async def upload_multi(
         subtitle_position=subtitle_position,
         subtitle_language=subtitle_language,
         mute_video_audio=mute_video,
+        video_filter=video_filter,
     )
 
     return {"data": {"job_id": job_id, "status": "processing"}}

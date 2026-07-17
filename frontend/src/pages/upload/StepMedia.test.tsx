@@ -1,7 +1,12 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
 import StepMedia, { type MediaItem } from './StepMedia'
+
+vi.mock('../../api/client', () => ({
+  default: { post: vi.fn(() => new Promise(() => undefined)) },
+}))
+import client from '../../api/client'
 
 function makeItem(kind: 'video' | 'image', id: string, durationSec?: number): MediaItem {
   return {
@@ -23,6 +28,8 @@ function buildProps(overrides: Partial<React.ComponentProps<typeof StepMedia>> =
     estimatedSeconds: 0,
     error: '',
     onNext: vi.fn(),
+    cartoonFilter: false,
+    setCartoonFilter: vi.fn(),
     ...overrides,
   }
 }
@@ -59,5 +66,30 @@ describe('StepMedia', () => {
     render(<StepMedia {...buildProps({ items, estimatedSeconds: 3, onRemove })} />)
     await userEvent.click(screen.getByLabelText('remove'))
     expect(onRemove).toHaveBeenCalledWith('a')
+  })
+
+  it('아이템이 없으면 카툰 필터 토글이 보이지 않는다', () => {
+    render(<StepMedia {...buildProps()} />)
+    expect(screen.queryByRole('switch')).toBeNull()
+  })
+
+  it('토글 클릭 시 setCartoonFilter(true) 호출', async () => {
+    const setCartoonFilter = vi.fn()
+    const items = [makeItem('image', 'a')]
+    render(<StepMedia {...buildProps({ items, estimatedSeconds: 3, setCartoonFilter })} />)
+    await userEvent.click(screen.getByRole('switch'))
+    expect(setCartoonFilter).toHaveBeenCalledWith(true)
+  })
+
+  it('필터 ON이면 이미지 아이템으로 filter-preview 요청을 보낸다', async () => {
+    const items = [makeItem('image', 'a')]
+    render(<StepMedia {...buildProps({ items, estimatedSeconds: 3, cartoonFilter: true })} />)
+    await waitFor(() =>
+      expect(vi.mocked(client.post)).toHaveBeenCalledWith(
+        '/videos/filter-preview',
+        expect.any(FormData),
+        expect.objectContaining({ responseType: 'blob' }),
+      ),
+    )
   })
 })
