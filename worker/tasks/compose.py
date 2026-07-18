@@ -86,6 +86,26 @@ def _probe_video_dims_fps(path: str) -> tuple[int, int, str]:
     return max(vw, 2), max(vh, 2), fps
 
 
+def _normalize_image_orientation(path: str) -> None:
+    """EXIF Orientation을 픽셀에 적용하고 태그를 제거한다 (제자리 저장).
+
+    폰 세로 사진은 센서 원본(가로) + EXIF 회전 태그로 저장되는데, ffprobe/ffmpeg의
+    EXIF 처리가 버전마다 달라 세로 사진이 가로로 눕는다. 픽셀에 구워버리면
+    이후 probe·encode가 버전 무관하게 일치한다. 실패 시 원본 유지(베스트 에포트).
+    """
+    try:
+        from PIL import Image, ImageOps
+
+        with Image.open(path) as im:
+            orientation = im.getexif().get(0x0112, 1)
+            if orientation == 1:
+                return  # 회전 불필요 — 재인코딩 생략
+            fixed = ImageOps.exif_transpose(im)
+            fixed.convert("RGB").save(path)
+    except Exception as e:
+        logger.warning("이미지 orientation 정규화 실패 (원본 사용): %s", e)
+
+
 def _probe_image_dims(path: str) -> tuple[int, int]:
     """이미지의 (width, height) 반환. 실패 시 기본값."""
     probe = subprocess.run(
@@ -242,6 +262,8 @@ def compose_items(r2, items: list[dict], mute_video: bool = False) -> tuple[str,
             resp = r2.get_object(Bucket=R2_BUCKET_NAME, Key=key)
             with open(local, "wb") as f:
                 f.write(resp["Body"].read())
+            if kind == "image":
+                _normalize_image_orientation(local)
             downloaded.append((kind, local))
 
         # 2) 기준 해상도/fps 결정 — 영상 우선, 없으면 첫 이미지

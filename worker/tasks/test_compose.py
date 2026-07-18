@@ -237,3 +237,85 @@ def test_compose_empty_raises() -> None:
     from tasks.compose import compose_items
     with pytest.raises(ValueError):
         compose_items(_FakeR2(), [])
+
+
+# ---------------------------------------------------------------------------
+# EXIF orientation — 폰 세로 사진 (센서 가로 + Orientation=6)
+# ---------------------------------------------------------------------------
+
+def _make_exif_portrait_jpeg(sensor_w: int = 480, sensor_h: int = 320) -> bytes:
+    """센서 원본은 가로(480x320), EXIF Orientation=6(90° CW 회전 필요) JPEG.
+
+    올바른 표시 결과는 세로 320x480이다 — 폰 세로 사진의 저장 방식.
+    """
+    from PIL import Image
+
+    img = Image.new("RGB", (sensor_w, sensor_h), (200, 50, 50))
+    exif = Image.Exif()
+    exif[0x0112] = 6
+    buf = BytesIO()
+    img.save(buf, format="JPEG", exif=exif)
+    return buf.getvalue()
+
+
+def test_normalize_image_orientation_bakes_rotation(tmp_path) -> None:
+    from PIL import Image
+
+    from tasks.compose import _normalize_image_orientation
+
+    p = tmp_path / "portrait.jpg"
+    p.write_bytes(_make_exif_portrait_jpeg())
+    _normalize_image_orientation(str(p))
+    with Image.open(p) as im:
+        assert im.size == (320, 480)  # 픽셀이 세로로 회전됨
+        assert im.getexif().get(0x0112, 1) == 1  # 태그 제거/초기화
+
+
+def test_normalize_image_orientation_skips_untagged(tmp_path) -> None:
+    """태그 없는 이미지는 재인코딩하지 않는다 (바이트 동일)."""
+    from PIL import Image
+
+    p = tmp_path / "plain.jpg"
+    img = Image.new("RGB", (320, 480), (50, 200, 50))
+    img.save(p, format="JPEG")
+    before = p.read_bytes()
+
+    from tasks.compose import _normalize_image_orientation
+
+    _normalize_image_orientation(str(p))
+    assert p.read_bytes() == before
+
+
+def test_normalize_image_orientation_bad_file_keeps_original(tmp_path) -> None:
+    p = tmp_path / "broken.jpg"
+    p.write_bytes(b"not an image")
+
+    from tasks.compose import _normalize_image_orientation
+
+    _normalize_image_orientation(str(p))  # 예외 없이 통과
+    assert p.read_bytes() == b"not an image"
+
+
+@requires_ffmpeg
+def test_compose_exif_portrait_image_stays_portrait() -> None:
+    """EXIF 세로 사진 단독 업로드: 합성 결과 캔버스가 세로여야 한다."""
+    from tasks.compose import compose_items
+
+    r2 = _FakeR2()
+    r2.store["img/p.jpg"] = _make_exif_portrait_jpeg()
+    key, _ = compose_items(r2, [{"kind": "image", "r2_key": "img/p.jpg"}])
+
+    path = tempfile.mktemp(suffix=".mp4")
+    try:
+        with open(path, "wb") as f:
+            f.write(_composed_bytes(r2, key))
+        out = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-select_streams", "v:0",
+             "-show_entries", "stream=width,height", "-of", "csv=p=0", path],
+            capture_output=True, text=True, timeout=30,
+        ).stdout.strip()
+        w, h = (int(x) for x in out.split(","))
+        assert h > w, f"세로 사진인데 캔버스가 가로: {w}x{h}"
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
