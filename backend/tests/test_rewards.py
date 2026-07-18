@@ -326,3 +326,39 @@ def test_hashrate_week_range_clipped_by_month() -> None:
         start, end = get_hashrate_week_range()
     assert start == datetime(2026, 7, 1, tzinfo=_tz.utc)
     assert end == datetime(2026, 7, 6, tzinfo=_tz.utc)  # 다음 월요일 (7월 내)
+
+
+def test_hashrate_user_and_admin_views_agree(client: TestClient, db: Session) -> None:
+    """돈 정산 무결성: 사용자 프로필 %와 관리자 순위 %는 항상 같아야 한다.
+
+    queued(미확정)·fixed(확정)·revoked(회수) 상태를 섞어 시드하고,
+    두 엔드포인트의 분자·분모·percent가 일치하는지 검증한다.
+    """
+    from app.services.reward import REWARD_STATUS_FIXED, REWARD_STATUS_REVOKED
+
+    token_a, user_a = _reg(client, "agree_a@x.com", "agreea")
+    token_b, user_b = _reg(client, "agree_b@x.com", "agreeb")
+    _upload(client, token_a, user_a["id"], "a.mp4")  # A: 0.5 queued
+    _upload(client, token_b, user_b["id"], "b.mp4")  # B: 0.5 queued
+
+    # B에 fixed 0.5 추가, A에 revoked 9.9 추가(양쪽 다 제외되어야 함)
+    db.add(RewardPoint(user_id=user_b["id"], points=0.5, reason="upload", status=REWARD_STATUS_FIXED))
+    db.add(RewardPoint(user_id=user_a["id"], points=9.9, reason="upload", status=REWARD_STATUS_REVOKED))
+    db.commit()
+
+    admin_res = client.get("/api/v1/admin/hashrate", headers={"X-Admin-Key": "test-admin-key"})
+    assert admin_res.status_code == 200
+    admin = admin_res.json()["data"]
+    admin_by_user = {row["user_id"]: row for row in admin["items"]}
+
+    for token, user in ((token_a, user_a), (token_b, user_b)):
+        me = client.get("/api/v1/users/me/hashrate", headers=_auth(token)).json()["data"]
+        row = admin_by_user[user["id"]]
+        assert row["points"] == me["my_points"], f"user {user['id']}: 분자 불일치"
+        assert row["percent"] == me["percent"], f"user {user['id']}: percent 불일치"
+        assert admin["total_points"] == me["total_points"], f"user {user['id']}: 분모 불일치"
+
+    # 기대값 자체도 고정: A=0.5(25%), B=1.0(50%+25%), 전체 1.5 — revoked 9.9는 미포함
+    assert admin["total_points"] == 1.5
+    assert admin_by_user[user_a["id"]]["percent"] == 33.3
+    assert admin_by_user[user_b["id"]]["percent"] == 66.7

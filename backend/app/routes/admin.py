@@ -24,9 +24,8 @@ from app.services import r2 as r2_service
 from app.schemas.video import VideoSchema
 from app.services.reward import (
     REWARD_STATUS_FIXED,
-    REWARD_STATUS_REVOKED,
     UTC,
-    get_hashrate_week_range,
+    hashrate_filters,
     get_week_range,
     revoke_queued_upload_reward,
     settle_queued_rewards,
@@ -469,11 +468,11 @@ def admin_hashrate(
     db: Session = Depends(get_db),
     _: User | None = Depends(require_admin),
 ) -> dict:
-    """이번 주(UTC ISO week) 활동 사용자별 포인트·비중(%) 목록.
+    """이번 주 활동 사용자별 포인트·비중(%) 목록.
 
-    프로필 해시레이트와 동일 기준: queued+fixed 포함, revoked 제외.
+    프로필 해시레이트(/users/me/hashrate)와 동일 기준 — 집계 조건은
+    hashrate_filters() 단일 원본을 공유한다.
     """
-    week_start_utc, week_end_utc = get_hashrate_week_range(UTC)
     rows = (
         db.query(
             RewardPoint.user_id,
@@ -489,11 +488,7 @@ def admin_hashrate(
             ).label("comment_count"),
         )
         .join(User, User.id == RewardPoint.user_id)
-        .filter(
-            RewardPoint.created_at >= week_start_utc,
-            RewardPoint.created_at < week_end_utc,
-            RewardPoint.status != REWARD_STATUS_REVOKED,
-        )
+        .filter(*hashrate_filters())
         .group_by(RewardPoint.user_id, User.username)
         .order_by(func.sum(RewardPoint.points).desc(), RewardPoint.user_id.asc())
         .all()
@@ -526,15 +521,9 @@ def admin_hashrate_user_detail(
     if target is None:
         raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
 
-    week_start_utc, week_end_utc = get_hashrate_week_range(UTC)
     rows = (
         db.query(RewardPoint)
-        .filter(
-            RewardPoint.user_id == user_id,
-            RewardPoint.created_at >= week_start_utc,
-            RewardPoint.created_at < week_end_utc,
-            RewardPoint.status != REWARD_STATUS_REVOKED,
-        )
+        .filter(RewardPoint.user_id == user_id, *hashrate_filters())
         .order_by(RewardPoint.created_at.desc())
         .all()
     )

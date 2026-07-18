@@ -98,17 +98,25 @@ def get_hashrate_week_range(tz: ZoneInfo = UTC) -> tuple[datetime, datetime]:
     return max(week_start, month_start), min(week_end, month_end)
 
 
-def get_weekly_hashrate(db: Session, user_id: int) -> tuple[float, float]:
-    """이번 주(월 경계 반영) (내 점수, 전체 점수) 반환 — 전체 대비 참여 비중 계산용.
+def hashrate_filters() -> list:
+    """해시레이트 집계 조건 — 단일 원본.
 
-    참여도는 즉시 반영되도록 queued+fixed 모두 포함, revoked만 제외한다.
+    사용자 프로필(/users/me/hashrate)과 관리자 순위(/admin/hashrate)가 반드시
+    같은 조건을 쓰도록 여기서만 정의한다. 관리자가 이 숫자를 보고 sats를
+    정산하므로 두 화면의 불일치는 곧 정산 오류다.
+    기준: 이번 주(월 경계 절단), queued+fixed 포함, revoked 제외.
     """
     week_start_utc, week_end_utc = get_hashrate_week_range(UTC)
-    base = db.query(func.sum(RewardPoint.points)).filter(
+    return [
         RewardPoint.created_at >= week_start_utc,
         RewardPoint.created_at < week_end_utc,
         RewardPoint.status != REWARD_STATUS_REVOKED,
-    )
+    ]
+
+
+def get_weekly_hashrate(db: Session, user_id: int) -> tuple[float, float]:
+    """이번 주(월 경계 반영) (내 점수, 전체 점수) 반환 — 전체 대비 참여 비중 계산용."""
+    base = db.query(func.sum(RewardPoint.points)).filter(*hashrate_filters())
     total = base.scalar() or 0.0
     mine = base.filter(RewardPoint.user_id == user_id).scalar() or 0.0
     return mine, total
