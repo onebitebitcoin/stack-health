@@ -51,12 +51,8 @@ class _WebViewPageState extends State<WebViewPage> {
   bool _hasError = false;
   Timer? _loadTimeout;
   late final StreamSubscription<List<ConnectivityResult>> _connectivitySub;
-  final List<String> _debugLogs = [];
-  bool _showDebug = false;
 
-  void _log(String msg) {
-    if (mounted) setState(() => _debugLogs.add('[${DateTime.now().toIso8601String().substring(11, 19)}] $msg'));
-  }
+  void _log(String msg) => debugPrint('[StackHealth] $msg');
 
   @override
   void initState() {
@@ -229,79 +225,6 @@ class _WebViewPageState extends State<WebViewPage> {
                 child: CircularProgressIndicator(color: Color(0xFFF7931A)),
               ),
             if (_hasError) _buildErrorView(),
-            // 우하단 버튼들
-            Positioned(
-              right: 16,
-              bottom: 32,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Opacity(
-                    opacity: 0.6,
-                    child: FloatingActionButton.small(
-                      heroTag: 'debug',
-                      onPressed: () => setState(() => _showDebug = !_showDebug),
-                      backgroundColor: const Color(0xFF333333),
-                      child: Icon(
-                        _showDebug ? Icons.close : Icons.bug_report,
-                        color: Colors.orange,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Opacity(
-                    opacity: 0.5,
-                    child: FloatingActionButton.small(
-                      heroTag: 'info',
-                      onPressed: _showStatusSheet,
-                      backgroundColor: const Color(0xFF333333),
-                      child: const Icon(Icons.info_outline, color: Colors.white, size: 18),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // 디버그 로그 패널
-            if (_showDebug)
-              Positioned(
-                left: 0,
-                right: 60,
-                bottom: 0,
-                height: 260,
-                child: Container(
-                  color: Colors.black.withOpacity(0.9),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        color: Colors.orange.withOpacity(0.2),
-                        child: Row(
-                          children: [
-                            const Text('DEBUG LOG', style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
-                            const Spacer(),
-                            GestureDetector(
-                              onTap: () => setState(() => _debugLogs.clear()),
-                              child: const Text('CLEAR', style: TextStyle(color: Colors.grey, fontSize: 11)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: ListView.builder(
-                          reverse: true,
-                          padding: const EdgeInsets.all(6),
-                          itemCount: _debugLogs.length,
-                          itemBuilder: (_, i) => Text(
-                            _debugLogs[_debugLogs.length - 1 - i],
-                            style: const TextStyle(color: Colors.greenAccent, fontSize: 10, fontFamily: 'monospace'),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
           ],
         ),
       ),
