@@ -261,7 +261,7 @@ export default function StepMedia({
                 <img
                   src={previewUrl}
                   alt={t('filter.previewLabel')}
-                  className="max-h-56 rounded-xl object-contain"
+                  className="max-h-56 max-w-full rounded-xl object-contain"
                 />
               )}
               {!previewLoading && previewError && (
