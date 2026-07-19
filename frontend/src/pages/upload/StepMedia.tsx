@@ -243,7 +243,7 @@ export default function StepMedia({
             >
               <span
                 className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                  cartoonFilter ? 'translate-x-[22px]' : 'translate-x-0.5'
+                  cartoonFilter ? 'translate-x-[1.375rem]' : 'translate-x-0.5'
                 }`}
               />
             </button>
