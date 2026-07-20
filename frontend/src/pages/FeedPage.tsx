@@ -82,6 +82,17 @@ export default function FeedPage() {
     return () => el.removeEventListener('wheel', handleWheel)
   }, [activeIndex, goTo])
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key === 'ArrowDown') { e.preventDefault(); goTo(activeIndex + 1) }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); goTo(activeIndex - 1) }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeIndex, goTo])
+
   if (isLoading) return <LoadingScreen />
 
   if (posts.length === 0) {
