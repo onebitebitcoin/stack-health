@@ -8,6 +8,9 @@ export interface User {
   app_settings: Record<string, unknown>
 }
 
+/** 게시물 공개 범위. private 은 작성자 본인에게만 보이고 피드·공유 링크에서 빠진다. */
+export type PostVisibility = 'public' | 'private'
+
 export interface Post {
   id: number
   video_id: number
@@ -30,6 +33,7 @@ export interface Post {
   subtitle_status: string
   avatar_url: string | null
   profile_color: string | null
+  visibility: PostVisibility
 }
 
 export interface FeedResponse {

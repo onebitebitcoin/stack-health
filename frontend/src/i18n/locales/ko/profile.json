@@ -104,5 +104,12 @@
   "inviteShare": "초대 링크 공유",
   "inviteCopied": "초대 링크가 복사됐어요!",
   "inviteCopyAria": "링크 복사",
-  "inviteShareText": "Orange Story에서 함께 기록하고 비트코인 받자!"
+  "inviteShareText": "Orange Story에서 함께 기록하고 비트코인 받자!",
+  "visibilityPublic": "공개",
+  "visibilityPrivate": "비공개",
+  "visibilityToPublic": "공개로 바꾸기",
+  "visibilityToPrivate": "비공개로 바꾸기",
+  "visibilityChangedToPublic": "공개로 바꿨습니다",
+  "visibilityChangedToPrivate": "비공개로 바꿨습니다",
+  "visibilityChangeFailed": "공개 범위를 바꾸지 못했습니다"
 }

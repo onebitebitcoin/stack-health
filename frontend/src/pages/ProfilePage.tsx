@@ -3,14 +3,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ShieldCheck, Settings, Share2, Bell,
   ChevronLeft, ChevronRight, Flame, Heart, Eye, MessageCircle, ArrowLeft, Trash2, Pencil,
+  Globe, Lock,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/auth'
 import { shareProfileLink } from '../lib/share'
 import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
-import type { MyStats, HistoryResponse, HistoryWorkoutPost, TreeStatus, TreeStage, FruitSize } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost, PostVisibility, TreeStatus, TreeStage, FruitSize } from '../api/types'
 import client from '../api/client'
+import { getApiErrorMessage } from '../api/errors'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
 import { SkeletonCalendarGrid } from '../components/Skeleton'
@@ -117,7 +120,7 @@ export default function ProfilePage() {
     large: 'treeFruitSizeLarge',
   }
 
-  type MyPost = { id: number; cdn_url: string; thumbnail_url?: string | null; caption: string | null; created_at: string; like_count: number; view_count: number; comment_count: number }
+  type MyPost = { id: number; cdn_url: string; thumbnail_url?: string | null; caption: string | null; created_at: string; like_count: number; view_count: number; comment_count: number; visibility: PostVisibility }
   type MyPostsPage = { posts: MyPost[]; has_more: boolean; week_offset: number }
 
   const {
@@ -135,6 +138,28 @@ export default function ProfilePage() {
   })
 
   const myPosts = myPostsData?.posts ?? []
+
+  // 공개 ↔ 비공개 전환. 비공개로 바꾸면 피드·타인 프로필·공유 링크에서 모두 빠진다.
+  const visibilityMutation = useMutation({
+    mutationFn: async ({ postId, visibility }: { postId: number; visibility: PostVisibility }) => {
+      await client.patch(`/videos/posts/${postId}`, { visibility })
+      return { postId, visibility }
+    },
+    onSuccess: ({ postId, visibility }) => {
+      queryClient.setQueryData<MyPostsPage>(
+        ['my-posts'],
+        (old) => old
+          ? { ...old, posts: old.posts.map((p) => (p.id === postId ? { ...p, visibility } : p)) }
+          : old
+      )
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+      queryClient.invalidateQueries({ queryKey: ['history'] })
+      toast.success(visibility === 'private' ? t('visibilityChangedToPrivate') : t('visibilityChangedToPublic'))
+    },
+    onError: (err) => {
+      toast.error(getApiErrorMessage(err, t('visibilityChangeFailed')))
+    },
+  })
 
   const deleteMutation = useMutation({
     mutationFn: (postId: number) => client.delete(`/videos/posts/${postId}`),
@@ -479,6 +504,25 @@ export default function ProfilePage() {
                       <Trash2 size={11} strokeWidth={2} />
                     </button>
                   </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      visibilityMutation.mutate({
+                        postId: post.id,
+                        visibility: post.visibility === 'private' ? 'public' : 'private',
+                      })
+                    }}
+                    disabled={visibilityMutation.isPending}
+                    className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded-pill bg-black/50 px-2 py-1 text-white/90 disabled:opacity-50"
+                    aria-label={post.visibility === 'private' ? t('visibilityToPublic') : t('visibilityToPrivate')}
+                  >
+                    {post.visibility === 'private'
+                      ? <Lock size={9} strokeWidth={2} />
+                      : <Globe size={9} strokeWidth={2} />}
+                    <span className="text-label font-medium">
+                      {post.visibility === 'private' ? t('visibilityPrivate') : t('visibilityPublic')}
+                    </span>
+                  </button>
                   <div className="absolute bottom-1.5 right-1 flex flex-col items-end gap-1 text-white/90">
                     <div className="flex items-center gap-1">
                       <Heart size={9} strokeWidth={2} />

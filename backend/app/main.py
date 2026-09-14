@@ -276,7 +276,9 @@ if _static_dir.exists():
                     .filter(Post.share_token == share_token)
                     .first()
                 )
-                if post:
+                # 비공개 게시물은 OG 태그를 만들지 않고 평소의 SPA 응답으로 떨어뜨린다.
+                # 크롤러에 제목·설명·썸네일이 새어나가는 것을 막기 위해서다.
+                if post and post.visibility == "public":
                     from app.config import settings as app_settings
                     base = app_settings.app_base_url.rstrip("/")
                     image = post.thumbnail_url or f"{base}/og-image.png"

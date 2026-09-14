@@ -9,7 +9,7 @@ import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import { getApiErrorMessage } from '../api/errors'
 import { MERGE_POLL_INTERVAL_MS, UPLOAD_STEP_CONFIG } from '../lib/constants'
-import type { Challenge, SubtitleLanguage } from '../api/types'
+import type { Challenge, PostVisibility, SubtitleLanguage } from '../api/types'
 import { isAxiosError } from 'axios'
 import StepMedia, { type MediaItem, MAX_IMAGES, IMAGE_CLIP_SECONDS } from './upload/StepMedia'
 import { type VideoFilterValue } from '../utils/videoFilter'
@@ -75,6 +75,8 @@ export default function UploadPage() {
   // 업로드 전 명시적으로 고르게 한다(미선택 시 categoryRequired 에러).
   const [mainCategory, setMainCategory] = useState<MainCategory | null>(null)
   const [caption, setCaption] = useState('')
+  // 기본은 공개다. 비공개를 고르면 내 프로필에서만 보이고, 나중에 공개로 전환할 수 있다.
+  const [visibility, setVisibility] = useState<PostVisibility>('public')
 
   const [subtitleSource, setSubtitleSource] = useState<SubtitleSource>('none')
   const [subtitleRawText, setSubtitleRawText] = useState('')
@@ -463,6 +465,7 @@ export default function UploadPage() {
       }
       if (muteOriginalAudio) form.append('mute_video', 'true')
       if (videoFilter) form.append('video_filter', videoFilter)
+      form.append('visibility', visibility)
       form.append('tags', JSON.stringify(mainCategory ? [mainCategory] : []))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       const postOnce = () => client.post<{ data: { job_id: string } }>(
@@ -647,6 +650,7 @@ export default function UploadPage() {
           showChallengeModal={showChallengeModal} setShowChallengeModal={setShowChallengeModal}
           challengeSearch={challengeSearch} setChallengeSearch={setChallengeSearch}
           displayedChallenges={displayedChallenges} selectChallenge={selectChallenge}
+          visibility={visibility} setVisibility={setVisibility}
           caption={caption} setCaption={setCaption}
           limitError={limitError} setLimitError={setLimitError}
           error={error} uploading={uploading} onUpload={handleUpload}

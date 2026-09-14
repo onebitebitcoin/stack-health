@@ -34,6 +34,7 @@ from app.schemas.video import (
 from app.services import r2 as r2_service
 from app.services.btc_price import get_btc_price_krw
 from app.services.subtitles import sanitize_srt
+from app.services.post_visibility import ALLOWED_VISIBILITIES, is_visible_to
 from app.services.share_token import generate_share_token
 from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_image_merge_job, enqueue_merge_job, enqueue_multi_pipeline, enqueue_subtitle_extract_job, fail_job, get_job_status, reserve_job_id
 from app.services.error_codes import (
@@ -196,6 +197,7 @@ def confirm_upload(
         proof_image_url=req.proof_image_url,
         share_token=generate_share_token(current_user.id),
         challenge_id=req.challenge_id,
+        visibility=req.visibility,
         btc_price_krw=get_btc_price_krw(),  # 조회 실패 시 None — 업로드는 계속 진행
     )
     db.add(post)
@@ -230,6 +232,7 @@ def confirm_upload(
         avatar_url=current_user.avatar_url,
         profile_color=(current_user.app_settings or {}).get("profile_color"),
         challenge_id=post.challenge_id,
+        visibility=post.visibility,
     )
     return {"data": {"post": post_schema}}
 
@@ -309,6 +312,7 @@ def my_posts(
                 avatar_url=current_user.avatar_url,
                 profile_color=(current_user.app_settings or {}).get("profile_color"),
                 challenge_id=post.challenge_id,
+                visibility=post.visibility,
             )
         )
     return {"data": {"posts": result, "has_more": has_more, "week_offset": week_offset}}
@@ -322,6 +326,10 @@ def get_post_by_share_token(
 ) -> dict:
     post = db.query(Post).filter(Post.share_token == share_token).first()
     if not post:
+        raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
+    # 비공개로 바꾸면 이미 나눠준 공유 링크도 함께 막힌다. 다시 공개로 바꾸면
+    # 같은 토큰으로 되살아난다(토큰을 재발급하지 않기 때문이다).
+    if not is_visible_to(post, current_user):
         raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
     video = db.query(Video).filter(Video.id == post.video_id).first()
     if not video:
@@ -357,6 +365,7 @@ def get_post_by_share_token(
         avatar_url=user.avatar_url,
         profile_color=(user.app_settings or {}).get("profile_color"),
         challenge_id=post.challenge_id,
+        visibility=post.visibility,
     )
     return {"data": {"post": post_schema}}
 
@@ -369,6 +378,8 @@ def get_post(
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
+        raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
+    if not is_visible_to(post, current_user):
         raise api_error(404, E_VIDEO_NOT_FOUND, "영상을 찾을 수 없습니다")
     video = db.query(Video).filter(Video.id == post.video_id).first()
     if not video:
@@ -400,6 +411,7 @@ def get_post(
         avatar_url=user.avatar_url,
         profile_color=(user.app_settings or {}).get("profile_color"),
         challenge_id=post.challenge_id,
+        visibility=post.visibility,
     )
     return {"data": {"post": post_schema}}
 
@@ -414,7 +426,7 @@ def update_post(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    """본인(또는 admin) 게시물의 캡션·태그·활동 시간 수정.
+    """본인(또는 admin) 게시물의 캡션·태그·활동 시간·공개 범위 수정.
 
     영상·자막(burn-in)·썸네일은 변경하지 않는다.
     """
@@ -439,6 +451,10 @@ def update_post(
     if "tags" in fields and fields["tags"] is not None:
         new_tags = [t for t in fields["tags"] if isinstance(t, str) and t.strip()]
         post.tags = json.dumps(new_tags, ensure_ascii=False)
+
+    # 값 검증은 PostUpdateRequest.visibility 의 Literal 이 맡는다.
+    if fields.get("visibility") is not None:
+        post.visibility = fields["visibility"]
 
     db.commit()
     db.refresh(post)
@@ -468,6 +484,7 @@ def update_post(
         avatar_url=user.avatar_url if user else None,
         profile_color=(user.app_settings or {}).get("profile_color") if user else None,
         challenge_id=post.challenge_id,
+        visibility=post.visibility,
     )
     return {"data": {"post": post_schema}}
 
@@ -1045,6 +1062,7 @@ def _r2_upload_and_enqueue_multi(
     subtitle_language: str,
     mute_video_audio: bool,
     video_filter: str | None = None,
+    visibility: str = "public",
 ) -> None:
     temp_paths = [p for _, p, _, _ in spooled] + ([audio_path] if audio_path else [])
     try:
@@ -1094,6 +1112,7 @@ def _r2_upload_and_enqueue_multi(
             subtitle_language=subtitle_language,
             mute_video_audio=mute_video_audio,
             video_filter=video_filter,
+            visibility=visibility,
             job_id=job_id,
         )
     except Exception as e:
@@ -1185,6 +1204,7 @@ async def upload_multi(
     subtitle_language: SubtitleLanguage = Form("ko"),
     mute_video: bool = Form(False),
     video_filter: str | None = Form(None),
+    visibility: str = Form("public"),
     current_user: User = Depends(get_active_user),
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = ...,
@@ -1193,10 +1213,13 @@ async def upload_multi(
 
     items_meta: JSON 배열 `[{"kind": "image"|"video"}, ...]` — files 순서와 1:1 대응.
     video_filter: 합성본 전체에 적용할 영상 필터. "cartoon"(카툰)만 지원한다.
+    visibility: 게시물 공개 범위. "public"(기본) 또는 "private".
     파일 수신 즉시 job_id 반환, R2 업로드 + 처리는 백그라운드.
     """
     if video_filter is not None and video_filter not in ALLOWED_VIDEO_FILTERS:
         raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 필터입니다: {video_filter}")
+    if visibility not in ALLOWED_VISIBILITIES:
+        raise api_error(400, E_VIDEO_FORMAT_INVALID, f"지원하지 않는 공개 범위입니다: {visibility}")
     try:
         meta = json.loads(items_meta)
     except (json.JSONDecodeError, TypeError):
@@ -1276,6 +1299,7 @@ async def upload_multi(
         subtitle_language=subtitle_language,
         mute_video_audio=mute_video,
         video_filter=video_filter,
+        visibility=visibility,
     )
 
     return {"data": {"job_id": job_id, "status": "processing"}}

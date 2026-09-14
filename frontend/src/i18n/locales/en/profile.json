@@ -104,5 +104,12 @@
   "inviteShare": "Share invite link",
   "inviteCopied": "Invite link copied!",
   "inviteCopyAria": "Copy link",
-  "inviteShareText": "Log your day and earn Bitcoin with me on Orange Story!"
+  "inviteShareText": "Log your day and earn Bitcoin with me on Orange Story!",
+  "visibilityPublic": "Public",
+  "visibilityPrivate": "Private",
+  "visibilityToPublic": "Make public",
+  "visibilityToPrivate": "Make private",
+  "visibilityChangedToPublic": "Now public",
+  "visibilityChangedToPrivate": "Now private",
+  "visibilityChangeFailed": "Could not change visibility"
 }

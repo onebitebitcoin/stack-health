@@ -32,6 +32,10 @@ class PresignedUrlResponse(BaseModel):
 
 SubtitleLanguage = Literal["ko", "en", "auto"]
 
+# 게시물 공개 범위. "private" 은 작성자 본인에게만 보이고, 피드·타인 프로필·공유 링크에서
+# 모두 빠진다. 내 기록(캘린더·오렌지 나무·통계)과 챌린지 개설자의 검증 화면에는 남는다.
+PostVisibility = Literal["public", "private"]
+
 # 게시물 설명(caption) 글자수 상한 — 프론트(constants/caption.ts)와 같은 값을 유지한다.
 # DB 컬럼은 Text 라 길이 제한이 없고, 이 상수만이 유일한 상한이다.
 CAPTION_MAX_LEN = 2200
@@ -47,14 +51,16 @@ class ConfirmUploadRequest(BaseModel):
     workout_end: str | None = None
     proof_image_url: str | None = None
     subtitle_language: SubtitleLanguage = "ko"
+    visibility: PostVisibility = "public"
 
 
 class PostUpdateRequest(BaseModel):
-    """게시물 글(캡션·태그·활동 시간) 수정 요청. 보낸 필드만 반영된다."""
+    """게시물 글(캡션·태그·활동 시간·공개 범위) 수정 요청. 보낸 필드만 반영된다."""
     caption: str | None = None
     tags: list[str] | None = None
     workout_start: str | None = None
     workout_end: str | None = None
+    visibility: PostVisibility | None = None
 
 
 class PostSchema(BaseModel):
@@ -80,5 +86,6 @@ class PostSchema(BaseModel):
     avatar_url: str | None = None
     profile_color: str | None = None
     challenge_id: int | None = None
+    visibility: str = "public"
 
     model_config = {"from_attributes": True}

@@ -25,6 +25,13 @@ class Post(Base):
     thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
     challenge_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("challenges.id"), nullable=True, index=True)
     share_token: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    # 공개 범위: "public"(피드·타인 프로필·공유 링크에 노출) | "private"(작성자 본인만).
+    # 값 검증은 DB CHECK 가 아니라 schemas.video.PostVisibility(Literal)와 라우트에서 한다
+    # — videos.status / videos.subtitle_status 와 같은 방식이다.
+    # 비공개여도 내 기록(캘린더·오렌지 나무·통계)과 챌린지 개설자의 검증 화면에서는 빠지지 않는다.
+    visibility: Mapped[str] = mapped_column(
+        String(10), default="public", server_default="public", nullable=False
+    )
     # 게시물 생성 시점의 BTC/KRW 가격(원 단위, 소수점 불필요). 조회 실패 시 NULL — 백필하지 않는다.
     btc_price_krw: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     like_count: Mapped[int] = mapped_column(Integer, default=0)

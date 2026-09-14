@@ -9,7 +9,8 @@ from app.models.comment import Comment
 from app.models.notification import Notification
 from app.models.post import Post
 from app.models.user import User
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, get_optional_user
+from app.services.post_visibility import is_visible_to
 from app.services.timeframe import today_start as service_today_start
 from app.services.notification import create_notification
 from app.services.error_codes import (
@@ -64,9 +65,13 @@ def _serialize_comment(c: Comment) -> dict:
 
 
 @router.get("/{post_id}/comments")
-def list_comments(post_id: int, db: Session = Depends(get_db)) -> dict:
+def list_comments(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
-    if post is None:
+    if post is None or not is_visible_to(post, current_user):
         raise api_error(404, E_POST_NOT_FOUND, "게시물을 찾을 수 없습니다")
     comments = (
         db.query(Comment)
@@ -99,7 +104,7 @@ def create_comment(
     if current_user.is_banned:
         raise api_error(403, E_BANNED, "계정이 정지된 상태입니다")
     post = db.query(Post).filter(Post.id == post_id).first()
-    if post is None:
+    if post is None or not is_visible_to(post, current_user):
         raise api_error(404, E_POST_NOT_FOUND, "게시물을 찾을 수 없습니다")
     content = body.content.strip()
     if len(content) < MIN_COMMENT_LENGTH:

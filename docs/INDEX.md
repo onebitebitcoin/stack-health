@@ -37,6 +37,7 @@ bitcoiners/
 | 어드민 기능 | `backend/app/routes/admin.py` + `frontend/src/pages/AdminPage.tsx` + `backend/tests/test_admin.py` |
 | 챌린지 기능 | `backend/app/{routes,models,schemas}/challenge*.py` + `frontend/src/pages/Challenge*.tsx` |
 | 게시물 글 수정 | `PATCH /videos/posts/{id}` (`backend/app/routes/videos.py`, `PostUpdateRequest`) + `frontend/src/pages/PostEditPage.tsx` (`/posts/:id/edit`) |
+| 게시물 공개 범위 (공개/비공개) | `posts.visibility` 컬럼 + `backend/app/services/post_visibility.py`(판정 단일 원본) + `backend/app/routes/{feed,users,comments,videos}.py` 필터 + `backend/app/main.py`(비공개는 OG 태그를 만들지 않는다) + 업로드 선택 `frontend/src/pages/upload/StepMeta.tsx`, 사후 전환 `frontend/src/pages/{ProfilePage,PostEditPage}.tsx` + `backend/tests/test_post_visibility.py`. **비공개는 챌린지 개설자의 검증 화면(`GET /challenges/{id}/videos`)과 내 기록(캘린더·오렌지 나무·`/users/me/stats`)에서는 빠지지 않는다** — 의도된 예외이니 필터를 추가하지 마라 |
 | 팔로우 | `backend/app/models/follow.py` + `app/routes/users.py`(follow/followers/following) + `frontend/src/pages/{UserProfilePage,FollowListPage}.tsx` |
 | 알림 (인앱) | `backend/app/models/notification.py` + `app/services/notification.py` + `app/routes/notifications.py` + `frontend/src/pages/NotificationsPage.tsx`(`/notifications`) + `frontend/src/hooks/useUnreadNotifications.ts` |
 | 친구 초대 (referral) | `backend/app/services/referral.py` + `users.referral_code/referred_by_id` + `GET /users/me/referral` + `frontend/src/pages/InvitePage.tsx` (`/invite`), `?ref=` 캡처는 `App.tsx` |

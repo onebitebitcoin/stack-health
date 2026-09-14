@@ -328,6 +328,8 @@ def run_multi_pipeline(job: dict, status_callback=None) -> dict:
             thumbnail_url=thumbnail_cdn_url,
             share_token=_generate_share_token(user_id),
             challenge_id=int(challenge_id) if challenge_id is not None else None,
+            # 구 버전 백엔드가 넣어둔 잡에는 이 키가 없으므로 기본값 "public" 으로 떨어진다.
+            visibility=job.get("visibility") or "public",
             # 기록한 그 시점의 시세를 박제한다. 나중에 조회하면 "지금" 가격이라
             # 의미가 달라지므로 여기서만 넣을 수 있다. 실패하면 None.
             btc_price_krw=_current_btc_price_krw(),

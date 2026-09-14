@@ -1,6 +1,6 @@
-import { Trophy, X, Search, Check } from 'lucide-react'
+import { Trophy, X, Search, Check, Globe, Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { Challenge } from '../../api/types'
+import type { Challenge, PostVisibility } from '../../api/types'
 import type { MediaItem } from './StepMedia'
 import type { VideoFilterValue } from '../../utils/videoFilter'
 import MediaPreviewBox from './MediaPreviewBox'
@@ -22,6 +22,8 @@ interface Props {
   setChallengeSearch: (v: string) => void
   displayedChallenges: Challenge[]
   selectChallenge: (c: Challenge) => void
+  visibility: PostVisibility
+  setVisibility: (v: PostVisibility) => void
   caption: string
   setCaption: (v: string) => void
   limitError: string
@@ -44,6 +46,7 @@ export default function StepMeta({
   hasChallenge, setHasChallenge, selectedChallenge, selectedChallengeId,
   clearChallenge, openChallengeModal, showChallengeModal, setShowChallengeModal,
   challengeSearch, setChallengeSearch, displayedChallenges, selectChallenge,
+  visibility, setVisibility,
   caption, setCaption, limitError, setLimitError, error, uploading, onUpload,
   items, subtitleSource, subtitleLines, subtitleSize, subtitlePosition,
   videoFilter, filteredPreviewUrl,
@@ -107,6 +110,34 @@ export default function StepMeta({
               <span className="text-body text-theme-muted">{t('tagChallenge.challengeSelect')}</span>
             </button>
           )}
+        </div>
+
+        {/* 공개 범위 */}
+        <div>
+          <p className="mb-2 text-body font-semibold text-theme-primary">{t('visibility.label')}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setVisibility('public')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-card py-3 text-body font-medium transition-colors ${
+                visibility === 'public' ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
+              }`}
+            >
+              <Globe size={15} strokeWidth={2} />
+              {t('visibility.public')}
+            </button>
+            <button
+              onClick={() => setVisibility('private')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-card py-3 text-body font-medium transition-colors ${
+                visibility === 'private' ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
+              }`}
+            >
+              <Lock size={15} strokeWidth={2} />
+              {t('visibility.private')}
+            </button>
+          </div>
+          <p className="mt-2 text-label text-theme-muted">
+            {visibility === 'private' ? t('visibility.privateHint') : t('visibility.publicHint')}
+          </p>
         </div>
 
         {/* 설명 */}

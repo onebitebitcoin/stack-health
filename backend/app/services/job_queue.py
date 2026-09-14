@@ -161,6 +161,7 @@ def enqueue_multi_pipeline(
     subtitle_language: str = "ko",
     mute_video_audio: bool = False,
     video_filter: str | None = None,
+    visibility: str = "public",
     job_id: str | None = None,
 ) -> str:
     """다중 미디어(영상 ≤1 + 이미지) 업로드 파이프라인을 Redis 큐에 등록.
@@ -192,6 +193,7 @@ def enqueue_multi_pipeline(
         "subtitle_language": subtitle_language,
         "mute_video_audio": mute_video_audio,
         "video_filter": video_filter,
+        "visibility": visibility,
     }
 
     r = get_redis_client()

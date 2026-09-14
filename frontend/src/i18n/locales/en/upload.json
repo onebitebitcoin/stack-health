@@ -139,5 +139,12 @@
         "hint": "Turns your whole video into a cartoon look. Faces and backgrounds are softly simplified."
       }
     }
+  },
+  "visibility": {
+    "label": "Visibility",
+    "public": "Public",
+    "private": "Private",
+    "publicHint": "Posted to the feed where other people can see it.",
+    "privateHint": "Only you can see it. You can make it public later from your profile."
   }
 }

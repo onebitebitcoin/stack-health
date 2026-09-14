@@ -17,6 +17,7 @@ from app.routes.auth import get_current_user as get_required_user
 from app.services.timeframe import to_local_date
 from app.services.btc_price import get_btc_price_krw
 from app.services.notification import create_notification
+from app.services.post_visibility import PUBLIC
 from app.services.referral import generate_referral_code
 from app.services.error_codes import api_error, E_USER_NOT_FOUND, E_FORBIDDEN
 
@@ -232,16 +233,18 @@ def get_user_profile(
             is not None
         )
 
+    # 공개 프로필은 타인이 보는 화면이라 비공개 게시물을 뺀다. 본인 기준 집계
+    # (/users/me/stats, 오렌지 나무, 캘린더)는 비공개도 내 기록이므로 그대로 센다.
     post_count = (
         db.query(Post)
         .join(Post.video)
-        .filter(Post.user_id == user_id, Video.status == "active")
+        .filter(Post.user_id == user_id, Video.status == "active", Post.visibility == PUBLIC)
         .count()
     )
     posts_raw = (
         db.query(Post)
         .join(Post.video)
-        .filter(Post.user_id == user_id, Video.status == "active")
+        .filter(Post.user_id == user_id, Video.status == "active", Post.visibility == PUBLIC)
         .options(selectinload(Post.video))
         .order_by(Post.created_at.desc())
         .limit(50)

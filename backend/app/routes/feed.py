@@ -14,6 +14,7 @@ from app.models.video import Video
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.video import PostSchema
+from app.services.post_visibility import PUBLIC, is_visible_to
 from app.services.timeframe import today_start
 from app.services.notification import create_notification
 from app.services.error_codes import (
@@ -57,6 +58,7 @@ def _post_to_schema(
         avatar_url=post.user.avatar_url,
         profile_color=(post.user.app_settings or {}).get("profile_color"),
         challenge_id=post.challenge_id,
+        visibility=post.visibility,
     )
 
 
@@ -71,7 +73,7 @@ def get_feed(
     query = (
         db.query(Post)
         .join(Post.video)
-        .filter(Video.status == "active")
+        .filter(Video.status == "active", Post.visibility == PUBLIC)
         .options(selectinload(Post.video), selectinload(Post.user))
         .order_by(Post.id.desc())
     )
@@ -122,7 +124,7 @@ def like_post(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
-    if post is None:
+    if post is None or not is_visible_to(post, current_user):
         raise api_error(404, E_POST_NOT_FOUND, "게시물을 찾을 수 없습니다")
 
     existing_like = (
@@ -158,7 +160,7 @@ def view_post(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     post = db.query(Post).filter(Post.id == post_id).first()
-    if post is None:
+    if post is None or not is_visible_to(post, current_user):
         raise api_error(404, E_POST_NOT_FOUND, "게시물을 찾을 수 없습니다")
 
     today_start_utc = today_start()

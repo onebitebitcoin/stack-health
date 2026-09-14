@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Globe, Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
-import type { Post } from '../api/types'
+import type { Post, PostVisibility } from '../api/types'
 import { MAIN_CATEGORIES, MAIN_CATEGORY_LABEL_KEYS, type MainCategory } from '../constants/category'
 import { CAPTION_MAX_LEN } from '../constants/caption'
 
@@ -20,6 +20,7 @@ export default function PostEditPage() {
   // 세부 태그 UI는 폐기됐지만 저장 시 기존 tags[1:]를 잃지 않으려고 원본을 들고 있는다.
   const [originalTags, setOriginalTags] = useState<string[]>([])
   const [caption, setCaption] = useState('')
+  const [visibility, setVisibility] = useState<PostVisibility>('public')
   const [error, setError] = useState('')
 
   const { data: post, isLoading } = useQuery<Post>({
@@ -38,6 +39,7 @@ export default function PostEditPage() {
     const main = tags[0] && (MAIN_CATEGORIES as readonly string[]).includes(tags[0]) ? (tags[0] as MainCategory) : null
     setMainCategory(main)
     setOriginalTags(tags)
+    setVisibility(post.visibility)
   }, [post])
 
   const mutation = useMutation({
@@ -47,6 +49,7 @@ export default function PostEditPage() {
       const body: Record<string, unknown> = {
         caption,
         tags,
+        visibility,
       }
       const res = await client.patch<{ data: { post: Post } }>(`/videos/posts/${postId}`, body)
       return res.data.data.post
@@ -94,6 +97,30 @@ export default function PostEditPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 공개 범위 */}
+        <div>
+          <p className="mb-2 text-body font-semibold text-theme-primary">{t('visibility.label')}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setVisibility('public')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-card py-3 text-body font-medium transition-colors ${visibility === 'public' ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'}`}
+            >
+              <Globe size={15} strokeWidth={2} />
+              {t('visibility.public')}
+            </button>
+            <button
+              onClick={() => setVisibility('private')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-card py-3 text-body font-medium transition-colors ${visibility === 'private' ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'}`}
+            >
+              <Lock size={15} strokeWidth={2} />
+              {t('visibility.private')}
+            </button>
+          </div>
+          <p className="mt-2 text-label text-theme-muted">
+            {visibility === 'private' ? t('visibility.privateHint') : t('visibility.publicHint')}
+          </p>
         </div>
 
         {/* 설명 */}
