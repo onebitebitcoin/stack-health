@@ -34,7 +34,12 @@ from app.schemas.video import (
 from app.services import r2 as r2_service
 from app.services.btc_price import get_btc_price_krw
 from app.services.subtitles import sanitize_srt
-from app.services.post_visibility import ALLOWED_VISIBILITIES, is_visible_to
+from app.services.post_visibility import (
+    ALLOWED_VISIBILITIES,
+    initial_published_at,
+    is_visible_to,
+    mark_published_if_needed,
+)
 from app.services.share_token import generate_share_token
 from app.services.job_queue import enqueue_full_upload_pipeline, enqueue_image_merge_job, enqueue_merge_job, enqueue_multi_pipeline, enqueue_subtitle_extract_job, fail_job, get_job_status, reserve_job_id
 from app.services.error_codes import (
@@ -198,6 +203,7 @@ def confirm_upload(
         share_token=generate_share_token(current_user.id),
         challenge_id=req.challenge_id,
         visibility=req.visibility,
+        published_at=initial_published_at(req.visibility),
         btc_price_krw=get_btc_price_krw(),  # 조회 실패 시 None — 업로드는 계속 진행
     )
     db.add(post)
@@ -455,6 +461,8 @@ def update_post(
     # 값 검증은 PostUpdateRequest.visibility 의 Literal 이 맡는다.
     if fields.get("visibility") is not None:
         post.visibility = fields["visibility"]
+        # 처음 공개되는 순간에만 공개 시각을 채운다. 이미 값이 있으면 그대로 둔다.
+        mark_published_if_needed(post)
 
     db.commit()
     db.refresh(post)

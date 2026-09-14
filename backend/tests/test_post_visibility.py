@@ -26,7 +26,15 @@ def _seed_post(
     visibility: str = "public",
     token: str | None = None,
     challenge_id: int | None = None,
+    created_at: datetime | None = None,
+    published_at: datetime | None = None,
+    set_published: bool = True,
 ) -> Post:
+    """테스트용 게시물 생성.
+
+    set_published=False 는 공개 게시물인데 published_at 이 비어 있는 상태, 즉 배포 창에서
+    구 슬롯 코드가 만든 행을 흉내 내는 용도다.
+    """
     video = Video(
         user_id=user_id,
         r2_key=f"videos/{user_id}/{visibility}.mp4",
@@ -37,6 +45,8 @@ def _seed_post(
     )
     db.add(video)
     db.flush()
+    if published_at is None and set_published and visibility == "public":
+        published_at = created_at or datetime.now(timezone.utc)
     post = Post(
         video_id=video.id,
         user_id=user_id,
@@ -45,7 +55,10 @@ def _seed_post(
         share_token=token or f"tok{user_id}{video.id}",
         visibility=visibility,
         challenge_id=challenge_id,
+        published_at=published_at,
     )
+    if created_at is not None:
+        post.created_at = created_at
     db.add(post)
     db.commit()
     db.refresh(post)
@@ -281,3 +294,163 @@ def test_challenge_owner_sees_private_post(client: TestClient, db: Session) -> N
     res = client.get(f"/api/v1/challenges/{challenge.id}/videos", headers=_auth(creator_token))
     assert res.status_code == 200, res.text
     assert private_post.id in [v["post_id"] for v in res.json()["data"]["videos"]]
+
+
+# ---------------------------------------------------------------------------
+# 정렬 — 피드는 업로드 시각이 아니라 공개된 시각 순이다
+# ---------------------------------------------------------------------------
+
+
+def _feed_ids(client: TestClient, token: str, *, limit: int = 20) -> list[int]:
+    res = client.get("/api/v1/feed", params={"limit": limit}, headers=_auth(token))
+    assert res.status_code == 200, res.text
+    return [p["id"] for p in res.json()["data"]["posts"]]
+
+
+def test_feed_orders_by_publish_time_not_upload_time(client: TestClient, db: Session) -> None:
+    """먼저 올렸지만 나중에 공개한 게시물이, 나중에 올려 바로 공개한 게시물보다 위에 온다."""
+    token, uid = _register(client, "ord-basic@x.com", "ordbasic")
+    now = datetime.now(timezone.utc)
+
+    # 5일 전에 비공개로 올려 두었다가 방금 공개한 게시물. 먼저 만들어서 id 가 더 작다.
+    reopened = _seed_post(
+        db, uid, visibility="public", token="tokordA",
+        created_at=now - timedelta(days=5), published_at=now,
+    )
+    # 3일 전에 올려서 그때 바로 공개한 게시물. 나중에 만들어서 id 가 더 크다.
+    older = _seed_post(
+        db, uid, visibility="public", token="tokordB",
+        created_at=now - timedelta(days=3), published_at=now - timedelta(days=3),
+    )
+    # id 순(예전 정렬)이었다면 [older, reopened] 가 나왔을 배치다.
+    assert reopened.id < older.id
+    assert _feed_ids(client, token) == [reopened.id, older.id]
+
+
+def test_private_to_public_moves_to_top_of_feed(client: TestClient, db: Session) -> None:
+    """비공개로 올려 둔 게시물을 공개로 바꾸면 피드 맨 위에 놓인다."""
+    token, uid = _register(client, "ord-open@x.com", "ordopen")
+    now = datetime.now(timezone.utc)
+
+    # 비공개 쪽을 먼저 만들어 id 를 더 작게 둔다 — id 순이었다면 아래에 깔렸을 배치다.
+    hidden = _seed_post(
+        db, uid, visibility="private", token="tokopenA",
+        created_at=now - timedelta(days=7),
+    )
+    published = _seed_post(
+        db, uid, visibility="public", token="tokopenB",
+        created_at=now - timedelta(days=1), published_at=now - timedelta(days=1),
+    )
+    assert hidden.id < published.id
+    assert hidden.published_at is None
+    assert _feed_ids(client, token) == [published.id]
+
+    res = client.patch(
+        f"/api/v1/videos/posts/{hidden.id}", json={"visibility": "public"}, headers=_auth(token)
+    )
+    assert res.status_code == 200, res.text
+    assert _feed_ids(client, token) == [hidden.id, published.id]
+
+
+def test_republish_keeps_first_publish_time(client: TestClient, db: Session) -> None:
+    """공개 → 비공개 → 공개 를 반복해도 처음 공개한 시각이 유지되어 자리가 그대로다."""
+    token, uid = _register(client, "ord-repub@x.com", "ordrepub")
+    now = datetime.now(timezone.utc)
+
+    # 최근에 공개한 쪽을 먼저 만들어 id 를 더 작게 둔다.
+    new_post = _seed_post(
+        db, uid, visibility="public", token="tokrepA",
+        created_at=now - timedelta(days=1), published_at=now - timedelta(days=1),
+    )
+    old_post = _seed_post(
+        db, uid, visibility="public", token="tokrepB",
+        created_at=now - timedelta(days=10), published_at=now - timedelta(days=10),
+    )
+    assert new_post.id < old_post.id
+    assert _feed_ids(client, token) == [new_post.id, old_post.id]
+
+    first_published_at = old_post.published_at
+    client.patch(f"/api/v1/videos/posts/{old_post.id}", json={"visibility": "private"}, headers=_auth(token))
+    client.patch(f"/api/v1/videos/posts/{old_post.id}", json={"visibility": "public"}, headers=_auth(token))
+
+    db.refresh(old_post)
+    assert old_post.published_at == first_published_at
+    # 토글을 반복해도 위로 올라오지 않는다
+    assert _feed_ids(client, token) == [new_post.id, old_post.id]
+
+
+def test_post_without_published_at_falls_back_to_created_at(
+    client: TestClient, db: Session
+) -> None:
+    """published_at 이 빈 공개 게시물(구 슬롯 코드가 만든 행)은 업로드 시각으로 정렬된다."""
+    token, uid = _register(client, "ord-legacy@x.com", "ordlegacy")
+    now = datetime.now(timezone.utc)
+
+    legacy = _seed_post(
+        db, uid, visibility="public", token="toklegacy",
+        created_at=now - timedelta(hours=1), set_published=False,
+    )
+    older = _seed_post(
+        db, uid, visibility="public", token="toklegacyB",
+        created_at=now - timedelta(days=2), published_at=now - timedelta(days=2),
+    )
+    assert legacy.published_at is None
+    assert _feed_ids(client, token) == [legacy.id, older.id]
+
+
+def test_feed_cursor_pagination_has_no_gap_or_duplicate(client: TestClient, db: Session) -> None:
+    """공개 시각이 같은 게시물이 섞여 있어도 커서 페이지네이션이 겹치거나 빠뜨리지 않는다."""
+    token, uid = _register(client, "ord-cursor@x.com", "ordcursor")
+    now = datetime.now(timezone.utc)
+
+    # 앞의 3개는 공개 시각이 완전히 동일하다 — id 로 갈라야 하는 경계다
+    same_time = now - timedelta(days=1)
+    ids: list[int] = []
+    for i in range(3):
+        ids.append(_seed_post(
+            db, uid, visibility="public", token=f"tokcurS{i}",
+            created_at=same_time, published_at=same_time,
+        ).id)
+    for i in range(3):
+        ids.append(_seed_post(
+            db, uid, visibility="public", token=f"tokcurD{i}",
+            created_at=now - timedelta(days=2 + i), published_at=now - timedelta(days=2 + i),
+        ).id)
+
+    collected: list[int] = []
+    cursor: int | None = None
+    for _ in range(10):
+        params: dict = {"limit": 2}
+        if cursor is not None:
+            params["cursor"] = cursor
+        res = client.get("/api/v1/feed", params=params, headers=_auth(token))
+        assert res.status_code == 200, res.text
+        data = res.json()["data"]
+        collected.extend(p["id"] for p in data["posts"])
+        cursor = data["next_cursor"]
+        if cursor is None:
+            break
+
+    assert len(collected) == len(set(collected)), "같은 게시물이 두 번 나왔다"
+    assert sorted(collected) == sorted(ids), "빠진 게시물이 있다"
+    assert collected == _feed_ids(client, token), "페이지를 나눠 받은 순서가 한 번에 받은 순서와 다르다"
+
+
+def test_public_profile_orders_by_publish_time(client: TestClient, db: Session) -> None:
+    """타인이 보는 공개 프로필의 영상 목록도 피드와 같은 공개 시각 순이다."""
+    _owner_token, owner_id = _register(client, "ord-prof-owner@x.com", "ordprofowner")
+    viewer_token, _ = _register(client, "ord-prof-viewer@x.com", "ordprofviewer")
+    now = datetime.now(timezone.utc)
+
+    older = _seed_post(
+        db, owner_id, visibility="public", token="tokprofordA",
+        created_at=now - timedelta(days=2), published_at=now - timedelta(days=2),
+    )
+    reopened = _seed_post(
+        db, owner_id, visibility="public", token="tokprofordB",
+        created_at=now - timedelta(days=9), published_at=now,
+    )
+
+    res = client.get(f"/api/v1/users/{owner_id}/profile", headers=_auth(viewer_token))
+    assert res.status_code == 200, res.text
+    assert [p["id"] for p in res.json()["data"]["posts"]] == [reopened.id, older.id]

@@ -1,7 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import case, func, update
+from sqlalchemy import and_, case, func, or_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -14,7 +14,7 @@ from app.models.video import Video
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_user
 from app.schemas.video import PostSchema
-from app.services.post_visibility import PUBLIC, is_visible_to
+from app.services.post_visibility import PUBLIC, is_visible_to, publish_order_key
 from app.services.timeframe import today_start
 from app.services.notification import create_notification
 from app.services.error_codes import (
@@ -70,15 +70,36 @@ def get_feed(
     current_user: User | None = Depends(get_optional_user),
 ) -> dict:
     limit = min(limit, 20)
+    # 업로드 시각이 아니라 공개된 시각 순이다. 비공개로 올려 둔 게시물을 나중에 공개하면
+    # 그 순간을 기준으로 위에 오고, 과거 업로드 위치에 묻히지 않는다.
+    order_key = publish_order_key()
     query = (
         db.query(Post)
         .join(Post.video)
         .filter(Video.status == "active", Post.visibility == PUBLIC)
         .options(selectinload(Post.video), selectinload(Post.user))
-        .order_by(Post.id.desc())
+        .order_by(order_key.desc(), Post.id.desc())
     )
     if cursor is not None:
-        query = query.filter(Post.id < cursor)
+        # 커서는 직전 페이지의 마지막 post_id 그대로다(프론트 계약 변경 없음).
+        # 정렬 키가 시각이라 같은 시각에 걸친 게시물이 잘리거나 겹치지 않도록
+        # (공개 시각, id) 복합 키로 이어 붙인다.
+        cursor_row = (
+            db.query(order_key.label("order_key"))
+            .filter(Post.id == cursor)
+            .first()
+        )
+        if cursor_row is None:
+            # 커서로 쓰던 게시물이 지워진 경우. 예전 방식대로 id 기준으로만 이어서
+            # 페이지네이션이 같은 자리를 맴돌지 않게 한다.
+            query = query.filter(Post.id < cursor)
+        else:
+            query = query.filter(
+                or_(
+                    order_key < cursor_row.order_key,
+                    and_(order_key == cursor_row.order_key, Post.id < cursor),
+                )
+            )
 
     posts = query.limit(limit + 1).all()
     has_more = len(posts) > limit

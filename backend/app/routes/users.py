@@ -17,7 +17,7 @@ from app.routes.auth import get_current_user as get_required_user
 from app.services.timeframe import to_local_date
 from app.services.btc_price import get_btc_price_krw
 from app.services.notification import create_notification
-from app.services.post_visibility import PUBLIC
+from app.services.post_visibility import PUBLIC, publish_order_key
 from app.services.referral import generate_referral_code
 from app.services.error_codes import api_error, E_USER_NOT_FOUND, E_FORBIDDEN
 
@@ -246,7 +246,9 @@ def get_user_profile(
         .join(Post.video)
         .filter(Post.user_id == user_id, Video.status == "active", Post.visibility == PUBLIC)
         .options(selectinload(Post.video))
-        .order_by(Post.created_at.desc())
+        # 피드와 같은 기준(공개된 시각)으로 정렬한다. 두 화면의 순서가 어긋나면
+        # 방문자가 같은 사람의 영상을 어디서 보느냐에 따라 다른 차례로 보게 된다.
+        .order_by(publish_order_key().desc(), Post.id.desc())
         .limit(50)
         .all()
     )
