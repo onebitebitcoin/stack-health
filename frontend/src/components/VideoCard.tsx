@@ -9,6 +9,7 @@ import type { Post, FeedResponse } from '../api/types'
 import client from '../api/client'
 import { useAuthStore } from '../store/auth'
 import ExpandableCaption from './ExpandableCaption'
+import { shouldFitContain } from '../utils/mediaFit'
 
 // 더블탭 시크: 왼쪽 -3초 / 오른쪽 +3초 (쇼츠 표준)
 const SEEK_SECONDS = 3
@@ -88,9 +89,17 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       if (video.duration) setProgress((video.currentTime / video.duration) * 100)
     }
     const onMeta = () => {
-      // 9:16(0.5625)보다 눈에 띄게 넓은 비율(1:1 이미지 합성, 4:3 사진, 가로 영상)은
-      // cover로 채우면 좌우가 크게 잘려 확대돼 보이므로 contain으로 전체 표시
-      setFitContain(video.videoWidth / video.videoHeight > 0.65)
+      if (!video.videoWidth || !video.videoHeight) return
+      // 어느 쪽이 잘리는지는 미디어 비율만으로 정해지지 않고 기기 화면 비율에
+      // 따라 달라진다. 9:16 영상도 화면이 9:19.5인 요즘 기기에서 cover로 채우면
+      // 좌우가 18~20% 잘려 나간다. 그래서 고정 기준값 대신 실제 화면 비율과
+      // 비교한다. 미디어가 화면보다 가로로 넓으면 cover가 좌우를 잘라내므로
+      // contain으로 전부 보여준다.
+      const box = containerRef.current
+      const boxRatio = box && box.clientHeight > 0
+        ? box.clientWidth / box.clientHeight
+        : window.innerWidth / window.innerHeight
+      setFitContain(shouldFitContain(video.videoWidth / video.videoHeight, boxRatio))
     }
     video.addEventListener('timeupdate', onTimeUpdate)
     video.addEventListener('loadedmetadata', onMeta)
@@ -229,11 +238,19 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
   }, [token, post.id, onLoginRequired, queryClient])
 
   return (
-    <div ref={containerRef} className="relative h-[100dvh] w-full flex-shrink-0 bg-black">
+    <div ref={containerRef} className="relative h-[100dvh] w-full flex-shrink-0 overflow-hidden bg-black">
+      {fitContain && post.thumbnail_url && (
+        <img
+          src={post.thumbnail_url}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+        />
+      )}
       <video
         ref={videoRef}
         src={post.cdn_url}
-        className={`h-full w-full ${fitContain ? 'object-contain' : 'object-cover'}`}
+        className={`relative h-full w-full ${fitContain ? 'object-contain' : 'object-cover'}`}
         loop
         muted={isMuted}
         playsInline
