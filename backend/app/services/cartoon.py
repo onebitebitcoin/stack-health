@@ -34,6 +34,21 @@ _CEL_LUT = np.clip(
     255,
 ).astype(np.uint8)
 
+# 잉크 선 조각 필터·셀 면 정리의 픽셀 값은 짧은 변 540px 기준이며 해상도에 비례해 늘린다.
+# 어두운 영상은 감마·CLAHE가 벽·바닥의 잔질감까지 키워서, 면적만 보는 필터로는 짧은 점선
+# 조각이 화면 전체에 "땡땡이"로 남았다(실측: 조각의 약 60%가 12px 이하). 그래서 짧은 조각은
+# 대비가 강할 때만 남긴다 — 눈·입 같은 이목구비는 짧아도 DoG 피크가 높고, 질감은 낮다.
+_REF_SHORT_SIDE = 540
+_LINE_MIN_AREA = 14
+_LINE_MIN_LEN = 16  # 이보다 짧은 조각(바운딩 박스 긴 변)은 대비가 강할 때만 남긴다
+_LINE_STRONG_DOG = 16  # 짧은 조각을 살리는 DoG 최소 피크(0~255). 9·12는 질감이 남고 16부터 깨끗했다
+_CEL_MEDIAN_K = 5  # 셀 양자화 전 L 중앙값 필터 — 잔질감이 만든 얼룩 조각을 주변 면으로 흡수한다
+
+
+def _scale_px(px: int, short_side: int) -> int:
+    return max(1, round(px * short_side / _REF_SHORT_SIDE))
+
+
 # NlMeans 등 OpenCV 연산은 멀티스레드 확장성이 낮아(10코어 ~1.4x) 프레임 단위
 # 프로세스 병렬화가 효과적이다. 워커는 OpenCV 내부 스레딩을 꺼서 과다구독을 막는다.
 
@@ -108,6 +123,11 @@ def cartoon_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     # d5 3.1ms). d=9 대비 출력차는 0.58/255(0.23%)에 불과한데, 이 결과는 어차피 업샘플 후
     # 셀 양자화를 거치므로 미세 차이가 더 묻힌다. d=5는 1.23/255로 커져 룩이 흔들릴 여지가 있다.
     small = cv2.bilateralFilter(small, 7, 75, 75)
+    # 셀 양자화 전에 중앙값 필터로 잔질감이 만든 작은 얼룩 섬을 주변 면에 흡수시킨다
+    # (540p 실측: 면적 80px 미만 셀 조각 582→278개). 원본 해상도 L에 걸면 1080p에서 커널이
+    # 11로 커져 15ms가 들어서, 이미 절반으로 줄인 이미지에 해상도 비례 커널로 건다(1080p 0.4ms).
+    short_side = min(h, w)
+    small = cv2.medianBlur(small, _scale_px(_CEL_MEDIAN_K, short_side // 2) | 1)
     smooth = cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
 
     # 셀 셰이딩: L만 6단계 소프트 양자화 (경계 깜빡임·밴딩 완화), 색은 부드럽게 유지.
@@ -123,13 +143,19 @@ def cartoon_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     # σ=3.0을 원본에서 직접 구하는 대신 g1에 σ=2.65를 덧씌운다 — 가우시안은 합성되므로
     # (1.4² + 2.65² ≈ 3.0²) 결과가 사실상 같고(출력차 0.04/255) 커널이 작아 더 싸다.
     g2 = cv2.GaussianBlur(g1, (0, 0), _DOG_SIGMA2_CASCADE)
-    _, line_mask = cv2.threshold(cv2.subtract(g1, g2), 4, 255, cv2.THRESH_BINARY)
+    dog = cv2.subtract(g1, g2)
+    _, line_mask = cv2.threshold(dog, 4, 255, cv2.THRESH_BINARY)
     line_mask = cv2.morphologyEx(line_mask, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
-    _, labels, stats, _ = cv2.connectedComponentsWithStats(line_mask, 8)
+    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(line_mask, 8)
     # 컴포넌트별 Python 루프(`labels == i`)는 성분 수만큼 전체 이미지를 훑어
     # 1080x1920·성분 800개 기준 프레임당 ~330ms(전체의 60%)를 잡아먹었다.
-    # 면적 조건을 라벨 LUT로 바꿔 한 번의 인덱싱으로 처리한다(결과는 픽셀 단위 동일).
-    keep = stats[:, cv2.CC_STAT_AREA] >= 14
+    # 면적·길이·대비 조건을 라벨 LUT로 바꿔 한 번의 인덱싱으로 처리한다.
+    long_side = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
+    # 조각마다 DoG 최대값을 따로 구하지 않고, 강한 픽셀이 하나라도 속한 라벨만 bincount로 표시한다
+    strong = np.bincount(labels[dog >= _LINE_STRONG_DOG], minlength=n_labels) > 0
+    keep = (stats[:, cv2.CC_STAT_AREA] >= _LINE_MIN_AREA) & (
+        (long_side >= _scale_px(_LINE_MIN_LEN, short_side)) | strong
+    )
     keep[0] = False  # 배경 라벨
     line_mask = np.where(keep[labels], np.uint8(255), np.uint8(0))
     line_mask = cv2.dilate(line_mask, np.ones((2, 2), np.uint8))

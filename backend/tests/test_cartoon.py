@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from app.services.cartoon import (
+    LINE_BGR,
     _worker_pool_size,
     adaptive_gamma,
     cartoon_frame,
@@ -39,6 +40,25 @@ class TestCartoonFrame:
         out = cartoon_frame(frame)
         center = out[120, 160]
         assert center[2] > center[0]  # 빨강 채널 우세 유지
+
+    def test_low_contrast_texture_leaves_no_ink_dots(self):
+        # 어두운 체육관의 콘크리트 벽처럼 대비가 약한 잔질감만 있는 화면. 저조도 보정(감마·CLAHE)이
+        # 질감을 키워도 잉크 점이 흩뿌려지면 안 된다(실측: 개선 전 8.8%, 개선 후 0.5%).
+        rng = np.random.default_rng(7)
+        noise = cv2.GaussianBlur(rng.normal(0, 1, (540, 960)).astype(np.float32), (0, 0), 2.0)
+        gray = np.clip(40 + noise / noise.std() * 4, 0, 255).astype(np.uint8)
+        frame = cv2.merge([gray, gray, gray])
+        out = cartoon_frame(frame, adaptive_gamma(frame))
+        ink = np.abs(out.astype(np.int16) - LINE_BGR.astype(np.int16)).sum(axis=2) < 25
+        assert float(ink.mean()) < 0.01, f"ink dots cover {float(ink.mean()):.2%} of a flat textured frame"
+
+    def test_short_high_contrast_feature_keeps_ink(self):
+        # 눈·입처럼 짧지만 대비가 강한 무늬는 길이 필터에 걸려도 잉크 선이 남아야 한다.
+        frame = np.full((540, 960, 3), 120, dtype=np.uint8)
+        frame[268:272, 477:483] = 250  # 6x4px 밝은 점
+        out = cartoon_frame(frame)
+        around = cv2.cvtColor(out[258:282, 467:493], cv2.COLOR_BGR2GRAY)
+        assert int(around.min()) < 70, "ink line around a short high-contrast feature was removed"
 
 
 class TestWorkerPoolSize:
