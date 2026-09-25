@@ -1136,7 +1136,7 @@ def _r2_upload_and_enqueue_multi(
 
 MAX_PREVIEW_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB — canvas 캡처 프레임 1장
 PREVIEW_MAX_WIDTH = 1280
-ALLOWED_VIDEO_FILTERS = {"cartoon"}
+ALLOWED_VIDEO_FILTERS = {"cartoon", "sketch"}
 
 
 def _render_filter_preview(raw: bytes, video_filter: str) -> bytes:
@@ -1157,9 +1157,9 @@ def _render_filter_preview(raw: bytes, video_filter: str) -> bytes:
             img, (PREVIEW_MAX_WIDTH, int(h * PREVIEW_MAX_WIDTH / w)), interpolation=cv2.INTER_AREA
         )
 
-    from app.services.cartoon import adaptive_gamma, cartoon_frame
+    from app.services.cartoon import adaptive_gamma, frame_renderer
 
-    out = cartoon_frame(img, adaptive_gamma(img))
+    out = frame_renderer(video_filter)(img, adaptive_gamma(img))
 
     ok, buf = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 88])
     if not ok:
@@ -1175,7 +1175,7 @@ async def filter_preview(
 ):
     """업로드 미리보기: 프레임 1장에 영상 필터를 적용해 JPEG로 반환한다.
 
-    워커 파이프라인과 동일한 렌더러(`app.services.cartoon`)를 사용하므로 미리보기 룩과
+    워커 파이프라인과 동일한 렌더러(`app.services.cartoon.frame_renderer`)를 사용하므로 미리보기 룩과
     최종 결과물이 일치한다.
     """
     from fastapi.responses import Response
@@ -1220,7 +1220,7 @@ async def upload_multi(
     """다중 미디어(영상 ≤1 + 이미지 ≤5)를 순서대로 받아 합성 파이프라인에 등록한다.
 
     items_meta: JSON 배열 `[{"kind": "image"|"video"}, ...]` — files 순서와 1:1 대응.
-    video_filter: 합성본 전체에 적용할 영상 필터. "cartoon"(카툰)만 지원한다.
+    video_filter: 합성본 전체에 적용할 영상 필터. "cartoon"(카툰)·"sketch"(선 크로키)를 지원한다.
     visibility: 게시물 공개 범위. "public"(기본) 또는 "private".
     파일 수신 즉시 job_id 반환, R2 업로드 + 처리는 백그라운드.
     """

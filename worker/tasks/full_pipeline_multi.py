@@ -68,10 +68,10 @@ def _should_compress(filter_status: str) -> bool:
 
 
 def _apply_video_filter(r2, video_key: str, video_filter: str) -> tuple[str, int, int, dict] | None:
-    """합성 영상에 카툰 필터를 적용해 (filtered_key, pre_bytes, post_bytes,
+    """합성 영상에 영상 필터(cartoon·sketch)를 적용해 (filtered_key, pre_bytes, post_bytes,
     video_meta)를 반환. 실패 시 None (원본 유지).
 
-    backend와 동일한 렌더러(`app.services.cartoon`)를 사용해
+    backend와 동일한 렌더러(`app.services.cartoon.filter_video`)를 사용해
     미리보기 룩과 최종 결과물을 일치시킨다. 인코더가 compress와 동일 crf(28)로 직접
     인코딩하므로 호출부(`run_multi_pipeline`)는 이 경우 별도 compress를 건너뛴다
     (이중 인코딩 + R2 왕복 제거).
@@ -92,9 +92,9 @@ def _apply_video_filter(r2, video_key: str, video_filter: str) -> tuple[str, int
             f.write(resp["Body"].read())
         pre_bytes = os.path.getsize(tmp_input)
 
-        from app.services.cartoon import cartoonize_video
+        from app.services.cartoon import filter_video
 
-        cartoonize_video(tmp_input, tmp_output)
+        filter_video(tmp_input, tmp_output, video_filter)
 
         post_bytes = os.path.getsize(tmp_output)
         video_meta = _probe_video_meta(tmp_output)
@@ -178,7 +178,7 @@ def run_multi_pipeline(job: dict, status_callback=None) -> dict:
     video_filter = job.get("video_filter")
     # 지원이 끝난 값(heat/cartoon_heat/footsteps)이 오래된 잡에 남아 있어도 필터를 건너뛰고
     # 원본 그대로 진행한다 — 여기서 실패시키면 큐에 남은 잡이 통째로 죽는다.
-    if video_filter == "cartoon":
+    if video_filter in ("cartoon", "sketch"):
         if status_callback:
             status_callback("filter")
         pre_filter_key = current_key

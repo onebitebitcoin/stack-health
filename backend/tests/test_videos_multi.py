@@ -160,7 +160,7 @@ def test_upload_multi_retired_filter_rejected(client: TestClient, video_filter: 
     assert res.status_code == 400
 
 
-@pytest.mark.parametrize("video_filter", ["cartoon"])
+@pytest.mark.parametrize("video_filter", ["cartoon", "sketch"])
 @patch("app.routes.videos.reserve_job_id", return_value="multi-filter-1")
 @patch("app.routes.videos._r2_upload_and_enqueue_multi")
 def test_upload_multi_filter_accepted(mock_bg, mock_reserve, client: TestClient, video_filter: str) -> None:
@@ -183,17 +183,19 @@ class TestFilterPreview:
         )
         assert res.status_code in (401, 403)
 
-    def test_returns_cartoonized_jpeg(self, client: TestClient) -> None:
+    @pytest.mark.parametrize("video_filter", ["cartoon", "sketch"])
+    def test_returns_filtered_jpeg(self, client: TestClient, video_filter: str) -> None:
         import cv2
         import numpy as np
 
-        token = _register_and_token(client, "fp1@x.com", "fpuser1")
+        token = _register_and_token(client, f"fp1-{video_filter}@x.com", f"fpuser1{video_filter}")
         rng = np.random.default_rng(3)
         img = rng.integers(40, 220, (120, 160, 3), dtype=np.uint8)
         ok, buf = cv2.imencode(".jpg", img)
         assert ok
         res = client.post(
             "/api/v1/videos/filter-preview",
+            data={"video_filter": video_filter},
             files={"frame": ("f.jpg", buf.tobytes(), "image/jpeg")},
             headers=_auth(token),
         )

@@ -26,7 +26,7 @@ bitcoiners/
 | 인증 (JWT/Google/Lightning) | `backend/app/services/auth.py`, `google_oauth.py`, `lnauth.py` + `backend/app/routes/auth.py` |
 | 영상 업로드/스토리지 | `backend/app/routes/videos.py` + `backend/app/services/r2.py` (Cloudflare R2) |
 | 영상 인코딩/병합/자막 처리 | `worker/tasks/full_pipeline.py`(단일), `full_pipeline_multi.py`(다중 미디어), `compose.py`(영상+이미지 concat), `merge.py`, `subtitle_extract.py` + `backend/app/services/job_queue.py` (Redis 큐 enqueue) |
-| 영상 필터 (카툰만) | `backend/app/services/cartoon.py`(카툰 렌더러) + `POST /videos/filter-preview`(1프레임 미리보기, `video_filter=cartoon`) + `worker/tasks/full_pipeline_multi.py`(`_apply_video_filter`) + `frontend/src/pages/upload/StepMedia.tsx`(효과 선택 드롭다운 UI) + `frontend/src/utils/videoFilter.ts`(옵션 목록·타입 — `''`·`cartoon`). 운동열(`heat`/`cartoon_heat`)·발자국(`footsteps`) 필터와 mediapipe 의존성은 v0.24.0 에서 제거됐다 |
+| 영상 필터 (카툰·크로키) | `backend/app/services/cartoon.py`(카툰 렌더러 + 공용 영상 변환 `filter_video`·`frame_renderer`) + `backend/app/services/sketch.py`(흑백 선 크로키 렌더러) + `POST /videos/filter-preview`(1프레임 미리보기, `video_filter=cartoon|sketch`) + `worker/tasks/full_pipeline_multi.py`(`_apply_video_filter`) + `frontend/src/pages/upload/StepMedia.tsx`(효과 선택 드롭다운 UI) + `frontend/src/utils/videoFilter.ts`(옵션 목록·타입 — `''`·`cartoon`·`sketch`). 운동열(`heat`/`cartoon_heat`)·발자국(`footsteps`) 필터와 mediapipe 의존성은 v0.24.0 에서 제거됐다 |
 | 다중 미디어 업로드 (영상≤1+이미지≤5) | `frontend/src/pages/upload/Step{Media,Subtitle,Meta}.tsx` → `POST /videos/upload-multi` → `worker/tasks/full_pipeline_multi.py` (`docs/PLAN-2026-06-29-upload-multi-media.md`) |
 | 자막 (Whisper 환각 필터 등) | `backend/app/services/subtitles.py` + `worker/tasks/subtitle.py` |
 | 프론트 페이지 수정 | `frontend/src/pages/<페이지>.tsx` (라우팅: `frontend/src/App.tsx`) |

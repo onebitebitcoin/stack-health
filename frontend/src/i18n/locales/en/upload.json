@@ -137,6 +137,10 @@
       "cartoon": {
         "title": "Cartoon filter",
         "hint": "Turns your whole video into a cartoon look. Faces and backgrounds are softly simplified."
+      },
+      "sketch": {
+        "title": "Sketch filter",
+        "hint": "Turns your whole video into a black-and-white line drawing. Only outlines remain, without color or shading."
       }
     }
   },
