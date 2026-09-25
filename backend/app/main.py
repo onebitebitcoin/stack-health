@@ -12,12 +12,12 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
-from fastapi.staticfiles import StaticFiles
 
 from app.models.post import Post
 from app.routes import admin, auth, challenges, comments, feed, history, notifications, survey, users, videos
 from app.services.r2 import ensure_r2_cors
 from app.services.notify import notify_backend_error
+from app.static_files import ImmutableStaticFiles
 
 logging.basicConfig(
     level=logging.INFO,
@@ -239,7 +239,7 @@ def _og_html(
 # Serve React SPA (production: static/ dir built by Docker)
 _static_dir = Path(__file__).parent.parent / "static"
 if _static_dir.exists():
-    app.mount("/assets", StaticFiles(directory=str(_static_dir / "assets")), name="assets")
+    app.mount("/assets", ImmutableStaticFiles(directory=str(_static_dir / "assets")), name="assets")
 
     @app.head("/", include_in_schema=False)
     @app.head("/{full_path:path}", include_in_schema=False)
