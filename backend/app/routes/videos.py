@@ -396,6 +396,9 @@ def get_post(
     tags = _parse_tags(post.tags)
     comment_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
     post_schema = PostSchema(
+    is_liked = False
+    if current_user:
+        is_liked = db.query(PostLike).filter(PostLike.post_id == post.id, PostLike.user_id == current_user.id).first() is not None
         id=post.id,
         video_id=post.video_id,
         user_id=post.user_id,
@@ -405,6 +408,7 @@ def get_post(
         view_count=post.view_count,
         comment_count=comment_count,
         created_at=post.created_at,
+        is_liked=is_liked,
         cdn_url=video.cdn_url,
         username=user.username,
         workout_start=post.workout_start,

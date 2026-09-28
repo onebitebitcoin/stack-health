@@ -126,3 +126,68 @@ describe('client 401 인터셉터', () => {
     expect(useAuthStore.getState().token).toBeNull()
   })
 })
+
+// get_optional_user가 만료/무효 토큰에 401을 내리기 시작하면서, 공개 조회(피드/게시물 등)에
+// Authorization 헤더만 달려 있던 요청은 로그아웃 후 헤더 없이 1회 재시도해야 한다.
+// 그래야 access token이 오래돼 갱신되지 않은 브라우저도 비로그인 응답으로 정상 조회된다.
+describe('client 401 인터셉터 — 헤더 없이 1회 재시도', () => {
+  it('refreshToken 없고 Authorization 헤더가 있으면 헤더 제거 후 1회 재시도한다', async () => {
+    useAuthStore.setState({ token: 'tok', refreshToken: null, user: mockUser })
+    const retryResult = { data: 'ok' }
+    ;(mockClient as unknown as { mockResolvedValueOnce: (v: unknown) => void }).mockResolvedValueOnce?.(retryResult)
+
+    const handler = getErrorHandler()
+    const err = {
+      response: { status: 401 },
+      config: { url: '/videos/posts/1', headers: { Authorization: 'Bearer expired' } },
+    }
+    const result = await handler(err)
+
+    expect(result).toBe(retryResult)
+    expect(useAuthStore.getState().token).toBeNull()
+    const calls = (mockClient as unknown as { mock: { calls: unknown[][] } }).mock.calls
+    expect(calls).toHaveLength(1)
+    const retriedConfig = calls[0][0] as { headers: Record<string, unknown> }
+    expect(retriedConfig.headers.Authorization).toBeUndefined()
+  })
+
+  it('refresh 실패 후에도 Authorization 헤더가 있으면 헤더 제거 후 1회 재시도한다', async () => {
+    useAuthStore.setState({ token: 'old', refreshToken: 'badref', user: mockUser })
+    rawPost.mockRejectedValueOnce(new Error('refresh failed'))
+    const retryResult = { data: 'ok' }
+    ;(mockClient as unknown as { mockResolvedValueOnce: (v: unknown) => void }).mockResolvedValueOnce?.(retryResult)
+
+    const handler = getErrorHandler()
+    const err = {
+      response: { status: 401 },
+      config: { url: '/videos/posts/1', headers: { Authorization: 'Bearer expired' } },
+    }
+    const result = await handler(err)
+
+    expect(result).toBe(retryResult)
+    expect(useAuthStore.getState().token).toBeNull()
+  })
+
+  it('Authorization 헤더가 없던 요청(순수 비로그인)은 재시도하지 않고 그대로 거절한다', async () => {
+    useAuthStore.setState({ token: 'tok', refreshToken: null, user: mockUser })
+    const handler = getErrorHandler()
+    const err = { response: { status: 401 }, config: { url: '/feed', headers: {} } }
+    await expect(handler(err)).rejects.toBe(err)
+    expect(mockClient).not.toHaveBeenCalled()
+  })
+
+  it('이미 헤더 없이 재시도한 요청은 다시 재시도하지 않는다 (무한루프 방지)', async () => {
+    useAuthStore.setState({ token: 'tok', refreshToken: null, user: mockUser })
+    const handler = getErrorHandler()
+    const err = {
+      response: { status: 401 },
+      config: {
+        url: '/videos/posts/1',
+        headers: { Authorization: 'Bearer expired' },
+        _retriedWithoutAuth: true,
+      },
+    }
+    await expect(handler(err)).rejects.toBe(err)
+    expect(mockClient).not.toHaveBeenCalled()
+  })
+})

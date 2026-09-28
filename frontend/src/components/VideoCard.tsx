@@ -211,8 +211,10 @@ export default function VideoCard({ post, onLoginRequired, onCommentClick, isMut
       setLikeCount(newCount)
       setLikeAnim(newLiked ? 'burst' : 'shrink')
       setTimeout(() => setLikeAnim(null), 400)
-      // Update feed cache so navigating away and back shows correct liked state
-      queryClient.setQueryData<InfiniteData<FeedResponse>>(['feed'], (old) => {
+      // Update feed cache so navigating away and back shows correct liked state.
+      // 피드 쿼리 키는 ['feed', userId]라 정확히 일치하는 키가 없다 — setQueriesData로
+      // ['feed']로 시작하는 모든 사용자별 캐시를 prefix 매칭으로 갱신한다.
+      queryClient.setQueriesData<InfiniteData<FeedResponse>>({ queryKey: ['feed'] }, (old) => {
         if (!old) return old
         return {
           ...old,

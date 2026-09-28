@@ -117,11 +117,19 @@ def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_optional),
     db: Session = Depends(get_db),
 ) -> User | None:
+    """Authorization 헤더가 아예 없으면 비로그인(None)으로 취급한다.
+
+    헤더가 있는데 토큰이 만료되었거나 무효하면 401을 낸다. 여기서 조용히 None을
+    반환하면 프론트의 401 → refresh 인터셉터가 동작하지 않아, access token이
+    하루 넘게 갱신되지 않은 브라우저는 로그인 상태인데도 계속 비로그인 응답(예:
+    좋아요 안 보임)을 받게 된다. 토큰은 유효한데 사용자가 없는 경우(탈퇴 등)는
+    여전히 None으로 둔다 — 그 경우는 재로그인해도 복구되지 않기 때문이다.
+    """
     if not credentials:
         return None
     user_id = decode_token(credentials.credentials)
     if user_id is None:
-        return None
+        raise api_error(status.HTTP_401_UNAUTHORIZED, E_AUTH_INVALID_TOKEN, "유효하지 않은 토큰입니다")
     return get_user_by_id(db, user_id)
 
 

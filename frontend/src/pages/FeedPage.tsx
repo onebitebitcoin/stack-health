@@ -9,6 +9,7 @@ import CommentSheet from '../components/CommentSheet'
 import LoadingScreen from '../components/LoadingScreen'
 import LogoMark from '../components/LogoMark'
 import { useUiStore } from '../store/ui'
+import { useAuthStore } from '../store/auth'
 
 async function fetchFeed(cursor?: number): Promise<FeedResponse> {
   const params = cursor ? { cursor } : {}
@@ -18,6 +19,7 @@ async function fetchFeed(cursor?: number): Promise<FeedResponse> {
 
 export default function FeedPage() {
   const { t } = useTranslation('feed')
+  const userId = useAuthStore((s) => s.user?.id)
   const [activeIndex, setActiveIndex] = useState(0)
   const [showLogin, setShowLogin] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
@@ -29,7 +31,9 @@ export default function FeedPage() {
   const touchStartY = useRef(0)
 
   const { data, fetchNextPage, hasNextPage, isLoading } = useInfiniteQuery({
-    queryKey: ['feed'],
+    // 로그인 사용자가 바뀌면(로그인/로그아웃/계정 전환) 이전 사용자의 캐시(is_liked 등)가
+    // 그대로 보이지 않도록 사용자 id를 키에 포함한다.
+    queryKey: ['feed', userId ?? 'anon'],
     queryFn: ({ pageParam }) => fetchFeed(pageParam as number | undefined),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,

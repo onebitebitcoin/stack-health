@@ -7,12 +7,14 @@ import type { Post } from '../api/types'
 import VideoCard from '../components/VideoCard'
 import CommentSheet from '../components/CommentSheet'
 import { useUiStore } from '../store/ui'
+import { useAuthStore } from '../store/auth'
 
 export default function PostDetailPage() {
   const { postId } = useParams<{ postId: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const setCommentOpen = useUiStore((s) => s.setCommentOpen)
+  const userId = useAuthStore((s) => s.user?.id)
 
   const [isMuted, setIsMuted] = useState(true)
   const [commentOpen, setLocalCommentOpen] = useState(false)
@@ -21,10 +23,10 @@ export default function PostDetailPage() {
   useEffect(() => () => setCommentOpen(false), [setCommentOpen])
 
   const { data: post, isLoading, isError } = useQuery<Post>({
-    queryKey: ['post', postId],
+    queryKey: ['post', postId, userId ?? 'anon'],
     queryFn: async () => {
       const res = await client.get<{ data: { post: Post } }>(`/videos/posts/${postId}`)
-      return { ...res.data.data.post, is_liked: false }
+      return res.data.data.post
     },
     enabled: !!postId,
   })

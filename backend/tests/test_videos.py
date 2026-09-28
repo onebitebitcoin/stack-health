@@ -419,6 +419,42 @@ def test_get_post_by_id_not_found(mock_cdn, client: TestClient) -> None:
     assert res.status_code == 404
 
 
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/gpliked.mp4")
+def test_get_post_by_id_reflects_is_liked(mock_cdn, client: TestClient) -> None:
+    """다른 브라우저에서 같은 게시물을 봐도 좋아요 여부가 그대로 보여야 한다 (원본 버그)."""
+    token, uid = _register(client, "gpliked@x.com", "gplikeduser")
+    headers = _auth(token)
+    confirm_res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/gpliked.mp4", "duration_sec": 20,
+    }, headers=headers)
+    post_id = confirm_res.json()["data"]["post"]["id"]
+
+    res = client.get(f"/api/v1/videos/posts/{post_id}", headers=headers)
+    assert res.status_code == 200
+    assert res.json()["data"]["post"]["is_liked"] is False
+
+    like_res = client.post(f"/api/v1/feed/{post_id}/like", headers=headers)
+    assert like_res.status_code == 200
+    assert like_res.json()["data"]["liked"] is True
+
+    res2 = client.get(f"/api/v1/videos/posts/{post_id}", headers=headers)
+    assert res2.status_code == 200
+    assert res2.json()["data"]["post"]["is_liked"] is True
+
+
+@patch("app.routes.videos.r2_service.get_cdn_url", return_value="https://cdn/gpanon.mp4")
+def test_get_post_by_id_anonymous_is_liked_false(mock_cdn, client: TestClient) -> None:
+    token, uid = _register(client, "gpanon@x.com", "gpanonuser")
+    confirm_res = client.post("/api/v1/videos/confirm", json={
+        "r2_key": f"videos/{uid}/gpanon.mp4", "duration_sec": 20,
+    }, headers=_auth(token))
+    post_id = confirm_res.json()["data"]["post"]["id"]
+
+    res = client.get(f"/api/v1/videos/posts/{post_id}")
+    assert res.status_code == 200
+    assert res.json()["data"]["post"]["is_liked"] is False
+
+
 @patch("app.routes.videos.r2_service.get_r2_client")
 def test_upload_proof_image_success(mock_r2_client, client: TestClient) -> None:
     """증거 이미지 업로드 성공."""
