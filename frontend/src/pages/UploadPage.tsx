@@ -16,7 +16,7 @@ import { type VideoFilterValue } from '../utils/videoFilter'
 import StepSubtitle, { type SubtitleSource } from './upload/StepSubtitle'
 import StepMeta from './upload/StepMeta'
 import { srtToTextLines } from '../utils/subtitles'
-import { type MainCategory } from '../constants/category'
+import { DEFAULT_MAIN_CATEGORY, type MainCategory } from '../constants/category'
 
 const STEPS_KEYS = ['media', 'subtitle', 'meta'] as const
 const MAX_RECORD_SECONDS = 60
@@ -71,9 +71,7 @@ export default function UploadPage() {
   const [step, setStep] = useState(0)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
 
-  // 비트코인/일상 두 카테고리는 성격이 뚜렷이 달라 임의로 하나를 선점하지 않는다 —
-  // 업로드 전 명시적으로 고르게 한다(미선택 시 categoryRequired 에러).
-  const [mainCategory, setMainCategory] = useState<MainCategory | null>(null)
+  const [mainCategory, setMainCategory] = useState<MainCategory>(DEFAULT_MAIN_CATEGORY)
   const [caption, setCaption] = useState('')
   // 기본은 공개다. 비공개를 고르면 내 프로필에서만 보이고, 나중에 공개로 전환할 수 있다.
   const [visibility, setVisibility] = useState<PostVisibility>('public')
@@ -466,7 +464,7 @@ export default function UploadPage() {
       if (muteOriginalAudio) form.append('mute_video', 'true')
       if (videoFilter) form.append('video_filter', videoFilter)
       form.append('visibility', visibility)
-      form.append('tags', JSON.stringify(mainCategory ? [mainCategory] : []))
+      form.append('tags', JSON.stringify([mainCategory]))
       if (selectedChallengeId != null) form.append('challenge_id', String(selectedChallengeId))
       const postOnce = () => client.post<{ data: { job_id: string } }>(
         '/videos/upload-multi', form,

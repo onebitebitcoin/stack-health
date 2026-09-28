@@ -8,7 +8,7 @@ import { MAIN_CATEGORIES, MAIN_CATEGORY_LABEL_KEYS, type MainCategory } from '..
 import { CAPTION_MAX_LEN } from '../../constants/caption'
 
 interface Props {
-  mainCategory: MainCategory | null
+  mainCategory: MainCategory
   setMainCategory: (cat: MainCategory) => void
   hasChallenge: boolean | null
   setHasChallenge: (v: boolean | null) => void
@@ -59,10 +59,6 @@ export default function StepMeta({
 
   async function handleUpload() {
     setLimitError('')
-    if (!mainCategory) {
-      setLimitError(t('tagChallenge.categoryRequired'))
-      return
-    }
     onUpload()
   }
 
@@ -76,6 +72,7 @@ export default function StepMeta({
             {MAIN_CATEGORIES.map((cat) => (
               <button
                 key={cat}
+                aria-pressed={mainCategory === cat}
                 onClick={() => setMainCategory(cat)}
                 className={`flex-1 rounded-card py-3 text-body font-medium transition-colors ${
                   mainCategory === cat ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
@@ -117,6 +114,7 @@ export default function StepMeta({
           <p className="mb-2 text-body font-semibold text-theme-primary">{t('visibility.label')}</p>
           <div className="flex gap-2">
             <button
+              aria-pressed={visibility === 'public'}
               onClick={() => setVisibility('public')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-card py-3 text-body font-medium transition-colors ${
                 visibility === 'public' ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'
@@ -126,6 +124,7 @@ export default function StepMeta({
               {t('visibility.public')}
             </button>
             <button
+              aria-pressed={visibility === 'private'}
               onClick={() => setVisibility('private')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-card py-3 text-body font-medium transition-colors ${
                 visibility === 'private' ? 'bg-accent text-accent-fg' : 'bg-theme-surface text-theme-muted'

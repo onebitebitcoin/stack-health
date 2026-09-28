@@ -10,6 +10,9 @@
 export const MAIN_CATEGORIES = ['비트코인', '일상'] as const
 export type MainCategory = typeof MAIN_CATEGORIES[number]
 
+/** 업로드 화면의 기본 카테고리. 비트코인 기록일 때만 사용자가 바꾼다. */
+export const DEFAULT_MAIN_CATEGORY: MainCategory = '일상'
+
 /** 카테고리 값 → i18n 키(upload 네임스페이스의 `tagChallenge.` 접두사 제외). */
 export const MAIN_CATEGORY_LABEL_KEYS: Record<MainCategory, string> = {
   '비트코인': 'categoryBitcoin',
