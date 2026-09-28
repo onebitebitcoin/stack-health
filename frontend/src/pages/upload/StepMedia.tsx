@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ImagePlus, Film, X, GripVertical, Loader2, Wand2, PenLine, Ban, ChevronDown, Check } from 'lucide-react'
+import { ImagePlus, Film, X, GripVertical, Loader2, Wand2, PenLine, Stamp, Ban, ChevronDown, Check } from 'lucide-react'
 import client from '../../api/client'
 import { VIDEO_FILTER_OPTIONS, type VideoFilterValue } from '../../utils/videoFilter'
 import {
@@ -118,6 +118,7 @@ const FILTER_ICONS: Record<string, ReactNode> = {
   none: <Ban size={16} className="text-theme-muted" />,
   cartoon: <Wand2 size={16} className="text-accent" />,
   sketch: <PenLine size={16} className="text-accent" />,
+  orange_cartoon: <Stamp size={16} className="text-accent" />,
 }
 
 interface FilterDropdownOption {

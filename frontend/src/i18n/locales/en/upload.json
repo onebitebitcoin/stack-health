@@ -141,6 +141,10 @@
       "sketch": {
         "title": "Sketch filter",
         "hint": "Turns your whole video into a black-and-white line drawing. Only outlines remain, without color or shading."
+      },
+      "orange_cartoon": {
+        "title": "Orange Cartoon",
+        "hint": "Turns your video into a two-color block print in orange and ink."
       }
     }
   },

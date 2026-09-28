@@ -181,14 +181,17 @@ def _worker_init() -> None:
     cv2.setNumThreads(1)
 
 
-VIDEO_FILTERS = ("cartoon", "sketch")
+VIDEO_FILTERS = ("cartoon", "sketch", "orange_cartoon")
 
 
-def frame_renderer(video_filter: str):
+def frame_renderer(video_filter: str, tone_range: tuple[float, float] | None = None):
     """필터 이름 → 프레임 렌더러 `(frame, gamma) -> frame`.
 
-    sketch 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를 피하려고
-    호출 시점에 가져온다.
+    sketch·orange_cartoon 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를
+    피하려고 호출 시점에 가져온다. `tone_range`는 orange_cartoon 전용 인자다 — 영상 전체
+    샘플로 미리 계산한 밝기 기준(lo/hi, `orange_cartoon.sample_tone_range`)을 클로저로
+    고정해 넘긴다. 다른 필터는 이 인자를 무시한다. 자세한 설계 이유는
+    `app.services.orange_cartoon` 모듈 docstring 참고.
     """
     if video_filter == "cartoon":
         return cartoon_frame
@@ -196,12 +199,19 @@ def frame_renderer(video_filter: str):
         from app.services.sketch import sketch_frame
 
         return sketch_frame
+    if video_filter == "orange_cartoon":
+        from app.services.orange_cartoon import orange_cartoon_frame
+
+        def _render(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+            return orange_cartoon_frame(frame, gamma, tone_range=tone_range)
+
+        return _render
     raise ValueError(f"unknown video filter: {video_filter}")
 
 
-def _render_one(args: tuple[np.ndarray, float, str]) -> np.ndarray:
-    frame, gamma, video_filter = args
-    return frame_renderer(video_filter)(frame, gamma)
+def _render_one(args: tuple[np.ndarray, float, str, tuple[float, float] | None]) -> np.ndarray:
+    frame, gamma, video_filter, tone_range = args
+    return frame_renderer(video_filter, tone_range)(frame, gamma)
 
 
 def _sample_gamma(frame: np.ndarray, gamma_ema: float | None, frame_idx: int) -> float:
@@ -240,10 +250,12 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
     """구간 하나를 카툰 변환해 비디오 전용(오디오 없음) mp4로 저장. (프레임 수, seg_path) 반환.
 
     pad_start부터 읽어 감마 EMA를 예열시키고 start 이후 프레임만 ffmpeg에 쓴다 —
-    구간 경계에서 EMA가 0부터 다시 쌓이며 밝기가 튀는 것을 막기 위함.
+    구간 경계에서 EMA가 0부터 다시 쌓이며 밝기가 튀는 것을 막기 위함. orange_cartoon의
+    밝기 기준(`tone_range`)은 감마와 달리 영상 전체에서 미리 계산해 넘긴 고정값이라
+    구간마다 다시 추정하지 않는다.
     """
-    input_path, start, end, pad_start, out_w, out_h, fps, seg_path, video_filter = args
-    render = frame_renderer(video_filter)
+    input_path, start, end, pad_start, out_w, out_h, fps, seg_path, video_filter, tone_range = args
+    render = frame_renderer(video_filter, tone_range)
     cv2.setNumThreads(1)
     # x264 -threads auto는 코어당 ~1.5개 프레임 스레드를 띄운다. 구간마다 인코더가 하나씩
     # 떠서(k개) 렌더 프로세스 수와 별개로 코어를 오버섭스크립션한다 — 2로 고정.
@@ -341,9 +353,41 @@ def cartoonize_video(input_path: str, output_path: str) -> None:
     filter_video(input_path, output_path, "cartoon")
 
 
+_TONE_SAMPLE_FRAMES = 10  # 균등 간격 8~12장 — 영상 전체 밝기 기준(lo/hi)을 한 번만 잰다
+
+
+def _sample_video_tone_range(input_path: str, frame_count: int) -> tuple[float, float] | None:
+    """orange_cartoon 전용: 영상 전체에서 균등 간격 프레임을 뽑아 밝기 기준(lo/hi 백분위)을
+    한 번만 계산한다. 구간 병렬 렌더링에 모두 같은 값을 넘겨 톤이 구간 경계에서 끊기거나
+    프레임마다 깜빡이지 않게 한다 — 설계 이유는 `app.services.orange_cartoon` 모듈 docstring
+    참고. 프레임을 하나도 못 읽으면 None(호출부가 프레임별 폴백을 쓴다).
+    """
+    if frame_count <= 0:
+        return None
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        return None
+    try:
+        n = min(_TONE_SAMPLE_FRAMES, frame_count)
+        frames = []
+        for i in range(n):
+            idx = int(i * frame_count / n)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ok, frame = cap.read()
+            if ok:
+                frames.append(frame)
+        if not frames:
+            return None
+        from app.services.orange_cartoon import sample_tone_range
+
+        return sample_tone_range(frames)
+    finally:
+        cap.release()
+
+
 def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
-    """영상 전체에 `video_filter`(cartoon·sketch) 렌더러를 적용한다. 원본 오디오 스트림은
-    그대로 보존(-c:a copy).
+    """영상 전체에 `video_filter`(cartoon·sketch·orange_cartoon) 렌더러를 적용한다. 원본
+    오디오 스트림은 그대로 보존(-c:a copy).
 
     프레임 수가 `_MIN_SEGMENT_FRAMES` 이상이면 영상을 `_worker_pool_size()`개 구간으로 나눠
     프로세스 풀로 병렬 렌더링한다 — 카툰 변환은 프레임 단위로 독립적이라 구간별로 디코딩·렌더링·
@@ -367,10 +411,17 @@ def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
 
+    # orange_cartoon만 영상 전체 샘플로 밝기 기준을 한 번 정하고 모든 구간에 그대로 넘긴다
+    # (자세한 이유는 `_sample_video_tone_range`·`app.services.orange_cartoon` docstring).
+    # cartoon·sketch는 프레임별 감마 EMA만으로 충분해 이 값을 쓰지 않는다.
+    tone_range = (
+        _sample_video_tone_range(input_path, frame_count) if video_filter == "orange_cartoon" else None
+    )
+
     # 컨테이너가 프레임 수를 신뢰할 수 없게 보고하면(0 이하) 안전하게 프레임 병렬로 폴백.
     k = min(_worker_pool_size(), max(1, frame_count // _MIN_SEGMENT_FRAMES)) if frame_count > 0 else 1
     if k <= 1:
-        _cartoonize_frame_parallel(input_path, output_path, out_w, out_h, fps, video_filter)
+        _cartoonize_frame_parallel(input_path, output_path, out_w, out_h, fps, video_filter, tone_range)
         return
 
     try:
@@ -378,7 +429,7 @@ def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             seg_args = [
                 (input_path, start, end, pad_start, out_w, out_h, fps,
-                 os.path.join(tmpdir, f"seg_{i}.mp4"), video_filter)
+                 os.path.join(tmpdir, f"seg_{i}.mp4"), video_filter, tone_range)
                 for i, (start, end, pad_start) in enumerate(segments)
             ]
             pool = mp.get_context("spawn").Pool(k)
@@ -396,7 +447,7 @@ def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
             "filter_video(%s): 구간 병렬 실패 → 프레임 병렬로 폴백 (frames=%d, k=%d)",
             video_filter, frame_count, k, exc_info=True,
         )
-        _cartoonize_frame_parallel(input_path, output_path, out_w, out_h, fps, video_filter)
+        _cartoonize_frame_parallel(input_path, output_path, out_w, out_h, fps, video_filter, tone_range)
         return
 
     processed = sum(n for n, _ in results)
@@ -408,7 +459,7 @@ def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
 
 def _cartoonize_frame_parallel(
     input_path: str, output_path: str, out_w: int, out_h: int, fps: float,
-    video_filter: str = "cartoon",
+    video_filter: str = "cartoon", tone_range: tuple[float, float] | None = None,
 ) -> None:
     """짧은 영상용 경로: 프레임을 프로세스 풀로 병렬 렌더링하고 단일 ffmpeg로 인코딩한다.
 
@@ -456,7 +507,7 @@ def _cartoonize_frame_parallel(
     pool = mp.get_context("spawn").Pool(_worker_pool_size(), initializer=_worker_init)
     try:
         while True:
-            batch: list[tuple[np.ndarray, float, str]] = []
+            batch: list[tuple[np.ndarray, float, str, tuple[float, float] | None]] = []
             while len(batch) < _CHUNK:
                 ok, frame = cap.read()
                 if not ok:
@@ -466,7 +517,7 @@ def _cartoonize_frame_parallel(
                 # 감마 EMA: 프레임별 노출 변화로 밝기가 깜빡이지 않게 스무딩
                 gamma_ema = _sample_gamma(frame, gamma_ema, read_idx)
                 read_idx += 1
-                batch.append((frame, gamma_ema, video_filter))
+                batch.append((frame, gamma_ema, video_filter, tone_range))
             if not batch:
                 break
             for canvas in pool.map(_render_one, batch):

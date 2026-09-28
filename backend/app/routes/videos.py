@@ -1143,7 +1143,7 @@ def _r2_upload_and_enqueue_multi(
 
 MAX_PREVIEW_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB — canvas 캡처 프레임 1장
 PREVIEW_MAX_WIDTH = 1280
-ALLOWED_VIDEO_FILTERS = {"cartoon", "sketch"}
+ALLOWED_VIDEO_FILTERS = {"cartoon", "sketch", "orange_cartoon"}
 
 
 def _render_filter_preview(raw: bytes, video_filter: str) -> bytes:
@@ -1227,7 +1227,8 @@ async def upload_multi(
     """다중 미디어(영상 ≤1 + 이미지 ≤5)를 순서대로 받아 합성 파이프라인에 등록한다.
 
     items_meta: JSON 배열 `[{"kind": "image"|"video"}, ...]` — files 순서와 1:1 대응.
-    video_filter: 합성본 전체에 적용할 영상 필터. "cartoon"(카툰)·"sketch"(선 크로키)를 지원한다.
+    video_filter: 합성본 전체에 적용할 영상 필터. "cartoon"(카툰)·"sketch"(선 크로키)·
+    "orange_cartoon"(오렌지 카툰, 2색 리노컷)을 지원한다.
     visibility: 게시물 공개 범위. "public"(기본) 또는 "private".
     파일 수신 즉시 job_id 반환, R2 업로드 + 처리는 백그라운드.
     """
