@@ -90,3 +90,12 @@
 |------|------|--------------|-----------|
 | `E_ADMIN_SELF_DELETE` | 400 | 자신의 계정은 삭제할 수 없습니다 | 관리자가 본인 계정 삭제 시도 |
 | `E_ADMIN_API_KEY_DELETE` | 400 | API 키로는 관리자 계정을 삭제할 수 없습니다 | API 키로 관리자 삭제 시도 |
+
+## Blink 지급 (Lightning)
+
+| 코드 | HTTP | 사용자 메시지 | 발생 상황 |
+|------|------|--------------|-----------|
+| `E_BLINK_NOT_CONFIGURED` | 503 | Blink 연동이 설정되지 않았습니다 | `BLINK_API_KEY` 미설정 상태에서 지급 시도 |
+| `E_BLINK_PAYMENT_FAILED` | 502 | Blink 지급에 실패했습니다: (사유) | Blink GraphQL 오류·FAILURE 상태·네트워크 오류 |
+| `E_BLINK_INVALID_ADDRESS` | 422 | 라이트닝 주소 형식이 올바르지 않습니다 | `user@domain` 형식이 아닌 주소 입력 |
+| `E_BLINK_AMOUNT_OUT_OF_RANGE` | 422 | 금액은 1~(상한) sats 사이여야 합니다 | 1 미만 또는 `BLINK_TEST_MAX_SATS` 초과 |

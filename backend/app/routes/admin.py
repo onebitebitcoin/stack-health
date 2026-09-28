@@ -1,8 +1,9 @@
+import re
 from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, inspect, or_, text
 from sqlalchemy.orm import Session
 
@@ -19,6 +20,7 @@ from app.models.post_view import PostView
 from app.models.video import Video
 from app.models.user import User
 from app.config import settings
+from app.services import blink as blink_service
 from app.services import r2 as r2_service
 from app.schemas.video import VideoSchema
 from app.services.error_codes import (
@@ -28,6 +30,10 @@ from app.services.error_codes import (
     E_ADMIN_SELF_DELETE,
     E_AUTH_INVALID_TOKEN,
     E_AUTH_REQUIRED,
+    E_BLINK_AMOUNT_OUT_OF_RANGE,
+    E_BLINK_INVALID_ADDRESS,
+    E_BLINK_NOT_CONFIGURED,
+    E_BLINK_PAYMENT_FAILED,
     E_UPLOAD_URL_FAILED,
     E_USER_NOT_FOUND,
     E_VIDEO_NOT_FOUND,
@@ -531,3 +537,101 @@ def confirm_app_upload(
     db.commit()
     db.refresh(links)
     return {"data": _app_links_data(links)}
+
+
+# ── Blink (Lightning 테스트 지급) ─────────────────────────────────────────────
+
+LN_ADDRESS_RE = re.compile(r"^[a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+BLINK_MEMO_MAX_LENGTH = 100
+
+
+class BlinkTestPayoutRequest(BaseModel):
+    ln_address: str
+    amount_sats: int
+    memo: str | None = Field(default=None, max_length=BLINK_MEMO_MAX_LENGTH)
+
+
+@router.get("/blink/status")
+def blink_status(
+    _: User | None = Depends(require_admin),
+) -> dict:
+    if not blink_service.is_configured():
+        return {
+            "data": {
+                "configured": False,
+                "wallet_id": None,
+                "balance_sats": None,
+                "max_test_sats": settings.blink_test_max_sats,
+                "error": None,
+            }
+        }
+
+    try:
+        wallet_id, balance_sats = blink_service.get_btc_wallet()
+    except blink_service.BlinkError as exc:
+        return {
+            "data": {
+                "configured": True,
+                "wallet_id": None,
+                "balance_sats": None,
+                "max_test_sats": settings.blink_test_max_sats,
+                "error": str(exc),
+            }
+        }
+
+    return {
+        "data": {
+            "configured": True,
+            "wallet_id": wallet_id,
+            "balance_sats": balance_sats,
+            "max_test_sats": settings.blink_test_max_sats,
+            "error": None,
+        }
+    }
+
+
+@router.post("/blink/test-payout")
+def blink_test_payout(
+    body: BlinkTestPayoutRequest,
+    db: Session = Depends(get_db),
+    _: User | None = Depends(require_admin),
+) -> dict:
+    ln_address = body.ln_address.strip().lower()
+    if not LN_ADDRESS_RE.match(ln_address):
+        raise api_error(422, E_BLINK_INVALID_ADDRESS, "라이트닝 주소 형식이 올바르지 않습니다")
+
+    if body.amount_sats < 1 or body.amount_sats > settings.blink_test_max_sats:
+        raise api_error(
+            422,
+            E_BLINK_AMOUNT_OUT_OF_RANGE,
+            f"금액은 1~{settings.blink_test_max_sats} sats 사이여야 합니다",
+        )
+
+    if not blink_service.is_configured():
+        raise api_error(503, E_BLINK_NOT_CONFIGURED, "Blink 연동이 설정되지 않았습니다")
+
+    try:
+        status = blink_service.send_to_lightning_address(ln_address, body.amount_sats, body.memo)
+        if status == "FAILURE":
+            raise blink_service.BlinkError("Blink가 결제를 실패 처리했습니다")
+    except blink_service.BlinkError as exc:
+        log = AdminLog(
+            action="blink_test_payout",
+            target_type="lightning_address",
+            target_id=0,
+            detail=f"{ln_address} {body.amount_sats} sats {exc}",
+        )
+        db.add(log)
+        db.commit()
+        raise api_error(502, E_BLINK_PAYMENT_FAILED, f"Blink 지급에 실패했습니다: {exc}") from exc
+
+    log = AdminLog(
+        action="blink_test_payout",
+        target_type="lightning_address",
+        target_id=0,
+        detail=f"{ln_address} {body.amount_sats} sats {status}",
+    )
+    db.add(log)
+    db.commit()
+
+    return {"data": {"status": status, "ln_address": ln_address, "amount_sats": body.amount_sats}}

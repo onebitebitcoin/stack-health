@@ -65,6 +65,7 @@ bitcoiners/
   - `timeframe.py` **날짜 경계 단일 원본** — `SERVICE_TZ`(Asia/Seoul) 고정. 캘린더·스트릭·나무 단계·일일 제한이 전부 여기를 거친다. 요청에서 타임존을 받지 않는다 / `share_token.py` 공유 링크 토큰
   - `r2.py` Cloudflare R2 업로드 / `job_queue.py` Redis 잡 큐 enqueue
   - `subtitles.py` 자막 생성·환각 필터 / `rate_limit.py` / `notify.py` 텔레그램(운영자) 알림 / `notification.py` 인앱(사용자) 알림 생성 / `error_codes.py`
+  - `blink.py` Blink(api.blink.sv) GraphQL 연동 — 라이트닝 주소로 sats 전송(`send_to_lightning_address`), BTC 지갑 조회(`get_btc_wallet`). 관리자 테스트 지급(`POST /admin/blink/test-payout`, `GET /admin/blink/status`, `app/routes/admin.py`)이 첫 사용처이고, 향후 업로더 자동 지급이 이 모듈을 재사용한다
 - **tests/**: 도메인별 `test_*.py` (pytest) — 실행: `cd backend && .venv/bin/pytest -q`
 
 ## Frontend (`frontend/`)

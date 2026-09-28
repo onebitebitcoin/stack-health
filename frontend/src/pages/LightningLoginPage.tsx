@@ -153,7 +153,7 @@ export default function LightningLoginPage() {
           <>
             {domain === 'current' && (
               <div className="flex gap-2 rounded-card border border-theme-border bg-theme-surface px-3 py-3">
-                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-danger" />
+                <AlertTriangle size={15} className="mt-1 shrink-0 text-danger" />
                 <p className="text-label text-theme-muted">{t('lightningNewAccountWarning')}</p>
               </div>
             )}

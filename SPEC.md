@@ -111,6 +111,12 @@ GOOGLE_CLIENT_SECRET=
 
 # Redis (선택 — 미설정 시 백엔드 직접 ffmpeg fallback)
 REDIS_URL=redis://localhost:6379/0
+
+# Blink (선택 — 미설정 시 관리자 테스트 지급이 503으로 막힘)
+BLINK_API_KEY=
+BLINK_API_URL=https://api.blink.sv/graphql
+BLINK_WALLET_ID=
+BLINK_TEST_MAX_SATS=10000
 ```
 
 ---
