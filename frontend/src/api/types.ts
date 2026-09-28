@@ -86,6 +86,8 @@ export interface Comment {
   profile_color: string | null
   content: string
   created_at: string
+  like_count: number
+  is_liked: boolean
   replies?: Comment[]
 }
 

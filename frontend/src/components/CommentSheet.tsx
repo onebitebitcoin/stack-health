@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, Send, Trash2 } from 'lucide-react'
+import { X, Send, Trash2, Heart } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
@@ -20,9 +20,10 @@ interface CommentRowProps {
   canDelete: boolean
   onReply: (c: Comment) => void
   onDelete: (c: Comment) => void
+  onToggleLike: (c: Comment) => void
 }
 
-function CommentRow({ comment, canDelete, onReply, onDelete }: CommentRowProps) {
+function CommentRow({ comment, canDelete, onReply, onDelete, onToggleLike }: CommentRowProps) {
   const { t } = useTranslation('feed')
   return (
     <div className="flex items-start gap-2">
@@ -36,13 +37,28 @@ function CommentRow({ comment, canDelete, onReply, onDelete }: CommentRowProps) 
       <div className="flex-1 min-w-0">
         <span className="text-label font-semibold text-theme-primary">@{comment.username}</span>
         <p className="text-body text-white mt-1 break-words">{comment.content}</p>
-        <button
-          type="button"
-          onClick={() => onReply(comment)}
-          className="text-label text-theme-muted hover:text-theme-primary mt-1"
-        >
-          {t('replyButton')}
-        </button>
+        <div className="flex items-center gap-3 mt-1">
+          <button
+            type="button"
+            onClick={() => onReply(comment)}
+            className="text-label text-theme-muted hover:text-theme-primary"
+          >
+            {t('replyButton')}
+          </button>
+          <button
+            type="button"
+            onClick={() => onToggleLike(comment)}
+            aria-label={t('commentLikeAria')}
+            className="flex items-center gap-1 text-label text-theme-muted hover:text-danger"
+          >
+            <Heart
+              size={14}
+              strokeWidth={1.75}
+              className={comment.is_liked ? 'fill-danger text-danger' : ''}
+            />
+            {comment.like_count > 0 && <span>{comment.like_count}</span>}
+          </button>
+        </div>
       </div>
       {canDelete && (
         <button
@@ -54,6 +70,29 @@ function CommentRow({ comment, canDelete, onReply, onDelete }: CommentRowProps) 
       )}
     </div>
   )
+}
+
+/** 댓글/답글 목록에서 특정 댓글(또는 답글)의 좋아요 상태만 불변적으로 교체한다. */
+function applyCommentLike(
+  comments: Comment[],
+  commentId: number,
+  isLiked: boolean,
+  likeCount: number
+): Comment[] {
+  return comments.map((c) => {
+    if (c.id === commentId) {
+      return { ...c, is_liked: isLiked, like_count: likeCount }
+    }
+    if (c.replies?.some((r) => r.id === commentId)) {
+      return {
+        ...c,
+        replies: c.replies.map((r) =>
+          r.id === commentId ? { ...r, is_liked: isLiked, like_count: likeCount } : r
+        ),
+      }
+    }
+    return c
+  })
 }
 
 export default function CommentSheet({ postId, open, onClose, onLoginRequired }: CommentSheetProps) {
@@ -179,6 +218,49 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
     },
   })
 
+  const toggleCommentLike = useMutation({
+    mutationFn: async (c: Comment) => {
+      const res = await client.post<{ data: { liked: boolean; like_count: number } }>(
+        `/feed/${postId}/comments/${c.id}/like`
+      )
+      return res.data.data
+    },
+    onMutate: async (c: Comment) => {
+      await qc.cancelQueries({ queryKey: ['comments', postId] })
+      const previous = qc.getQueryData<Comment[]>(['comments', postId])
+      qc.setQueryData<Comment[]>(['comments', postId], (old) =>
+        old
+          ? applyCommentLike(
+              old,
+              c.id,
+              !c.is_liked,
+              c.is_liked ? c.like_count - 1 : c.like_count + 1
+            )
+          : old
+      )
+      return { previous }
+    },
+    onError: (_err, _c, context) => {
+      if (context?.previous) {
+        qc.setQueryData(['comments', postId], context.previous)
+      }
+      setSubmitError(t('commentLikeError'))
+    },
+    onSuccess: (data, c) => {
+      qc.setQueryData<Comment[]>(['comments', postId], (old) =>
+        old ? applyCommentLike(old, c.id, data.liked, data.like_count) : old
+      )
+    },
+  })
+
+  function handleToggleLike(c: Comment) {
+    if (!token) {
+      onLoginRequired()
+      return
+    }
+    toggleCommentLike.mutate(c)
+  }
+
   useEffect(() => {
     if (open) inputRef.current?.focus()
   }, [open])
@@ -258,6 +340,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
                 canDelete={!!user && user.id === c.user_id}
                 onReply={startReply}
                 onDelete={(target) => deleteComment.mutate(target)}
+                onToggleLike={handleToggleLike}
               />
               {c.replies && c.replies.length > 0 && (
                 <div className="ml-8 space-y-2 border-l border-theme-border pl-3">
@@ -268,6 +351,7 @@ export default function CommentSheet({ postId, open, onClose, onLoginRequired }:
                       canDelete={!!user && user.id === r.user_id}
                       onReply={startReply}
                       onDelete={(target) => deleteComment.mutate(target)}
+                      onToggleLike={handleToggleLike}
                     />
                   ))}
                 </div>

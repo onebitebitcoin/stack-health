@@ -3,6 +3,9 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.models.comment_like import CommentLike
 
 
 def _reg(client: TestClient, email: str = "c@x.com", username: str = "cuser") -> tuple[str, dict]:
@@ -228,3 +231,127 @@ def test_delete_reply_keeps_parent(client: TestClient) -> None:
     assert len(comments) == 1
     assert comments[0]["id"] == parent_id
     assert comments[0]["replies"] == []
+
+
+# ---------- 댓글 좋아요 (comment likes) ----------
+
+
+def test_list_comments_default_like_fields(client: TestClient) -> None:
+    """좋아요를 아무도 누르지 않은 댓글은 like_count=0, is_liked=False."""
+    token, user = _reg(client, "cl0@x.com", "cliker0")
+    post_id = _make_post(client, token, user["id"])
+    _make_comment(client, token, post_id, "좋아요 없는 댓글입니다")
+    comments = client.get(f"/api/v1/feed/{post_id}/comments").json()["data"]["comments"]
+    assert comments[0]["like_count"] == 0
+    assert comments[0]["is_liked"] is False
+
+
+def test_toggle_comment_like_requires_auth(client: TestClient) -> None:
+    token, user = _reg(client, "cl1@x.com", "cliker1")
+    post_id = _make_post(client, token, user["id"])
+    comment_id = _make_comment(client, token, post_id, "좋아요 눌러볼 댓글입니다")
+    res = client.post(f"/api/v1/feed/{post_id}/comments/{comment_id}/like")
+    assert res.status_code in (401, 403)
+
+
+def test_toggle_comment_like_like_then_unlike(client: TestClient) -> None:
+    token, user = _reg(client, "cl2@x.com", "cliker2")
+    post_id = _make_post(client, token, user["id"])
+    comment_id = _make_comment(client, token, post_id, "좋아요 토글 테스트 댓글")
+
+    like_res = client.post(f"/api/v1/feed/{post_id}/comments/{comment_id}/like", headers=_auth(token))
+    assert like_res.status_code == 200
+    assert like_res.json()["data"] == {"liked": True, "like_count": 1}
+
+    unlike_res = client.post(f"/api/v1/feed/{post_id}/comments/{comment_id}/like", headers=_auth(token))
+    assert unlike_res.status_code == 200
+    assert unlike_res.json()["data"] == {"liked": False, "like_count": 0}
+
+
+def test_comment_like_reflected_in_list_for_liker_and_others(client: TestClient) -> None:
+    owner_token, owner = _reg(client, "cl3@x.com", "cliker3")
+    other_token, _ = _reg(client, "cl4@x.com", "cliker4")
+    post_id = _make_post(client, owner_token, owner["id"])
+    comment_id = _make_comment(client, owner_token, post_id, "여러 명이 볼 댓글입니다")
+
+    client.post(f"/api/v1/feed/{post_id}/comments/{comment_id}/like", headers=_auth(other_token))
+
+    as_liker = client.get(f"/api/v1/feed/{post_id}/comments", headers=_auth(other_token)).json()["data"]["comments"]
+    assert as_liker[0]["like_count"] == 1
+    assert as_liker[0]["is_liked"] is True
+
+    as_owner = client.get(f"/api/v1/feed/{post_id}/comments", headers=_auth(owner_token)).json()["data"]["comments"]
+    assert as_owner[0]["like_count"] == 1
+    assert as_owner[0]["is_liked"] is False
+
+    anon = client.get(f"/api/v1/feed/{post_id}/comments").json()["data"]["comments"]
+    assert anon[0]["like_count"] == 1
+    assert anon[0]["is_liked"] is False
+
+
+def test_reply_like_reflected_in_list(client: TestClient) -> None:
+    """답글도 좋아요/집계가 최상위 댓글과 동일하게 동작한다."""
+    token, user = _reg(client, "cl5@x.com", "cliker5")
+    post_id = _make_post(client, token, user["id"])
+    parent_id = _make_comment(client, token, post_id, "부모 댓글")
+    reply_id = _make_comment(client, token, post_id, "답글입니다", parent_id=parent_id)
+
+    like_res = client.post(f"/api/v1/feed/{post_id}/comments/{reply_id}/like", headers=_auth(token))
+    assert like_res.status_code == 200
+    assert like_res.json()["data"]["liked"] is True
+
+    comments = client.get(f"/api/v1/feed/{post_id}/comments", headers=_auth(token)).json()["data"]["comments"]
+    reply = comments[0]["replies"][0]
+    assert reply["like_count"] == 1
+    assert reply["is_liked"] is True
+
+
+def test_toggle_comment_like_nonexistent_comment_404(client: TestClient) -> None:
+    token, user = _reg(client, "cl6@x.com", "cliker6")
+    post_id = _make_post(client, token, user["id"])
+    res = client.post(f"/api/v1/feed/{post_id}/comments/99999/like", headers=_auth(token))
+    assert res.status_code == 404
+
+
+def test_toggle_comment_like_wrong_post_404(client: TestClient) -> None:
+    """댓글이 존재하더라도 URL의 post_id와 다른 게시물 소속이면 404."""
+    token, user = _reg(client, "cl7@x.com", "cliker7")
+    post_a = _make_post(client, token, user["id"])
+    post_b = _make_post(client, token, user["id"])
+    comment_id = _make_comment(client, token, post_a, "post_a 소속 댓글입니다")
+
+    res = client.post(f"/api/v1/feed/{post_b}/comments/{comment_id}/like", headers=_auth(token))
+    assert res.status_code == 404
+
+
+def test_toggle_comment_like_on_hidden_private_post_404(client: TestClient) -> None:
+    """댓글은 실재해도 게시물이 조회자에게 보이지 않으면(비공개) 404."""
+    owner_token, owner = _reg(client, "cl8@x.com", "cliker8")
+    other_token, _ = _reg(client, "cl9@x.com", "cliker9")
+    post_id = _make_post(client, owner_token, owner["id"])
+    comment_id = _make_comment(client, owner_token, post_id, "곧 비공개될 게시물의 댓글")
+
+    patch_res = client.patch(
+        f"/api/v1/videos/posts/{post_id}", json={"visibility": "private"}, headers=_auth(owner_token)
+    )
+    assert patch_res.status_code == 200
+
+    res = client.post(f"/api/v1/feed/{post_id}/comments/{comment_id}/like", headers=_auth(other_token))
+    assert res.status_code == 404
+
+
+def test_delete_comment_cleans_up_comment_likes(client: TestClient, db: Session) -> None:
+    """댓글을 삭제하면 그 댓글에 달린 comment_likes 행도 함께 지워져 FK 오류가 없어야 한다."""
+    owner_token, owner = _reg(client, "cl10@x.com", "cliker10")
+    liker_token, _ = _reg(client, "cl11@x.com", "cliker11")
+    post_id = _make_post(client, owner_token, owner["id"])
+    parent_id = _make_comment(client, owner_token, post_id, "삭제될 부모 댓글")
+    reply_id = _make_comment(client, owner_token, post_id, "삭제될 답글", parent_id=parent_id)
+
+    client.post(f"/api/v1/feed/{post_id}/comments/{parent_id}/like", headers=_auth(liker_token))
+    client.post(f"/api/v1/feed/{post_id}/comments/{reply_id}/like", headers=_auth(liker_token))
+    assert db.query(CommentLike).count() == 2
+
+    del_res = client.delete(f"/api/v1/feed/{post_id}/comments/{parent_id}", headers=_auth(owner_token))
+    assert del_res.status_code == 200
+    assert db.query(CommentLike).count() == 0

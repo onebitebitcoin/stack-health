@@ -15,6 +15,8 @@
   "commentLoginPlaceholder": "Log in to comment",
   "commentTooShort": "Comment must be at least 5 characters",
   "commentSubmitError": "Failed to post comment",
+  "commentLikeAria": "Like comment",
+  "commentLikeError": "Failed to update like",
   "replyButton": "Reply",
   "replyingTo": "Replying to @{{username}}",
   "replyPlaceholder": "Add a reply...",

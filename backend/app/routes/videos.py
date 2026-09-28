@@ -13,6 +13,7 @@ from app.config import settings as app_settings
 from app.database import get_db
 from app.models.challenge import ChallengeParticipation
 from app.models.comment import Comment
+from app.models.comment_like import CommentLike
 from app.models.notification import Notification
 from app.models.post import Post
 from app.models.post_like import PostLike
@@ -395,10 +396,10 @@ def get_post(
         raise api_error(404, E_USER_NOT_FOUND, "사용자를 찾을 수 없습니다")
     tags = _parse_tags(post.tags)
     comment_count = db.query(sqlfunc.count(Comment.id)).filter(Comment.post_id == post.id).scalar() or 0
-    post_schema = PostSchema(
     is_liked = False
     if current_user:
         is_liked = db.query(PostLike).filter(PostLike.post_id == post.id, PostLike.user_id == current_user.id).first() is not None
+    post_schema = PostSchema(
         id=post.id,
         video_id=post.video_id,
         user_id=post.user_id,
@@ -407,8 +408,8 @@ def get_post(
         like_count=post.like_count,
         view_count=post.view_count,
         comment_count=comment_count,
-        created_at=post.created_at,
         is_liked=is_liked,
+        created_at=post.created_at,
         cdn_url=video.cdn_url,
         username=user.username,
         workout_start=post.workout_start,
@@ -518,6 +519,8 @@ def delete_post(
     db.query(Notification).filter(Notification.post_id == post_id).delete()
     db.query(PostView).filter(PostView.post_id == post_id).delete()
     db.query(PostLike).filter(PostLike.post_id == post_id).delete()
+    comment_ids = db.query(Comment.id).filter(Comment.post_id == post_id)
+    db.query(CommentLike).filter(CommentLike.comment_id.in_(comment_ids)).delete(synchronize_session=False)
     db.query(Comment).filter(Comment.post_id == post_id).delete()
 
     if post.challenge_id:

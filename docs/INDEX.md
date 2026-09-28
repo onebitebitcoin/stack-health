@@ -58,7 +58,7 @@ bitcoiners/
 - **설정**: `app/config.py` (pydantic settings, `.env` 로드)
 - **DB**: `app/database.py` / 마이그레이션 `alembic/`
 - **routes/** (도메인별 API): `auth` `videos` `feed` `admin` `comments` `history` `challenges` `users` `survey` `notifications`
-- **models/** (SQLAlchemy): `user` `video` `post` `post_like` `post_view` `comment` `challenge` `admin_log` `lnauth_challenge` `app_links` `survey` `survey_response` `follow` `notification`
+- **models/** (SQLAlchemy): `user` `video` `post` `post_like` `post_view` `comment` `comment_like` `challenge` `admin_log` `lnauth_challenge` `app_links` `survey` `survey_response` `follow` `notification`
 - **schemas/** (Pydantic): `user` `video` `challenge` `survey`
 - **services/** (비즈니스 로직):
   - `auth.py` JWT / `google_oauth.py` Google 로그인 / `lnauth.py` Lightning 로그인(LNURL-auth)

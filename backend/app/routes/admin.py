@@ -11,6 +11,7 @@ from app.models.admin_log import AdminLog
 from app.models.app_links import AppLinks
 from app.models.challenge import Challenge, ChallengeParticipation
 from app.models.comment import Comment
+from app.models.comment_like import CommentLike
 from app.models.notification import Notification
 from app.models.post import Post
 from app.models.post_like import PostLike
@@ -137,6 +138,10 @@ def delete_video(
 
     post = db.query(Post).filter(Post.video_id == video_id).first()
     if post:
+        comment_id_subq = db.query(Comment.id).filter(Comment.post_id == post.id)
+        db.query(CommentLike).filter(CommentLike.comment_id.in_(comment_id_subq)).delete(
+            synchronize_session=False
+        )
         db.query(Notification).filter(Notification.post_id == post.id).delete()
         db.query(PostView).filter(PostView.post_id == post.id).delete()
         db.query(PostLike).filter(PostLike.post_id == post.id).delete()
@@ -288,16 +293,26 @@ def delete_user(
     ).delete(synchronize_session=False)
     if video_ids:
         post_id_subq = db.query(Post.id).filter(Post.video_id.in_(video_ids))
+        comment_id_subq = db.query(Comment.id).filter(Comment.post_id.in_(post_id_subq))
+        db.query(CommentLike).filter(CommentLike.comment_id.in_(comment_id_subq)).delete(
+            synchronize_session=False
+        )
         db.query(PostView).filter(PostView.post_id.in_(post_id_subq)).delete(synchronize_session=False)
         db.query(PostLike).filter(PostLike.post_id.in_(post_id_subq)).delete(synchronize_session=False)
         db.query(Comment).filter(Comment.post_id.in_(post_id_subq)).delete(synchronize_session=False)
         db.query(Post).filter(Post.video_id.in_(video_ids)).delete(synchronize_session=False)
         db.query(Video).filter(Video.user_id == user_id).delete(synchronize_session=False)
 
+    # 다른 사람의 게시물에 이 사용자가 남긴 댓글(과 그 댓글이 받은 좋아요) 정리
+    own_comment_id_subq = db.query(Comment.id).filter(Comment.user_id == user_id)
+    db.query(CommentLike).filter(CommentLike.comment_id.in_(own_comment_id_subq)).delete(
+        synchronize_session=False
+    )
     db.query(Comment).filter(Comment.user_id == user_id).delete(synchronize_session=False)
     db.query(ChallengeParticipation).filter(ChallengeParticipation.user_id == user_id).delete(synchronize_session=False)
-    # 타 게시물에 누른 좋아요/조회 행 삭제 (FK: post_like.user_id, post_view.user_id)
+    # 타 게시물/댓글에 누른 좋아요/조회 행 삭제 (FK: post_like.user_id, post_view.user_id, comment_like.user_id)
     db.query(PostLike).filter(PostLike.user_id == user_id).delete(synchronize_session=False)
+    db.query(CommentLike).filter(CommentLike.user_id == user_id).delete(synchronize_session=False)
     db.query(PostView).filter(PostView.user_id == user_id).delete(synchronize_session=False)
     # 생성한 챌린지 creator_id NULL 처리 (챌린지 자체는 보존)
     db.query(Challenge).filter(Challenge.creator_id == user_id).update(

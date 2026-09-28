@@ -2,10 +2,13 @@ from datetime import timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.comment import Comment
+from app.models.comment_like import CommentLike
 from app.models.notification import Notification
 from app.models.post import Post
 from app.models.user import User
@@ -50,7 +53,7 @@ class CreateCommentRequest(BaseModel):
     parent_id: int | None = None
 
 
-def _serialize_comment(c: Comment) -> dict:
+def _serialize_comment(c: Comment, *, like_count: int = 0, is_liked: bool = False) -> dict:
     return {
         "id": c.id,
         "post_id": c.post_id,
@@ -61,7 +64,18 @@ def _serialize_comment(c: Comment) -> dict:
         "profile_color": (c.user.app_settings or {}).get("profile_color") if c.user else None,
         "content": c.content,
         "created_at": c.created_at.isoformat(),
+        "like_count": like_count,
+        "is_liked": is_liked,
     }
+
+
+def _comment_like_count(db: Session, comment_id: int) -> int:
+    return (
+        db.query(func.count(CommentLike.id))
+        .filter(CommentLike.comment_id == comment_id)
+        .scalar()
+        or 0
+    )
 
 
 @router.get("/{post_id}/comments")
@@ -79,11 +93,37 @@ def list_comments(
         .order_by(Comment.created_at.asc())
         .all()
     )
+    # 좋아요 수·조회자의 좋아요 여부를 댓글 수만큼 쿼리하지 않도록 게시물 단위로
+    # 한 번씩만 집계한다 (N+1 방지).
+    comment_ids = [c.id for c in comments]
+    like_counts: dict[int, int] = {}
+    liked_comment_ids: set[int] = set()
+    if comment_ids:
+        like_counts = dict(
+            db.query(CommentLike.comment_id, func.count(CommentLike.id))
+            .filter(CommentLike.comment_id.in_(comment_ids))
+            .group_by(CommentLike.comment_id)
+            .all()
+        )
+        if current_user is not None:
+            liked_comment_ids = {
+                row[0]
+                for row in db.query(CommentLike.comment_id)
+                .filter(
+                    CommentLike.comment_id.in_(comment_ids),
+                    CommentLike.user_id == current_user.id,
+                )
+                .all()
+            }
     # 최상위 댓글은 top-level, 답글은 부모의 replies 배열에 평면적으로 묶는다 (1-depth).
     parents: list[dict] = []
     replies_by_parent: dict[int, list[dict]] = {}
     for c in comments:
-        item = _serialize_comment(c)
+        item = _serialize_comment(
+            c,
+            like_count=like_counts.get(c.id, 0),
+            is_liked=c.id in liked_comment_ids,
+        )
         if c.parent_id is None:
             item["replies"] = []
             parents.append(item)
@@ -142,6 +182,44 @@ def create_comment(
     return {"data": {"comment": _serialize_comment(comment)}}
 
 
+@router.post("/{post_id}/comments/{comment_id}/like")
+def toggle_comment_like(
+    post_id: int,
+    comment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if post is None or not is_visible_to(post, current_user):
+        raise api_error(404, E_POST_NOT_FOUND, "게시물을 찾을 수 없습니다")
+    comment = (
+        db.query(Comment)
+        .filter(Comment.id == comment_id, Comment.post_id == post_id)
+        .first()
+    )
+    if comment is None:
+        raise api_error(404, E_COMMENT_NOT_FOUND, "댓글을 찾을 수 없습니다")
+
+    existing_like = (
+        db.query(CommentLike)
+        .filter(CommentLike.user_id == current_user.id, CommentLike.comment_id == comment_id)
+        .first()
+    )
+
+    if existing_like:
+        db.delete(existing_like)
+        db.commit()
+        return {"data": {"liked": False, "like_count": _comment_like_count(db, comment_id)}}
+
+    try:
+        db.add(CommentLike(user_id=current_user.id, comment_id=comment_id))
+        db.commit()
+    except IntegrityError:
+        # 동시에 두 번 눌러 유니크 제약에 걸린 경우 — 이미 좋아요 상태이므로 그대로 반환한다.
+        db.rollback()
+    return {"data": {"liked": True, "like_count": _comment_like_count(db, comment_id)}}
+
+
 @router.delete("/{post_id}/comments/{comment_id}")
 def delete_comment(
     post_id: int,
@@ -161,6 +239,11 @@ def delete_comment(
     if comment.parent_id is None:
         children = db.query(Comment).filter(Comment.parent_id == comment.id).all()
         targets.extend(children)
+    target_ids = [c.id for c in targets]
+    # comment_likes FK 정리 (PostgreSQL FK 제약 위반 방지) — notifications 와 동일한 이유
+    db.query(CommentLike).filter(CommentLike.comment_id.in_(target_ids)).delete(
+        synchronize_session=False
+    )
     for c in targets:
         # notifications FK 정리 (PostgreSQL FK 제약 위반 방지)
         db.query(Notification).filter(Notification.comment_id == c.id).delete()
