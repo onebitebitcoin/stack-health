@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ImagePlus, Film, X, GripVertical, Loader2, Wand2, PenLine, Stamp, Ban, ChevronDown, Check } from 'lucide-react'
+import { ImagePlus, Film, X, GripVertical, Loader2, Wand2, PenLine, Stamp, Palette, Ban, ChevronDown, Check } from 'lucide-react'
 import client from '../../api/client'
 import { VIDEO_FILTER_OPTIONS, type VideoFilterValue } from '../../utils/videoFilter'
 import {
@@ -119,6 +119,7 @@ const FILTER_ICONS: Record<string, ReactNode> = {
   cartoon: <Wand2 size={16} className="text-accent" />,
   sketch: <PenLine size={16} className="text-accent" />,
   orange_cartoon: <Stamp size={16} className="text-accent" />,
+  monet: <Palette size={16} className="text-accent" />,
 }
 
 interface FilterDropdownOption {
@@ -126,6 +127,24 @@ interface FilterDropdownOption {
   key: string
   title: string
   hint: string
+  /** 제목 옆 배지 문구(번역된 값). 없으면 배지를 그리지 않는다. */
+  badge?: string
+}
+
+function FilterOptionText({ option }: { option: FilterDropdownOption }) {
+  return (
+    <div className="flex-1">
+      <p className="flex flex-wrap items-center gap-2 text-body font-semibold text-theme-primary">
+        {option.title}
+        {option.badge && (
+          <span className="rounded-pill bg-accent/10 px-2 py-1 text-label font-medium text-accent">
+            {option.badge}
+          </span>
+        )}
+      </p>
+      <p className="text-label text-theme-muted mt-1 leading-relaxed">{option.hint}</p>
+    </div>
+  )
 }
 
 /** 효과 선택 드롭다운 — 닫힌 상태는 선택된 효과 하나만, 열면 아이콘+제목+힌트 목록.
@@ -169,10 +188,7 @@ function FilterDropdown({
         className="flex w-full items-center gap-3 rounded-card border border-theme-border bg-theme-surface2 p-3 text-left"
       >
         {FILTER_ICONS[selected.key]}
-        <div className="flex-1">
-          <p className="text-body font-semibold text-theme-primary">{selected.title}</p>
-          <p className="text-label text-theme-muted mt-1 leading-relaxed">{selected.hint}</p>
-        </div>
+        <FilterOptionText option={selected} />
         <ChevronDown
           size={16}
           className={`shrink-0 text-theme-muted transition-transform ${open ? 'rotate-180' : ''}`}
@@ -200,10 +216,7 @@ function FilterDropdown({
                 }`}
               >
                 {FILTER_ICONS[o.key]}
-                <div className="flex-1">
-                  <p className="text-body font-semibold text-theme-primary">{o.title}</p>
-                  <p className="text-label text-theme-muted mt-1 leading-relaxed">{o.hint}</p>
-                </div>
+                <FilterOptionText option={o} />
                 {isSel && <Check size={15} className="shrink-0 text-accent" />}
               </button>
             )
@@ -342,6 +355,7 @@ export default function StepMedia({
               key: opt.key,
               title: t(`filter.options.${opt.key}.title`),
               hint: t(`filter.options.${opt.key}.hint`),
+              badge: opt.badge && t(`filter.badges.${opt.badge}`),
             }))}
           />
 

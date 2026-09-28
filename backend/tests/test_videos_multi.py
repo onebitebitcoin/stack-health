@@ -160,7 +160,7 @@ def test_upload_multi_retired_filter_rejected(client: TestClient, video_filter: 
     assert res.status_code == 400
 
 
-@pytest.mark.parametrize("video_filter", ["cartoon", "sketch", "orange_cartoon"])
+@pytest.mark.parametrize("video_filter", ["cartoon", "sketch", "orange_cartoon", "monet"])
 @patch("app.routes.videos.reserve_job_id", return_value="multi-filter-1")
 @patch("app.routes.videos._r2_upload_and_enqueue_multi")
 def test_upload_multi_filter_accepted(mock_bg, mock_reserve, client: TestClient, video_filter: str) -> None:
@@ -183,7 +183,7 @@ class TestFilterPreview:
         )
         assert res.status_code in (401, 403)
 
-    @pytest.mark.parametrize("video_filter", ["cartoon", "sketch", "orange_cartoon"])
+    @pytest.mark.parametrize("video_filter", ["cartoon", "sketch", "orange_cartoon", "monet"])
     def test_returns_filtered_jpeg(self, client: TestClient, video_filter: str) -> None:
         import cv2
         import numpy as np

@@ -145,7 +145,14 @@
       "orange_cartoon": {
         "title": "Orange Cartoon",
         "hint": "Turns your video into a two-color block print in orange and ink."
+      },
+      "monet": {
+        "title": "Paint filter",
+        "hint": "Turns your whole video into a painting. Brushstrokes show, light softly glows, shadows turn bluish and sunlight turns warm."
       }
+    },
+    "badges": {
+      "natureRecommended": "Best for nature"
     }
   },
   "visibility": {

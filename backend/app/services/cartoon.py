@@ -181,13 +181,13 @@ def _worker_init() -> None:
     cv2.setNumThreads(1)
 
 
-VIDEO_FILTERS = ("cartoon", "sketch", "orange_cartoon")
+VIDEO_FILTERS = ("cartoon", "sketch", "orange_cartoon", "monet")
 
 
 def frame_renderer(video_filter: str, tone_range: tuple[float, float] | None = None):
     """필터 이름 → 프레임 렌더러 `(frame, gamma) -> frame`.
 
-    sketch·orange_cartoon 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를
+    sketch·orange_cartoon·monet 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를
     피하려고 호출 시점에 가져온다. `tone_range`는 orange_cartoon 전용 인자다 — 영상 전체
     샘플로 미리 계산한 밝기 기준(lo/hi, `orange_cartoon.sample_tone_range`)을 클로저로
     고정해 넘긴다. 다른 필터는 이 인자를 무시한다. 자세한 설계 이유는
@@ -206,6 +206,10 @@ def frame_renderer(video_filter: str, tone_range: tuple[float, float] | None = N
             return orange_cartoon_frame(frame, gamma, tone_range=tone_range)
 
         return _render
+    if video_filter == "monet":
+        from app.services.monet import monet_frame
+
+        return monet_frame
     raise ValueError(f"unknown video filter: {video_filter}")
 
 
@@ -386,7 +390,7 @@ def _sample_video_tone_range(input_path: str, frame_count: int) -> tuple[float, 
 
 
 def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
-    """영상 전체에 `video_filter`(cartoon·sketch·orange_cartoon) 렌더러를 적용한다. 원본
+    """영상 전체에 `video_filter`(cartoon·sketch·orange_cartoon·monet) 렌더러를 적용한다. 원본
     오디오 스트림은 그대로 보존(-c:a copy).
 
     프레임 수가 `_MIN_SEGMENT_FRAMES` 이상이면 영상을 `_worker_pool_size()`개 구간으로 나눠

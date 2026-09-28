@@ -81,17 +81,27 @@ describe('StepMedia', () => {
     expect(screen.queryByRole('listbox')).toBeNull()
   })
 
-  it('드롭다운을 열면 효과 옵션 2개가 보인다', async () => {
+  it('드롭다운을 열면 효과 옵션 5개가 보인다', async () => {
     const items = [makeItem('image', 'a')]
     render(<StepMedia {...buildProps({ items, estimatedSeconds: 3 })} />)
     await userEvent.click(screen.getByRole('button', { name: '영상 효과' }))
-    expect(screen.getAllByRole('option')).toHaveLength(4)
+    expect(screen.getAllByRole('option')).toHaveLength(5)
+  })
+
+  it('물감 필터 옵션에만 자연 배경 추천 배지가 붙는다', async () => {
+    const items = [makeItem('image', 'a')]
+    render(<StepMedia {...buildProps({ items, estimatedSeconds: 3 })} />)
+    await userEvent.click(screen.getByRole('button', { name: '영상 효과' }))
+    const badges = screen.getAllByText('자연 배경 추천')
+    expect(badges).toHaveLength(1)
+    expect(screen.getByRole('option', { name: '물감 필터' })).toContainElement(badges[0])
   })
 
   it.each([
     ['카툰 필터', 'cartoon'],
     ['크로키 필터', 'sketch'],
     ['오렌지 카툰', 'orange_cartoon'],
+    ['물감 필터', 'monet'],
   ])('%s 옵션 선택 시 setVideoFilter(%s) 호출', async (label, value) => {
     const setVideoFilter = vi.fn()
     const items = [makeItem('image', 'a')]
@@ -118,7 +128,7 @@ describe('StepMedia', () => {
     expect(screen.getByRole('option', { name: '효과 없음' })).toHaveAttribute('aria-selected', 'false')
   })
 
-  it.each(['cartoon', 'sketch', 'orange_cartoon'] as const)(
+  it.each(['cartoon', 'sketch', 'orange_cartoon', 'monet'] as const)(
     '%s 선택이면 filter-preview 요청을 보낸다', async (videoFilter) => {
       const items = [makeItem('image', 'a')]
       render(<StepMedia {...buildProps({ items, estimatedSeconds: 3, videoFilter })} />)
