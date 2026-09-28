@@ -28,7 +28,8 @@ from app.services.sketch import (
     _REF_SHORT_SIDE,
     _line_mask,
     _paper_texture,
-    _smoothed_gray,
+    _reference_gray,
+    _solid,
 )
 
 PAPER_BGR = np.array([226, 236, 242], np.float32) / 255.0  # 미색 종이
@@ -57,7 +58,7 @@ def _tone(frame: np.ndarray, scale: float, tone_range: tuple[float, float] | Non
     영상 변환 시에는 `cartoon.filter_video`가 미리 계산한 값을 넘겨 구간마다 달라지지
     않게 한다.
     """
-    g = _smoothed_gray(frame, 1.0, scale)
+    g = _reference_gray(frame, 1.0, scale)
     if tone_range is None:
         lo, hi = np.percentile(g, (_TONE_LO_PCT, _TONE_HI_PCT))
     else:
@@ -81,13 +82,23 @@ def _ink_wear(h: int, w: int, scale: float) -> np.ndarray:
     return np.clip(1.0 - 0.18 * (n > 1.3) - 0.10 * (streak > 1.5), 0, 1).astype(np.float32)
 
 
-def _compose(ink_masks: list[np.ndarray], colors: list[np.ndarray], h: int, w: int) -> np.ndarray:
-    """종이 결 바탕에 판(오렌지 → 먹) 순서로 겹쳐 찍는다."""
+@lru_cache(maxsize=4)
+def _paper_background(h: int, w: int) -> np.ndarray:
+    """판을 찍기 전의 종이(결이 섞인 미색) uint8 이미지. 해상도마다 한 번만 만든다."""
     out = _paper_texture(h, w)[..., None] * PAPER_BGR
+    return np.clip(out * 255.0 + 0.5, 0, 255).astype(np.uint8)
+
+
+def _compose(ink_masks: list[np.ndarray], colors: list[np.ndarray], h: int, w: int) -> np.ndarray:
+    """종이 결 바탕에 판(오렌지 → 먹) 순서로 겹쳐 찍는다.
+
+    원본 해상도 전체를 float32 3채널로 섞으면 1080p 기준 판 두 장에 프레임당 120ms가량
+    든다. 바탕과 잉크판을 uint8로 캐시해 두고 `cv2.blendLinear`로 판마다 한 번씩 섞는다.
+    """
+    out = _paper_background(h, w)
     for mask, color in zip(ink_masks, colors):
-        m = mask[..., None]
-        out = out * (1 - m) + m * color
-    return np.clip(out * 255.0, 0, 255).astype(np.uint8)
+        out = cv2.blendLinear(out, _solid(h, w, tuple(color.tolist())), 1.0 - mask, mask)
+    return out
 
 
 def sample_tone_range(frames) -> tuple[float, float]:
@@ -100,7 +111,7 @@ def sample_tone_range(frames) -> tuple[float, float]:
     for frame in frames:
         h, w = frame.shape[:2]
         scale = max(1.0, min(h, w) / _REF_SHORT_SIDE)
-        grays.append(_smoothed_gray(frame, 1.0, scale).ravel())
+        grays.append(_reference_gray(frame, 1.0, scale).ravel())
     pooled = np.concatenate(grays)
     lo, hi = np.percentile(pooled, (_TONE_LO_PCT, _TONE_HI_PCT))
     return float(lo), float(hi)
@@ -118,15 +129,19 @@ def orange_cartoon_frame(
     h, w = frame.shape[:2]
     scale = max(1.0, min(h, w) / _REF_SHORT_SIDE)
 
-    g = _tone(frame, scale, tone_range)
-    g = cv2.GaussianBlur(g, (0, 0), _TONE_BLUR_SIGMA * scale)
+    # 톤 블러와 윤곽선 추출은 기준 해상도(짧은 변 540px)에서 하고 결과만 원본 크기로 키운다.
+    # 원본 해상도에서 하면 1080p 기준 프레임당 100ms가량 더 들지만 모습은 사실상 같다
+    # (`sketch._reference_gray` docstring 참고).
+    g = cv2.GaussianBlur(_tone(frame, scale, tone_range), (0, 0), _TONE_BLUR_SIGMA)
+    lines = _line_mask(g, 1.0)
+    if g.shape != (h, w):
+        g = cv2.resize(g, (w, h), interpolation=cv2.INTER_LINEAR)
+        lines = cv2.resize(lines, (w, h), interpolation=cv2.INTER_LINEAR)
 
     wear = _ink_wear(h, w, scale)
     orange = (g < _ORANGE_THRESHOLD).astype(np.float32)
     black = (g < _BLACK_THRESHOLD).astype(np.float32)
-    edges = cv2.dilate(
-        (_line_mask(g, scale) > 0.5).astype(np.uint8), _EDGE_DILATE_KERNEL
-    ).astype(np.float32)
+    edges = cv2.dilate((lines > 0.5).astype(np.uint8), _EDGE_DILATE_KERNEL).astype(np.float32)
     black = np.maximum(black, edges)
 
     # 먹판을 오렌지판 대비 살짝 어긋나게 찍는다 — 손으로 맞춘 2도 인쇄 느낌.

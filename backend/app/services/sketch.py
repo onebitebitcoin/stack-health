@@ -55,15 +55,27 @@ def _paper_texture(h: int, w: int) -> np.ndarray:
 def _smoothed_gray(frame: np.ndarray, gamma: float, scale: float) -> np.ndarray:
     """감마·CLAHE 보정 후 기준 해상도에서 bilateral로 잔질감을 지운 휘도(0~1, 원본 해상도)."""
     h, w = frame.shape[:2]
-    enh = _enhance(frame, gamma, clip=1.6)
-    if scale > 1.0:
-        enh = cv2.resize(enh, (round(w / scale), round(h / scale)), interpolation=cv2.INTER_AREA)
-    for _ in range(_BILATERAL_PASSES):
-        enh = cv2.bilateralFilter(enh, 9, 60, 7)
-    gray = cv2.cvtColor(enh, cv2.COLOR_BGR2GRAY)
+    gray = _reference_gray(frame, gamma, scale)
     if gray.shape != (h, w):
         gray = cv2.resize(gray, (w, h), interpolation=cv2.INTER_LINEAR)
-    return gray.astype(np.float32) / 255.0
+    return gray
+
+
+def _reference_gray(frame: np.ndarray, gamma: float, scale: float) -> np.ndarray:
+    """`_smoothed_gray`와 같은 휘도를 기준 해상도(짧은 변 540px) 그대로 돌려준다.
+
+    원본 해상도로 키워도 담긴 정보는 기준 해상도 그대로다. 그래서 이어지는 블러·선 추출을
+    이 크기에서 하고 결과 마스크만 키우면, 같은 모습을 픽셀 1/4 비용으로 얻는다.
+    """
+    h, w = frame.shape[:2]
+    # 줄인 뒤에 감마·CLAHE를 건다. 뒤따르는 bilateral이 어차피 기준 해상도에서 돌기 때문에
+    # 결과는 사실상 같고, 1080p 기준 이 단계 비용이 약 1/4로 준다.
+    if scale > 1.0:
+        frame = cv2.resize(frame, (round(w / scale), round(h / scale)), interpolation=cv2.INTER_AREA)
+    enh = _enhance(frame, gamma, clip=1.6)
+    for _ in range(_BILATERAL_PASSES):
+        enh = cv2.bilateralFilter(enh, 9, 60, 7)
+    return cv2.cvtColor(enh, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
 
 
 def _line_mask(gray: np.ndarray, scale: float) -> np.ndarray:
@@ -86,6 +98,23 @@ def sketch_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     h, w = frame.shape[:2]
     scale = max(1.0, min(h, w) / _REF_SHORT_SIDE)
     ink = _line_mask(_smoothed_gray(frame, gamma, scale), scale)
-    tone = ((1.0 - ink) * _paper_texture(h, w))[..., None]
+    return cv2.blendLinear(_paper_background(h, w), _solid(h, w, tuple(INK_BGR.tolist())), 1.0 - ink, ink)
+
+
+@lru_cache(maxsize=4)
+def _paper_background(h: int, w: int) -> np.ndarray:
+    """선이 없는 자리의 색(종이 결이 섞인 미색). 해상도마다 한 번만 만든다.
+
+    프레임마다 원본 해상도 전체를 float32 3채널로 합성하면 1080p 기준 프레임당 70ms가량
+    든다. 바탕을 uint8로 미리 만들어 두고 `cv2.blendLinear`로 선만 섞으면 한 자릿수 ms다.
+    """
+    tone = _paper_texture(h, w)[..., None]
     out = tone * PAPER_BGR + (1.0 - tone) * INK_BGR
-    return np.clip(out * 255.0, 0, 255).astype(np.uint8)
+    return np.clip(out * 255.0 + 0.5, 0, 255).astype(np.uint8)
+
+
+@lru_cache(maxsize=8)
+def _solid(h: int, w: int, bgr: tuple[float, float, float]) -> np.ndarray:
+    """한 가지 색(0~1 BGR 튜플)으로 채운 uint8 이미지(잉크판). 해상도·색마다 한 번만 만든다."""
+    color = np.clip(np.asarray(bgr, np.float32) * 255.0 + 0.5, 0, 255).astype(np.uint8)
+    return np.broadcast_to(color, (h, w, 3)).copy()
