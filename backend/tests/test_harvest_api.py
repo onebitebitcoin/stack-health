@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,8 @@ from app.models.post import Post
 from app.models.user import User
 from app.models.video import Video
 from app.services import harvest as harvest_service
+from app.services.timeframe import now_local
+harvest = harvest_service
 
 ADMIN = "/api/v1/admin/harvest"
 
@@ -27,6 +30,12 @@ def _register(client: TestClient, name: str) -> tuple[str, dict]:
 
 def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def _frozen_today(monkeypatch):
+    """지급은 종료일 다음 날부터 가능하므로 기준일을 2026-10-01로 고정한다."""
+    monkeypatch.setattr(harvest, "today_kst", lambda: date(2026, 10, 1))
 
 
 def _admin(client: TestClient, db: Session) -> dict:
@@ -236,13 +245,13 @@ def test_delete_round_removes_allocations(client: TestClient, db: Session) -> No
     rid = rnd.id
     db.expire_all()
 
-    res = client.delete(f"{ADMIN}/rounds/{rid}", headers=h)
+    res = client.delete(f"{ADMIN}/rounds/{rid}?force=true", headers=h)
 
     assert res.status_code == 200
     assert db.query(HarvestRound).count() == 0
     assert db.query(HarvestAllocation).count() == 0
     assert db.query(AdminLog).filter_by(action="harvest_round_delete").count() == 1
-    assert client.delete(f"{ADMIN}/rounds/{rid}", headers=h).status_code == 404
+    assert client.delete(f"{ADMIN}/rounds/{rid}?force=true", headers=h).status_code == 404
 
 
 def test_delete_open_round(client: TestClient, db: Session) -> None:
@@ -306,7 +315,7 @@ def test_user_harvest_empty_month(client: TestClient) -> None:
 def test_user_harvest_default_month_is_current_kst(client: TestClient) -> None:
     token, _ = _register(client, "alice")
     data = client.get("/api/v1/users/me/harvest", headers=_auth(token)).json()["data"]
-    now = datetime.now(harvest_service.KST)
+    now = now_local()
     assert data["month"] == f"{now.year:04d}-{now.month:02d}"
 
 
@@ -336,3 +345,60 @@ def test_user_harvest_months_list(client: TestClient, db: Session) -> None:
 def test_user_harvest_months_empty(client: TestClient) -> None:
     token, _ = _register(client, "alice")
     assert client.get("/api/v1/users/me/harvest/months", headers=_auth(token)).json()["data"] == []
+
+
+# ── 리뷰 수정 ─────────────────────────────────────────────────────────
+
+def test_pay_before_period_end_409(client: TestClient, db: Session, monkeypatch) -> None:
+    h = _admin(client, db)
+    rnd = _make_round(db, date(2026, 9, 14), date(2026, 9, 30))
+    monkeypatch.setattr(harvest, "today_kst", lambda: date(2026, 9, 30))  # 종료일 당일
+    res = client.post(f"{ADMIN}/rounds/{rnd.id}/pay", headers=h)
+    assert res.status_code == 409
+    assert res.json()["detail"]["code"] == "E_HARVEST_ROUND_NOT_ENDED"
+    db.expire_all()
+    assert db.get(HarvestRound, rnd.id).status == "open"
+    assert db.query(AdminLog).filter_by(action="harvest_round_pay").count() == 0
+    monkeypatch.setattr(harvest, "today_kst", lambda: date(2026, 10, 1))  # 다음 날
+    assert client.post(f"{ADMIN}/rounds/{rnd.id}/pay", headers=h).status_code == 200
+
+
+def test_delete_paid_requires_force(client: TestClient, db: Session) -> None:
+    h = _admin(client, db)
+    rnd = _make_round(db, date(2026, 9, 1), date(2026, 9, 13))
+    client.post(f"{ADMIN}/rounds/{rnd.id}/pay", headers=h)
+    res = client.delete(f"{ADMIN}/rounds/{rnd.id}", headers=h)
+    assert res.status_code == 409
+    assert res.json()["detail"]["code"] == "E_HARVEST_ROUND_PAID_DELETE"
+    assert db.query(HarvestRound).count() == 1
+    assert client.delete(f"{ADMIN}/rounds/{rnd.id}?force=true", headers=h).status_code == 200
+    log = db.query(AdminLog).filter_by(action="harvest_round_delete").one()
+    assert "force=True" in log.detail
+
+
+def test_seed_bounds_422(client: TestClient, db: Session) -> None:
+    h = _admin(client, db)
+    for seed in (-1, 2**31):
+        res = client.post(
+            f"{ADMIN}/rounds", json={"start_date": "2026-09-01", "end_date": "2026-09-13", "seed": seed}, headers=h
+        )
+        assert res.status_code == 422
+    res = client.post(
+        f"{ADMIN}/rounds", json={"start_date": "2026-09-01", "end_date": "2026-09-13", "seed": 2**31 - 1}, headers=h
+    )
+    assert res.status_code == 201
+
+
+def test_pay_integrity_error_maps_to_409(client: TestClient, db: Session, monkeypatch) -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    h = _admin(client, db)
+    rnd = _make_round(db, date(2026, 9, 1), date(2026, 9, 13))
+
+    def boom(*a, **k):
+        raise IntegrityError("x", {}, Exception("dup"))
+
+    monkeypatch.setattr(harvest, "finalize_round", boom)
+    res = client.post(f"{ADMIN}/rounds/{rnd.id}/pay", headers=h)
+    assert res.status_code == 409
+    assert res.json()["detail"]["code"] == "E_HARVEST_ALREADY_PAID"

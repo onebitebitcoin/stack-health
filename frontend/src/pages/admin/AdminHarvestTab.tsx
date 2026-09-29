@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, Sprout, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Sprout, XCircle } from 'lucide-react'
 import { getApiErrorMessage } from '../../api/errors'
 import {
   createRound,
@@ -17,7 +17,9 @@ import {
 } from '../../api/harvestAdmin'
 
 type ConfirmKind = 'pay' | 'delete'
-type Notice = { kind: 'success' | 'error'; message: string }
+// scope: 상세 패널의 확인 영역 옆에 보여줄지(detail), 화면 상단에 보여줄지(top)
+type Notice = { kind: 'success' | 'error'; message: string; scope: 'top' | 'detail' }
+const MONTH_RE = /^\d{4}-\d{2}$/
 
 const CADENCES: HarvestCadence[] = ['weekly', 'biweekly', 'monthly']
 
@@ -27,6 +29,18 @@ function currentKstMonth(): string {
   const year = parts.find((p) => p.type === 'year')?.value
   const month = parts.find((p) => p.type === 'month')?.value
   return `${year}-${month}`
+}
+
+// 현재 한국 시간(Asia/Seoul) 기준 YYYY-MM-DD
+function todayKst(): string {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+}
+
+// 'YYYY-MM-DD' 의 다음 날 'YYYY-MM-DD'
+function nextDay(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
 }
 
 // 'YYYY-MM-DD' -> 'M/D'
@@ -70,7 +84,7 @@ export default function AdminHarvestTab() {
   const roundsQuery = useQuery({
     queryKey: ['admin-harvest-rounds', month],
     queryFn: () => fetchRounds(month),
-    enabled: /^\d{4}-\d{2}$/.test(month),
+    enabled: MONTH_RE.test(month),
   })
 
   const detailQuery = useQuery({
@@ -84,14 +98,14 @@ export default function AdminHarvestTab() {
     qc.invalidateQueries({ queryKey: ['admin-harvest-detail'] })
   }
 
-  function onSuccess(message: string) {
-    setNotice({ kind: 'success', message })
+  function onSuccess(message: string, scope: Notice['scope'] = 'detail') {
+    setNotice({ kind: 'success', message, scope })
     setConfirm(null)
     refresh()
   }
 
   function onError(err: unknown) {
-    setNotice({ kind: 'error', message: getApiErrorMessage(err, t('harvestErrorFallback')) })
+    setNotice({ kind: 'error', message: getApiErrorMessage(err, t('harvestErrorFallback')), scope: selectedId !== null ? 'detail' : 'top' })
     setConfirm(null)
   }
 
@@ -100,7 +114,7 @@ export default function AdminHarvestTab() {
       const [year, mon] = month.split('-').map(Number)
       return generateRounds({ year, month: mon, cadence })
     },
-    onSuccess: (rounds) => onSuccess(t('harvestGenerateSuccess', { count: rounds.length })),
+    onSuccess: (rounds) => onSuccess(t('harvestGenerateSuccess', { count: rounds.length }), 'top'),
     onError,
   })
 
@@ -109,7 +123,7 @@ export default function AdminHarvestTab() {
     onSuccess: () => {
       setStartDate('')
       setEndDate('')
-      onSuccess(t('harvestCreateSuccess'))
+      onSuccess(t('harvestCreateSuccess'), 'top')
     },
     onError,
   })
@@ -121,10 +135,10 @@ export default function AdminHarvestTab() {
   })
 
   const remove = useMutation({
-    mutationFn: (id: number) => deleteRound(id),
+    mutationFn: ({ id, force }: { id: number; force: boolean }) => deleteRound(id, force),
     onSuccess: () => {
       setSelectedId(null)
-      onSuccess(t('harvestDeleteSuccess'))
+      onSuccess(t('harvestDeleteSuccess'), 'top')
     },
     onError,
   })
@@ -149,7 +163,25 @@ export default function AdminHarvestTab() {
   function handleConfirm() {
     if (selectedId === null || busy) return
     if (confirm === 'pay') pay.mutate(selectedId)
-    else if (confirm === 'delete') remove.mutate(selectedId)
+    else if (confirm === 'delete') remove.mutate({ id: selectedId, force: detail?.round.status === 'paid' })
+  }
+
+  const canGenerate = MONTH_RE.test(month)
+  // 기간이 끝난 다음 날(KST)부터 지급 완료 처리할 수 있다
+  const payableFrom = detail ? nextDay(detail.round.end_date) : ''
+  const payBlocked = detail?.round.status === 'open' && todayKst() < payableFrom
+
+  function renderNotice(scope: Notice['scope']) {
+    if (!notice || notice.scope !== scope) return null
+    return (
+      <div
+        role={notice.kind === 'error' ? 'alert' : 'status'}
+        className={`flex items-start gap-2 rounded-card px-3 py-2 text-label ${notice.kind === 'success' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}
+      >
+        {notice.kind === 'success' ? <CheckCircle2 size={14} className="mt-1 shrink-0" /> : <XCircle size={14} className="mt-1 shrink-0" />}
+        <span>{notice.message}</span>
+      </div>
+    )
   }
 
   const totalOranges = detail
@@ -175,15 +207,7 @@ export default function AdminHarvestTab() {
           />
         </div>
 
-        {notice && (
-          <div
-            role={notice.kind === 'error' ? 'alert' : 'status'}
-            className={`flex items-start gap-2 rounded-card px-3 py-2 text-label ${notice.kind === 'success' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}
-          >
-            {notice.kind === 'success' ? <CheckCircle2 size={14} className="mt-1 shrink-0" /> : <XCircle size={14} className="mt-1 shrink-0" />}
-            <span>{notice.message}</span>
-          </div>
-        )}
+        {renderNotice('top')}
 
         {roundsQuery.isLoading && <p className="text-label text-theme-muted">{t('loading')}</p>}
         {roundsQuery.isError && <p className="text-label text-danger">{getApiErrorMessage(roundsQuery.error, t('loadFailed'))}</p>}
@@ -234,7 +258,7 @@ export default function AdminHarvestTab() {
         <button
           type="button"
           onClick={() => { setNotice(null); generate.mutate() }}
-          disabled={busy}
+          disabled={busy || !canGenerate}
           className="w-full rounded-card bg-accent py-3 text-body font-semibold text-accent-fg disabled:opacity-50"
         >
           {generate.isPending ? t('harvestGenerating') : t('harvestGenerateButton')}
@@ -310,6 +334,12 @@ export default function AdminHarvestTab() {
 
               {confirm ? (
                 <div className="rounded-card border border-theme-border bg-theme-surface2 p-4 space-y-3">
+                  {confirm === 'delete' && detail.round.status === 'paid' && (
+                    <p role="alert" className="flex items-start gap-2 text-body font-semibold text-danger">
+                      <AlertTriangle size={16} className="mt-1 shrink-0" />
+                      <span>{t('harvestDeletePaidWarning')}</span>
+                    </p>
+                  )}
                   <p className="text-body text-theme-primary">
                     {confirm === 'pay' ? t('harvestPayConfirmBody') : t('harvestDeleteConfirmBody')}
                   </p>
@@ -338,7 +368,7 @@ export default function AdminHarvestTab() {
                     <button
                       type="button"
                       onClick={() => { setNotice(null); setConfirm('pay') }}
-                      disabled={busy}
+                      disabled={busy || payBlocked}
                       className="flex-1 rounded-card bg-accent py-3 text-body font-semibold text-accent-fg disabled:opacity-50"
                     >
                       {t('harvestPayButton')}
@@ -354,6 +384,10 @@ export default function AdminHarvestTab() {
                   </button>
                 </div>
               )}
+              {payBlocked && !confirm && (
+                <p className="text-label text-theme-muted">{t('harvestPayBlockedHint', { date: formatShortDate(payableFrom) })}</p>
+              )}
+              {renderNotice('detail')}
             </>
           )}
         </div>

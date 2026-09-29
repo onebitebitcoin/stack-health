@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import AdminHarvestTab from './AdminHarvestTab'
 
@@ -66,8 +66,14 @@ function axiosError(status: number, message: string) {
 }
 
 beforeEach(() => {
+  // 오늘(KST)을 2026-09-29로 고정한다 (타이머는 Date만 가짜로 만든다)
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-09-29T03:00:00Z') })
   vi.clearAllMocks()
   mockGets()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('AdminHarvestTab 회차 목록', () => {
@@ -214,5 +220,82 @@ describe('AdminHarvestTab 회차 상세', () => {
 
     expect(mockClient.delete).toHaveBeenCalledWith('/admin/harvest/rounds/1')
     expect(await screen.findByText('회차를 삭제했습니다')).toBeInTheDocument()
+  })
+
+  it('기간이 끝나지 않은 회차는 지급 완료 버튼을 비활성화하고 사유를 보여준다', async () => {
+    const user = userEvent.setup()
+    const ongoing = { ...openRound, id: 3, start_date: '2026-09-28', end_date: '2026-09-29' }
+    mockGets([ongoing], { ...openDetail, round: ongoing })
+    renderTab()
+    await user.click(await screen.findByRole('button', { name: /9\/28~9\/29/ }))
+    await screen.findByText('alice')
+
+    expect(screen.getByRole('button', { name: '지급 완료' })).toBeDisabled()
+    expect(screen.getByText('기간이 끝난 다음 날부터 지급 완료로 표시할 수 있어요 (9/30 이후)')).toBeInTheDocument()
+  })
+
+  it('종료일 다음 날이 되면 지급 완료 버튼이 활성화된다', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    await user.click(await screen.findByRole('button', { name: /9\/1~9\/13/ }))
+    await screen.findByText('alice')
+
+    expect(screen.getByRole('button', { name: '지급 완료' })).toBeEnabled()
+    expect(screen.queryByText(/다음 날부터 지급 완료로 표시할 수 있어요/)).not.toBeInTheDocument()
+  })
+
+  it('지급 완료 회차 삭제는 강한 경고를 보여주고 force=true 로 삭제한다', async () => {
+    const user = userEvent.setup()
+    mockClient.delete.mockResolvedValueOnce({ data: {} })
+    mockGets([openRound, paidRound], paidDetail)
+    renderTab()
+    await user.click(await screen.findByRole('button', { name: /9\/14~9\/30/ }))
+    await screen.findByText('alice')
+
+    await user.click(screen.getByRole('button', { name: '회차 삭제' }))
+    expect(screen.getByText('지급 완료된 기록입니다. 삭제하면 이 회차의 오렌지 배분 기록이 사라집니다.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '확인' }))
+
+    expect(mockClient.delete).toHaveBeenCalledWith('/admin/harvest/rounds/2', { params: { force: true } })
+    expect(await screen.findByText('회차를 삭제했습니다')).toBeInTheDocument()
+  })
+
+  it('진행 중 회차 삭제에는 강한 경고와 force 가 없다', async () => {
+    const user = userEvent.setup()
+    mockClient.delete.mockResolvedValueOnce({ data: {} })
+    renderTab()
+    await user.click(await screen.findByRole('button', { name: /9\/1~9\/13/ }))
+    await screen.findByText('alice')
+
+    await user.click(screen.getByRole('button', { name: '회차 삭제' }))
+    expect(screen.queryByText(/오렌지 배분 기록이 사라집니다/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '확인' }))
+    expect(mockClient.delete).toHaveBeenCalledWith('/admin/harvest/rounds/1')
+  })
+
+  it('지급 결과 메시지는 상세 패널 안(확인 영역 근처)에 보인다', async () => {
+    const user = userEvent.setup()
+    mockClient.post.mockRejectedValueOnce(axiosError(409, '아직 기간이 끝나지 않았습니다'))
+    renderTab()
+    await user.click(await screen.findByRole('button', { name: /9\/1~9\/13/ }))
+    await screen.findByText('alice')
+
+    await user.click(screen.getByRole('button', { name: '지급 완료' }))
+    await user.click(screen.getByRole('button', { name: '확인' }))
+    const alert = await screen.findByText(/아직 기간이 끝나지 않았습니다/)
+    const panel = screen.getByRole('button', { name: '회차 삭제' }).closest('div.space-y-3') as HTMLElement
+    expect(panel).toContainElement(alert)
+  })
+})
+
+describe('AdminHarvestTab 월 입력 검증', () => {
+  it('월이 비어 있으면 회차 만들기 버튼이 비활성화된다', async () => {
+    const user = userEvent.setup()
+    renderTab()
+    await screen.findByText('9/1~9/13')
+    expect(screen.getByRole('button', { name: '회차 만들기' })).toBeEnabled()
+
+    await user.clear(screen.getByLabelText('조회 월'))
+    expect(screen.getByRole('button', { name: '회차 만들기' })).toBeDisabled()
   })
 })

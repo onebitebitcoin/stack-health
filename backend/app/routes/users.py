@@ -14,7 +14,7 @@ from app.models.user import User
 from app.models.video import Video
 from app.routes.auth import get_active_user, get_optional_user
 from app.routes.auth import get_current_user as get_required_user
-from app.services.timeframe import to_local_date
+from app.services.timeframe import now_local, to_local_date
 from app.services.notification import create_notification
 from app.services.post_visibility import PUBLIC, publish_order_key
 from app.services.referral import generate_referral_code
@@ -194,7 +194,7 @@ def get_my_harvest(
 ) -> dict:
     """한 달의 회차별 내 오렌지, 합계, 지분, 열매 수."""
     if month is None:
-        now = datetime.now(harvest_service.KST)
+        now = now_local()
         year, mon = now.year, now.month
     else:
         try:

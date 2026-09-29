@@ -121,5 +121,7 @@
   "harvestPayConfirmBody": "이 회차의 배분을 확정하고 지급 완료로 표시합니다. 되돌리려면 회차를 삭제해야 합니다.",
   "harvestDeleteConfirmBody": "이 회차를 삭제합니다. 삭제한 회차는 복구할 수 없습니다.",
   "harvestPaySuccess": "지급 완료로 표시했습니다",
-  "harvestDeleteSuccess": "회차를 삭제했습니다"
+  "harvestDeleteSuccess": "회차를 삭제했습니다",
+  "harvestDeletePaidWarning": "지급 완료된 기록입니다. 삭제하면 이 회차의 오렌지 배분 기록이 사라집니다.",
+  "harvestPayBlockedHint": "기간이 끝난 다음 날부터 지급 완료로 표시할 수 있어요 ({{date}} 이후)"
 }

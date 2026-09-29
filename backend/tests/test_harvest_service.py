@@ -13,7 +13,8 @@ from app.models.post import Post
 from app.models.user import User
 from app.models.video import Video
 from app.services import harvest
-from app.services.harvest import KST
+from app.services.harvest import RoundNotEndedError
+from app.services.timeframe import SERVICE_TZ
 
 
 def _user(db: Session, name: str, *, is_admin: bool = False) -> User:
@@ -57,7 +58,7 @@ def _comment(db: Session, user_id: int, post_id: int, created_at: datetime) -> C
 
 def _kst(y, m, d, hh=12, mm=0) -> datetime:
     # sqlite는 tz를 버리고 벽시계 값만 저장하므로 UTC로 변환해 넣는다(운영 PG의 timestamptz와 동일한 의미).
-    return datetime(y, m, d, hh, mm, tzinfo=KST).astimezone(timezone.utc)
+    return datetime(y, m, d, hh, mm, tzinfo=SERVICE_TZ).astimezone(timezone.utc)
 
 
 # ---- month_ranges ----
@@ -245,6 +246,12 @@ def test_default_seed():
 
 # ---- finalize_round ----
 
+@pytest.fixture(autouse=True)
+def _frozen_today(monkeypatch):
+    """지급은 종료일 다음 날부터 가능하므로 기준일을 2026-10-01로 고정한다."""
+    monkeypatch.setattr(harvest, "today_kst", lambda: date(2026, 10, 1))
+
+
 def _round(db: Session, start: date, end: date) -> HarvestRound:
     rnd = HarvestRound(start_date=start, end_date=end, seed=harvest.default_seed(end))
     db.add(rnd)
@@ -278,3 +285,25 @@ def test_finalize_round_twice_raises(db: Session):
 
     with pytest.raises(ValueError):
         harvest.finalize_round(db, rnd)
+
+
+def test_finalize_before_end_raises(db: Session):
+    rnd = _round(db, date(2026, 9, 1), date(2026, 9, 13))
+    with pytest.raises(RoundNotEndedError):
+        harvest.finalize_round(db, rnd, today=date(2026, 9, 13))
+    assert rnd.status == "open"
+    assert harvest.finalize_round(db, rnd, today=date(2026, 9, 14)).status == "paid"
+
+
+def test_compute_scores_excludes_rejected_video_keeps_private(db: Session):
+    a = _user(db, "alice")
+    ok = _post(db, a.id, _kst(2026, 9, 3))
+    private = _post(db, a.id, _kst(2026, 9, 4))
+    private.visibility = "private"
+    rejected = _post(db, a.id, _kst(2026, 9, 5))
+    db.get(Video, rejected.video_id).status = "rejected"
+    db.commit()
+
+    scores = harvest.compute_scores(db, date(2026, 9, 1), date(2026, 9, 13))
+
+    assert ok and scores[a.id]["uploads"] == 2

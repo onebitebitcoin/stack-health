@@ -148,4 +148,11 @@ describe('HarvestTreeCard', () => {
     expect(await screen.findByText('수확 정보를 불러오지 못했습니다')).toBeInTheDocument()
     expect(screen.queryByTestId('harvest-total')).not.toBeInTheDocument()
   })
+
+  it('월 목록 조회가 실패해도 오류 메시지를 보여준다', async () => {
+    mockApi({ monthsFail: true })
+    renderCard()
+
+    expect(await screen.findByText('수확 정보를 불러오지 못했습니다')).toBeInTheDocument()
+  })
 })

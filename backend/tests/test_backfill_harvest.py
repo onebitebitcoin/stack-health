@@ -62,7 +62,7 @@ def test_dry_run_writes_nothing(db: Session):
 def test_apply_creates_11_rounds_10_paid(db: Session):
     _seed_activity(db)
 
-    backfill.apply_plan(db, backfill.build_plan(db, TODAY))
+    backfill.apply_plan(db, backfill.build_plan(db, TODAY), TODAY)
 
     rounds = db.query(HarvestRound).order_by(HarvestRound.start_date).all()
     assert len(rounds) == 11
@@ -80,12 +80,12 @@ def test_apply_creates_11_rounds_10_paid(db: Session):
 
 def test_apply_is_idempotent(db: Session):
     _seed_activity(db)
-    backfill.apply_plan(db, backfill.build_plan(db, TODAY))
+    backfill.apply_plan(db, backfill.build_plan(db, TODAY), TODAY)
     before = {(r.id, r.status) for r in db.query(HarvestRound)}
     allocs = db.query(HarvestAllocation).count()
 
     plan = backfill.build_plan(db, TODAY)
-    backfill.apply_plan(db, plan)
+    backfill.apply_plan(db, plan, TODAY)
 
     assert all(p["exists"] for p in plan)
     assert {(r.id, r.status) for r in db.query(HarvestRound)} == before
@@ -101,3 +101,37 @@ def test_overlap_with_different_round_aborts_without_writes(db: Session):
 
     assert "2026-07-01" in str(exc.value)
     assert db.query(HarvestRound).count() == 1
+
+
+def test_existing_open_round_past_end_is_finalized(db: Session):
+    _seed_activity(db)
+    db.add(HarvestRound(start_date=date(2026, 8, 1), end_date=date(2026, 8, 31), seed=20260831, status="open"))
+    db.commit()
+
+    plan = backfill.build_plan(db, TODAY)
+    aug = next(p for p in plan if p["start"] == date(2026, 8, 1))
+    assert aug["exists"] and aug["finalize_existing"]
+    assert "finalize" in backfill.render_plan(db, plan)
+    backfill.apply_plan(db, plan, TODAY)
+
+    rnd = db.query(HarvestRound).filter_by(start_date=date(2026, 8, 1)).one()
+    assert rnd.status == "paid"
+    assert sum(a.oranges for a in db.query(HarvestAllocation).filter_by(round_id=rnd.id)) == 1008
+    assert db.query(HarvestRound).count() == 11
+
+
+def test_apply_writes_admin_log_per_round(db: Session):
+    from app.models.admin_log import AdminLog
+
+    backfill.apply_plan(db, backfill.build_plan(db, TODAY), TODAY)
+    logs = db.query(AdminLog).filter_by(action="harvest_round_backfill", target_type="harvest_round").all()
+    assert len(logs) == 11
+
+
+def test_apply_requires_confirm_db(monkeypatch, db: Session, capsys):
+    monkeypatch.setattr(backfill.sys, "argv", ["backfill_harvest.py", "--apply", "--confirm-db", "wrong"])
+    with pytest.raises(SystemExit) as exc:
+        backfill.main()
+    assert exc.value.code != 0
+    assert db.query(HarvestRound).count() == 0
+    assert "confirm-db" in capsys.readouterr().out

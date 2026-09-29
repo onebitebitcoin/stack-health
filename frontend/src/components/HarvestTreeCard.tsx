@@ -108,7 +108,7 @@ export default function HarvestTreeCard({ tree }: HarvestTreeCardProps) {
         />
       )}
 
-      {harvestQuery.isError && (
+      {(harvestQuery.isError || monthsQuery.isError) && (
         <p role="alert" className="mt-4 text-body text-theme-muted">{t('harvestLoadFailed')}</p>
       )}
 

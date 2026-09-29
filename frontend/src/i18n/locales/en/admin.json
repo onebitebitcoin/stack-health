@@ -121,5 +121,7 @@
   "harvestPayConfirmBody": "This finalizes the allocation for this round and marks it as paid. To undo it, you must delete the round.",
   "harvestDeleteConfirmBody": "This deletes the round. A deleted round cannot be restored.",
   "harvestPaySuccess": "Marked as paid",
-  "harvestDeleteSuccess": "Round deleted"
+  "harvestDeleteSuccess": "Round deleted",
+  "harvestDeletePaidWarning": "This round is already paid. Deleting it erases its orange allocation record.",
+  "harvestPayBlockedHint": "You can mark it as paid from the day after the period ends (from {{date}})"
 }

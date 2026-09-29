@@ -8,7 +8,6 @@ from __future__ import annotations
 import calendar
 import random
 from datetime import date, datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -17,8 +16,8 @@ from app.models.comment import Comment
 from app.models.harvest import HarvestAllocation, HarvestRound
 from app.models.post import Post
 from app.models.user import User
-
-KST = ZoneInfo("Asia/Seoul")
+from app.models.video import Video
+from app.services.timeframe import SERVICE_TZ, now_local
 
 TOTAL_ORANGES = 1008
 POINTS_PER_UPLOAD = 0.5
@@ -26,6 +25,15 @@ POINTS_PER_COMMENT = 0.01
 CONTRIBUTION_WEIGHT = 0.8  # 나머지 0.2는 균등 무작위 몫
 
 _CADENCES = ("weekly", "biweekly", "monthly")
+
+
+class RoundNotEndedError(ValueError):
+    """회차 종료일 다음 날 이전에 지급(finalize)하려 할 때."""
+
+
+def today_kst() -> date:
+    """오늘 날짜(KST). 테스트에서 이 함수를 패치해 기준일을 고정한다."""
+    return now_local().date()
 
 
 def month_ranges(year: int, month: int, cadence: str) -> list[tuple[date, date]]:
@@ -76,9 +84,9 @@ def validate_round_range(start: date, end: date) -> None:
 
 def _kst_bounds_utc(start: date, end: date) -> tuple[datetime, datetime]:
     """KST 날짜 구간 [start 00:00, end+1일 00:00)을 UTC datetime으로 변환한다."""
-    lo = datetime(start.year, start.month, start.day, tzinfo=KST).astimezone(timezone.utc)
+    lo = datetime(start.year, start.month, start.day, tzinfo=SERVICE_TZ).astimezone(timezone.utc)
     nxt = end + timedelta(days=1)
-    hi = datetime(nxt.year, nxt.month, nxt.day, tzinfo=KST).astimezone(timezone.utc)
+    hi = datetime(nxt.year, nxt.month, nxt.day, tzinfo=SERVICE_TZ).astimezone(timezone.utc)
     return lo, hi
 
 
@@ -93,6 +101,10 @@ def compute_scores(db: Session, start: date, end: date) -> dict[int, dict]:
             .where(User.is_admin.is_(False), model.created_at >= lo, model.created_at < hi)
             .group_by(model.user_id)
         )
+        if model is Post:
+            # 관리자가 반려한 영상의 게시물은 업로드로 세지 않는다(레거시 리워드도 반려/삭제 시 회수했다).
+            # 비공개 게시물은 영상이 active이면 그대로 센다.
+            stmt = stmt.join(Video, Video.id == Post.video_id).where(Video.status == "active")
         return {uid: cnt for uid, cnt in db.execute(stmt).all()}
 
     uploads = _counts(Post)
@@ -153,12 +165,17 @@ def default_seed(end_date: date) -> int:
     return int(end_date.strftime("%Y%m%d"))
 
 
-def finalize_round(db: Session, round: HarvestRound, commit: bool = True) -> HarvestRound:
+def finalize_round(
+    db: Session, round: HarvestRound, commit: bool = True, today: date | None = None
+) -> HarvestRound:
     """회차를 확정한다: 점수 계산 -> 배분 -> 결과 저장 -> paid 처리.
 
-    commit=False면 flush만 하고 커밋은 호출자가 한다(여러 회차를 한 트랜잭션으로 묶을 때)."""
+    commit=False면 flush만 하고 커밋은 호출자가 한다(여러 회차를 한 트랜잭션으로 묶을 때).
+    종료일 다음 날부터만 지급할 수 있다(today는 테스트용, 기본은 오늘 KST)."""
     if round.status == "paid":
         raise ValueError("이미 지급 완료된 회차입니다")
+    if (today or today_kst()) <= round.end_date:
+        raise RoundNotEndedError("회차 종료일 다음 날부터 지급할 수 있습니다")
     scores = compute_scores(db, round.start_date, round.end_date)
     wins = allocate(scores, total=round.total_oranges, seed=round.seed)
 

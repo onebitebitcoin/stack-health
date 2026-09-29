@@ -3,6 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -16,7 +17,9 @@ from app.services.error_codes import (
     E_HARVEST_ALREADY_PAID,
     E_HARVEST_INVALID_MONTH,
     E_HARVEST_INVALID_RANGE,
+    E_HARVEST_ROUND_NOT_ENDED,
     E_HARVEST_ROUND_NOT_FOUND,
+    E_HARVEST_ROUND_PAID_DELETE,
     E_HARVEST_ROUND_OVERLAP,
 )
 
@@ -26,7 +29,7 @@ router = APIRouter(prefix="/api/v1/admin/harvest", tags=["admin-harvest"])
 class RoundCreate(BaseModel):
     start_date: date
     end_date: date
-    seed: int | None = None
+    seed: int | None = Field(default=None, ge=0, le=2**31 - 1)
 
 
 class RoundGenerate(BaseModel):
@@ -221,13 +224,20 @@ def pay_round(
     db: Session = Depends(get_db),
     _: User | None = Depends(require_admin),
 ) -> dict:
-    rnd = _get_round(db, round_id)
+    # 동시 지급을 막기 위해 행을 잠그고, 지급·감사 로그를 한 번의 커밋으로 묶는다.
+    rnd = db.query(HarvestRound).filter(HarvestRound.id == round_id).with_for_update().first()
+    if rnd is None:
+        raise api_error(404, E_HARVEST_ROUND_NOT_FOUND, "회차를 찾을 수 없습니다")
     try:
-        harvest_service.finalize_round(db, rnd)
-    except ValueError:
+        harvest_service.finalize_round(db, rnd, commit=False)
+        _log(db, "harvest_round_pay", rnd.id, f"{rnd.start_date}~{rnd.end_date} seed={rnd.seed}")
+        db.commit()
+    except harvest_service.RoundNotEndedError:
+        db.rollback()
+        raise api_error(409, E_HARVEST_ROUND_NOT_ENDED, "회차 종료일 다음 날부터 지급할 수 있습니다")
+    except (ValueError, IntegrityError):
+        db.rollback()
         raise api_error(409, E_HARVEST_ALREADY_PAID, "이미 지급 완료된 회차입니다")
-    _log(db, "harvest_round_pay", rnd.id, f"{rnd.start_date}~{rnd.end_date} seed={rnd.seed}")
-    db.commit()
     db.refresh(rnd)
     return {"data": _round_dict(rnd, _participant_count(db, rnd))}
 
@@ -235,11 +245,14 @@ def pay_round(
 @router.delete("/rounds/{round_id}")
 def delete_round(
     round_id: int,
+    force: bool = Query(default=False, description="paid 회차 삭제 시 필수"),
     db: Session = Depends(get_db),
     _: User | None = Depends(require_admin),
 ) -> dict:
     rnd = _get_round(db, round_id)
-    detail = f"{rnd.start_date}~{rnd.end_date} status={rnd.status}"
+    if rnd.status == "paid" and not force:
+        raise api_error(409, E_HARVEST_ROUND_PAID_DELETE, "지급 완료된 회차는 force=true 로만 삭제할 수 있습니다")
+    detail = f"{rnd.start_date}~{rnd.end_date} status={rnd.status} force={force}"
     # SQLite는 FK cascade가 꺼져 있으므로 배분 행을 명시적으로 먼저 지운다(PG에서는 ON DELETE CASCADE와 중복 안전).
     db.query(HarvestAllocation).filter(HarvestAllocation.round_id == rnd.id).delete()
     db.delete(rnd)

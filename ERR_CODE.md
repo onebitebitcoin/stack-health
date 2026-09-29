@@ -109,3 +109,5 @@
 | `E_HARVEST_ROUND_OVERLAP` | 409 | 기존 회차(...)와 기간이 겹칩니다 | 기존 회차와 기간이 겹치는 회차 생성·일괄 생성 |
 | `E_HARVEST_ALREADY_PAID` | 409 | 이미 지급 완료된 회차입니다 | paid 회차를 다시 지급 처리 |
 | `E_HARVEST_INVALID_MONTH` | 400 | month는 YYYY-MM 형식이어야 합니다 | 잘못된 month 쿼리 값 |
+| `E_HARVEST_ROUND_NOT_ENDED` | 409 | 회차 종료일 다음 날부터 지급할 수 있습니다 | 종료일(KST) 당일 이전에 지급 처리 |
+| `E_HARVEST_ROUND_PAID_DELETE` | 409 | 지급 완료된 회차는 force=true 로만 삭제할 수 있습니다 | force 없이 paid 회차 삭제 |

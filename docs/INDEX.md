@@ -42,7 +42,9 @@ bitcoiners/
 | 팔로우 | `backend/app/models/follow.py` + `app/routes/users.py`(follow/followers/following) + `frontend/src/pages/{UserProfilePage,FollowListPage}.tsx` |
 | 알림 (인앱) | `backend/app/models/notification.py` + `app/services/notification.py` + `app/routes/notifications.py` + `frontend/src/pages/NotificationsPage.tsx`(`/notifications`) + `frontend/src/hooks/useUnreadNotifications.ts` |
 | 친구 초대 (referral) | `backend/app/services/referral.py` + `users.referral_code/referred_by_id` + `GET /users/me/referral` + `frontend/src/pages/InvitePage.tsx` (`/invite`), `?ref=` 캡처는 `App.tsx` |
-| 오렌지 나무 (성장 시각화) | `backend/app/services/btc_price.py`(CoinGecko 시세·Redis 캐시) + `posts.btc_price_krw`(기록 시점 가격 박제) + `GET /users/me/tree` + `frontend/src/components/OrangeTree.tsx` + `ProfilePage.tsx`. 규칙과 설계 의도는 `docs/orange-tree.md` |
+| 오렌지 나무 (성장 시각화) | 나무 단계 `GET /users/me/tree` + 열매·수확 `GET /users/me/harvest[/months]` + `frontend/src/components/OrangeTree.tsx` · `HarvestTreeCard.tsx` + `ProfilePage.tsx`. 규칙과 설계 의도는 `docs/orange-tree.md` |
+| 수확 회차 (비트코인 지급 기록) | `backend/app/models/harvest.py`(HarvestRound/HarvestAllocation) + `backend/app/services/harvest.py`(회차 범위·점수·1,008 오렌지 배분) + `backend/app/routes/harvest_admin.py`(`/admin/harvest/*`) + `frontend/src/pages/admin/AdminHarvestTab.tsx` + 과거분 `backend/scripts/backfill_harvest.py` |
+| BTC 시세 | `backend/app/services/btc_price.py`(CoinGecko 시세·Redis 캐시) + `posts.btc_price_krw`(기록 시점 가격 박제, 업로드 시 저장만 하고 현재 화면에서는 쓰지 않음) |
 | 설문 기능 | `backend/app/{models,schemas,routes}/survey.py` + `frontend/src/pages/SurveyPage.tsx` + `AdminSurveys*.tsx` |
 | 배포/인프라 | `scripts/deploy.sh` + `Dockerfile` + `CLAUDE.md`(blue-green 주의사항) |
 | 도메인 전환 (서버 도메인 변경) | `docs/DOMAIN-CUTOVER.md` — DNS·인증서·nginx server_name·Google OAuth redirect_uri 재등록 순서와 각 단계 롤백 절차 |
@@ -58,13 +60,14 @@ bitcoiners/
 - **설정**: `app/config.py` (pydantic settings, `.env` 로드)
 - **DB**: `app/database.py` / 마이그레이션 `alembic/`
 - **routes/** (도메인별 API): `auth` `videos` `feed` `admin` `comments` `history` `challenges` `users` `survey` `notifications`
-- **models/** (SQLAlchemy): `user` `video` `post` `post_like` `post_view` `comment` `comment_like` `challenge` `admin_log` `lnauth_challenge` `app_links` `survey` `survey_response` `follow` `notification`
+- **models/** (SQLAlchemy): `user` `video` `post` `post_like` `post_view` `comment` `comment_like` `challenge` `admin_log` `lnauth_challenge` `app_links` `survey` `survey_response` `follow` `notification` `harvest`
 - **schemas/** (Pydantic): `user` `video` `challenge` `survey`
 - **services/** (비즈니스 로직):
   - `auth.py` JWT / `google_oauth.py` Google 로그인 / `lnauth.py` Lightning 로그인(LNURL-auth)
   - `timeframe.py` **날짜 경계 단일 원본** — `SERVICE_TZ`(Asia/Seoul) 고정. 캘린더·스트릭·나무 단계·일일 제한이 전부 여기를 거친다. 요청에서 타임존을 받지 않는다 / `share_token.py` 공유 링크 토큰
   - `r2.py` Cloudflare R2 업로드 / `job_queue.py` Redis 잡 큐 enqueue
   - `subtitles.py` 자막 생성·환각 필터 / `rate_limit.py` / `notify.py` 텔레그램(운영자) 알림 / `notification.py` 인앱(사용자) 알림 생성 / `error_codes.py`
+  - `harvest.py` 수확 회차 — 월 경계 안의 회차 범위(`month_ranges`), 점수(업로드 0.5·댓글 0.01), 리포트와 같은 80/20 추첨으로 회차당 오렌지 1,008개 배분(`allocate`), 진행 중 기대값, 열매 수
   - `blink.py` Blink(api.blink.sv) GraphQL 연동 — 라이트닝 주소로 sats 전송(`send_to_lightning_address`), BTC 지갑 조회(`get_btc_wallet`). 관리자 테스트 지급(`POST /admin/blink/test-payout`, `GET /admin/blink/status`, `app/routes/admin.py`)이 첫 사용처이고, 향후 업로더 자동 지급이 이 모듈을 재사용한다
 - **tests/**: 도메인별 `test_*.py` (pytest) — 실행: `cd backend && .venv/bin/pytest -q`
 
@@ -116,7 +119,7 @@ bitcoiners/
 | `docs/DOMAIN-CUTOVER.md` | 서버 도메인을 stackhealth.life → story.onebitebitcoin.com 으로 바꿀 때 실행하는 인프라 전환 절차서. DNS·인증서·nginx·Google OAuth 재등록 순서와 각 단계 롤백 방법을 다룬다 |
 | `docs/DEPLOY-NOTES-orange-story.md` | v0.19.1 → v0.20.0 배포 노트. 이 배포는 미적용 마이그레이션 3개(하나는 파괴적)를 한 번에 실어 나르므로 평소 배포와 위험도가 다르다 |
 | `docs/LNURL-DOMAIN-MIGRATION.md` | 도메인 전환이 라이트닝 사용자 신원을 갈라놓은 사고의 원인·피해 범위·적용한 구조. `stackhealth.life` 를 왜 계속 살려둬야 하는지와, 구 도메인을 은퇴시키려면 무엇이 더 필요한지 |
-| `docs/orange-tree.md` | 나의 오렌지 나무(성장 시각화). 나무=내 기록 / 열매=비트코인 가격으로 축을 가른 이유, 단계·열매 판정 규칙, 시세 조회 실패 시 동작 |
+| `docs/orange-tree.md` | 나의 오렌지 나무(성장 시각화). 나무=내 기록 / 열매=그 달 수확한 오렌지. 단계·열매 판정 규칙, 회차 범위, 배분 방식 |
 | `meetings/INDEX.md` | 회의록 인덱스 |
 
 ## 탐색하지 않아도 되는 곳

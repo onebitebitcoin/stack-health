@@ -74,6 +74,11 @@ export async function payRound(id: number): Promise<HarvestRound> {
   return res.data.data
 }
 
-export async function deleteRound(id: number): Promise<void> {
+// 지급 완료된 회차는 force=true 없이는 서버가 409로 거부한다
+export async function deleteRound(id: number, force = false): Promise<void> {
+  if (force) {
+    await client.delete(`/admin/harvest/rounds/${id}`, { params: { force: true } })
+    return
+  }
   await client.delete(`/admin/harvest/rounds/${id}`)
 }
