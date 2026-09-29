@@ -153,8 +153,10 @@ def default_seed(end_date: date) -> int:
     return int(end_date.strftime("%Y%m%d"))
 
 
-def finalize_round(db: Session, round: HarvestRound) -> HarvestRound:
-    """회차를 확정한다: 점수 계산 -> 배분 -> 결과 저장 -> paid 처리."""
+def finalize_round(db: Session, round: HarvestRound, commit: bool = True) -> HarvestRound:
+    """회차를 확정한다: 점수 계산 -> 배분 -> 결과 저장 -> paid 처리.
+
+    commit=False면 flush만 하고 커밋은 호출자가 한다(여러 회차를 한 트랜잭션으로 묶을 때)."""
     if round.status == "paid":
         raise ValueError("이미 지급 완료된 회차입니다")
     scores = compute_scores(db, round.start_date, round.end_date)
@@ -174,7 +176,10 @@ def finalize_round(db: Session, round: HarvestRound) -> HarvestRound:
         )
     round.status = "paid"
     round.paid_at = datetime.now(timezone.utc)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(round)
     return round
 
