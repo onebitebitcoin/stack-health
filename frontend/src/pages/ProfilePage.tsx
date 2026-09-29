@@ -11,7 +11,7 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/auth'
 import { shareProfileLink } from '../lib/share'
 import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
-import type { MyStats, HistoryResponse, HistoryWorkoutPost, PostVisibility, TreeStatus } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost, PostVisibility } from '../api/types'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import LoadingScreen from '../components/LoadingScreen'
@@ -88,19 +88,6 @@ export default function ProfilePage() {
     queryKey: ['my-stats'],
     queryFn: async () => {
       const res = await client.get<{ data: MyStats }>('/users/me/stats')
-      return res.data.data
-    },
-    enabled: !!user,
-  })
-
-  const {
-    data: treeStatus,
-    isLoading: treeLoading,
-    isError: treeIsError,
-  } = useQuery<TreeStatus>({
-    queryKey: ['tree-status'],
-    queryFn: async () => {
-      const res = await client.get<{ data: TreeStatus }>('/users/me/tree')
       return res.data.data
     },
     enabled: !!user,
@@ -273,17 +260,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {treeLoading && (
-        <div
-          className="mx-4 mb-4 h-44 rounded-card animate-shimmer"
-          style={{
-            background: 'linear-gradient(90deg, var(--bg-surface-2) 25%, var(--bg-surface) 50%, var(--bg-surface-2) 75%)',
-            backgroundSize: '200% 100%',
-          }}
-        />
-      )}
-
-      {!treeLoading && !treeIsError && treeStatus && <HarvestTreeCard tree={treeStatus} />}
+      <HarvestTreeCard />
 
       <div className="bracket-card mx-4 mb-4 rounded-card bg-theme-surface px-4 py-3">
         <div className="flex items-center gap-4 py-1">

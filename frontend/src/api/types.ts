@@ -291,17 +291,6 @@ export type SurveyAggregateValue = SurveyAggregateScaleValue | SurveyAggregateOp
 
 export type SurveyAggregate = Record<string, SurveyAggregateValue>
 
-// 오렌지 나무: stage/FruitSize는 components/OrangeTree.tsx도 동일한 값 집합을 export한다.
-// api 계층이 컴포넌트 파일을 import하면 계층이 뒤섞이므로, 여기서는 값 집합을 직접 선언한다.
-export type TreeStage = 'seed' | 'sprout' | 'sapling' | 'tree' | 'grand'
-export type FruitSize = 'small' | 'medium' | 'large'
-
-export interface TreeStatus {
-  stage: TreeStage
-  total_days: number
-  next_stage_at: number | null
-}
-
 // 수확 오렌지: 오렌지 개수만 다룬다(사토시/가격 노출 금지).
 export interface HarvestMonthSummary {
   month: string

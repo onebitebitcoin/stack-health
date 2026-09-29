@@ -14,7 +14,7 @@ from app.models.user import User
 from app.models.video import Video
 from app.routes.auth import get_active_user, get_optional_user
 from app.routes.auth import get_current_user as get_required_user
-from app.services.timeframe import now_local, to_local_date
+from app.services.timeframe import now_local
 from app.services.notification import create_notification
 from app.services.post_visibility import PUBLIC, publish_order_key
 from app.services.referral import generate_referral_code
@@ -100,56 +100,6 @@ def get_my_stats(
     return {
         "data": {
             "total_posts": total_posts,
-        }
-    }
-
-
-# ---------------------------------------------------------------------------
-# 나의 오렌지 나무
-# ---------------------------------------------------------------------------
-# 나무 = 내 기록(사용자가 통제하는 축, 하락장에도 절대 작아지거나 죽지 않는다).
-# 열매 = 수확 회차에서 받은 오렌지 지분(`/me/harvest`).
-
-def _compute_total_days(db: Session, user_id: int) -> int:
-    """누적 기록일 수. 활성 영상이 달린 게시물만 세고, 날짜 경계는 서비스 기준(한국 시간)이다.
-
-    캘린더·스트릭(`/history`)과 같은 `to_local_date()` 를 쓴다. 여기만 다른 기준을 쓰면
-    한 화면에서 나무의 "N일째"와 캘린더의 기록일이 어긋난다.
-    """
-    rows = (
-        db.query(Post.created_at)
-        .join(Post.video)
-        .filter(Post.user_id == user_id, Video.status == "active")
-        .all()
-    )
-    return len({to_local_date(row[0]) for row in rows})
-
-
-def _resolve_tree_stage(total_days: int) -> tuple[str, int | None]:
-    if total_days < 1:
-        return "seed", 1
-    if total_days < 7:
-        return "sprout", 7
-    if total_days < 30:
-        return "sapling", 30
-    if total_days < 100:
-        return "tree", 100
-    return "grand", None
-
-
-@router.get("/me/tree")
-def get_my_tree(
-    current_user: User = Depends(get_required_user),
-    db: Session = Depends(get_db),
-) -> dict:
-    total_days = _compute_total_days(db, current_user.id)
-    stage, next_stage_at = _resolve_tree_stage(total_days)
-
-    return {
-        "data": {
-            "stage": stage,
-            "total_days": total_days,
-            "next_stage_at": next_stage_at,
         }
     }
 

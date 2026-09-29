@@ -42,7 +42,7 @@ bitcoiners/
 | 팔로우 | `backend/app/models/follow.py` + `app/routes/users.py`(follow/followers/following) + `frontend/src/pages/{UserProfilePage,FollowListPage}.tsx` |
 | 알림 (인앱) | `backend/app/models/notification.py` + `app/services/notification.py` + `app/routes/notifications.py` + `frontend/src/pages/NotificationsPage.tsx`(`/notifications`) + `frontend/src/hooks/useUnreadNotifications.ts` |
 | 친구 초대 (referral) | `backend/app/services/referral.py` + `users.referral_code/referred_by_id` + `GET /users/me/referral` + `frontend/src/pages/InvitePage.tsx` (`/invite`), `?ref=` 캡처는 `App.tsx` |
-| 오렌지 나무 (성장 시각화) | 나무 단계 `GET /users/me/tree` + 열매·수확 `GET /users/me/harvest[/months]` + `frontend/src/components/OrangeTree.tsx` · `HarvestTreeCard.tsx` + `ProfilePage.tsx`. 규칙과 설계 의도는 `docs/orange-tree.md` |
+| 오렌지 나무 (수확 시각화) | 열매·수확 `GET /users/me/harvest[/months]` + `frontend/src/components/OrangeTree.tsx` · `HarvestTreeCard.tsx` + `ProfilePage.tsx`. 규칙과 설계 의도는 `docs/orange-tree.md` |
 | 수확 회차 (비트코인 지급 기록) | `backend/app/models/harvest.py`(HarvestRound/HarvestAllocation) + `backend/app/services/harvest.py`(회차 범위·점수·1,008 오렌지 배분) + `backend/app/routes/harvest_admin.py`(`/admin/harvest/*`) + `frontend/src/pages/admin/AdminHarvestTab.tsx` + 과거분 `backend/scripts/backfill_harvest.py` |
 | BTC 시세 | `backend/app/services/btc_price.py`(CoinGecko 시세·Redis 캐시) + `posts.btc_price_krw`(기록 시점 가격 박제, 업로드 시 저장만 하고 현재 화면에서는 쓰지 않음) |
 | 설문 기능 | `backend/app/{models,schemas,routes}/survey.py` + `frontend/src/pages/SurveyPage.tsx` + `AdminSurveys*.tsx` |
@@ -119,7 +119,7 @@ bitcoiners/
 | `docs/DOMAIN-CUTOVER.md` | 서버 도메인을 stackhealth.life → story.onebitebitcoin.com 으로 바꿀 때 실행하는 인프라 전환 절차서. DNS·인증서·nginx·Google OAuth 재등록 순서와 각 단계 롤백 방법을 다룬다 |
 | `docs/DEPLOY-NOTES-orange-story.md` | v0.19.1 → v0.20.0 배포 노트. 이 배포는 미적용 마이그레이션 3개(하나는 파괴적)를 한 번에 실어 나르므로 평소 배포와 위험도가 다르다 |
 | `docs/LNURL-DOMAIN-MIGRATION.md` | 도메인 전환이 라이트닝 사용자 신원을 갈라놓은 사고의 원인·피해 범위·적용한 구조. `stackhealth.life` 를 왜 계속 살려둬야 하는지와, 구 도메인을 은퇴시키려면 무엇이 더 필요한지 |
-| `docs/orange-tree.md` | 나의 오렌지 나무(성장 시각화). 나무=내 기록 / 열매=그 달 수확한 오렌지. 단계·열매 판정 규칙, 회차 범위, 배분 방식 |
+| `docs/orange-tree.md` | 나의 오렌지 나무. 항상 다 자란 나무 + 열매=그 달 수확한 오렌지. 열매 규칙, 회차 범위, 배분 방식, 성장 단계를 없앤 이유 |
 | `meetings/INDEX.md` | 회의록 인덱스 |
 
 ## 탐색하지 않아도 되는 곳
