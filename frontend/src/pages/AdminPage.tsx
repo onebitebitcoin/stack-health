@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft, RefreshCw, ClipboardList, Target, XCircle, Zap } from 'lucide-react'
+import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft, RefreshCw, ClipboardList, Target, XCircle, Zap, Sprout } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { AdminVideo, AdminUsersResponse } from '../api/types'
 import { useAuthStore } from '../store/auth'
 import AdminPayoutTab from './admin/AdminPayoutTab'
+import AdminHarvestTab from './admin/AdminHarvestTab'
 
-type TabId = 'users' | 'videos' | 'challenges' | 'payout'
+type TabId = 'users' | 'videos' | 'challenges' | 'payout' | 'harvest'
 
 interface AdminChallenge {
   id: number
@@ -219,6 +220,7 @@ export default function AdminPage() {
     { id: 'videos', label: t('tabVideos'), icon: <Video size={14} /> },
     { id: 'challenges', label: t('tabChallenges'), icon: <Target size={14} /> },
     { id: 'payout', label: t('tabPayout'), icon: <Zap size={14} /> },
+    { id: 'harvest', label: t('tabHarvest'), icon: <Sprout size={14} /> },
   ]
 
   return (
@@ -537,6 +539,7 @@ export default function AdminPage() {
       )}
 
       {activeTab === 'payout' && <AdminPayoutTab />}
+      {activeTab === 'harvest' && <AdminHarvestTab />}
 
       {selectedUserId !== null && (
         <UserDetailPanel userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
