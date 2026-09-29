@@ -15,3 +15,12 @@ class ImmutableStaticFiles(StaticFiles):
         if response.status_code in (200, 304):
             response.headers["Cache-Control"] = IMMUTABLE_CACHE_CONTROL
         return response
+
+
+def is_api_path(path: str) -> bool:
+    """SPA fallback 이 받은 경로가 API 네임스페이스(/api/...)인지.
+
+    없는 API 를 부르면 index.html(200) 대신 JSON 404 를 줘야 클라이언트가 원인을 알 수 있다.
+    `full_path` 는 앞의 / 가 빠진 형태로 들어온다.
+    """
+    return path == "api" or path.startswith("api/")

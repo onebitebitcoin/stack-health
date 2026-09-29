@@ -17,7 +17,8 @@ from app.models.post import Post
 from app.routes import admin, auth, challenges, comments, feed, harvest_admin, history, notifications, survey, users, videos
 from app.services.r2 import ensure_r2_cors
 from app.services.notify import notify_backend_error
-from app.static_files import ImmutableStaticFiles
+from app.services.error_codes import E_API_NOT_FOUND, api_error
+from app.static_files import ImmutableStaticFiles, is_api_path
 
 logging.basicConfig(
     level=logging.INFO,
@@ -244,7 +245,9 @@ if _static_dir.exists():
 
     @app.head("/", include_in_schema=False)
     @app.head("/{full_path:path}", include_in_schema=False)
-    def spa_fallback_head() -> Response:
+    def spa_fallback_head(full_path: str = "") -> Response:
+        if is_api_path(full_path):
+            return Response(status_code=404)
         return Response(status_code=200)
 
     @app.get("/{full_path:path}", response_model=None)
@@ -252,6 +255,10 @@ if _static_dir.exists():
         full_path: str,
         request: Request,
     ) -> FileResponse | HTMLResponse:
+        # 없는 API 는 index.html 로 떨어뜨리지 않는다 — 200 + HTML 이면 호출한 쪽이 원인을 알 수 없다.
+        if is_api_path(full_path):
+            raise api_error(404, E_API_NOT_FOUND, "요청한 API를 찾을 수 없습니다")
+
         # Serve static files first
         file_path = _static_dir / full_path
         if file_path.exists() and file_path.is_file():
