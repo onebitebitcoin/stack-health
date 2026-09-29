@@ -72,25 +72,30 @@ def _kuwahara(bgr01: np.ndarray, gray: np.ndarray, radius: int) -> np.ndarray:
     """사분면 쿠와하라: 픽셀마다 네 사분면 중 휘도 분산이 가장 작은 쪽의 평균색을 고른다.
 
     분산이 작은 사분면은 경계를 넘지 않은 균일한 영역이라, 그 평균색을 쓰면 윤곽은 살고
-    안쪽은 평평한 유화 색면이 된다. `cv2.boxFilter`의 anchor를 네 모서리로 돌려 사분면
-    평균을 반복문 없이 구한다.
+    안쪽은 평평한 유화 색면이 된다. 네 사분면은 같은 k×k 박스 평균을 네 방향으로 밀어 읽은
+    것이라, 가장자리를 복제해 붙인 (BGR+휘도) 4채널 이미지와 휘도² 이미지에 박스 필터를
+    한 번씩만 걸고 잘라 읽는다. 5채널 이상으로 쌓으면 cv2.boxFilter가 느린 경로를 탄다.
     """
     k = radius + 1
-    gray2 = gray * gray
-    best_var = None
-    out = bgr01
-    for anchor in ((0, 0), (k - 1, 0), (0, k - 1), (k - 1, k - 1)):
-        m = cv2.boxFilter(gray, -1, (k, k), anchor=anchor, borderType=cv2.BORDER_REPLICATE)
-        m2 = cv2.boxFilter(gray2, -1, (k, k), anchor=anchor, borderType=cv2.BORDER_REPLICATE)
-        var = m2 - m * m
-        cmean = cv2.boxFilter(bgr01, -1, (k, k), anchor=anchor, borderType=cv2.BORDER_REPLICATE)
-        if best_var is None:
-            best_var, out = var, cmean
-            continue
-        better = var < best_var
-        best_var = np.where(better, var, best_var)
-        out = np.where(better[..., None], cmean, out)
-    return out
+    p = k - 1
+    h, w = gray.shape
+    stack = cv2.copyMakeBorder(cv2.merge([bgr01, gray]), p, p, p, p, cv2.BORDER_REPLICATE)
+    sq = cv2.copyMakeBorder(gray * gray, p, p, p, p, cv2.BORDER_REPLICATE)
+    m_all = cv2.boxFilter(stack, -1, (k, k), anchor=(0, 0))
+    m2_all = cv2.boxFilter(sq, -1, (k, k), anchor=(0, 0))
+    best_var = out = None
+    for oy in (0, p):
+        for ox in (0, p):
+            m = m_all[oy : oy + h, ox : ox + w]
+            mean_gray = m[..., 3]
+            var = m2_all[oy : oy + h, ox : ox + w] - mean_gray * mean_gray
+            if best_var is None:
+                best_var, out = var, m.copy()
+                continue
+            better = (var < best_var).view(np.uint8)
+            best_var = np.minimum(var, best_var)
+            cv2.copyTo(m, better, out)
+    return out[..., :3]
 
 
 @lru_cache(maxsize=4)
@@ -127,40 +132,55 @@ def _canvas_weave(h: int, w: int, scale: float) -> np.ndarray:
     return cv2.merge([mult, mult, mult])
 
 
+@lru_cache(maxsize=4)
+def _paint_tables(h: int, w: int, dab_px: int) -> tuple[np.ndarray, ...]:
+    """`_paint`에서 프레임 크기와 상수에만 의존하는 LUT·붓자국 배율을 한 번만 만든다."""
+    keep = 1.0 - _SHADOW_AMT_LUT - _HIGHLIGHT_AMT_LUT
+    add = SHADOW_TINT_BGR * _SHADOW_AMT_LUT[:, None] + HIGHLIGHT_TINT_BGR * _HIGHLIGHT_AMT_LUT[:, None]
+    keep_lut = np.ascontiguousarray(np.repeat(keep[:, None], 3, axis=1).reshape(256, 1, 3), np.float32)
+    add_lut = np.ascontiguousarray(add.reshape(256, 1, 3), np.float32)
+    bright_lut = _smoothstep((_LUM_STEPS - _BLOOM_THRESHOLD) / (1.0 - _BLOOM_THRESHOLD)).astype(np.float32)
+    sat_lut = np.clip(np.rint(np.arange(256) * _SAT_BOOST), 0, 255).astype(np.uint8)
+    dab_lum, dab_hue = _dab_texture(h, w, dab_px)
+    # HSV_FULL의 색상은 0~255(=360도)라 uint8 덧셈이 256에서 한 바퀴 돌아 색상환 회전과 같아진다.
+    hue_off = np.rint(dab_hue * (256.0 / 360.0)).astype(np.int16).astype(np.uint8)
+    val_mul = np.rint(dab_lum * _WEAVE_UNIT).astype(np.uint8)
+    return keep_lut, add_lut, bright_lut, sat_lut, hue_off, val_mul
+
+
 def _paint(work: np.ndarray, work_scale: float) -> np.ndarray:
     """작업 해상도 BGR uint8 → 쿠와하라·팔레트·채도·붓자국·블룸까지 입힌 BGR uint8."""
     h, w = work.shape[:2]
+    keep_lut, add_lut, bright_lut, sat_lut, hue_off, val_mul = _paint_tables(
+        h, w, max(2, round(_DAB_PX * work_scale))
+    )
     work_f = work.astype(np.float32) * (1.0 / 255.0)
     gray = cv2.cvtColor(work_f, cv2.COLOR_BGR2GRAY)
 
     painted = _kuwahara(work_f, gray, max(1, round(_KUWAHARA_RADIUS * work_scale)))
     painted = cv2.GaussianBlur(painted, (0, 0), _POST_BLUR_SIGMA)
-    lum = cv2.cvtColor(painted, cv2.COLOR_BGR2GRAY)
+    lum8 = cv2.convertScaleAbs(cv2.cvtColor(painted, cv2.COLOR_BGR2GRAY), alpha=255.0)
 
-    idx = np.clip((lum * 255.0).astype(np.int32), 0, 255)
-    shadow_amt = _SHADOW_AMT_LUT[idx][..., None]
-    highlight_amt = _HIGHLIGHT_AMT_LUT[idx][..., None]
-    graded = painted * (1.0 - shadow_amt - highlight_amt)
-    graded += SHADOW_TINT_BGR * shadow_amt
-    graded += HIGHLIGHT_TINT_BGR * highlight_amt
+    # 팔레트: painted * keep(휘도) + add(휘도). 두 항 모두 휘도 하나로 정해져 3채널 LUT로 뽑는다.
+    lum3 = cv2.merge([lum8, lum8, lum8])
+    graded = cv2.add(cv2.multiply(painted, cv2.LUT(lum3, keep_lut)), cv2.LUT(lum3, add_lut))
 
-    # 채도를 올리고, 이웃 붓자국마다 명도·색상을 조금씩 다르게 흔든다.
-    hsv = cv2.cvtColor(graded, cv2.COLOR_BGR2HSV)
+    # 채도를 올리고, 이웃 붓자국마다 명도·색상을 조금씩 다르게 흔든다(uint8 HSV_FULL).
+    hsv = cv2.cvtColor(cv2.convertScaleAbs(graded, alpha=255.0), cv2.COLOR_BGR2HSV_FULL)
     hue, sat, val = cv2.split(hsv)
-    dab_lum, dab_hue = _dab_texture(h, w, max(2, round(_DAB_PX * work_scale)))
-    hue = cv2.add(hue, dab_hue)
-    hue[hue >= 360.0] -= 360.0
-    hue[hue < 0.0] += 360.0
-    sat = np.minimum(sat * _SAT_BOOST, 1.0)
-    val = np.minimum(val * dab_lum, 1.0)
-    out = cv2.cvtColor(cv2.merge([hue, sat, val]), cv2.COLOR_HSV2BGR)
+    out = cv2.cvtColor(
+        cv2.merge([hue + hue_off, cv2.LUT(sat, sat_lut), cv2.multiply(val, val_mul, scale=1.0 / _WEAVE_UNIT)]),
+        cv2.COLOR_HSV2BGR_FULL,
+    )
 
-    # 블룸: 밝은 곳만 뽑아 크게 번지게 한 뒤 스크린 합성으로 더한다.
-    bright = _smoothstep((lum - _BLOOM_THRESHOLD) / (1.0 - _BLOOM_THRESHOLD))
-    bloom = cv2.GaussianBlur(bright, (0, 0), _BLOOM_SIGMA * work_scale) * _BLOOM_STRENGTH
-    out = 1.0 - (1.0 - out) * (1.0 - bloom[..., None])
-
-    return cv2.convertScaleAbs(out, alpha=255.0)
+    # 블룸: 밝은 곳만 뽑아 1/4 해상도에서 크게 번지게 한 뒤 스크린 합성으로 더한다.
+    # 시그마가 커서 줄인 해상도에서 흐려도 결과가 같다.
+    small = cv2.resize(cv2.LUT(lum8, bright_lut), (max(2, w // 4), max(2, h // 4)), interpolation=cv2.INTER_AREA)
+    small = cv2.GaussianBlur(small, (0, 0), _BLOOM_SIGMA * work_scale / 4)
+    bloom = cv2.convertScaleAbs(
+        cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR), alpha=255.0 * _BLOOM_STRENGTH
+    )
+    return 255 - cv2.multiply(255 - out, 255 - cv2.merge([bloom, bloom, bloom]), scale=1.0 / 255.0)
 
 
 def monet_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
