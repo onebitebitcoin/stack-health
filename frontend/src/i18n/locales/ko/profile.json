@@ -117,11 +117,17 @@
   "harvestPastMonth": "{{month}}월 수확",
   "harvestEstimateSuffix": "(예상 포함)",
   "harvestCount": "{{count}}개",
-  "harvestShare": "이 달 전체의 {{pct}}%",
+  "harvestShare": "이 달 전체 {{pool}}개 중 {{pct}}%",
   "harvestRoundPaid": "완료",
   "harvestRoundOpen": "수확 중",
   "harvestEstimatePrefix": "예상",
   "harvestEmpty": "이 달은 아직 수확 회차가 없어요",
   "harvestLoadFailed": "수확 정보를 불러오지 못했습니다",
-  "harvestMonthsAria": "월별 수확량"
+  "harvestMonthsAria": "월별 수확량",
+  "harvestFruitUnit": "열매 1개 = 오렌지 {{count}}개",
+  "harvestRoundCount": "{{count}}회",
+  "harvestHelpAria": "오렌지를 얻는 방법",
+  "harvestHelpScore": "인증 1회 0.5점, 댓글 1개 0.01점이 쌓여요.",
+  "harvestHelpSplit": "회차마다 오렌지 1,008개를 점수에 따라 나눠요. 점수가 높을수록 많이 받고, 참여만 해도 일부는 받아요.",
+  "harvestEstimateNote": "예상은 다른 참여자의 활동에 따라 달라질 수 있어요"
 }

@@ -27,17 +27,17 @@ const harvests: Record<string, MonthlyHarvest> = {
       { id: 2, start_date: '2026-09-01', end_date: '2026-09-13', status: 'paid', oranges: 50, is_estimate: false },
       { id: 3, start_date: '2026-09-14', end_date: '2026-09-27', status: 'open', oranges: 35, is_estimate: true },
     ],
-    my_oranges: 85, pool_oranges: 1008, share_pct: 8.4, fruit_count: 5, has_estimate: true,
+    my_oranges: 85, pool_oranges: 1008, share_pct: 8.4, fruit_count: 1, oranges_per_fruit: 100, has_estimate: true,
   },
   '2026-08': {
     month: '2026-08',
     rounds: [
       { id: 1, start_date: '2026-08-01', end_date: '2026-08-15', status: 'paid', oranges: 120, is_estimate: false },
     ],
-    my_oranges: 120, pool_oranges: 2016, share_pct: 6, fruit_count: 7, has_estimate: false,
+    my_oranges: 120, pool_oranges: 2016, share_pct: 6, fruit_count: 2, oranges_per_fruit: 100, has_estimate: false,
   },
   '2026-07': {
-    month: '2026-07', rounds: [], my_oranges: 0, pool_oranges: 0, share_pct: 0, fruit_count: 0, has_estimate: false,
+    month: '2026-07', rounds: [], my_oranges: 0, pool_oranges: 0, share_pct: 0, fruit_count: 0, oranges_per_fruit: 100, has_estimate: false,
   },
 }
 
@@ -79,7 +79,7 @@ describe('HarvestTreeCard', () => {
 
     expect(await screen.findByText('이번 달 수확 (예상 포함)')).toBeInTheDocument()
     expect(screen.getByTestId('harvest-total')).toHaveTextContent('85개')
-    expect(screen.getByText('이 달 전체의 8.4%')).toBeInTheDocument()
+    expect(screen.getByText('이 달 전체 1,008개 중 8.4%')).toBeInTheDocument()
     expect(screen.getByText('2026년 9월')).toBeInTheDocument()
     expect(screen.getByText('9/1~9/13')).toBeInTheDocument()
     expect(screen.getByText('완료')).toBeInTheDocument()
@@ -154,5 +154,50 @@ describe('HarvestTreeCard', () => {
     renderCard()
 
     expect(await screen.findByText('수확 정보를 불러오지 못했습니다')).toBeInTheDocument()
+  })
+
+  it('나무 열매 기준(열매 1개 = 오렌지 100개)을 함께 보여준다', async () => {
+    mockApi()
+    renderCard()
+
+    expect(await screen.findByText('열매 1개 = 오렌지 100개')).toBeInTheDocument()
+  })
+
+  it('월별 막대 아래에 그 달 지급 횟수를 보여준다', async () => {
+    mockApi()
+    renderCard()
+
+    const strip = await screen.findByRole('group', { name: '월별 수확량' })
+    expect(within(strip).getAllByText('2회')).toHaveLength(3)
+  })
+
+  it('도움말 버튼으로 오렌지를 얻는 방법을 펼치고 접는다', async () => {
+    mockApi()
+    const user = userEvent.setup()
+    renderCard()
+
+    const help = await screen.findByRole('button', { name: '오렌지를 얻는 방법' })
+    expect(help).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText(/회차마다 오렌지 1,008개/)).not.toBeInTheDocument()
+
+    await user.click(help)
+    expect(help).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText(/인증 1회 0.5점, 댓글 1개 0.01점/)).toBeInTheDocument()
+    expect(screen.getByText(/회차마다 오렌지 1,008개/)).toBeInTheDocument()
+
+    await user.click(help)
+    expect(screen.queryByText(/회차마다 오렌지 1,008개/)).not.toBeInTheDocument()
+  })
+
+  it('예상이 포함된 달에만 예상값이 바뀔 수 있다는 안내를 보여준다', async () => {
+    mockApi()
+    const user = userEvent.setup()
+    renderCard()
+
+    expect(await screen.findByText('예상은 다른 참여자의 활동에 따라 달라질 수 있어요')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '이전 달' }))
+    await screen.findByText('8월 수확')
+    expect(screen.queryByText('예상은 다른 참여자의 활동에 따라 달라질 수 있어요')).not.toBeInTheDocument()
   })
 })

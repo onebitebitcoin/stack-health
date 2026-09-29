@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import calendar
+import math
 import random
 from datetime import date, datetime, timedelta, timezone
 
@@ -20,6 +21,8 @@ from app.models.video import Video
 from app.services.timeframe import SERVICE_TZ, now_local
 
 TOTAL_ORANGES = 1008
+ORANGES_PER_FRUIT = 100  # 나무 열매 1개가 뜻하는 오렌지 개수
+MAX_FRUITS = 7
 POINTS_PER_UPLOAD = 0.5
 POINTS_PER_COMMENT = 0.01
 CONTRIBUTION_WEIGHT = 0.8  # 나머지 0.2는 균등 무작위 몫
@@ -150,14 +153,15 @@ def expected(scores: dict[int, dict], total: int = TOTAL_ORANGES) -> dict[int, f
     return {uid: round(p * total, 1) for uid, p in probabilities(scores).items()}
 
 
-def fruit_count(share_pct: float) -> int:
-    """지분(%)에 따른 나무의 열매 수 (0~7)."""
-    if share_pct <= 0:
+def fruit_count(oranges: int) -> int:
+    """그 달 수확한 오렌지 개수에 따른 나무의 열매 수 (0~7).
+
+    화면의 큰 숫자(오렌지 개수)와 같은 기준이어야 사용자가 헷갈리지 않는다.
+    열매 1개 = 오렌지 ORANGES_PER_FRUIT 개, 올림 — 1개라도 받았으면 열매가 1개는 열린다.
+    """
+    if oranges <= 0:
         return 0
-    for limit, count in ((3, 1), (6, 2), (9, 3), (12, 4), (16, 5), (20, 6)):
-        if share_pct < limit:
-            return count
-    return 7
+    return min(MAX_FRUITS, math.ceil(oranges / ORANGES_PER_FRUIT))
 
 
 def default_seed(end_date: date) -> int:
@@ -254,4 +258,5 @@ def summarize_rounds(rounds: list[HarvestRound], per_round: dict[int, tuple[int,
     my = sum(per_round[r.id][0] for r in rounds)
     pool = sum(r.total_oranges for r in rounds)
     share = round(my / pool * 100, 1) if pool else 0.0
-    return {"my_oranges": my, "pool_oranges": pool, "share_pct": share, "fruit_count": fruit_count(share)}
+    return {"my_oranges": my, "pool_oranges": pool, "share_pct": share, "fruit_count": fruit_count(my),
+            "oranges_per_fruit": ORANGES_PER_FRUIT}

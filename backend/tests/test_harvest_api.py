@@ -290,7 +290,8 @@ def test_user_harvest_only_own_data_paid_and_open(client: TestClient, db: Sessio
     assert a_data["my_oranges"] == 300
     assert a_data["pool_oranges"] == 2016
     assert a_data["share_pct"] == 14.9
-    assert a_data["fruit_count"] == 5
+    assert a_data["fruit_count"] == 3
+    assert a_data["oranges_per_fruit"] == 100
     assert a_data["has_estimate"] is True
     assert b_data["rounds"][0]["oranges"] == 708
     assert b_data["rounds"][1]["oranges"] == 1008
@@ -308,6 +309,7 @@ def test_user_harvest_empty_month(client: TestClient) -> None:
         "pool_oranges": 0,
         "share_pct": 0.0,
         "fruit_count": 0,
+        "oranges_per_fruit": 100,
         "has_estimate": False,
     }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import client from '../api/client'
 import type { TreeStatus, TreeStage, HarvestMonthSummary, MonthlyHarvest } from '../api/types'
@@ -39,6 +39,7 @@ export default function HarvestTreeCard({ tree }: HarvestTreeCardProps) {
   const { t } = useTranslation('profile')
   const currentMonth = currentKstMonth()
   const [selected, setSelected] = useState(currentMonth)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const monthsQuery = useQuery<HarvestMonthSummary[]>({
     queryKey: ['harvest', 'months'],
@@ -72,7 +73,19 @@ export default function HarvestTreeCard({ tree }: HarvestTreeCardProps) {
   return (
     <div className="mx-4 mb-4 rounded-card bg-theme-surface px-4 py-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-title font-semibold text-theme-primary">{t('harvestTitle')}</h2>
+        <div className="flex items-center gap-1">
+          <h2 className="text-title font-semibold text-theme-primary">{t('harvestTitle')}</h2>
+          <button
+            type="button"
+            aria-label={t('harvestHelpAria')}
+            aria-expanded={helpOpen}
+            aria-controls="harvest-help"
+            onClick={() => setHelpOpen((v) => !v)}
+            className="p-1 text-theme-muted"
+          >
+            <Info size={16} />
+          </button>
+        </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -98,6 +111,13 @@ export default function HarvestTreeCard({ tree }: HarvestTreeCardProps) {
         </div>
       </div>
 
+      {helpOpen && (
+        <div id="harvest-help" className="mt-3 rounded-card bg-theme-surface-2 px-3 py-2 text-label text-theme-muted">
+          <p>{t('harvestHelpScore')}</p>
+          <p>{t('harvestHelpSplit')}</p>
+        </div>
+      )}
+
       {harvestQuery.isLoading && (
         <div
           className="mt-4 h-36 rounded-card animate-shimmer"
@@ -115,14 +135,17 @@ export default function HarvestTreeCard({ tree }: HarvestTreeCardProps) {
       {harvest && (
         <>
           <div className="mt-4 flex items-center gap-4">
-            <OrangeTree stage={tree.stage} fruitCount={harvest.fruit_count} fruitSize="medium" size={112} />
+            <div className="flex flex-col items-center">
+              <OrangeTree stage={tree.stage} fruitCount={harvest.fruit_count} fruitSize="medium" size={112} />
+              <p className="text-label text-theme-muted">{t('harvestFruitUnit', { count: harvest.oranges_per_fruit })}</p>
+            </div>
             <div className="min-w-0">
               <p className="text-label text-theme-muted">{tallyLabel}</p>
               <p data-testid="harvest-total" className="font-display text-3xl font-bold tabular-nums text-accent-text">
                 {t('harvestCount', { count: harvest.my_oranges })}
               </p>
               <span className="mt-1 inline-block rounded-pill bg-leaf/15 px-2 py-0.5 text-label tabular-nums text-leaf">
-                {t('harvestShare', { pct: harvest.share_pct })}
+                {t('harvestShare', { pct: harvest.share_pct, pool: harvest.pool_oranges.toLocaleString('ko-KR') })}
               </span>
             </div>
           </div>
@@ -173,6 +196,10 @@ export default function HarvestTreeCard({ tree }: HarvestTreeCardProps) {
               ))}
             </ul>
           )}
+
+          {harvest.has_estimate && (
+            <p className="mt-2 text-label text-theme-muted">{t('harvestEstimateNote')}</p>
+          )}
         </>
       )}
 
@@ -199,6 +226,7 @@ export default function HarvestTreeCard({ tree }: HarvestTreeCardProps) {
                   {t('harvestStripMonth', { month: parseMonth(m.month).month })}
                 </span>
                 <span className="text-label tabular-nums text-theme-muted">{m.my_oranges}</span>
+                <span className="text-label tabular-nums text-theme-muted">{t('harvestRoundCount', { count: m.round_count })}</span>
               </button>
             )
           })}

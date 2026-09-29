@@ -230,14 +230,20 @@ def test_expected_rounded_one_decimal():
 # ---- fruit_count / default_seed ----
 
 @pytest.mark.parametrize(
-    "pct,expected",
+    "oranges,expected",
     [
-        (0, 0), (-1, 0), (0.1, 1), (2.99, 1), (3, 2), (5.99, 2), (6, 3), (8.99, 3),
-        (9, 4), (11.99, 4), (12, 5), (15.99, 5), (16, 6), (19.99, 6), (20, 7), (100, 7),
+        (0, 0), (-5, 0), (1, 1), (100, 1), (101, 2), (120, 2), (300, 3), (388, 4),
+        (600, 6), (601, 7), (700, 7), (1716, 7),
     ],
 )
-def test_fruit_count_thresholds(pct, expected):
-    assert harvest.fruit_count(pct) == expected
+def test_fruit_count_is_one_per_hundred_oranges_rounded_up(oranges, expected):
+    # 열매 1개 = 오렌지 100개(올림), 최대 7개 — 화면의 큰 숫자와 같은 기준이다.
+    assert harvest.fruit_count(oranges) == expected
+
+
+def test_oranges_per_fruit_constant():
+    assert harvest.ORANGES_PER_FRUIT == 100
+    assert harvest.MAX_FRUITS == 7
 
 
 def test_default_seed():

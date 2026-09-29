@@ -117,11 +117,17 @@
   "harvestPastMonth": "Harvested in month {{month}}",
   "harvestEstimateSuffix": "(incl. estimate)",
   "harvestCount": "{{count}}",
-  "harvestShare": "{{pct}}% of this month's total",
+  "harvestShare": "{{pct}}% of {{pool}} this month",
   "harvestRoundPaid": "Done",
   "harvestRoundOpen": "Harvesting",
   "harvestEstimatePrefix": "Est.",
   "harvestEmpty": "No harvest rounds this month yet",
   "harvestLoadFailed": "Could not load harvest info",
-  "harvestMonthsAria": "Harvest by month"
+  "harvestMonthsAria": "Harvest by month",
+  "harvestFruitUnit": "1 fruit = {{count}} oranges",
+  "harvestRoundCount": "{{count}}×",
+  "harvestHelpAria": "How to earn oranges",
+  "harvestHelpScore": "Each check-in earns 0.5 points and each comment 0.01 points.",
+  "harvestHelpSplit": "Every round splits 1,008 oranges by score. Higher scores get more, and everyone who takes part gets some.",
+  "harvestEstimateNote": "Estimates can change as other people post"
 }

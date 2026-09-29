@@ -327,5 +327,7 @@ export interface MonthlyHarvest {
   pool_oranges: number
   share_pct: number
   fruit_count: number
+  /** 나무 열매 1개가 뜻하는 오렌지 개수 */
+  oranges_per_fruit: number
   has_estimate: boolean
 }
