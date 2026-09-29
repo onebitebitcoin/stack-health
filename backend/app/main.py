@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from app.models.post import Post
-from app.routes import admin, auth, challenges, comments, feed, history, notifications, survey, users, videos
+from app.routes import admin, auth, challenges, comments, feed, harvest_admin, history, notifications, survey, users, videos
 from app.services.r2 import ensure_r2_cors
 from app.services.notify import notify_backend_error
 from app.static_files import ImmutableStaticFiles
@@ -121,6 +121,7 @@ app.include_router(auth.router)
 app.include_router(videos.router)
 app.include_router(feed.router)
 app.include_router(admin.router)
+app.include_router(harvest_admin.router)
 app.include_router(comments.router)
 app.include_router(history.router)
 app.include_router(challenges.router)

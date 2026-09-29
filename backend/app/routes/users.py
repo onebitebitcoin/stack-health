@@ -15,11 +15,12 @@ from app.models.video import Video
 from app.routes.auth import get_active_user, get_optional_user
 from app.routes.auth import get_current_user as get_required_user
 from app.services.timeframe import to_local_date
-from app.services.btc_price import get_btc_price_krw
 from app.services.notification import create_notification
 from app.services.post_visibility import PUBLIC, publish_order_key
 from app.services.referral import generate_referral_code
-from app.services.error_codes import api_error, E_USER_NOT_FOUND, E_FORBIDDEN
+from app.models.harvest import HarvestRound
+from app.services import harvest as harvest_service
+from app.services.error_codes import api_error, E_USER_NOT_FOUND, E_FORBIDDEN, E_HARVEST_INVALID_MONTH
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -107,7 +108,7 @@ def get_my_stats(
 # 나의 오렌지 나무
 # ---------------------------------------------------------------------------
 # 나무 = 내 기록(사용자가 통제하는 축, 하락장에도 절대 작아지거나 죽지 않는다).
-# 열매 = 비트코인 가격(사용자가 통제 못 하는 축, 하락장에도 최소 1개 — "나무는 버틴다").
+# 열매 = 수확 회차에서 받은 오렌지 지분(`/me/harvest`).
 
 def _compute_total_days(db: Session, user_id: int) -> int:
     """누적 기록일 수. 활성 영상이 달린 게시물만 세고, 날짜 경계는 서비스 기준(한국 시간)이다.
@@ -136,63 +137,6 @@ def _resolve_tree_stage(total_days: int) -> tuple[str, int | None]:
     return "grand", None
 
 
-def _empty_fruit() -> dict:
-    return {
-        "available": False,
-        "count": 0,
-        "size": "small",
-        "price_krw": None,
-        "baseline_krw": None,
-        "change_pct": None,
-    }
-
-
-def _resolve_fruit_count(change_pct: float) -> int:
-    if change_pct < -20:
-        return 1
-    if change_pct < 0:
-        return 2
-    if change_pct < 20:
-        return 3
-    if change_pct < 50:
-        return 5
-    return 7
-
-
-def _resolve_fruit_size(change_pct: float) -> str:
-    if change_pct < 0:
-        return "small"
-    if change_pct < 30:
-        return "medium"
-    return "large"
-
-
-def _compute_fruit(db: Session, user_id: int) -> dict:
-    baseline = (
-        db.query(sqlfunc.avg(Post.btc_price_krw))
-        .filter(Post.user_id == user_id, Post.btc_price_krw.isnot(None))
-        .scalar()
-    )
-    if baseline is None:
-        return _empty_fruit()
-
-    current_price = get_btc_price_krw()
-    if current_price is None:
-        return _empty_fruit()
-
-    baseline_krw = round(float(baseline))
-    change_pct = round((current_price - baseline_krw) / baseline_krw * 100, 1)
-
-    return {
-        "available": True,
-        "count": _resolve_fruit_count(change_pct),
-        "size": _resolve_fruit_size(change_pct),
-        "price_krw": current_price,
-        "baseline_krw": baseline_krw,
-        "change_pct": change_pct,
-    }
-
-
 @router.get("/me/tree")
 def get_my_tree(
     current_user: User = Depends(get_required_user),
@@ -200,14 +144,88 @@ def get_my_tree(
 ) -> dict:
     total_days = _compute_total_days(db, current_user.id)
     stage, next_stage_at = _resolve_tree_stage(total_days)
-    fruit = _compute_fruit(db, current_user.id)
 
     return {
         "data": {
             "stage": stage,
             "total_days": total_days,
             "next_stage_at": next_stage_at,
-            "fruit": fruit,
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
+# 나의 수확(오렌지) — 본인 데이터만
+# ---------------------------------------------------------------------------
+
+def _month_key(d) -> str:
+    return f"{d.year:04d}-{d.month:02d}"
+
+
+@router.get("/me/harvest/months")
+def get_my_harvest_months(
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """회차가 하나 이상 있는 달의 목록(오름차순)과 달별 내 오렌지·지분."""
+    rounds = db.query(HarvestRound).order_by(HarvestRound.start_date, HarvestRound.id).all()
+    per_round = harvest_service.user_round_oranges(db, rounds, current_user.id)
+    grouped: dict[str, list[HarvestRound]] = {}
+    for r in rounds:
+        grouped.setdefault(_month_key(r.start_date), []).append(r)
+    months = []
+    for key, items in grouped.items():
+        summary = harvest_service.summarize_rounds(items, per_round)
+        months.append({
+            "month": key,
+            "my_oranges": summary["my_oranges"],
+            "pool_oranges": summary["pool_oranges"],
+            "share_pct": summary["share_pct"],
+            "round_count": len(items),
+        })
+    return {"data": months}
+
+
+@router.get("/me/harvest")
+def get_my_harvest(
+    month: str | None = Query(default=None, description="YYYY-MM (기본: 현재 한국 시간 기준 달)"),
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """한 달의 회차별 내 오렌지, 합계, 지분, 열매 수."""
+    if month is None:
+        now = datetime.now(harvest_service.KST)
+        year, mon = now.year, now.month
+    else:
+        try:
+            year, mon = harvest_service.parse_month(month)
+        except ValueError as exc:
+            raise api_error(400, E_HARVEST_INVALID_MONTH, str(exc))
+    first, last = harvest_service.month_bounds(year, mon)
+    rounds = (
+        db.query(HarvestRound)
+        .filter(HarvestRound.start_date >= first, HarvestRound.start_date <= last)
+        .order_by(HarvestRound.start_date, HarvestRound.id)
+        .all()
+    )
+    per_round = harvest_service.user_round_oranges(db, rounds, current_user.id)
+    summary = harvest_service.summarize_rounds(rounds, per_round)
+    return {
+        "data": {
+            "month": f"{year:04d}-{mon:02d}",
+            "rounds": [
+                {
+                    "id": r.id,
+                    "start_date": r.start_date.isoformat(),
+                    "end_date": r.end_date.isoformat(),
+                    "status": r.status,
+                    "oranges": per_round[r.id][0],
+                    "is_estimate": per_round[r.id][1],
+                }
+                for r in rounds
+            ],
+            **summary,
+            "has_estimate": any(per_round[r.id][1] for r in rounds),
         }
     }
 

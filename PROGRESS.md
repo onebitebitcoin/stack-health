@@ -6,8 +6,8 @@
 
 | Phase | 내용 | 상태 | 커밋 |
 |---|---|---|---|
-| 1 | 백엔드 모델·서비스 (HarvestRound/Allocation, 범위·배분 로직) | 완료 | (이 커밋) |
-| 2 | 백엔드 API (관리자 회차 관리, /users/me/harvest) | 진행 중 | |
+| 1 | 백엔드 모델·서비스 (HarvestRound/Allocation, 범위·배분 로직) | 완료 | 6c47fcc |
+| 2 | 백엔드 API (관리자 회차 관리, /users/me/harvest) | 완료 | (이 커밋) |
 | 3 | 프론트 프로필 나무 영역 (HarvestTreeCard) | 대기 | |
 | 4 | 프론트 관리자 수확 회차 탭 | 대기 | |
 | 5 | 과거분 백필 스크립트 + 최종 검증·리뷰 | 대기 | |

@@ -177,3 +177,59 @@ def finalize_round(db: Session, round: HarvestRound) -> HarvestRound:
     db.commit()
     db.refresh(round)
     return round
+
+
+def parse_month(month: str) -> tuple[int, int]:
+    """'YYYY-MM' 문자열을 (year, month)로 변환한다. 형식이 틀리면 ValueError."""
+    try:
+        parsed = datetime.strptime(month, "%Y-%m")
+    except (ValueError, TypeError):
+        raise ValueError("month는 YYYY-MM 형식이어야 합니다")
+    return parsed.year, parsed.month
+
+
+def month_bounds(year: int, month: int) -> tuple[date, date]:
+    """월의 첫날과 말일."""
+    return date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
+
+
+def find_overlap(db: Session, start: date, end: date) -> HarvestRound | None:
+    """[start, end]와 기간이 겹치는 기존 회차 하나를 반환한다(없으면 None)."""
+    return (
+        db.query(HarvestRound)
+        .filter(HarvestRound.start_date <= end, HarvestRound.end_date >= start)
+        .first()
+    )
+
+
+def user_round_oranges(db: Session, rounds: list[HarvestRound], user_id: int) -> dict[int, tuple[int, bool]]:
+    """회차별 내 오렌지 수. {round_id: (oranges, is_estimate)}.
+
+    paid 회차는 저장된 배분값, open 회차는 기대값(반올림 정수)이다.
+    open 회차의 점수 계산은 회차당 한 번만 한다.
+    """
+    result: dict[int, tuple[int, bool]] = {}
+    paid_ids = [r.id for r in rounds if r.status == "paid"]
+    stored: dict[int, int] = {}
+    if paid_ids:
+        rows = (
+            db.query(HarvestAllocation.round_id, HarvestAllocation.oranges)
+            .filter(HarvestAllocation.round_id.in_(paid_ids), HarvestAllocation.user_id == user_id)
+            .all()
+        )
+        stored = {rid: oranges for rid, oranges in rows}
+    for r in rounds:
+        if r.status == "paid":
+            result[r.id] = (stored.get(r.id, 0), False)
+        else:
+            scores = compute_scores(db, r.start_date, r.end_date)
+            result[r.id] = (round(expected(scores, r.total_oranges).get(user_id, 0.0)), True)
+    return result
+
+
+def summarize_rounds(rounds: list[HarvestRound], per_round: dict[int, tuple[int, bool]]) -> dict:
+    """회차 목록의 내 오렌지 합계, 전체 풀, 지분(%), 열매 수."""
+    my = sum(per_round[r.id][0] for r in rounds)
+    pool = sum(r.total_oranges for r in rounds)
+    share = round(my / pool * 100, 1) if pool else 0.0
+    return {"my_oranges": my, "pool_oranges": pool, "share_pct": share, "fruit_count": fruit_count(share)}

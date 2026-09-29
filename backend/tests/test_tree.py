@@ -73,14 +73,12 @@ def test_tree_requires_auth(client: TestClient) -> None:
 
 def test_tree_stage_seed_when_no_posts(client: TestClient) -> None:
     token, _ = _register(client, "seed@x.com", "seeduser")
-    with patch("app.routes.users.get_btc_price_krw", return_value=BASELINE):
-        res = client.get("/api/v1/users/me/tree", headers=_auth(token))
+    res = client.get("/api/v1/users/me/tree", headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
     assert data["stage"] == "seed"
     assert data["total_days"] == 0
     assert data["next_stage_at"] == 1
-    assert data["fruit"]["available"] is False
 
 
 @pytest.mark.parametrize(
@@ -100,8 +98,7 @@ def test_tree_stage_boundaries(
 ) -> None:
     token, user = _register(client, f"tree{total_days}@x.com", f"treeuser{total_days}")
     _seed_days(db, user["id"], total_days)
-    with patch("app.routes.users.get_btc_price_krw", return_value=None):
-        res = client.get("/api/v1/users/me/tree", headers=_auth(token))
+    res = client.get("/api/v1/users/me/tree", headers=_auth(token))
     assert res.status_code == 200
     data = res.json()["data"]
     assert data["total_days"] == total_days
@@ -113,82 +110,10 @@ def test_tree_stage_counts_only_own_posts(client: TestClient, db: Session) -> No
     token_a, _user_a = _register(client, "owna@x.com", "ownusera")
     _token_b, user_b = _register(client, "ownb@x.com", "ownuserb")
     _seed_days(db, user_b["id"], 10)
-    with patch("app.routes.users.get_btc_price_krw", return_value=None):
-        res = client.get("/api/v1/users/me/tree", headers=_auth(token_a))
+    res = client.get("/api/v1/users/me/tree", headers=_auth(token_a))
     data = res.json()["data"]
     assert data["total_days"] == 0
     assert data["stage"] == "seed"
-
-
-# ── fruit 판정 ────────────────────────────────────────────────────────
-
-@pytest.mark.parametrize(
-    "current_price,expected_count,expected_size",
-    [
-        (75_000_000, 1, "small"),    # change -25%
-        (80_000_000, 2, "small"),    # change -20% (경계값 — -20 이상은 2)
-        (90_000_000, 2, "small"),    # change -10%
-        (100_000_000, 3, "medium"),  # change 0%
-        (119_000_000, 3, "medium"),  # change +19%
-        (120_000_000, 5, "medium"),  # change +20% (경계값 — 20 이상은 5)
-        (129_000_000, 5, "medium"),  # change +29%
-        (130_000_000, 5, "large"),   # change +30% (size 경계값 — 30 이상은 large)
-        (149_000_000, 5, "large"),   # change +49%
-        (150_000_000, 7, "large"),   # change +50% (경계값 — 50 이상은 7)
-        (200_000_000, 7, "large"),   # change +100%
-    ],
-)
-def test_tree_fruit_boundaries(
-    client: TestClient, db: Session, current_price: int, expected_count: int, expected_size: str
-) -> None:
-    token, user = _register(client, f"fruit{current_price}@x.com", f"fruituser{current_price}")
-    _seed_post(db, user["id"], btc_price_krw=BASELINE)
-    with patch("app.routes.users.get_btc_price_krw", return_value=current_price):
-        res = client.get("/api/v1/users/me/tree", headers=_auth(token))
-    fruit = res.json()["data"]["fruit"]
-    assert fruit["available"] is True
-    assert fruit["count"] == expected_count
-    assert fruit["size"] == expected_size
-    assert fruit["price_krw"] == current_price
-    assert fruit["baseline_krw"] == BASELINE
-
-
-def test_tree_fruit_baseline_is_average_of_stamped_posts(client: TestClient, db: Session) -> None:
-    token, user = _register(client, "avg@x.com", "avguser")
-    _seed_post(db, user["id"], btc_price_krw=80_000_000, days_ago=0)
-    _seed_post(db, user["id"], btc_price_krw=120_000_000, days_ago=1)
-    with patch("app.routes.users.get_btc_price_krw", return_value=110_000_000):
-        res = client.get("/api/v1/users/me/tree", headers=_auth(token))
-    fruit = res.json()["data"]["fruit"]
-    assert fruit["baseline_krw"] == 100_000_000
-    assert fruit["change_pct"] == 10.0
-
-
-def test_tree_fruit_unavailable_when_no_stamped_price(client: TestClient, db: Session) -> None:
-    """과거(가격 박제 이전) 게시물만 있는 경우 — btc_price_krw가 전부 NULL."""
-    token, user = _register(client, "nostamp@x.com", "nostampuser")
-    _seed_post(db, user["id"], btc_price_krw=None)
-    with patch("app.routes.users.get_btc_price_krw", return_value=BASELINE):
-        res = client.get("/api/v1/users/me/tree", headers=_auth(token))
-    fruit = res.json()["data"]["fruit"]
-    assert fruit == {
-        "available": False,
-        "count": 0,
-        "size": "small",
-        "price_krw": None,
-        "baseline_krw": None,
-        "change_pct": None,
-    }
-
-
-def test_tree_fruit_unavailable_when_price_fetch_fails(client: TestClient, db: Session) -> None:
-    """baseline은 있지만 현재가 조회에 실패한 경우."""
-    token, user = _register(client, "pricefail@x.com", "pricefailuser")
-    _seed_post(db, user["id"], btc_price_krw=BASELINE)
-    with patch("app.routes.users.get_btc_price_krw", return_value=None):
-        res = client.get("/api/v1/users/me/tree", headers=_auth(token))
-    fruit = res.json()["data"]["fruit"]
-    assert fruit["available"] is False
 
 
 # ── /videos/confirm 가격 박제 통합 ───────────────────────────────────────
@@ -204,11 +129,8 @@ def test_confirm_upload_stamps_btc_price_and_feeds_tree_baseline(client: TestCli
         )
     assert res.status_code == 200
 
-    with patch("app.routes.users.get_btc_price_krw", return_value=BASELINE):
-        tree_res = client.get("/api/v1/users/me/tree", headers=_auth(token))
-    fruit = tree_res.json()["data"]["fruit"]
-    assert fruit["available"] is True
-    assert fruit["baseline_krw"] == BASELINE
+    tree_res = client.get("/api/v1/users/me/tree", headers=_auth(token))
+    assert "fruit" not in tree_res.json()["data"]
     assert tree_res.json()["data"]["total_days"] == 1
     assert tree_res.json()["data"]["stage"] == "sprout"
 

@@ -74,6 +74,13 @@ E_SURVEY_NOT_FOUND = "E_SURVEY_NOT_FOUND"
 E_SURVEY_CLOSED = "E_SURVEY_CLOSED"
 E_SURVEY_INVALID_ANSWER = "E_SURVEY_INVALID_ANSWER"
 
+# ── Harvest (오렌지 수확 회차) ────────────────────────────────────────────────
+E_HARVEST_ROUND_NOT_FOUND = "E_HARVEST_ROUND_NOT_FOUND"
+E_HARVEST_INVALID_RANGE = "E_HARVEST_INVALID_RANGE"
+E_HARVEST_ROUND_OVERLAP = "E_HARVEST_ROUND_OVERLAP"
+E_HARVEST_ALREADY_PAID = "E_HARVEST_ALREADY_PAID"
+E_HARVEST_INVALID_MONTH = "E_HARVEST_INVALID_MONTH"
+
 
 def api_error(status_code: int, code: str, message: str) -> HTTPException:
     """Return an HTTPException whose detail carries both a machine-readable code
