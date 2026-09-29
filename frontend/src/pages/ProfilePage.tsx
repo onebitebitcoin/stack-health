@@ -11,13 +11,13 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/auth'
 import { shareProfileLink } from '../lib/share'
 import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
-import type { MyStats, HistoryResponse, HistoryWorkoutPost, PostVisibility, TreeStatus, TreeStage, FruitSize } from '../api/types'
+import type { MyStats, HistoryResponse, HistoryWorkoutPost, PostVisibility, TreeStatus } from '../api/types'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
 import LoadingScreen from '../components/LoadingScreen'
 import UserAvatar from '../components/UserAvatar'
 import { SkeletonCalendarGrid } from '../components/Skeleton'
-import OrangeTree from '../components/OrangeTree'
+import HarvestTreeCard from '../components/HarvestTreeCard'
 
 import { getDaysInMonth, getFirstDayIndex, pad2 } from '../utils/calendar'
 
@@ -105,20 +105,6 @@ export default function ProfilePage() {
     },
     enabled: !!user,
   })
-
-  const treeStageLabelKey: Record<TreeStage, string> = {
-    seed: 'treeStageSeed',
-    sprout: 'treeStageSprout',
-    sapling: 'treeStageSapling',
-    tree: 'treeStageTree',
-    grand: 'treeStageGrand',
-  }
-
-  const fruitSizeLabelKey: Record<FruitSize, string> = {
-    small: 'treeFruitSizeSmall',
-    medium: 'treeFruitSizeMedium',
-    large: 'treeFruitSizeLarge',
-  }
 
   type MyPost = { id: number; cdn_url: string; thumbnail_url?: string | null; caption: string | null; created_at: string; like_count: number; view_count: number; comment_count: number; visibility: PostVisibility }
   type MyPostsPage = { posts: MyPost[]; has_more: boolean; week_offset: number }
@@ -297,50 +283,7 @@ export default function ProfilePage() {
         />
       )}
 
-      {!treeLoading && !treeIsError && treeStatus && (
-        <div className="mx-4 mb-4 flex flex-col items-center rounded-card bg-theme-surface px-4 py-5 text-center">
-          <OrangeTree
-            stage={treeStatus.stage}
-            fruitCount={treeStatus.fruit.available ? treeStatus.fruit.count ?? 0 : 0}
-            fruitSize={treeStatus.fruit.available && treeStatus.fruit.size ? treeStatus.fruit.size : 'small'}
-            size={120}
-          />
-          <p className="mt-3 text-title font-semibold text-theme-primary">
-            {t(treeStageLabelKey[treeStatus.stage])}
-          </p>
-          <p className="text-body text-theme-muted">
-            {t('treeDaysGrowing', { count: treeStatus.total_days })}
-          </p>
-
-          <div className="mt-3 w-full max-w-[220px]">
-            {treeStatus.next_stage_at !== null ? (
-              <>
-                <div className="flex items-center justify-between text-label text-theme-muted mb-1">
-                  <span>{t('treeNextStageLabel')}</span>
-                  <span>{t('treeProgressDays', { current: treeStatus.total_days, target: treeStatus.next_stage_at })}</span>
-                </div>
-                <div className="h-1.5 w-full rounded-pill bg-leaf/25">
-                  <div
-                    className="h-1.5 rounded-pill bg-leaf transition-all"
-                    style={{ width: `${Math.min(100, (treeStatus.total_days / treeStatus.next_stage_at) * 100)}%` }}
-                  />
-                </div>
-              </>
-            ) : (
-              <p className="text-label font-medium text-leaf">{t('treeMaxStageReached')}</p>
-            )}
-          </div>
-
-          {treeStatus.fruit.available && treeStatus.fruit.count !== null && treeStatus.fruit.size && (
-            <p className="mt-2 text-label text-theme-muted">
-              {t('treeFruitDescription', {
-                count: treeStatus.fruit.count,
-                size: t(fruitSizeLabelKey[treeStatus.fruit.size]),
-              })}
-            </p>
-          )}
-        </div>
-      )}
+      {!treeLoading && !treeIsError && treeStatus && <HarvestTreeCard tree={treeStatus} />}
 
       <div className="bracket-card mx-4 mb-4 rounded-card bg-theme-surface px-4 py-3">
         <div className="flex items-center gap-4 py-1">

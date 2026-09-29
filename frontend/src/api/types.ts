@@ -296,18 +296,36 @@ export type SurveyAggregate = Record<string, SurveyAggregateValue>
 export type TreeStage = 'seed' | 'sprout' | 'sapling' | 'tree' | 'grand'
 export type FruitSize = 'small' | 'medium' | 'large'
 
-export interface TreeFruit {
-  available: boolean
-  count: number | null
-  size: FruitSize | null
-  price_krw: number | null
-  baseline_krw: number | null
-  change_pct: number | null
-}
-
 export interface TreeStatus {
   stage: TreeStage
   total_days: number
   next_stage_at: number | null
-  fruit: TreeFruit
+}
+
+// 수확 오렌지: 오렌지 개수만 다룬다(사토시/가격 노출 금지).
+export interface HarvestMonthSummary {
+  month: string
+  my_oranges: number
+  pool_oranges: number
+  share_pct: number
+  round_count: number
+}
+
+export interface HarvestRound {
+  id: number
+  start_date: string
+  end_date: string
+  status: 'open' | 'paid'
+  oranges: number
+  is_estimate: boolean
+}
+
+export interface MonthlyHarvest {
+  month: string
+  rounds: HarvestRound[]
+  my_oranges: number
+  pool_oranges: number
+  share_pct: number
+  fruit_count: number
+  has_estimate: boolean
 }
