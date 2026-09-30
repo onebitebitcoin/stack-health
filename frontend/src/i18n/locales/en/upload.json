@@ -149,6 +149,10 @@
       "monet": {
         "title": "Paint filter",
         "hint": "Turns your whole video into a painting. Brushstrokes show, light softly glows, shadows turn bluish and sunlight turns warm."
+      },
+      "mono_cartoon": {
+        "title": "B&W Cartoon",
+        "hint": "Turns your video into a black-and-white comic. Ink outlines with flat white, gray and black tones."
       }
     },
     "badges": {

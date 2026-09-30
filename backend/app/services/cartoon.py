@@ -181,14 +181,17 @@ def _worker_init() -> None:
     cv2.setNumThreads(1)
 
 
-VIDEO_FILTERS = ("cartoon", "sketch", "orange_cartoon", "monet")
+# 영상 전체 샘플로 밝기 기준(lo/hi)을 한 번 계산해 넘겨받는 필터. 둘 다 `orange_cartoon._tone`을 쓴다.
+_TONE_RANGE_FILTERS = ("orange_cartoon", "mono_cartoon")
+
+VIDEO_FILTERS = ("cartoon", "sketch", "orange_cartoon", "monet", "mono_cartoon")
 
 
 def frame_renderer(video_filter: str, tone_range: tuple[float, float] | None = None):
     """필터 이름 → 프레임 렌더러 `(frame, gamma) -> frame`.
 
-    sketch·orange_cartoon·monet 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를
-    피하려고 호출 시점에 가져온다. `tone_range`는 orange_cartoon 전용 인자다 — 영상 전체
+    sketch·orange_cartoon·monet·mono_cartoon 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를
+    피하려고 호출 시점에 가져온다. `tone_range`는 orange_cartoon·mono_cartoon 전용 인자다 — 영상 전체
     샘플로 미리 계산한 밝기 기준(lo/hi, `orange_cartoon.sample_tone_range`)을 클로저로
     고정해 넘긴다. 다른 필터는 이 인자를 무시한다. 자세한 설계 이유는
     `app.services.orange_cartoon` 모듈 docstring 참고.
@@ -210,6 +213,13 @@ def frame_renderer(video_filter: str, tone_range: tuple[float, float] | None = N
         from app.services.monet import monet_frame
 
         return monet_frame
+    if video_filter == "mono_cartoon":
+        from app.services.mono_cartoon import mono_cartoon_frame
+
+        def _render_mono(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+            return mono_cartoon_frame(frame, gamma, tone_range=tone_range)
+
+        return _render_mono
     raise ValueError(f"unknown video filter: {video_filter}")
 
 
@@ -361,7 +371,7 @@ _TONE_SAMPLE_FRAMES = 10  # 균등 간격 8~12장 — 영상 전체 밝기 기�
 
 
 def _sample_video_tone_range(input_path: str, frame_count: int) -> tuple[float, float] | None:
-    """orange_cartoon 전용: 영상 전체에서 균등 간격 프레임을 뽑아 밝기 기준(lo/hi 백분위)을
+    """orange_cartoon·mono_cartoon 전용: 영상 전체에서 균등 간격 프레임을 뽑아 밝기 기준(lo/hi 백분위)을
     한 번만 계산한다. 구간 병렬 렌더링에 모두 같은 값을 넘겨 톤이 구간 경계에서 끊기거나
     프레임마다 깜빡이지 않게 한다 — 설계 이유는 `app.services.orange_cartoon` 모듈 docstring
     참고. 프레임을 하나도 못 읽으면 None(호출부가 프레임별 폴백을 쓴다).
@@ -390,7 +400,7 @@ def _sample_video_tone_range(input_path: str, frame_count: int) -> tuple[float, 
 
 
 def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
-    """영상 전체에 `video_filter`(cartoon·sketch·orange_cartoon·monet) 렌더러를 적용한다. 원본
+    """영상 전체에 `video_filter`(cartoon·sketch·orange_cartoon·monet·mono_cartoon) 렌더러를 적용한다. 원본
     오디오 스트림은 그대로 보존(-c:a copy).
 
     프레임 수가 `_MIN_SEGMENT_FRAMES` 이상이면 영상을 `_worker_pool_size()`개 구간으로 나눠
@@ -415,11 +425,11 @@ def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
 
-    # orange_cartoon만 영상 전체 샘플로 밝기 기준을 한 번 정하고 모든 구간에 그대로 넘긴다
+    # orange_cartoon·mono_cartoon만 영상 전체 샘플로 밝기 기준을 한 번 정하고 모든 구간에 그대로 넘긴다
     # (자세한 이유는 `_sample_video_tone_range`·`app.services.orange_cartoon` docstring).
     # cartoon·sketch는 프레임별 감마 EMA만으로 충분해 이 값을 쓰지 않는다.
     tone_range = (
-        _sample_video_tone_range(input_path, frame_count) if video_filter == "orange_cartoon" else None
+        _sample_video_tone_range(input_path, frame_count) if video_filter in _TONE_RANGE_FILTERS else None
     )
 
     # 컨테이너가 프레임 수를 신뢰할 수 없게 보고하면(0 이하) 안전하게 프레임 병렬로 폴백.
