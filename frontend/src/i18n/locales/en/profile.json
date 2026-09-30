@@ -38,7 +38,6 @@
   "noVideos": "No videos uploaded yet",
   "deleteConfirmTitle": "Delete Video",
   "deleteConfirmBody": "This can't be undone.",
-  "deleting": "Deleting...",
   "myPostsLabel": "My Videos",
   "deleteAriaLabel": "Delete",
   "editAriaLabel": "Edit",
@@ -116,5 +115,7 @@
   "harvestHelpScore": "Each check-in earns 0.5 points and each comment 0.01 points.",
   "harvestHelpSplit": "Every round splits 1,008 oranges by score. Higher scores get more, and everyone who takes part gets some.",
   "harvestEstimateNote": "Estimates can change as other people post",
-  "harvestEstimateIncluded": "incl. {{count}} estimated"
+  "harvestEstimateIncluded": "incl. {{count}} estimated",
+  "deleteSuccess": "Video deleted",
+  "deleteFailed": "Failed to delete video"
 }

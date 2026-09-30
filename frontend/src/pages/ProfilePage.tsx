@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/auth'
 import { shareProfileLink } from '../lib/share'
 import { useUnreadNotifications } from '../hooks/useUnreadNotifications'
+import { useDeletePost } from '../hooks/useDeletePost'
 import type { MyStats, HistoryResponse, HistoryWorkoutPost, PostVisibility } from '../api/types'
 import client from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
@@ -134,19 +135,7 @@ export default function ProfilePage() {
     },
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: (postId: number) => client.delete(`/videos/posts/${postId}`),
-    onSuccess: (_, postId) => {
-      queryClient.setQueryData<MyPostsPage>(
-        ['my-posts'],
-        (old) => old ? { ...old, posts: old.posts.filter((p) => p.id !== postId) } : old
-      )
-      queryClient.invalidateQueries({ queryKey: ['history'] })
-      queryClient.invalidateQueries({ queryKey: ['my-stats'] })
-      queryClient.invalidateQueries({ queryKey: ['feed'] })
-      setDeleteConfirmId(null)
-    },
-  })
+  const deleteMutation = useDeletePost()
 
   const { data: historyData, isLoading: historyLoading } = useQuery<HistoryResponse>({
     queryKey: ['history', year, month],
@@ -487,11 +476,13 @@ export default function ProfilePage() {
                 {t('common:cancel')}
               </button>
               <button
-                onClick={() => deleteMutation.mutate(deleteConfirmId)}
-                disabled={deleteMutation.isPending}
-                className="flex-1 rounded-card bg-danger py-3 text-body font-semibold text-white disabled:opacity-60"
+                onClick={() => {
+                  deleteMutation.mutate(deleteConfirmId)
+                  setDeleteConfirmId(null)
+                }}
+                className="flex-1 rounded-card bg-danger py-3 text-body font-semibold text-white"
               >
-                {deleteMutation.isPending ? t('deleting') : t('common:delete')}
+                {t('common:delete')}
               </button>
             </div>
           </div>

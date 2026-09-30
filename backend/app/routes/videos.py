@@ -505,6 +505,7 @@ def update_post(
 @router.delete("/posts/{post_id}")
 def delete_post(
     post_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -542,13 +543,20 @@ def delete_post(
         db.delete(video)
     db.commit()
 
+    # R2 삭제는 응답 뒤로 미룬다. 게시물은 커밋 시점에 이미 사라졌고, R2 호출이 느리면
+    # 클라이언트가 그만큼 삭제 완료를 기다리게 된다.
     if video:
-        try:
-            r2_service.delete_object(video.r2_key)
-        except Exception:
-            pass  # R2 deletion failure is non-fatal
+        background_tasks.add_task(_delete_r2_object_quietly, video.r2_key)
 
     return {"data": {"deleted": post_id}}
+
+
+def _delete_r2_object_quietly(r2_key: str) -> None:
+    """게시물 삭제 후 R2 객체를 지운다. 실패해도 게시물 삭제는 이미 끝났으므로 로그만 남긴다."""
+    try:
+        r2_service.delete_object(r2_key)
+    except Exception:
+        logger.exception("R2 객체 삭제 실패: r2_key=%s", r2_key)
 
 
 @router.post("/merge-audio")

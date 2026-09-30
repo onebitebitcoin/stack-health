@@ -38,7 +38,6 @@
   "noVideos": "업로드한 영상이 없습니다",
   "deleteConfirmTitle": "영상 삭제",
   "deleteConfirmBody": "삭제하면 복구할 수 없습니다.",
-  "deleting": "삭제 중...",
   "myPostsLabel": "내 영상",
   "deleteAriaLabel": "삭제",
   "editAriaLabel": "수정",
@@ -116,5 +115,7 @@
   "harvestHelpScore": "인증 1회 0.5점, 댓글 1개 0.01점이 쌓여요.",
   "harvestHelpSplit": "회차마다 오렌지 1,008개를 점수에 따라 나눠요. 점수가 높을수록 많이 받고, 참여만 해도 일부는 받아요.",
   "harvestEstimateNote": "예상은 다른 참여자의 활동에 따라 달라질 수 있어요",
-  "harvestEstimateIncluded": "예상 {{count}}개 포함"
+  "harvestEstimateIncluded": "예상 {{count}}개 포함",
+  "deleteSuccess": "영상을 삭제했습니다",
+  "deleteFailed": "영상 삭제에 실패했습니다"
 }
