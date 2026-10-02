@@ -133,7 +133,7 @@ function Layout() {
         <Route path="/login/lightning" element={<LightningLoginPage />} />
         <Route path="/login/email" element={<EmailLoginPage />} />
         <Route path="/login/register" element={<RegisterPage />} />
-        <Route path="/" element={<RequireAuth><FeedPage /></RequireAuth>} />
+        <Route path="/" element={<FeedPage />} />
         <Route path="/upload" element={<RequireAuth><UploadPage /></RequireAuth>} />
         <Route path="/challenges" element={<RequireAuth><ChallengePage /></RequireAuth>} />
         <Route path="/challenges/create" element={<RequireAuth><ChallengeCreatePage /></RequireAuth>} />
