@@ -23,6 +23,12 @@ export default function HarvestUserStatusTable({ month }: { month: string }) {
   const rows = query.data?.rows ?? []
   const poolOranges = query.data?.pool_oranges ?? 0
   const sum = (pick: (row: (typeof rows)[number]) => number) => rows.reduce((acc, row) => acc + pick(row), 0)
+  const totalShare = poolOranges > 0 ? (sum((r) => r.total) / poolOranges) * 100 : 0
+  const breakdown = (growing: number, ripe: number, collected: number) => [
+    [t('harvestColGrowing'), growing],
+    [t('harvestColRipe'), ripe],
+    [t('harvestColCollected'), collected],
+  ] as const
 
   return (
     <div className="rounded-card bg-theme-surface p-4 space-y-3">
@@ -31,7 +37,8 @@ export default function HarvestUserStatusTable({ month }: { month: string }) {
       {query.isError && <p className="text-label text-danger">{getApiErrorMessage(query.error, t('loadFailed'))}</p>}
       {query.isSuccess && rows.length === 0 && <p className="text-label text-theme-muted">{t('harvestUsersEmpty')}</p>}
       {rows.length > 0 && (
-        <div className="overflow-x-auto">
+        <>
+        <div className="hidden md:block">
           <table className="w-full text-label tabular-nums">
             <thead>
               <tr className="text-left text-theme-muted">
@@ -60,11 +67,32 @@ export default function HarvestUserStatusTable({ month }: { month: string }) {
                 <td className="py-2 pr-3 text-right">{formatNumber(sum((r) => r.ripe))}</td>
                 <td className="py-2 pr-3 text-right">{formatNumber(sum((r) => r.collected))}</td>
                 <td className="py-2 pr-3 text-right">{formatNumber(sum((r) => r.total))}</td>
-                <td className="py-2 text-right">{formatPct(poolOranges > 0 ? (sum((r) => r.total) / poolOranges) * 100 : 0)}</td>
+                <td className="py-2 text-right">{formatPct(totalShare)}</td>
               </tr>
             </tbody>
           </table>
         </div>
+        <ul data-testid="harvest-user-list" className="md:hidden text-label">
+          {[
+            ...rows.map((row) => ({ key: String(row.user_id), name: row.username, total: row.total, share: row.share_pct, parts: breakdown(row.growing, row.ripe, row.collected), bold: false })),
+            { key: 'total', name: t('harvestTotal'), total: sum((r) => r.total), share: totalShare, parts: breakdown(sum((r) => r.growing), sum((r) => r.ripe), sum((r) => r.collected)), bold: true },
+          ].map((item) => (
+            <li key={item.key} className="border-t border-theme-border py-2 first:border-t-0">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className={`min-w-0 truncate text-theme-primary ${item.bold ? 'font-semibold' : ''}`}>{item.name}</span>
+                <span className="whitespace-nowrap font-semibold tabular-nums text-theme-primary">
+                  {formatNumber(item.total)}개 · {formatPct(item.share)}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 tabular-nums text-theme-muted">
+                {item.parts.map(([label, value]) => (
+                  <span key={label} className="whitespace-nowrap">{label} {formatNumber(value)}</span>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+        </>
       )}
     </div>
   )

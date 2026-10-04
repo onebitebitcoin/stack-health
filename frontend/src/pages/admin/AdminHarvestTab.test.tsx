@@ -129,13 +129,13 @@ describe('AdminHarvestTab 회차 목록', () => {
   })
 })
 
-describe('AdminHarvestTab BTC 지급 표시', () => {
+describe('AdminHarvestTab 비트코인 지급 표시', () => {
   it('btc_paid_at 이 있으면 지급 완료 날짜를, 없으면 표시 버튼을 보여준다', async () => {
     renderTab()
     await screen.findByText('9/1~9/13')
-    expect(screen.getByText('BTC 지급 완료 (10/1)')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'BTC 지급 완료 표시' })).toHaveLength(1)
-    expect(screen.getByRole('button', { name: 'BTC 지급 완료 표시' })).toBeEnabled()
+    expect(screen.getByText('비트코인 지급 완료 (10/1)')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '비트코인 지급 완료 표시' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: '비트코인 지급 완료 표시' })).toBeEnabled()
   })
 })
 
@@ -218,7 +218,7 @@ describe('AdminHarvestTab 사용자별 오렌지 현황', () => {
     renderTab()
     const heading = await screen.findByText('사용자별 오렌지 현황')
     const card = heading.parentElement as HTMLElement
-    expect(await within(card).findByText('alice')).toBeInTheDocument()
+    expect(await within(card).findByRole('table')).toBeInTheDocument()
     expect(within(card).getByRole('columnheader', { name: '자라는 중' })).toBeInTheDocument()
     expect(within(card).getByRole('columnheader', { name: '수확 대기' })).toBeInTheDocument()
     expect(within(card).getByRole('columnheader', { name: '수확함' })).toBeInTheDocument()
@@ -231,53 +231,21 @@ describe('AdminHarvestTab 사용자별 오렌지 현황', () => {
     expect(call[1].params.month).toMatch(/^\d{4}-\d{2}$/)
   })
 
+  it('모바일 목록에 사용자별 합계와 비율, 합계 항목을 보여준다', async () => {
+    renderTab()
+    const list = await screen.findByTestId('harvest-user-list')
+    const items = within(list).getAllByRole('listitem').map((li) => li.textContent)
+    expect(items).toEqual([
+      'alice60개 · 90.9%자라는 중 10수확 대기 20수확함 30',
+      'bob6개 · 9.1%자라는 중 1수확 대기 2수확함 3',
+      '합계66개 · 100.0%자라는 중 11수확 대기 22수확함 33',
+    ])
+  })
+
   it('행이 없으면 안내 문구를 보여준다', async () => {
     mockGets([openRound, paidRound], openDetail, false, { month: '2026-09', rows: [] })
     renderTab()
     expect(await screen.findByText('이 달에는 오렌지 현황이 없습니다')).toBeInTheDocument()
-  })
-})
-
-describe('AdminHarvestTab 회차 생성', () => {
-  it('회차 만들기는 선택한 월과 주기로 generate를 호출하고 성공 메시지를 보여준다', async () => {
-    const user = userEvent.setup()
-    mockClient.post.mockResolvedValueOnce({ data: { data: [openRound, paidRound] } })
-    renderTab()
-    await screen.findByText('9/1~9/13')
-
-    await user.selectOptions(screen.getByLabelText('주기'), 'biweekly')
-    await user.click(screen.getByRole('button', { name: '회차 만들기' }))
-
-    const [url, body] = mockClient.post.mock.calls[0]
-    expect(url).toBe('/admin/harvest/rounds/generate')
-    expect(body.cadence).toBe('biweekly')
-    expect(Number.isInteger(body.year)).toBe(true)
-    expect(Number.isInteger(body.month)).toBe(true)
-    expect(await screen.findByText('회차 2개를 만들었습니다')).toBeInTheDocument()
-  })
-
-  it('겹치는 회차가 있으면 서버의 409 메시지를 보여준다', async () => {
-    const user = userEvent.setup()
-    mockClient.post.mockRejectedValueOnce(axiosError(409, '이미 겹치는 회차가 있습니다'))
-    renderTab()
-    await screen.findByText('9/1~9/13')
-
-    await user.click(screen.getByRole('button', { name: '회차 만들기' }))
-    expect(await screen.findByText(/이미 겹치는 회차가 있습니다/)).toBeInTheDocument()
-  })
-
-  it('수동 생성은 시작일과 종료일을 보낸다', async () => {
-    const user = userEvent.setup()
-    mockClient.post.mockResolvedValueOnce({ data: { data: openRound } })
-    renderTab()
-    await screen.findByText('9/1~9/13')
-
-    await user.type(screen.getByLabelText('시작일'), '2026-09-01')
-    await user.type(screen.getByLabelText('종료일'), '2026-09-13')
-    await user.click(screen.getByRole('button', { name: '수동 생성' }))
-
-    expect(mockClient.post).toHaveBeenCalledWith('/admin/harvest/rounds', { start_date: '2026-09-01', end_date: '2026-09-13' })
-    expect(await screen.findByText('회차를 만들었습니다')).toBeInTheDocument()
   })
 })
 
@@ -303,22 +271,22 @@ describe('AdminHarvestTab 회차 상세', () => {
     expect(await screen.findByRole('columnheader', { name: '오렌지' })).toBeInTheDocument()
     const totalRow = within(screen.getByRole('columnheader', { name: '점수' }).closest('table') as HTMLElement).getByText('합계').closest('tr') as HTMLElement
     expect(within(totalRow).getByText('1,008')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'BTC 지급 완료 표시' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '비트코인 지급 완료 표시' })).toHaveLength(1)
   })
 
-  it('BTC 지급 표시는 확인 단계를 거친 뒤에만 POST 하고 성공 메시지를 보여준다', async () => {
+  it('비트코인 지급 표시는 확인 단계를 거친 뒤에만 POST 하고 성공 메시지를 보여준다', async () => {
     const user = userEvent.setup()
     mockClient.post.mockResolvedValueOnce({ data: { data: { ...openRound, status: 'paid', btc_paid_at: '2026-09-29T03:00:00Z' } } })
     renderTab()
     await screen.findByText('9/1~9/13')
 
-    await user.click(screen.getByRole('button', { name: 'BTC 지급 완료 표시' }))
+    await user.click(screen.getByRole('button', { name: '비트코인 지급 완료 표시' }))
     expect(await screen.findByText(/표시한 뒤에는 되돌릴 수 없습니다/)).toBeInTheDocument()
     expect(mockClient.post).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: '확인' }))
     expect(mockClient.post).toHaveBeenCalledWith('/admin/harvest/rounds/1/pay')
-    expect(await screen.findByText('BTC 지급 완료로 표시했습니다')).toBeInTheDocument()
+    expect(await screen.findByText('비트코인 지급 완료로 표시했습니다')).toBeInTheDocument()
   })
 
   it('확인 단계에서 취소하면 POST 하지 않는다', async () => {
@@ -326,7 +294,7 @@ describe('AdminHarvestTab 회차 상세', () => {
     renderTab()
     await screen.findByText('9/1~9/13')
 
-    await user.click(screen.getByRole('button', { name: 'BTC 지급 완료 표시' }))
+    await user.click(screen.getByRole('button', { name: '비트코인 지급 완료 표시' }))
     await user.click(await screen.findByRole('button', { name: '취소' }))
     expect(mockClient.post).not.toHaveBeenCalled()
     expect(screen.queryByText(/표시한 뒤에는 되돌릴 수 없습니다/)).not.toBeInTheDocument()
@@ -334,13 +302,13 @@ describe('AdminHarvestTab 회차 상세', () => {
 
   it('지급 표시 실패 시 서버 메시지를 보여준다', async () => {
     const user = userEvent.setup()
-    mockClient.post.mockRejectedValueOnce(axiosError(409, '이미 BTC 지급 완료된 회차입니다'))
+    mockClient.post.mockRejectedValueOnce(axiosError(409, '이미 비트코인 지급 완료된 회차입니다'))
     renderTab()
     await screen.findByText('9/1~9/13')
 
-    await user.click(screen.getByRole('button', { name: 'BTC 지급 완료 표시' }))
+    await user.click(screen.getByRole('button', { name: '비트코인 지급 완료 표시' }))
     await user.click(await screen.findByRole('button', { name: '확인' }))
-    expect(await screen.findByText(/이미 BTC 지급 완료된 회차입니다/)).toBeInTheDocument()
+    expect(await screen.findByText(/이미 비트코인 지급 완료된 회차입니다/)).toBeInTheDocument()
   })
 
   it('삭제는 확인 단계를 거친 뒤 DELETE 하고 성공 메시지를 보여준다', async () => {
@@ -358,21 +326,21 @@ describe('AdminHarvestTab 회차 상세', () => {
     expect(await screen.findByText('회차를 삭제했습니다')).toBeInTheDocument()
   })
 
-  it('기간이 끝나지 않은 회차는 BTC 지급 표시 버튼을 비활성화하고 사유를 안내한다', async () => {
+  it('기간이 끝나지 않은 회차는 비트코인 지급 표시 버튼을 비활성화하고 사유를 안내한다', async () => {
     const ongoing = { ...openRound, id: 3, start_date: '2026-09-28', end_date: '2026-09-29' }
     mockGets([ongoing], { ...openDetail, round: ongoing })
     renderTab()
     await screen.findByText('9/28~9/29')
 
-    const button = screen.getByRole('button', { name: 'BTC 지급 완료 표시' })
+    const button = screen.getByRole('button', { name: '비트코인 지급 완료 표시' })
     expect(button).toBeDisabled()
-    expect(button).toHaveAttribute('title', '기간이 끝난 다음 날부터 BTC 지급 완료로 표시할 수 있어요 (9/30 이후)')
+    expect(button).toHaveAttribute('title', '기간이 끝난 다음 날부터 비트코인 지급 완료로 표시할 수 있어요 (9/30 이후)')
   })
 
-  it('종료일 다음 날이 되면 BTC 지급 표시 버튼이 활성화된다', async () => {
+  it('종료일 다음 날이 되면 비트코인 지급 표시 버튼이 활성화된다', async () => {
     renderTab()
     await screen.findByText('9/1~9/13')
-    expect(screen.getByRole('button', { name: 'BTC 지급 완료 표시' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '비트코인 지급 완료 표시' })).toBeEnabled()
   })
 
   it('확정 회차 삭제는 강한 경고를 보여주고 force=true 로 삭제한다', async () => {
@@ -404,28 +372,16 @@ describe('AdminHarvestTab 회차 상세', () => {
     expect(mockClient.delete).toHaveBeenCalledWith('/admin/harvest/rounds/1')
   })
 
-  it('BTC 지급 결과 메시지는 상세 패널 안(확인 영역 근처)에 보인다', async () => {
+  it('비트코인 지급 결과 메시지는 상세 패널 안(확인 영역 근처)에 보인다', async () => {
     const user = userEvent.setup()
     mockClient.post.mockRejectedValueOnce(axiosError(409, '아직 기간이 끝나지 않았습니다'))
     renderTab()
     await screen.findByText('9/1~9/13')
 
-    await user.click(screen.getByRole('button', { name: 'BTC 지급 완료 표시' }))
+    await user.click(screen.getByRole('button', { name: '비트코인 지급 완료 표시' }))
     await user.click(await screen.findByRole('button', { name: '확인' }))
     const alert = await screen.findByText(/아직 기간이 끝나지 않았습니다/)
     const panel = screen.getByRole('button', { name: '회차 삭제' }).closest('div.space-y-3') as HTMLElement
     expect(panel).toContainElement(alert)
-  })
-})
-
-describe('AdminHarvestTab 월 입력 검증', () => {
-  it('월이 비어 있으면 회차 만들기 버튼이 비활성화된다', async () => {
-    const user = userEvent.setup()
-    renderTab()
-    await screen.findByText('9/1~9/13')
-    expect(screen.getByRole('button', { name: '회차 만들기' })).toBeEnabled()
-
-    await user.clear(screen.getByLabelText('조회 월'))
-    expect(screen.getByRole('button', { name: '회차 만들기' })).toBeDisabled()
   })
 })

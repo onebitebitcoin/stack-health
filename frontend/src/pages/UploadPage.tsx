@@ -90,7 +90,7 @@ export default function UploadPage() {
   const [videoAudioStatus, setVideoAudioStatus] = useState<'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'>('idle')
   const videoSubtitleTriedRef = useRef(false)
 
-  const [hasChallenge, setHasChallenge] = useState<boolean | null>(null)
+  const [hasChallenge, setHasChallenge] = useState<boolean | null>(false)
   const [selectedChallengeId, setSelectedChallengeId] = useState<number | null>(null)
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null)
   const [showChallengeModal, setShowChallengeModal] = useState(false)
@@ -378,14 +378,6 @@ export default function UploadPage() {
     enabled: showChallengeModal && challengeSearch.length > 0,
   })
   const displayedChallenges = challengeSearch ? searchChallenges.filter((c) => c.joined) : joinedChallenges
-
-  // 참여중 챌린지가 있으면 첫 번째를 기본 선택(사용자가 '없음'을 명시 선택하지 않은 경우에만)
-  useEffect(() => {
-    if (joinedChallenges.length > 0 && selectedChallengeId == null && hasChallenge !== false) {
-      const first = joinedChallenges[0]
-      setSelectedChallengeId(first.id); setSelectedChallenge(first); setHasChallenge(true)
-    }
-  }, [joinedChallenges, selectedChallengeId, hasChallenge])
 
   async function extractSubtitles(source: 'video' | 'audio') {
     const videoItem = mediaItems.find((m) => m.kind === 'video')

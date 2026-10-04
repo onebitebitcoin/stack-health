@@ -61,7 +61,6 @@ export default function HarvestTreeCard() {
           <p>{t('harvestEstimateNote')}</p>
           <p>{t('harvestHelpWeekEnd')}</p>
           <p>{t('harvestHelpShare')}</p>
-          {harvest && <p>{t('harvestFruitUnit', { count: harvest.oranges_per_fruit })}</p>}
         </div>
       )}
 

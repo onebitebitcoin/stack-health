@@ -1,22 +1,16 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, CheckCircle2, Clock, Info, XCircle, Zap } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, XCircle, Zap } from 'lucide-react'
 import client from '../../api/client'
 import { getApiErrorMessage } from '../../api/errors'
 
-interface BlinkStatus {
-  configured: boolean
-  wallet_id: string | null
-  balance_sats: number | null
+interface PayoutStatusResponse {
+  dummy: boolean
   max_test_sats: number
-  error: string | null
 }
 
-type PayoutStatus = 'SUCCESS' | 'PENDING' | 'FAILURE' | 'ALREADY_PAID'
-
 interface PayoutResult {
-  status: PayoutStatus
   ln_address: string
   amount_sats: number
 }
@@ -28,7 +22,6 @@ interface PayoutRequestPayload {
 }
 
 interface PayoutOutcome {
-  status: PayoutStatus
   lnAddress: string
   amountSats: number
 }
@@ -60,10 +53,10 @@ export default function AdminPayoutTab() {
     data: statusData,
     isLoading: statusLoading,
     isError: statusError,
-  } = useQuery<BlinkStatus>({
-    queryKey: ['admin-blink-status'],
+  } = useQuery<PayoutStatusResponse>({
+    queryKey: ['admin-payout-status'],
     queryFn: async () => {
-      const res = await client.get<{ data: BlinkStatus }>('/admin/blink/status')
+      const res = await client.get<{ data: PayoutStatusResponse }>('/admin/blink/status')
       return res.data.data
     },
   })
@@ -74,10 +67,10 @@ export default function AdminPayoutTab() {
       return res.data.data
     },
     onSuccess: (data) => {
-      setOutcome({ status: data.status, lnAddress: data.ln_address, amountSats: data.amount_sats })
+      setOutcome({ lnAddress: data.ln_address, amountSats: data.amount_sats })
       setFailure(null)
       setConfirmPayload(null)
-      qc.invalidateQueries({ queryKey: ['admin-blink-status'] })
+      qc.invalidateQueries({ queryKey: ['admin-payout-status'] })
     },
     onError: (err) => {
       setFailure({ message: getApiErrorMessage(err, t('payoutErrorFallback')) })
@@ -86,9 +79,8 @@ export default function AdminPayoutTab() {
     },
   })
 
-  const configured = statusData?.configured ?? false
   const maxTestSats = statusData?.max_test_sats ?? 0
-  const canAttemptSubmit = configured && !testPayout.isPending && lnAddress.trim() !== '' && amountInput.trim() !== ''
+  const canAttemptSubmit = !testPayout.isPending && lnAddress.trim() !== '' && amountInput.trim() !== ''
 
   function validate(): PayoutRequestPayload | null {
     const trimmedAddress = lnAddress.trim()
@@ -138,13 +130,6 @@ export default function AdminPayoutTab() {
     testPayout.mutate(confirmPayload)
   }
 
-  const outcomeMeta: Record<PayoutStatus, { icon: React.ReactNode; colorClass: string; titleKey: string; bodyKey: string }> = {
-    SUCCESS: { icon: <CheckCircle2 size={16} />, colorClass: 'bg-success/10 text-success', titleKey: 'payoutResultSuccessTitle', bodyKey: 'payoutResultSuccessBody' },
-    PENDING: { icon: <Clock size={16} />, colorClass: 'bg-warning/10 text-warning', titleKey: 'payoutResultPendingTitle', bodyKey: 'payoutResultPendingBody' },
-    ALREADY_PAID: { icon: <Info size={16} />, colorClass: 'bg-accent/10 text-accent', titleKey: 'payoutResultAlreadyPaidTitle', bodyKey: 'payoutResultAlreadyPaidBody' },
-    FAILURE: { icon: <XCircle size={16} />, colorClass: 'bg-danger/10 text-danger', titleKey: 'payoutResultFailureTitle', bodyKey: 'payoutResultFailureBody' },
-  }
-
   return (
     <div className="space-y-4">
       <div className="rounded-card bg-theme-surface p-4">
@@ -153,35 +138,13 @@ export default function AdminPayoutTab() {
           <p className="text-body font-semibold text-theme-primary">{t('tabPayout')}</p>
         </div>
 
-        {statusLoading && <p className="text-label text-theme-muted">{t('loading')}</p>}
-        {!statusLoading && statusError && <p className="text-label text-danger">{t('loadFailed')}</p>}
-
-        {!statusLoading && !statusError && statusData && (
-          <div className="space-y-2">
-            {!statusData.configured && (
-              <div className="flex items-start gap-2 rounded-card bg-warning/10 px-3 py-2 text-label text-warning">
-                <AlertTriangle size={14} className="mt-1 shrink-0" />
-                <span>{t('payoutNotConfigured')}</span>
-              </div>
-            )}
-            {statusData.configured && statusData.error && (
-              <div className="flex items-start gap-2 rounded-card bg-danger/10 px-3 py-2 text-label text-danger">
-                <AlertTriangle size={14} className="mt-1 shrink-0" />
-                <span>{t('payoutStatusErrorPrefix', { message: statusData.error })}</span>
-              </div>
-            )}
-            {statusData.configured && !statusData.error && (
-              <div className="text-label text-theme-muted">
-                {statusData.balance_sats !== null
-                  ? <p className="text-body font-semibold text-theme-primary">{t('payoutWalletBalance', { balance: formatSats(statusData.balance_sats) })}</p>
-                  : <p>{t('payoutBalanceUnavailable')}</p>
-                }
-                {statusData.wallet_id && <p className="font-mono">{t('payoutWalletId', { walletId: statusData.wallet_id })}</p>}
-                <p>{t('payoutMaxHint', { max: formatSats(statusData.max_test_sats) })}</p>
-              </div>
-            )}
-          </div>
-        )}
+        <div className="flex items-start gap-2 rounded-card bg-warning/10 px-3 py-2 text-label text-warning">
+          <AlertTriangle size={14} className="mt-1 shrink-0" />
+          <span>{t('payoutDummyNotice')}</span>
+        </div>
+        {statusLoading && <p className="mt-2 text-label text-theme-muted">{t('loading')}</p>}
+        {!statusLoading && statusError && <p className="mt-2 text-label text-danger">{t('loadFailed')}</p>}
+        {statusData && <p className="mt-2 text-label text-theme-muted">{t('payoutMaxHint', { max: formatSats(statusData.max_test_sats) })}</p>}
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="rounded-card bg-theme-surface p-4 space-y-4">
@@ -192,7 +155,7 @@ export default function AdminPayoutTab() {
             value={lnAddress}
             onChange={(e) => { setLnAddress(e.target.value); setFieldErrors((f) => ({ ...f, address: undefined })) }}
             placeholder={t('payoutAddressPlaceholder')}
-            disabled={!configured || testPayout.isPending}
+            disabled={testPayout.isPending}
             className="w-full rounded-card border border-theme-border bg-theme-surface2 px-4 py-3 text-body font-mono text-theme-primary placeholder:text-theme-muted outline-none focus:border-accent disabled:opacity-50"
           />
           {fieldErrors.address && <p className="mt-1 text-label text-danger">{fieldErrors.address}</p>}
@@ -205,7 +168,7 @@ export default function AdminPayoutTab() {
             value={amountInput}
             onChange={(e) => { setAmountInput(e.target.value); setFieldErrors((f) => ({ ...f, amount: undefined })) }}
             placeholder={t('payoutAmountPlaceholder')}
-            disabled={!configured || testPayout.isPending}
+            disabled={testPayout.isPending}
             className="w-full rounded-card border border-theme-border bg-theme-surface2 px-4 py-3 text-body text-theme-primary placeholder:text-theme-muted outline-none focus:border-accent disabled:opacity-50"
           />
           {fieldErrors.amount && <p className="mt-1 text-label text-danger">{fieldErrors.amount}</p>}
@@ -219,7 +182,7 @@ export default function AdminPayoutTab() {
             onChange={(e) => { setMemo(e.target.value); setFieldErrors((f) => ({ ...f, memo: undefined })) }}
             placeholder={t('payoutMemoPlaceholder')}
             maxLength={MEMO_MAX_LENGTH}
-            disabled={!configured || testPayout.isPending}
+            disabled={testPayout.isPending}
             className="w-full rounded-card border border-theme-border bg-theme-surface2 px-4 py-3 text-body text-theme-primary placeholder:text-theme-muted outline-none focus:border-accent disabled:opacity-50"
           />
           <div className="mt-1 flex items-center justify-between">
@@ -238,11 +201,11 @@ export default function AdminPayoutTab() {
       </form>
 
       {outcome && (
-        <div className={`flex items-start gap-2 rounded-card px-4 py-3 text-label ${outcomeMeta[outcome.status].colorClass}`}>
-          <span className="mt-1 shrink-0">{outcomeMeta[outcome.status].icon}</span>
+        <div className="flex items-start gap-2 rounded-card bg-success/10 px-4 py-3 text-label text-success">
+          <CheckCircle2 size={16} className="mt-1 shrink-0" />
           <div>
-            <p className="font-semibold">{t(outcomeMeta[outcome.status].titleKey)}</p>
-            <p>{t(outcomeMeta[outcome.status].bodyKey, { address: outcome.lnAddress, amount: formatSats(outcome.amountSats) })}</p>
+            <p className="font-semibold">{t('payoutResultDummyTitle')}</p>
+            <p>{t('payoutResultDummyBody', { address: outcome.lnAddress, amount: formatSats(outcome.amountSats) })}</p>
           </div>
         </div>
       )}

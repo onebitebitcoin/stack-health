@@ -101,7 +101,6 @@
   "harvestTitle": "나의 오렌지 나무",
   "harvestCount": "{{count}}개",
   "harvestLoadFailed": "수확 정보를 불러오지 못했습니다",
-  "harvestFruitUnit": "열매 1개 = 이번 주 오렌지 {{count}}개",
   "harvestHelpAria": "오렌지를 얻는 방법",
   "harvestEstimateNote": "이번 주 오렌지는 다른 참여자의 활동에 따라 달라질 수 있어요",
   "deleteSuccess": "영상을 삭제했습니다",

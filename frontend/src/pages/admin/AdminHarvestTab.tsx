@@ -4,13 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle, CheckCircle2, Sprout, XCircle } from 'lucide-react'
 import { getApiErrorMessage } from '../../api/errors'
 import {
-  createRound,
   deleteRound,
   fetchRoundDetail,
   fetchRounds,
-  generateRounds,
   payRound,
-  type HarvestCadence,
   type HarvestOpenRow,
   type HarvestPaidRow,
   type HarvestRound,
@@ -22,8 +19,6 @@ type ConfirmKind = 'pay' | 'delete'
 // scope: 상세 패널의 확인 영역 옆에 보여줄지(detail), 화면 상단에 보여줄지(top)
 type Notice = { kind: 'success' | 'error'; message: string; scope: 'top' | 'detail' }
 const MONTH_RE = /^\d{4}-\d{2}$/
-
-const CADENCES: HarvestCadence[] = ['weekly', 'biweekly', 'monthly']
 
 // 현재 한국 시간(Asia/Seoul) 기준 YYYY-MM
 function currentKstMonth(): string {
@@ -76,9 +71,6 @@ export default function AdminHarvestTab() {
   const qc = useQueryClient()
 
   const [month, setMonth] = useState(currentKstMonth)
-  const [cadence, setCadence] = useState<HarvestCadence>('weekly')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [confirm, setConfirm] = useState<ConfirmKind | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -111,25 +103,6 @@ export default function AdminHarvestTab() {
     setConfirm(null)
   }
 
-  const generate = useMutation({
-    mutationFn: () => {
-      const [year, mon] = month.split('-').map(Number)
-      return generateRounds({ year, month: mon, cadence })
-    },
-    onSuccess: (rounds) => onSuccess(t('harvestGenerateSuccess', { count: rounds.length }), 'top'),
-    onError,
-  })
-
-  const create = useMutation({
-    mutationFn: () => createRound({ start_date: startDate, end_date: endDate }),
-    onSuccess: () => {
-      setStartDate('')
-      setEndDate('')
-      onSuccess(t('harvestCreateSuccess'), 'top')
-    },
-    onError,
-  })
-
   const pay = useMutation({
     mutationFn: (id: number) => payRound(id),
     onSuccess: () => onSuccess(t('harvestPaySuccess')),
@@ -145,7 +118,7 @@ export default function AdminHarvestTab() {
     onError,
   })
 
-  const busy = generate.isPending || create.isPending || pay.isPending || remove.isPending
+  const busy = pay.isPending || remove.isPending
   const detail = detailQuery.data
   const rounds = roundsQuery.data ?? []
 
@@ -174,8 +147,6 @@ export default function AdminHarvestTab() {
     if (confirm === 'pay') pay.mutate(selectedId)
     else if (confirm === 'delete') remove.mutate({ id: selectedId, force: detail?.round.status === 'paid' })
   }
-
-  const canGenerate = MONTH_RE.test(month)
 
   function renderNotice(scope: Notice['scope']) {
     if (!notice || notice.scope !== scope) return null
@@ -267,54 +238,6 @@ export default function AdminHarvestTab() {
       </div>
 
       <HarvestUserStatusTable month={month} />
-
-      <div className="rounded-card bg-theme-surface p-4 space-y-3">
-        <div>
-          <label htmlFor="harvest-cadence" className={labelClass}>{t('harvestCadenceLabel')}</label>
-          <select
-            id="harvest-cadence"
-            value={cadence}
-            onChange={(e) => setCadence(e.target.value as HarvestCadence)}
-            disabled={busy}
-            className={inputClass}
-          >
-            {CADENCES.map((c) => <option key={c} value={c}>{t(`harvestCadence_${c}`)}</option>)}
-          </select>
-        </div>
-        <p className="text-label text-theme-muted">{t('harvestGenerateHelp')}</p>
-        <button
-          type="button"
-          onClick={() => { setNotice(null); generate.mutate() }}
-          disabled={busy || !canGenerate}
-          className="w-full rounded-card bg-accent py-3 text-body font-semibold text-accent-fg disabled:opacity-50"
-        >
-          {generate.isPending ? t('harvestGenerating') : t('harvestGenerateButton')}
-        </button>
-      </div>
-
-      <form
-        onSubmit={(e) => { e.preventDefault(); setNotice(null); create.mutate() }}
-        className="rounded-card bg-theme-surface p-4 space-y-3"
-      >
-        <p className="text-body font-semibold text-theme-primary">{t('harvestManualTitle')}</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor="harvest-start-date" className={labelClass}>{t('harvestStartDateLabel')}</label>
-            <input id="harvest-start-date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} disabled={busy} className={inputClass} />
-          </div>
-          <div>
-            <label htmlFor="harvest-end-date" className={labelClass}>{t('harvestEndDateLabel')}</label>
-            <input id="harvest-end-date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} disabled={busy} className={inputClass} />
-          </div>
-        </div>
-        <button
-          type="submit"
-          disabled={busy || !startDate || !endDate}
-          className="w-full rounded-card bg-theme-surface2 py-3 text-body font-semibold text-theme-primary disabled:opacity-50"
-        >
-          {create.isPending ? t('harvestCreating') : t('harvestCreateButton')}
-        </button>
-      </form>
 
       {selectedId !== null && (
         <div className="rounded-card bg-theme-surface p-4 space-y-3">

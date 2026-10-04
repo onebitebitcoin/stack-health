@@ -79,12 +79,6 @@ def month_ranges(year: int, month: int, cadence: str) -> list[tuple[date, date]]
     return ranges
 
 
-def validate_round_range(start: date, end: date) -> None:
-    """시작일이 종료일보다 늦으면 ValueError."""
-    if start > end:
-        raise ValueError("시작일이 종료일보다 늦습니다")
-
-
 def _kst_bounds_utc(start: date, end: date) -> tuple[datetime, datetime]:
     """KST 날짜 구간 [start 00:00, end+1일 00:00)을 UTC datetime으로 변환한다."""
     lo = datetime(start.year, start.month, start.day, tzinfo=SERVICE_TZ).astimezone(timezone.utc)
@@ -307,15 +301,6 @@ def parse_month(month: str) -> tuple[int, int]:
 def month_bounds(year: int, month: int) -> tuple[date, date]:
     """월의 첫날과 말일."""
     return date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
-
-
-def find_overlap(db: Session, start: date, end: date) -> HarvestRound | None:
-    """[start, end]와 기간이 겹치는 기존 회차 하나를 반환한다(없으면 None)."""
-    return (
-        db.query(HarvestRound)
-        .filter(HarvestRound.start_date <= end, HarvestRound.end_date >= start)
-        .first()
-    )
 
 
 def user_round_oranges(db: Session, rounds: list[HarvestRound], user_id: int) -> dict[int, tuple[int, bool]]:

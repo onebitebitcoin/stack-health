@@ -86,74 +86,6 @@ def test_admin_rejects_non_admin(client: TestClient) -> None:
     assert res.status_code == 403
 
 
-# ── 생성 ──────────────────────────────────────────────────────────────
-
-def test_create_round_defaults_seed_and_logs(client: TestClient, db: Session) -> None:
-    h = _admin(client, db)
-    res = client.post(f"{ADMIN}/rounds", json={"start_date": "2026-09-01", "end_date": "2026-09-13"}, headers=h)
-    assert res.status_code == 201
-    data = res.json()["data"]
-    assert data["status"] == "open"
-    assert data["seed"] == 20260913
-    assert data["total_oranges"] == 1008
-    assert data["paid_at"] is None
-    assert data["btc_paid_at"] is None
-    assert db.query(AdminLog).filter_by(action="harvest_round_create", target_type="harvest_round").count() == 1
-
-
-def test_create_round_custom_seed(client: TestClient, db: Session) -> None:
-    h = _admin(client, db)
-    res = client.post(
-        f"{ADMIN}/rounds", json={"start_date": "2026-09-01", "end_date": "2026-09-13", "seed": 42}, headers=h
-    )
-    assert res.json()["data"]["seed"] == 42
-
-
-def test_create_round_cross_month_allowed(client: TestClient, db: Session) -> None:
-    h = _admin(client, db)
-    res = client.post(f"{ADMIN}/rounds", json={"start_date": "2026-09-28", "end_date": "2026-10-02"}, headers=h)
-    assert res.status_code == 201
-
-
-def test_create_round_start_after_end_400(client: TestClient, db: Session) -> None:
-    h = _admin(client, db)
-    res = client.post(f"{ADMIN}/rounds", json={"start_date": "2026-09-10", "end_date": "2026-09-05"}, headers=h)
-    assert res.status_code == 400
-
-
-def test_create_round_overlap_409(client: TestClient, db: Session) -> None:
-    h = _admin(client, db)
-    _make_round(db, date(2026, 9, 1), date(2026, 9, 13))
-    res = client.post(f"{ADMIN}/rounds", json={"start_date": "2026-09-13", "end_date": "2026-09-20"}, headers=h)
-    assert res.status_code == 409
-    assert res.json()["detail"]["code"] == "E_HARVEST_ROUND_OVERLAP"
-
-
-# ── 일괄 생성 ─────────────────────────────────────────────────────────
-
-def test_generate_biweekly_2026_09(client: TestClient, db: Session) -> None:
-    h = _admin(client, db)
-    res = client.post(f"{ADMIN}/rounds/generate", json={"year": 2026, "month": 9, "cadence": "biweekly"}, headers=h)
-    assert res.status_code == 201
-    got = [(r["start_date"], r["end_date"]) for r in res.json()["data"]]
-    assert got == [("2026-09-01", "2026-09-13"), ("2026-09-14", "2026-09-30")]
-    assert db.query(AdminLog).filter_by(action="harvest_round_generate").count() == 1
-
-
-def test_generate_overlap_creates_none(client: TestClient, db: Session) -> None:
-    h = _admin(client, db)
-    _make_round(db, date(2026, 9, 14), date(2026, 9, 30))
-    res = client.post(f"{ADMIN}/rounds/generate", json={"year": 2026, "month": 9, "cadence": "biweekly"}, headers=h)
-    assert res.status_code == 409
-    assert db.query(HarvestRound).count() == 1
-
-
-def test_generate_invalid_cadence_422(client: TestClient, db: Session) -> None:
-    h = _admin(client, db)
-    res = client.post(f"{ADMIN}/rounds/generate", json={"year": 2026, "month": 9, "cadence": "daily"}, headers=h)
-    assert res.status_code == 422
-
-
 # ── 목록 / 상세 ───────────────────────────────────────────────────────
 
 def test_list_rounds_filter_by_month_ordered(client: TestClient, db: Session) -> None:
@@ -384,19 +316,6 @@ def test_delete_paid_requires_force(client: TestClient, db: Session) -> None:
     assert client.delete(f"{ADMIN}/rounds/{rnd.id}?force=true", headers=h).status_code == 200
     log = db.query(AdminLog).filter_by(action="harvest_round_delete").one()
     assert "force=True" in log.detail
-
-
-def test_seed_bounds_422(client: TestClient, db: Session) -> None:
-    h = _admin(client, db)
-    for seed in (-1, 2**31):
-        res = client.post(
-            f"{ADMIN}/rounds", json={"start_date": "2026-09-01", "end_date": "2026-09-13", "seed": seed}, headers=h
-        )
-        assert res.status_code == 422
-    res = client.post(
-        f"{ADMIN}/rounds", json={"start_date": "2026-09-01", "end_date": "2026-09-13", "seed": 2**31 - 1}, headers=h
-    )
-    assert res.status_code == 201
 
 
 def test_pay_integrity_error_maps_to_409(client: TestClient, db: Session, monkeypatch) -> None:

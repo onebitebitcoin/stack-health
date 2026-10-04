@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Trash2, User, Video, ChevronRight, Search, X, ArrowLeft, RefreshCw, ClipboardList, Target, XCircle, Zap, Sprout } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
@@ -112,6 +112,7 @@ export default function AdminPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab: TabId = (searchParams.get('tab') as TabId) ?? 'users'
+  const tabRowRef = useRef<HTMLDivElement>(null)
   const [videoPage, setVideoPage] = useState(1)
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [deleteVideoConfirmId, setDeleteVideoConfirmId] = useState<number | null>(null)
@@ -207,6 +208,11 @@ export default function AdminPage() {
     },
   })
 
+  useEffect(() => {
+    const el = tabRowRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')
+    el?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' })
+  }, [activeTab])
+
   if (!isAdmin) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-theme-page">
@@ -250,12 +256,14 @@ export default function AdminPage() {
           <ChevronRight size={15} className="text-theme-muted" />
         </button>
 
-        <div className="flex rounded-card bg-theme-surface overflow-hidden">
+        <div ref={tabRowRef} role="tablist" className="flex overflow-x-auto md:overflow-hidden rounded-card bg-theme-surface">
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
               onClick={() => { setSearchParams({ tab: tab.id }); setVideoPage(1); setUserSearchInput(''); setUserSearch(''); setUserPage(1) }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 text-body font-semibold transition-colors ${
+              className={`shrink-0 whitespace-nowrap md:flex-1 flex items-center justify-center gap-2 min-h-[44px] px-4 py-3 text-body font-semibold transition-colors ${
                 activeTab === tab.id ? 'bg-accent text-accent-fg' : 'text-theme-muted hover:text-theme-primary'
               }`}
             >

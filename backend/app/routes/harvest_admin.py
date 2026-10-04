@@ -1,8 +1,7 @@
 from datetime import date, datetime, timezone
-from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -16,30 +15,16 @@ from app.services.error_codes import (
     api_error,
     E_HARVEST_ALREADY_PAID,
     E_HARVEST_INVALID_MONTH,
-    E_HARVEST_INVALID_RANGE,
     E_HARVEST_ROUND_NOT_ENDED,
     E_HARVEST_ROUND_NOT_FOUND,
     E_HARVEST_ROUND_PAID_DELETE,
-    E_HARVEST_ROUND_OVERLAP,
 )
 
 router = APIRouter(prefix="/api/v1/admin/harvest", tags=["admin-harvest"])
 
 
-class RoundCreate(BaseModel):
-    start_date: date
-    end_date: date
-    seed: int | None = Field(default=None, ge=0, le=2**31 - 1)
-
-
 class SettingsUpdate(BaseModel):
     collect_enabled: bool
-
-
-class RoundGenerate(BaseModel):
-    year: int = Field(ge=2000, le=2100)
-    month: int = Field(ge=1, le=12)
-    cadence: Literal["weekly", "biweekly", "monthly"]
 
 
 def _get_round(db: Session, round_id: int) -> HarvestRound:
@@ -72,21 +57,6 @@ def _participant_count(db: Session, rnd: HarvestRound) -> int:
 
 def _log(db: Session, action: str, round_id: int, detail: str) -> None:
     db.add(AdminLog(action=action, target_type="harvest_round", target_id=round_id, detail=detail))
-
-
-def _check_range(start: date, end: date) -> None:
-    try:
-        harvest_service.validate_round_range(start, end)
-    except ValueError as exc:
-        raise api_error(400, E_HARVEST_INVALID_RANGE, str(exc))
-
-
-def _overlap_error(other: HarvestRound):
-    return api_error(
-        409,
-        E_HARVEST_ROUND_OVERLAP,
-        f"기존 회차({other.start_date}~{other.end_date})와 기간이 겹칩니다",
-    )
 
 
 @router.get("/rounds")
@@ -148,68 +118,6 @@ def list_user_harvest(
     rounds = db.query(HarvestRound).filter(HarvestRound.end_date >= first, HarvestRound.end_date <= last).all()
     pool = sum(r.total_oranges for r in rounds)
     return {"data": {"month": month, "pool_oranges": pool, "rows": harvest_service.admin_user_rows(db, rounds)}}
-
-
-@router.post("/rounds", status_code=201)
-def create_round(
-    body: RoundCreate,
-    db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
-) -> dict:
-    _check_range(body.start_date, body.end_date)
-    other = harvest_service.find_overlap(db, body.start_date, body.end_date)
-    if other is not None:
-        raise _overlap_error(other)
-    seed = body.seed if body.seed is not None else harvest_service.default_seed(body.end_date)
-    rnd = HarvestRound(
-        start_date=body.start_date,
-        end_date=body.end_date,
-        seed=seed,
-        total_oranges=harvest_service.TOTAL_ORANGES,
-        status="open",
-    )
-    db.add(rnd)
-    db.flush()
-    _log(db, "harvest_round_create", rnd.id, f"{rnd.start_date}~{rnd.end_date} seed={seed}")
-    db.commit()
-    db.refresh(rnd)
-    return {"data": _round_dict(rnd, 0)}
-
-
-@router.post("/rounds/generate", status_code=201)
-def generate_rounds(
-    body: RoundGenerate,
-    db: Session = Depends(get_db),
-    _: User | None = Depends(require_admin),
-) -> dict:
-    ranges = harvest_service.month_ranges(body.year, body.month, body.cadence)
-    # 하나라도 겹치면 아무것도 만들지 않는다.
-    for start, end in ranges:
-        other = harvest_service.find_overlap(db, start, end)
-        if other is not None:
-            raise _overlap_error(other)
-    created: list[HarvestRound] = []
-    for start, end in ranges:
-        rnd = HarvestRound(
-            start_date=start,
-            end_date=end,
-            seed=harvest_service.default_seed(end),
-            total_oranges=harvest_service.TOTAL_ORANGES,
-            status="open",
-        )
-        db.add(rnd)
-        created.append(rnd)
-    db.flush()
-    _log(
-        db,
-        "harvest_round_generate",
-        created[0].id,
-        f"{body.year:04d}-{body.month:02d} {body.cadence} rounds={len(created)}",
-    )
-    db.commit()
-    for rnd in created:
-        db.refresh(rnd)
-    return {"data": [_round_dict(r, 0) for r in created]}
 
 
 @router.get("/rounds/{round_id}")

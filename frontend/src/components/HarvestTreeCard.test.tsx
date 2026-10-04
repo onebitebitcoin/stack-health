@@ -134,11 +134,13 @@ describe('HarvestTreeCard', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('수확 정보를 불러오지 못했습니다')
   })
 
-  it('도움말에 열매 기준을 보여준다', async () => {
+  it('도움말을 열어도 열매 기준 문구는 보이지 않는다', async () => {
     mockHarvest()
     renderCard()
     await screen.findByTestId('harvest-total')
-    await userEvent.click(screen.getByRole('button', { name: '오렌지를 얻는 방법' }))
-    expect(screen.getByText('열매 1개 = 이번 주 오렌지 100개')).toBeInTheDocument()
+    const helpButton = screen.getByRole('button', { name: '오렌지를 얻는 방법' })
+    await userEvent.click(helpButton)
+    expect(helpButton).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.queryByText(/열매 1개/)).not.toBeInTheDocument()
   })
 })

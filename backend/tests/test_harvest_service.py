@@ -107,21 +107,6 @@ def test_month_ranges_unknown_cadence():
         harvest.month_ranges(2026, 9, "daily")
 
 
-# ---- validate_round_range ----
-
-def test_validate_round_range_ok():
-    harvest.validate_round_range(date(2026, 9, 1), date(2026, 9, 1))
-
-
-def test_validate_round_range_start_after_end():
-    with pytest.raises(ValueError):
-        harvest.validate_round_range(date(2026, 9, 5), date(2026, 9, 4))
-
-
-def test_validate_round_range_cross_month_allowed():
-    harvest.validate_round_range(date(2026, 9, 28), date(2026, 10, 2))
-
-
 # ---- compute_scores ----
 
 def test_compute_scores_counts_and_excludes_admin(db: Session):

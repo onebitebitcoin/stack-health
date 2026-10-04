@@ -92,22 +92,18 @@
 | `E_ADMIN_SELF_DELETE` | 400 | 자신의 계정은 삭제할 수 없습니다 | 관리자가 본인 계정 삭제 시도 |
 | `E_ADMIN_API_KEY_DELETE` | 400 | API 키로는 관리자 계정을 삭제할 수 없습니다 | API 키로 관리자 삭제 시도 |
 
-## Blink 지급 (Lightning)
+## 지급 (더미)
 
 | 코드 | HTTP | 사용자 메시지 | 발생 상황 |
 |------|------|--------------|-----------|
-| `E_BLINK_NOT_CONFIGURED` | 503 | Blink 연동이 설정되지 않았습니다 | `BLINK_API_KEY` 미설정 상태에서 지급 시도 |
-| `E_BLINK_PAYMENT_FAILED` | 502 | Blink 지급에 실패했습니다: (사유) | Blink GraphQL 오류·FAILURE 상태·네트워크 오류 |
-| `E_BLINK_INVALID_ADDRESS` | 422 | 라이트닝 주소 형식이 올바르지 않습니다 | `user@domain` 형식이 아닌 주소 입력 |
-| `E_BLINK_AMOUNT_OUT_OF_RANGE` | 422 | 금액은 1~(상한) sats 사이여야 합니다 | 1 미만 또는 `BLINK_TEST_MAX_SATS` 초과 |
+| `E_PAYOUT_INVALID_ADDRESS` | 422 | 라이트닝 주소 형식이 올바르지 않습니다 | `user@domain` 형식이 아닌 주소 입력 |
+| `E_PAYOUT_AMOUNT_OUT_OF_RANGE` | 422 | 금액은 1~(상한) sats 사이여야 합니다 | 1 미만 또는 `PAYOUT_TEST_MAX_SATS` 초과 |
 
 ## 수확 회차 (Harvest)
 
 | 코드 | HTTP | 사용자 메시지 | 발생 상황 |
 |------|------|--------------|-----------|
 | `E_HARVEST_ROUND_NOT_FOUND` | 404 | 회차를 찾을 수 없습니다 | 존재하지 않는 회차 조회·지급·삭제 |
-| `E_HARVEST_INVALID_RANGE` | 400 | (사유별 메시지) | 시작일이 종료일보다 늦거나 월을 넘는 회차 생성 |
-| `E_HARVEST_ROUND_OVERLAP` | 409 | 기존 회차(...)와 기간이 겹칩니다 | 기존 회차와 기간이 겹치는 회차 생성·일괄 생성 |
 | `E_HARVEST_ALREADY_PAID` | 409 | 이미 지급 완료된 회차입니다 | paid 회차를 다시 지급 처리 |
 | `E_HARVEST_INVALID_MONTH` | 400 | month는 YYYY-MM 형식이어야 합니다 | 잘못된 month 쿼리 값 |
 | `E_HARVEST_ROUND_NOT_ENDED` | 409 | 회차 종료일 다음 날부터 지급할 수 있습니다 | 종료일(KST) 당일 이전에 지급 처리 |

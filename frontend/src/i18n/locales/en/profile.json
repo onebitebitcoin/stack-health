@@ -101,7 +101,6 @@
   "harvestTitle": "My orange tree",
   "harvestCount": "{{count}}",
   "harvestLoadFailed": "Could not load harvest info",
-  "harvestFruitUnit": "1 fruit = {{count}} oranges this week",
   "harvestHelpAria": "How to earn oranges",
   "harvestEstimateNote": "This week's oranges can change as other people post",
   "deleteSuccess": "Video deleted",

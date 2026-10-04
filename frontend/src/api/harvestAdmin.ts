@@ -1,6 +1,5 @@
 import client from './client'
 
-export type HarvestCadence = 'weekly' | 'biweekly' | 'monthly'
 export type HarvestRoundStatus = 'open' | 'paid'
 
 export interface HarvestRound {
@@ -39,30 +38,8 @@ export interface HarvestRoundDetail {
   rows: Array<HarvestOpenRow | HarvestPaidRow>
 }
 
-export interface CreateRoundPayload {
-  start_date: string
-  end_date: string
-  seed?: number
-}
-
-export interface GenerateRoundsPayload {
-  year: number
-  month: number
-  cadence: HarvestCadence
-}
-
 export async function fetchRounds(month: string): Promise<HarvestRound[]> {
   const res = await client.get<{ data: HarvestRound[] }>('/admin/harvest/rounds', { params: { month } })
-  return res.data.data
-}
-
-export async function createRound(payload: CreateRoundPayload): Promise<HarvestRound> {
-  const res = await client.post<{ data: HarvestRound }>('/admin/harvest/rounds', payload)
-  return res.data.data
-}
-
-export async function generateRounds(payload: GenerateRoundsPayload): Promise<HarvestRound[]> {
-  const res = await client.post<{ data: HarvestRound[] }>('/admin/harvest/rounds/generate', payload)
   return res.data.data
 }
 

@@ -67,8 +67,8 @@ bitcoiners/
   - `timeframe.py` **날짜 경계 단일 원본** — `SERVICE_TZ`(Asia/Seoul) 고정. 캘린더·스트릭·나무 단계·일일 제한이 전부 여기를 거친다. 요청에서 타임존을 받지 않는다 / `share_token.py` 공유 링크 토큰
   - `r2.py` Cloudflare R2 업로드 / `job_queue.py` Redis 잡 큐 enqueue
   - `subtitles.py` 자막 생성·환각 필터 / `rate_limit.py` / `notify.py` 텔레그램(운영자) 알림 / `notification.py` 인앱(사용자) 알림 생성 / `error_codes.py`
-  - `harvest.py` 수확 회차 — 매주(월~일) 자동 회차(`ensure_weekly_rounds`), 수동 생성용 월 경계 범위(`month_ranges`), 점수(업로드 0.5·댓글 0.01), 리포트와 같은 80/20 추첨으로 회차당 오렌지 1,008개 배분(`allocate`), 진행 중 기대값, 열매 수
-  - `blink.py` Blink(api.blink.sv) GraphQL 연동 — 라이트닝 주소로 sats 전송(`send_to_lightning_address`), BTC 지갑 조회(`get_btc_wallet`). 관리자 테스트 지급(`POST /admin/blink/test-payout`, `GET /admin/blink/status`, `app/routes/admin.py`)이 첫 사용처이고, 향후 업로더 자동 지급이 이 모듈을 재사용한다
+  - `harvest.py` 수확 회차 — 매주(월~일) 자동 회차(`ensure_weekly_rounds`), 백필 스크립트용 월 경계 범위(`month_ranges`), 점수(업로드 0.5·댓글 0.01), 리포트와 같은 80/20 추첨으로 회차당 오렌지 1,008개 배분(`allocate`), 진행 중 기대값, 열매 수
+  - `payout.py` 비트코인 지급 더미 스텁(실제 Blink 연동은 제거됨, 네트워크 호출·실제 전송 없음) — `send_to_lightning_address`가 가짜 `DUMMY` 결과 반환. 관리자 테스트 지급(`POST /admin/blink/test-payout`, `GET /admin/blink/status`, `app/routes/admin.py`)이 사용
 - **tests/**: 도메인별 `test_*.py` (pytest) — 실행: `cd backend && .venv/bin/pytest -q`
 
 ## Frontend (`frontend/`)

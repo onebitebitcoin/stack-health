@@ -20,10 +20,7 @@
 
 | 변수명 | 기본값 | 설명 |
 |--------|--------|------|
-| BLINK_API_KEY | (없음) | Blink Lightning 자동결제 키(`X-API-KEY` 헤더). 없으면 관리자 테스트 지급이 503(E_BLINK_NOT_CONFIGURED)으로 막힌다 |
-| BLINK_API_URL | https://api.blink.sv/graphql | Blink GraphQL 엔드포인트. 별도 환경 필요 시만 변경 |
-| BLINK_WALLET_ID | (없음) | 지급에 쓸 Blink 지갑 ID. 비우면 지갑 목록에서 `walletCurrency=="BTC"`인 지갑을 자동 탐색 |
-| BLINK_TEST_MAX_SATS | 10000 | 관리자 테스트 지급 1회 상한(sats). 실 사용자 자동 지급에는 적용되지 않음 |
+| PAYOUT_TEST_MAX_SATS | 10000 | 관리자 테스트 지급(더미, 실제 전송 없음) 1회 상한(sats) |
 | GEMINI_API_KEY | (없음) | 운동열 필터의 종목 자동 분류용(근육군 프리셋). 없으면 프리셋 없이 렌더(정상 동작). **워커 `.env`에 설정해야 적용** — 영상당 1회 호출 |
 | GOOGLE_CLIENT_ID | (없음) | Google OAuth 클라이언트 ID. 없으면 Google 로그인 비활성 |
 | GOOGLE_CLIENT_SECRET | (없음) | Google OAuth 시크릿 |
@@ -36,4 +33,4 @@
 ## 설정 방법
 
 서버 환경변수 또는 `.env` 파일에 추가한다.
-BLINK_API_KEY 없으면 수동 정산 모드, REDIS_URL 없으면 로컬 ffmpeg fallback 모드로 동작.
+REDIS_URL 없으면 로컬 ffmpeg fallback 모드로 동작.

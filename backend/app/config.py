@@ -29,13 +29,8 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = ""
 
-    # Blink (Lightning 자동 지급)
-    # BLINK_WALLET_ID: 비워두면 지갑 목록에서 walletCurrency=="BTC"인 지갑을 자동 탐색한다.
-    blink_api_key: str = ""
-    blink_api_url: str = "https://api.blink.sv/graphql"
-    blink_wallet_id: str = ""
-    # 관리자 테스트 지급 1회 상한(sats). 실 사용자 자동 지급에는 적용되지 않는다.
-    blink_test_max_sats: int = 10000
+    # 관리자 테스트 지급 1회 상한(sats). 지급은 더미라 실제 전송은 없다.
+    payout_test_max_sats: int = 10000
 
     # App
     # APP_URL: the publicly reachable base URL of this backend server.
