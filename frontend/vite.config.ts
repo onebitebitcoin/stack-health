@@ -35,7 +35,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'favicon-192.png', 'apple-touch-icon.png', 'icon-192.png', 'maskable-512.png'],
+      includeAssets: ['favicon.svg', 'favicon-192.png', 'apple-touch-icon.png', 'icon-192.png', 'splash-icon-192.png', 'splash-icon-512.png', 'maskable-512.png'],
       manifest: {
         id: '/',
         name: 'Orange Story',
@@ -48,17 +48,18 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/',
         start_url: '/',
-        // 설치 아이콘은 어두운 타일(icon-*.png)을 쓴다. favicon-192.png 는 배경이
-        // 투명한 마크라 런처가 흰 판을 깔아 밝게 보였다 — 탭 아이콘 자리에만 둔다.
+        // any 아이콘은 Chrome 설치 스플래시가 background_color 위에 그대로 얹는다.
+        // 타일(icon-*.png)을 주면 사각 테두리가 보이므로 타일 없는 투명 마크를 쓴다.
+        // 런처 아이콘은 maskable 이 따로 있어 투명 any 여도 흰 판이 깔리지 않는다.
         icons: [
           {
-            src: '/icon-192.png',
+            src: '/splash-icon-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: '/icon-512.png',
+            src: '/splash-icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',

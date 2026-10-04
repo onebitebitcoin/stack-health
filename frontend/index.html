@@ -111,8 +111,48 @@
       ]
     }
     </script>
+    <style>
+      html, body { background: #0A0A0A; margin: 0; }
+      #boot-splash {
+        position: fixed; inset: 0; z-index: 9999; background: #0A0A0A;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+        padding: 0 24px; box-sizing: border-box; text-align: center;
+        transition: opacity 250ms ease-out;
+        font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      }
+      #boot-splash .bs-mark { color: #FF8C00; display: block; line-height: 0; }
+      #boot-splash p { margin: 0; }
+      #boot-splash .bs-title { font-size: 15px; line-height: 23px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #F5F5F5; }
+      #boot-splash .bs-sub { margin-top: 4px; font-size: 13px; line-height: 18px; font-weight: 500; color: #949494; }
+      @media (prefers-reduced-motion: reduce) { #boot-splash { transition: none; } }
+    </style>
   </head>
   <body>
+    <div id="boot-splash" role="status" aria-live="polite">
+<div class="bs-mark"><svg width="56" height="56" aria-hidden="true" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <clipPath id="bs-fruit">
+    <circle cx="24" cy="28" r="14"/>
+  </clipPath>
+  <mask id="bs-bolt">
+    <rect width="48" height="48" fill="white"/>
+    <path d="M27.6 17.6L18.9 28.8H23.6L20.6 38.6L29.6 26.6H24.7Z" fill="black"/>
+  </mask>
+  <g mask="url(#bs-bolt)">
+    <g clip-path="url(#bs-fruit)">
+      <circle cx="24" cy="28" r="14" fill="currentColor"/>
+      <ellipse cx="34" cy="40" rx="15" ry="13" fill="#000000" opacity="0.16"/>
+      <ellipse cx="18" cy="22" rx="6.5" ry="4.5" fill="#FFFFFF" opacity="0.22" transform="rotate(-35 18 22)"/>
+    </g>
+  </g>
+  <path d="M24 15C24 12 24.5 10.5 25.5 9.5" stroke="#7A4A22" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M25.8 10.6C28.2 4.6 34.4 2.4 38.6 4.2C38.4 9.8 32.8 13.2 25.8 10.6Z" fill="#3DBE73"/>
+  <path d="M27.2 10.2C30.6 7.4 34.6 5.4 37.6 4.6" stroke="#1F7A47" stroke-width="1.1" stroke-linecap="round"/>
+</svg></div>
+      <div>
+        <p class="bs-title">Orange Story</p>
+        <p class="bs-sub">나의 작은 습관을 기록해요</p>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

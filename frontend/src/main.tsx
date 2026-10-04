@@ -6,6 +6,7 @@ import './i18n'
 import { initTheme } from './store/theme'
 import { useAuthStore } from './store/auth'
 import App from './App.tsx'
+import { removeBootSplash } from './utils/bootSplash'
 
 const savedUser = useAuthStore.getState().user
 initTheme(savedUser?.app_settings?.theme as string | null)
@@ -30,3 +31,7 @@ createRoot(rootEl).render(
     </QueryClientProvider>
   </StrictMode>,
 )
+
+// 첫 렌더 직후 부팅 화면을 걷는다. 렌더가 실패해도 화면이 막히지 않도록 안전 타이머를 둔다.
+requestAnimationFrame(removeBootSplash)
+window.setTimeout(removeBootSplash, 8000)
