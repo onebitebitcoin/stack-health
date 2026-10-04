@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -32,6 +32,10 @@ class RoundCreate(BaseModel):
     seed: int | None = Field(default=None, ge=0, le=2**31 - 1)
 
 
+class SettingsUpdate(BaseModel):
+    collect_enabled: bool
+
+
 class RoundGenerate(BaseModel):
     year: int = Field(ge=2000, le=2100)
     month: int = Field(ge=1, le=12)
@@ -54,6 +58,7 @@ def _round_dict(rnd: HarvestRound, participants: int) -> dict:
         "total_oranges": rnd.total_oranges,
         "seed": rnd.seed,
         "paid_at": rnd.paid_at.isoformat() if rnd.paid_at else None,
+        "btc_paid_at": rnd.btc_paid_at.isoformat() if rnd.btc_paid_at else None,
         "participant_count": participants,
     }
 
@@ -86,20 +91,63 @@ def _overlap_error(other: HarvestRound):
 
 @router.get("/rounds")
 def list_rounds(
-    month: str | None = Query(default=None, description="YYYY-MM (생략하면 전체)"),
+    month: str | None = Query(default=None, description="YYYY-MM, 회차 종료일 기준 (생략하면 전체)"),
     db: Session = Depends(get_db),
     _: User | None = Depends(require_admin),
 ) -> dict:
+    harvest_service.ensure_weekly_rounds(db)
     q = db.query(HarvestRound)
     if month is not None:
-        try:
-            year, mon = harvest_service.parse_month(month)
-        except ValueError as exc:
-            raise api_error(400, E_HARVEST_INVALID_MONTH, str(exc))
-        first, last = harvest_service.month_bounds(year, mon)
-        q = q.filter(HarvestRound.start_date >= first, HarvestRound.start_date <= last)
+        first, last = _month_bounds(month)
+        q = q.filter(HarvestRound.end_date >= first, HarvestRound.end_date <= last)
     rounds = q.order_by(HarvestRound.start_date, HarvestRound.id).all()
     return {"data": [_round_dict(r, _participant_count(db, r)) for r in rounds]}
+
+
+def _month_bounds(month: str) -> tuple[date, date]:
+    """'YYYY-MM' 의 첫날과 말일. 형식이 틀리면 400."""
+    try:
+        year, mon = harvest_service.parse_month(month)
+    except ValueError as exc:
+        raise api_error(400, E_HARVEST_INVALID_MONTH, str(exc))
+    return harvest_service.month_bounds(year, mon)
+
+
+@router.get("/settings")
+def get_settings(db: Session = Depends(get_db), _: User | None = Depends(require_admin)) -> dict:
+    return {"data": {"collect_enabled": harvest_service.get_collect_enabled(db)}}
+
+
+@router.put("/settings")
+def update_settings(
+    body: SettingsUpdate,
+    db: Session = Depends(get_db),
+    _: User | None = Depends(require_admin),
+) -> dict:
+    harvest_service.set_collect_enabled(db, body.collect_enabled)
+    collected = 0 if body.collect_enabled else harvest_service.collect_all_ripe(db)
+    db.add(AdminLog(
+        action="harvest_settings_update", target_type="harvest_settings", target_id=1,
+        detail=f"collect_enabled={body.collect_enabled} collected={collected}",
+    ))
+    db.commit()
+    return {"data": {"collect_enabled": body.collect_enabled}}
+
+
+@router.get("/users")
+def list_user_harvest(
+    month: str | None = Query(default=None, description="YYYY-MM (기본: 이번 달, 회차 종료일 기준)"),
+    db: Session = Depends(get_db),
+    _: User | None = Depends(require_admin),
+) -> dict:
+    harvest_service.ensure_weekly_rounds(db)
+    if month is None:
+        today = harvest_service.today_kst()
+        month = f"{today.year:04d}-{today.month:02d}"
+    first, last = _month_bounds(month)
+    rounds = db.query(HarvestRound).filter(HarvestRound.end_date >= first, HarvestRound.end_date <= last).all()
+    pool = sum(r.total_oranges for r in rounds)
+    return {"data": {"month": month, "pool_oranges": pool, "rows": harvest_service.admin_user_rows(db, rounds)}}
 
 
 @router.post("/rounds", status_code=201)
@@ -224,12 +272,17 @@ def pay_round(
     db: Session = Depends(get_db),
     _: User | None = Depends(require_admin),
 ) -> dict:
+    # BTC 송금 표시. 아직 확정 전이면 오렌지 배분부터 확정한다.
     # 동시 지급을 막기 위해 행을 잠그고, 지급·감사 로그를 한 번의 커밋으로 묶는다.
     rnd = db.query(HarvestRound).filter(HarvestRound.id == round_id).with_for_update().first()
     if rnd is None:
         raise api_error(404, E_HARVEST_ROUND_NOT_FOUND, "회차를 찾을 수 없습니다")
+    if rnd.btc_paid_at is not None:
+        raise api_error(409, E_HARVEST_ALREADY_PAID, "이미 지급 완료된 회차입니다")
     try:
-        harvest_service.finalize_round(db, rnd, commit=False)
+        if rnd.status == "open":
+            harvest_service.finalize_round(db, rnd, commit=False)
+        rnd.btc_paid_at = datetime.now(timezone.utc)
         _log(db, "harvest_round_pay", rnd.id, f"{rnd.start_date}~{rnd.end_date} seed={rnd.seed}")
         db.commit()
     except harvest_service.RoundNotEndedError:

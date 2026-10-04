@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from pydantic import BaseModel
@@ -20,7 +20,9 @@ from app.services.post_visibility import PUBLIC, publish_order_key
 from app.services.referral import generate_referral_code
 from app.models.harvest import HarvestRound
 from app.services import harvest as harvest_service
-from app.services.error_codes import api_error, E_USER_NOT_FOUND, E_FORBIDDEN, E_HARVEST_INVALID_MONTH
+from app.services.error_codes import (
+    api_error, E_USER_NOT_FOUND, E_FORBIDDEN, E_HARVEST_INVALID_MONTH, E_HARVEST_COLLECT_DISABLED,
+)
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -117,12 +119,13 @@ def get_my_harvest_months(
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    """회차가 하나 이상 있는 달의 목록(오름차순)과 달별 내 오렌지·지분."""
-    rounds = db.query(HarvestRound).order_by(HarvestRound.start_date, HarvestRound.id).all()
+    """회차가 하나 이상 있는 달(회차 종료일 기준)의 목록(오름차순)과 달별 내 오렌지·지분."""
+    harvest_service.ensure_weekly_rounds(db)
+    rounds = db.query(HarvestRound).order_by(HarvestRound.end_date, HarvestRound.id).all()
     per_round = harvest_service.user_round_oranges(db, rounds, current_user.id)
     grouped: dict[str, list[HarvestRound]] = {}
     for r in rounds:
-        grouped.setdefault(_month_key(r.start_date), []).append(r)
+        grouped.setdefault(_month_key(r.end_date), []).append(r)
     months = []
     for key, items in grouped.items():
         summary = harvest_service.summarize_rounds(items, per_round)
@@ -142,7 +145,8 @@ def get_my_harvest(
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    """한 달의 회차별 내 오렌지, 합계, 지분, 열매 수."""
+    """한 달(회차 종료일 기준)의 회차별 내 오렌지, 합계, 지분, 열매 수, 이번 주 예상, 수확 대기량."""
+    harvest_service.ensure_weekly_rounds(db)
     if month is None:
         now = now_local()
         year, mon = now.year, now.month
@@ -154,11 +158,12 @@ def get_my_harvest(
     first, last = harvest_service.month_bounds(year, mon)
     rounds = (
         db.query(HarvestRound)
-        .filter(HarvestRound.start_date >= first, HarvestRound.start_date <= last)
-        .order_by(HarvestRound.start_date, HarvestRound.id)
+        .filter(HarvestRound.end_date >= first, HarvestRound.end_date <= last)
+        .order_by(HarvestRound.end_date, HarvestRound.id)
         .all()
     )
     per_round = harvest_service.user_round_oranges(db, rounds, current_user.id)
+    ripe = harvest_service.user_ripe_by_round(db, current_user.id)
     summary = harvest_service.summarize_rounds(rounds, per_round)
     return {
         "data": {
@@ -171,13 +176,60 @@ def get_my_harvest(
                     "status": r.status,
                     "oranges": per_round[r.id][0],
                     "is_estimate": per_round[r.id][1],
+                    "collected": r.id not in ripe,
                 }
                 for r in rounds
             ],
             **summary,
             "has_estimate": any(per_round[r.id][1] for r in rounds),
+            "this_week": _this_week(db, current_user.id),
+            "ripe_oranges": sum(ripe.values()),
+            "total_collected": harvest_service.user_total_collected(db, current_user.id),
+            "collect_enabled": harvest_service.get_collect_enabled(db),
         }
     }
+
+
+def _this_week(db: Session, user_id: int) -> dict:
+    """지금 진행 중인 회차의 기간, 내 예상 오렌지(활동이 없으면 0), 나무에 달 열매 수."""
+    today = harvest_service.today_kst()
+    current = (
+        db.query(HarvestRound)
+        .filter(HarvestRound.status == "open", HarvestRound.start_date <= today, HarvestRound.end_date >= today)
+        .first()
+    )
+    if current is None:
+        return {
+            "start_date": (today - timedelta(days=today.weekday())).isoformat(),
+            "end_date": harvest_service.week_end(today).isoformat(),
+            "oranges": 0,
+            "fruit_count": 0,
+            "share_pct": 0.0,
+        }
+    scores = harvest_service.compute_scores(db, current.start_date, current.end_date)
+    oranges = round(harvest_service.expected(scores, current.total_oranges).get(user_id, 0.0))
+    share_pct = round(harvest_service.probabilities(scores).get(user_id, 0.0) * 100, 1)
+    return {
+        "start_date": current.start_date.isoformat(),
+        "end_date": current.end_date.isoformat(),
+        "oranges": oranges,
+        "fruit_count": harvest_service.fruit_count(oranges),
+        "share_pct": share_pct,
+    }
+
+
+@router.post("/me/harvest/collect")
+def collect_my_harvest(
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """다 익은 내 오렌지를 모두 수확한다. 이미 수확했다면 0을 돌려준다."""
+    harvest_service.ensure_weekly_rounds(db)
+    if not harvest_service.get_collect_enabled(db):
+        raise api_error(403, E_HARVEST_COLLECT_DISABLED, "지금은 수확 버튼을 사용할 수 없습니다")
+    collected = harvest_service.collect_all_ripe(db, user_id=current_user.id)
+    db.commit()
+    return {"data": {"collected": collected}}
 
 
 @router.get("/{user_id}/profile")

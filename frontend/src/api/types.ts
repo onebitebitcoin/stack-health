@@ -292,31 +292,25 @@ export type SurveyAggregateValue = SurveyAggregateScaleValue | SurveyAggregateOp
 export type SurveyAggregate = Record<string, SurveyAggregateValue>
 
 // 수확 오렌지: 오렌지 개수만 다룬다(사토시/가격 노출 금지).
-export interface HarvestMonthSummary {
-  month: string
-  my_oranges: number
-  pool_oranges: number
-  share_pct: number
-  round_count: number
-}
-
-export interface HarvestRound {
-  id: number
+export interface HarvestThisWeek {
   start_date: string
   end_date: string
-  status: 'open' | 'paid'
+  /** 이번 주에 자라는 오렌지(예상치, 오르내릴 수 있음) */
   oranges: number
-  is_estimate: boolean
+  /** 나무에 달 열매 수 (이번 주 오렌지 기준) */
+  fruit_count: number
+  /** 이번 주 전체 오렌지 중 내 몫(%) */
+  share_pct: number
 }
 
-export interface MonthlyHarvest {
-  month: string
-  rounds: HarvestRound[]
-  my_oranges: number
-  pool_oranges: number
-  share_pct: number
-  fruit_count: number
+export interface MyHarvest {
+  /** 지금까지 수확한 오렌지. 수확 대기분은 포함하지 않는다 */
+  total_collected: number
+  this_week: HarvestThisWeek
+  /** 끝난 주들의 수확 대기 오렌지 */
+  ripe_oranges: number
+  /** 관리자 스위치. false면 수확 버튼을 보이지 않는다 */
+  collect_enabled: boolean
   /** 나무 열매 1개가 뜻하는 오렌지 개수 */
   oranges_per_fruit: number
-  has_estimate: boolean
 }

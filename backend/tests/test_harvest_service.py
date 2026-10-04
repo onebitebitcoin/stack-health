@@ -118,9 +118,8 @@ def test_validate_round_range_start_after_end():
         harvest.validate_round_range(date(2026, 9, 5), date(2026, 9, 4))
 
 
-def test_validate_round_range_cross_month():
-    with pytest.raises(ValueError):
-        harvest.validate_round_range(date(2026, 9, 28), date(2026, 10, 2))
+def test_validate_round_range_cross_month_allowed():
+    harvest.validate_round_range(date(2026, 9, 28), date(2026, 10, 2))
 
 
 # ---- compute_scores ----
@@ -313,3 +312,94 @@ def test_compute_scores_excludes_rejected_video_keeps_private(db: Session):
     scores = harvest.compute_scores(db, date(2026, 9, 1), date(2026, 9, 13))
 
     assert ok and scores[a.id]["uploads"] == 2
+
+
+# ---- 주간 회차 ensure_weekly_rounds ----
+
+def _ranges(db: Session) -> list[tuple[date, date]]:
+    rows = db.query(HarvestRound).order_by(HarvestRound.start_date).all()
+    return [(r.start_date, r.end_date) for r in rows]
+
+
+def test_week_end_is_sunday():
+    assert harvest.week_end(date(2026, 10, 1)) == date(2026, 10, 4)  # 목요일
+    assert harvest.week_end(date(2026, 10, 4)) == date(2026, 10, 4)  # 일요일
+    assert harvest.week_end(date(2026, 9, 28)) == date(2026, 10, 4)  # 월요일
+
+
+def test_ensure_creates_current_week_crossing_month(db: Session):
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 1))
+    assert _ranges(db) == [(date(2026, 9, 28), date(2026, 10, 4))]
+    rnd = db.query(HarvestRound).one()
+    assert rnd.status == "open" and rnd.seed == 20261004 and rnd.total_oranges == 1008
+
+
+def test_ensure_catches_up_missed_weeks(db: Session):
+    _round(db, date(2026, 9, 14), date(2026, 9, 20))
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 1))
+    assert _ranges(db) == [
+        (date(2026, 9, 14), date(2026, 9, 20)),
+        (date(2026, 9, 21), date(2026, 9, 27)),
+        (date(2026, 9, 28), date(2026, 10, 4)),
+    ]
+
+
+def test_ensure_first_round_after_midweek_end_is_short(db: Session):
+    _round(db, date(2026, 9, 1), date(2026, 9, 26))  # 토요일에 끝난 임의 회차
+    harvest.ensure_weekly_rounds(db, today=date(2026, 9, 29))
+    assert _ranges(db)[1:] == [(date(2026, 9, 27), date(2026, 9, 27)), (date(2026, 9, 28), date(2026, 10, 4))]
+
+
+def test_ensure_is_idempotent(db: Session):
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 1))
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 1))
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 3))
+    assert len(_ranges(db)) == 1
+
+
+def test_ensure_new_week_creates_next_round(db: Session):
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 4))
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 5))
+    assert _ranges(db) == [(date(2026, 9, 28), date(2026, 10, 4)), (date(2026, 10, 5), date(2026, 10, 11))]
+
+
+def test_ensure_finalizes_ended_rounds_only(db: Session):
+    a = _user(db, "alice")
+    _post(db, a.id, _kst(2026, 9, 30))
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 4))  # 마지막 날: 아직 진행 중
+    assert db.query(HarvestRound).one().status == "open"
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 5))
+    first = db.query(HarvestRound).order_by(HarvestRound.start_date).first()
+    assert first.status == "paid"
+    assert db.query(HarvestAllocation).filter_by(round_id=first.id).one().oranges == 1008
+
+
+def test_collect_off_auto_collects(db: Session):
+    a = _user(db, "alice")
+    _post(db, a.id, _kst(2026, 9, 30))
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 4))
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 5))
+    alloc = db.query(HarvestAllocation).one()
+    assert alloc.collected_at is not None
+
+
+def test_collect_on_keeps_ripe_then_auto_collects_after_7_days(db: Session):
+    a = _user(db, "alice")
+    _post(db, a.id, _kst(2026, 9, 30))
+    harvest.set_collect_enabled(db, True)
+    db.commit()
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 4))
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 5))
+    assert db.query(HarvestAllocation).one().collected_at is None
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 11))  # 종료 후 7일째: 아직
+    assert db.query(HarvestAllocation).one().collected_at is None
+    harvest.ensure_weekly_rounds(db, today=date(2026, 10, 12))  # 종료일 + 8일: 자동 수확
+    assert db.query(HarvestAllocation).one().collected_at is not None
+
+
+def test_collect_enabled_defaults_false_and_toggles(db: Session):
+    assert harvest.get_collect_enabled(db) is False
+    harvest.set_collect_enabled(db, True)
+    assert harvest.get_collect_enabled(db) is True
+    harvest.set_collect_enabled(db, False)
+    assert harvest.get_collect_enabled(db) is False

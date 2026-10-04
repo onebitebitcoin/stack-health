@@ -11,6 +11,8 @@ export interface HarvestRound {
   total_oranges: number
   seed: number | string
   paid_at: string | null
+  // 관리자가 BTC 지급 완료로 표시한 시각 (null이면 미지급)
+  btc_paid_at?: string | null
   participant_count: number
 }
 
@@ -74,11 +76,47 @@ export async function payRound(id: number): Promise<HarvestRound> {
   return res.data.data
 }
 
-// 지급 완료된 회차는 force=true 없이는 서버가 409로 거부한다
+// 확정된 회차는 force=true 없이는 서버가 409로 거부한다
 export async function deleteRound(id: number, force = false): Promise<void> {
   if (force) {
     await client.delete(`/admin/harvest/rounds/${id}`, { params: { force: true } })
     return
   }
   await client.delete(`/admin/harvest/rounds/${id}`)
+}
+
+export interface HarvestSettings {
+  collect_enabled: boolean
+}
+
+export interface HarvestUserStatusRow {
+  user_id: number
+  username: string
+  growing: number
+  ripe: number
+  collected: number
+  total: number
+  /** 선택한 달 전체 오렌지 중 비율(%) */
+  share_pct: number
+}
+
+export interface HarvestUserStatus {
+  month: string
+  pool_oranges: number
+  rows: HarvestUserStatusRow[]
+}
+
+export async function fetchHarvestSettings(): Promise<HarvestSettings> {
+  const res = await client.get<{ data: HarvestSettings }>('/admin/harvest/settings')
+  return res.data.data
+}
+
+export async function updateHarvestSettings(collectEnabled: boolean): Promise<HarvestSettings> {
+  const res = await client.put<{ data: HarvestSettings }>('/admin/harvest/settings', { collect_enabled: collectEnabled })
+  return res.data.data
+}
+
+export async function fetchHarvestUserStatus(month: string): Promise<HarvestUserStatus> {
+  const res = await client.get<{ data: HarvestUserStatus }>('/admin/harvest/users', { params: { month } })
+  return res.data.data
 }

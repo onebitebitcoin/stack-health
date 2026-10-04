@@ -15,6 +15,8 @@ import {
   type HarvestPaidRow,
   type HarvestRound,
 } from '../../api/harvestAdmin'
+import HarvestCollectSwitch from './HarvestCollectSwitch'
+import HarvestUserStatusTable from './HarvestUserStatusTable'
 
 type ConfirmKind = 'pay' | 'delete'
 // scope: 상세 패널의 확인 영역 옆에 보여줄지(detail), 화면 상단에 보여줄지(top)
@@ -53,8 +55,8 @@ function formatRange(round: HarvestRound): string {
   return `${formatShortDate(round.start_date)}~${formatShortDate(round.end_date)}`
 }
 
-// 지급 시각은 한국 시간 기준 M/D 로 표시
-function formatPaidDate(iso: string): string {
+// BTC 지급 시각은 한국 시간 기준 M/D 로 표시
+function formatBtcPaidDate(iso: string): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' }).format(new Date(iso))
 }
 
@@ -160,6 +162,13 @@ export default function AdminHarvestTab() {
     setNotice(null)
   }
 
+  // 목록의 BTC 지급 버튼: 회차를 선택하고 상세 패널의 확인 단계를 연다
+  function handleBtcPay(id: number) {
+    setSelectedId(id)
+    setNotice(null)
+    setConfirm('pay')
+  }
+
   function handleConfirm() {
     if (selectedId === null || busy) return
     if (confirm === 'pay') pay.mutate(selectedId)
@@ -167,9 +176,6 @@ export default function AdminHarvestTab() {
   }
 
   const canGenerate = MONTH_RE.test(month)
-  // 기간이 끝난 다음 날(KST)부터 지급 완료 처리할 수 있다
-  const payableFrom = detail ? nextDay(detail.round.end_date) : ''
-  const payBlocked = detail?.round.status === 'open' && todayKst() < payableFrom
 
   function renderNotice(scope: Notice['scope']) {
     if (!notice || notice.scope !== scope) return null
@@ -190,6 +196,8 @@ export default function AdminHarvestTab() {
 
   return (
     <div className="space-y-4">
+      <HarvestCollectSwitch />
+
       <div className="rounded-card bg-theme-surface p-4 space-y-4">
         <div className="flex items-center gap-2">
           <Sprout size={15} className="text-accent" />
@@ -215,31 +223,50 @@ export default function AdminHarvestTab() {
 
         {rounds.length > 0 && (
           <ul className="space-y-2">
-            {rounds.map((round) => (
-              <li key={round.id}>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(round.id)}
-                  aria-pressed={selectedId === round.id}
-                  className={`flex w-full items-center justify-between gap-3 rounded-card border px-4 py-3 text-left ${selectedId === round.id ? 'border-accent bg-theme-surface2' : 'border-theme-border bg-theme-surface2'}`}
+            {rounds.map((round) => {
+              const ended = round.end_date < todayKst()
+              return (
+                <li
+                  key={round.id}
+                  className={`rounded-card border bg-theme-surface2 ${selectedId === round.id ? 'border-accent' : 'border-theme-border'}`}
                 >
-                  <span className="text-body font-semibold tabular-nums text-theme-primary">{formatRange(round)}</span>
-                  <span className="flex items-center gap-2 text-label text-theme-muted">
-                    <span className={round.status === 'paid' ? 'text-success' : 'text-warning'}>
-                      {round.status === 'paid' && round.paid_at
-                        ? t('harvestStatusPaidOn', { date: formatPaidDate(round.paid_at) })
-                        : round.status === 'paid'
-                          ? t('harvestStatusPaid')
-                          : t('harvestStatusOpen')}
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(round.id)}
+                    aria-pressed={selectedId === round.id}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                  >
+                    <span className="text-body font-semibold tabular-nums text-theme-primary">{formatRange(round)}</span>
+                    <span className="flex items-center gap-2 text-label text-theme-muted">
+                      <span className={round.status === 'paid' ? 'text-success' : 'text-warning'}>
+                        {round.status === 'paid' ? t('harvestStatusPaid') : t('harvestStatusOpen')}
+                      </span>
+                      <span className="tabular-nums">{t('harvestParticipants', { count: round.participant_count })}</span>
                     </span>
-                    <span className="tabular-nums">{t('harvestParticipants', { count: round.participant_count })}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
+                  </button>
+                  <div className="border-t border-theme-border px-4 py-2 text-label">
+                    {round.btc_paid_at ? (
+                      <span className="text-success">{t('harvestBtcPaidOn', { date: formatBtcPaidDate(round.btc_paid_at) })}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleBtcPay(round.id)}
+                        disabled={busy || !ended}
+                        title={ended ? undefined : t('harvestPayBlockedHint', { date: formatShortDate(nextDay(round.end_date)) })}
+                        className="rounded-card bg-accent px-3 py-1 font-semibold text-accent-fg disabled:opacity-50"
+                      >
+                        {t('harvestPayButton')}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
+
+      <HarvestUserStatusTable month={month} />
 
       <div className="rounded-card bg-theme-surface p-4 space-y-3">
         <div>
@@ -364,16 +391,6 @@ export default function AdminHarvestTab() {
                 </div>
               ) : (
                 <div className="flex gap-3">
-                  {detail.round.status === 'open' && (
-                    <button
-                      type="button"
-                      onClick={() => { setNotice(null); setConfirm('pay') }}
-                      disabled={busy || payBlocked}
-                      className="flex-1 rounded-card bg-accent py-3 text-body font-semibold text-accent-fg disabled:opacity-50"
-                    >
-                      {t('harvestPayButton')}
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => { setNotice(null); setConfirm('delete') }}
@@ -383,9 +400,6 @@ export default function AdminHarvestTab() {
                     {t('harvestDeleteButton')}
                   </button>
                 </div>
-              )}
-              {payBlocked && !confirm && (
-                <p className="text-label text-theme-muted">{t('harvestPayBlockedHint', { date: formatShortDate(payableFrom) })}</p>
               )}
               {renderNotice('detail')}
             </>

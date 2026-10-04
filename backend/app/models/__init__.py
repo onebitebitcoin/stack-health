@@ -12,6 +12,6 @@ from app.models.notification import Notification
 from app.models.survey import Survey, SurveyResponse
 from app.models.follow import Follow
 from app.models.comment_like import CommentLike
-from app.models.harvest import HarvestRound, HarvestAllocation
+from app.models.harvest import HarvestRound, HarvestAllocation, HarvestSetting
 
-__all__ = ["User", "Video", "Post", "Comment", "AdminLog", "Challenge", "ChallengeParticipation", "LNAuthChallenge", "AppLinks", "PostLike", "PostView", "Notification", "Survey", "SurveyResponse", "Follow", "CommentLike", "HarvestRound", "HarvestAllocation"]
+__all__ = ["User", "Video", "Post", "Comment", "AdminLog", "Challenge", "ChallengeParticipation", "LNAuthChallenge", "AppLinks", "PostLike", "PostView", "Notification", "Survey", "SurveyResponse", "Follow", "CommentLike", "HarvestRound", "HarvestAllocation", "HarvestSetting"]

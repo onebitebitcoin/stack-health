@@ -10,11 +10,12 @@ import math
 import random
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.comment import Comment
-from app.models.harvest import HarvestAllocation, HarvestRound
+from app.models.harvest import HarvestAllocation, HarvestRound, HarvestSetting
 from app.models.post import Post
 from app.models.user import User
 from app.models.video import Video
@@ -26,6 +27,7 @@ MAX_FRUITS = 7
 POINTS_PER_UPLOAD = 0.5
 POINTS_PER_COMMENT = 0.01
 CONTRIBUTION_WEIGHT = 0.8  # 나머지 0.2는 균등 무작위 몫
+AUTO_COLLECT_DAYS = 7  # 수확 버튼이 켜져 있어도 종료 후 이 기간이 지나면 자동 수확
 
 _CADENCES = ("weekly", "biweekly", "monthly")
 
@@ -78,11 +80,9 @@ def month_ranges(year: int, month: int, cadence: str) -> list[tuple[date, date]]
 
 
 def validate_round_range(start: date, end: date) -> None:
-    """시작일이 종료일보다 늦거나 서로 다른 달이면 ValueError."""
+    """시작일이 종료일보다 늦으면 ValueError."""
     if start > end:
         raise ValueError("시작일이 종료일보다 늦습니다")
-    if (start.year, start.month) != (end.year, end.month):
-        raise ValueError("회차는 월을 넘을 수 없습니다")
 
 
 def _kst_bounds_utc(start: date, end: date) -> tuple[datetime, datetime]:
@@ -172,7 +172,7 @@ def default_seed(end_date: date) -> int:
 def finalize_round(
     db: Session, round: HarvestRound, commit: bool = True, today: date | None = None
 ) -> HarvestRound:
-    """회차를 확정한다: 점수 계산 -> 배분 -> 결과 저장 -> paid 처리.
+    """회차를 확정한다: 점수 계산 -> 배분 -> 결과 저장 -> paid 처리(오렌지 확정, BTC 송금과 무관).
 
     commit=False면 flush만 하고 커밋은 호출자가 한다(여러 회차를 한 트랜잭션으로 묶을 때).
     종료일 다음 날부터만 지급할 수 있다(today는 테스트용, 기본은 오늘 KST)."""
@@ -182,6 +182,9 @@ def finalize_round(
         raise RoundNotEndedError("회차 종료일 다음 날부터 지급할 수 있습니다")
     scores = compute_scores(db, round.start_date, round.end_date)
     wins = allocate(scores, total=round.total_oranges, seed=round.seed)
+    now = datetime.now(timezone.utc)
+    # 수확 버튼이 꺼져 있으면 확정 즉시 수확된 것으로 본다.
+    collected_at = None if get_collect_enabled(db) else now
 
     db.query(HarvestAllocation).filter(HarvestAllocation.round_id == round.id).delete()
     for uid, s in scores.items():
@@ -193,16 +196,103 @@ def finalize_round(
                 comments=s["comments"],
                 score=s["score"],
                 oranges=wins.get(uid, 0),
+                collected_at=collected_at,
             )
         )
     round.status = "paid"
-    round.paid_at = datetime.now(timezone.utc)
+    round.paid_at = now
     if commit:
         db.commit()
     else:
         db.flush()
     db.refresh(round)
     return round
+
+
+def week_end(day: date) -> date:
+    """day 가 속한 주(월~일)의 일요일."""
+    return day + timedelta(days=6 - day.weekday())
+
+
+def get_collect_enabled(db: Session) -> bool:
+    """수확 버튼 사용 여부. 설정 행이 없으면 꺼진 것으로 본다."""
+    return bool(db.query(HarvestSetting.collect_enabled).filter(HarvestSetting.id == 1).scalar())
+
+
+def set_collect_enabled(db: Session, enabled: bool) -> None:
+    """수확 버튼 사용 여부를 저장한다(행이 없으면 만든다). 커밋은 호출자가 한다."""
+    setting = db.get(HarvestSetting, 1)
+    if setting is None:
+        db.add(HarvestSetting(id=1, collect_enabled=enabled))
+    else:
+        setting.collect_enabled = enabled
+    db.flush()
+
+
+def collect_all_ripe(db: Session, now: datetime | None = None, user_id: int | None = None) -> int:
+    """아직 수확하지 않은 배분을 수확 처리하고 처리한 오렌지 수를 반환한다(user_id 가 없으면 전원)."""
+    cond = [HarvestAllocation.collected_at.is_(None)]
+    if user_id is not None:
+        cond.append(HarvestAllocation.user_id == user_id)
+    total = db.query(func.coalesce(func.sum(HarvestAllocation.oranges), 0)).filter(*cond).scalar()
+    db.execute(
+        update(HarvestAllocation).where(*cond).values(collected_at=now or datetime.now(timezone.utc)),
+        execution_options={"synchronize_session": False},
+    )
+    return int(total)
+
+
+def _create_missing_rounds(db: Session, today: date) -> None:
+    """마지막 회차 다음 날부터 이번 주 일요일까지 월~일 단위 회차를 채운다."""
+    last_end = db.query(func.max(HarvestRound.end_date)).scalar()
+    start = last_end + timedelta(days=1) if last_end else today - timedelta(days=today.weekday())
+    this_sunday = week_end(today)
+    while start <= this_sunday:
+        end = week_end(start)
+        db.add(HarvestRound(
+            start_date=start, end_date=end, seed=default_seed(end),
+            total_oranges=TOTAL_ORANGES, status="open",
+        ))
+        start = end + timedelta(days=1)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()  # 동시 요청이 먼저 만들었다. 다음 호출에서 다시 확인한다.
+
+
+def ensure_weekly_rounds(db: Session, today: date | None = None) -> None:
+    """주간 회차를 보장한다: 빠진 회차 생성 -> 끝난 회차 확정 -> 수확 규칙 적용.
+
+    조회 API 시작에서 호출한다. 할 일이 없으면 가벼운 쿼리 몇 번으로 끝난다."""
+    today = today or today_kst()
+    _create_missing_rounds(db, today)
+
+    ended = (
+        db.query(HarvestRound)
+        .filter(HarvestRound.status == "open", HarvestRound.end_date < today)
+        .order_by(HarvestRound.end_date)
+        .with_for_update()
+        .all()
+    )
+    for rnd in ended:
+        try:
+            finalize_round(db, rnd, commit=False, today=today)
+        except ValueError:
+            pass  # 다른 요청이 먼저 확정했다.
+
+    if not get_collect_enabled(db):
+        collect_all_ripe(db)
+    else:
+        # 버튼을 누르지 않아도 종료 후 일정 기간이 지나면 자동 수확한다.
+        cutoff = today - timedelta(days=AUTO_COLLECT_DAYS)
+        old_rounds = select(HarvestRound.id).where(HarvestRound.end_date < cutoff)
+        db.execute(
+            update(HarvestAllocation)
+            .where(HarvestAllocation.collected_at.is_(None), HarvestAllocation.round_id.in_(old_rounds))
+            .values(collected_at=datetime.now(timezone.utc)),
+            execution_options={"synchronize_session": False},
+        )
+    db.commit()
 
 
 def parse_month(month: str) -> tuple[int, int]:
@@ -251,6 +341,63 @@ def user_round_oranges(db: Session, rounds: list[HarvestRound], user_id: int) ->
             scores = compute_scores(db, r.start_date, r.end_date)
             result[r.id] = (round(expected(scores, r.total_oranges).get(user_id, 0.0)), True)
     return result
+
+
+def user_ripe_by_round(db: Session, user_id: int) -> dict[int, int]:
+    """내가 아직 수확하지 않은 오렌지. {round_id: oranges}."""
+    rows = (
+        db.query(HarvestAllocation.round_id, HarvestAllocation.oranges)
+        .filter(HarvestAllocation.user_id == user_id, HarvestAllocation.collected_at.is_(None))
+        .all()
+    )
+    return {rid: oranges for rid, oranges in rows}
+
+
+def user_total_collected(db: Session, user_id: int) -> int:
+    """지금까지 수확한 내 오렌지 합계. 수확 대기분은 거두기 전까지 넣지 않는다."""
+    total = (
+        db.query(func.coalesce(func.sum(HarvestAllocation.oranges), 0))
+        .filter(HarvestAllocation.user_id == user_id, HarvestAllocation.collected_at.is_not(None))
+        .scalar()
+    )
+    return int(total)
+
+
+def admin_user_rows(db: Session, rounds: list[HarvestRound]) -> list[dict]:
+    """회차들에 걸친 사용자별 오렌지 현황: 자라는 중 / 익음(미수확) / 수확 완료 / 합계 / 비율(%)."""
+    pool = sum(r.total_oranges for r in rounds)
+    stats: dict[int, dict[str, int]] = {}
+
+    def _entry(uid: int) -> dict[str, int]:
+        return stats.setdefault(uid, {"growing": 0, "ripe": 0, "collected": 0})
+
+    for r in rounds:
+        if r.status == "paid":
+            continue
+        scores = compute_scores(db, r.start_date, r.end_date)
+        for uid, value in expected(scores, r.total_oranges).items():
+            _entry(uid)["growing"] += round(value)
+    paid_ids = [r.id for r in rounds if r.status == "paid"]
+    if paid_ids:
+        rows = (
+            db.query(HarvestAllocation.user_id, HarvestAllocation.oranges, HarvestAllocation.collected_at)
+            .filter(HarvestAllocation.round_id.in_(paid_ids))
+            .all()
+        )
+        for uid, oranges, collected_at in rows:
+            _entry(uid)["collected" if collected_at else "ripe"] += oranges
+    names = dict(db.query(User.id, User.username).filter(User.id.in_(list(stats))).all()) if stats else {}
+    result = [
+        {
+            "user_id": uid,
+            "username": names.get(uid, ""),
+            **e,
+            "total": sum(e.values()),
+            "share_pct": round(sum(e.values()) / pool * 100, 1) if pool else 0.0,
+        }
+        for uid, e in stats.items()
+    ]
+    return sorted(result, key=lambda row: (-row["total"], row["user_id"]))
 
 
 def summarize_rounds(rounds: list[HarvestRound], per_round: dict[int, tuple[int, bool]]) -> dict:
