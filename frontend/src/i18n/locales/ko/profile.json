@@ -63,6 +63,7 @@
   "shareText": "이번 달 {{days}}일 기록, 연속 {{streak}}일 달성",
   "shareTitle": "Orange Story 기록 리포트",
   "clipboardCopied": "클립보드에 복사됐어요!",
+  "calendarDayVideos": "{{day}}일, 영상 {{count}}개",
   "calendarYear": "{{year}}년 {{month}}월",
   "daysOfWeek": [
     "월",

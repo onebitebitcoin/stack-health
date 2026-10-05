@@ -63,6 +63,7 @@
   "shareText": "{{days}} record days this month, {{streak}}-day streak",
   "shareTitle": "Orange Story Record Report",
   "clipboardCopied": "Copied to clipboard!",
+  "calendarDayVideos": "Day {{day}}, {{count}} videos",
   "calendarYear": "{{year}} / {{month}}",
   "daysOfWeek": [
     "Mon",

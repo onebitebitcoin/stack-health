@@ -306,6 +306,7 @@ export default function ProfilePage() {
                   <button
                     key={cell.dateStr}
                     onClick={() => openDay(cell.dateStr!, posts)}
+                    aria-label={posts.length > 1 ? t('calendarDayVideos', { day: cell.day, count: posts.length }) : undefined}
                     className={`aspect-square relative overflow-hidden rounded-card active:scale-95 transition-transform ${isToday ? 'ring-2 ring-accent ring-offset-1 ring-offset-[--bg-page]' : ''}`}
                   >
                     {posts[0].thumbnail_url ? (
@@ -328,7 +329,13 @@ export default function ProfilePage() {
                       {cell.day}
                     </span>
                     {posts.length > 1 && (
-                      <div className="absolute top-1 right-1 h-1.5 w-1.5 rounded-pill bg-accent" />
+                      <span
+                        data-testid="calendar-count-badge"
+                        aria-hidden="true"
+                        className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-pill bg-accent px-1 text-eyebrow font-bold leading-none tracking-normal text-white tabular-nums"
+                      >
+                        {posts.length}
+                      </span>
                     )}
                   </button>
                 )
