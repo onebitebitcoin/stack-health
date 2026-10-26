@@ -44,9 +44,37 @@ _LINE_MIN_LEN = 16  # 이보다 짧은 조각(바운딩 박스 긴 변)은 대�
 _LINE_STRONG_DOG = 16  # 짧은 조각을 살리는 DoG 최소 피크(0~255). 9·12는 질감이 남고 16부터 깨끗했다
 _CEL_MEDIAN_K = 5  # 셀 양자화 전 L 중앙값 필터 — 잔질감이 만든 얼룩 조각을 주변 면으로 흡수한다
 
+# 군집 억제: 조각 하나하나는 길이·대비 필터를 통과해도, 질감 위에서는 짧은 조각이 좁은 곳에
+# 수십 개씩 모여 "환공포증" 무늬가 된다(피드 실측: 보도·낙엽·카펫). 짧은 조각만 모은 마스크의
+# 국소 밀도가 높은 곳의 짧은 조각을 버린다. 긴 윤곽과 주변이 빈 짧은 선(눈·입)은 남는다.
+_CLUSTER_FRAG_LEN = 60  # 이보다 짧은 조각(바운딩 박스 긴 변, 기준 px)이 군집 판정 대상
+_CLUSTER_WIN = 41  # 밀도를 재는 창(기준 px)
+_CLUSTER_MAX_DENSITY = 0.06  # 창 안 짧은 조각 잉크 비율이 이보다 높으면 질감으로 본다
+# DoG σ·커널은 짧은 변 1080px에서 맞춘 값이라 그보다 큰 영상(4K 등)에서는 비례해 키운다.
+# 고정 px로 두면 4K 원본에서 같은 장면이 더 잘게 쪼개져 조각이 수천 개로 늘었다(실측 5,751개).
+_DOG_REF_SHORT_SIDE = 1080
+
 
 def _scale_px(px: int, short_side: int) -> int:
     return max(1, round(px * short_side / _REF_SHORT_SIDE))
+
+
+def _suppress_clusters(
+    keep: np.ndarray, labels: np.ndarray, stats: np.ndarray, short_side: int
+) -> np.ndarray:
+    """`keep`(라벨별 bool)에서 짧은 조각이 빽빽이 모인 곳의 조각을 뺀 새 배열."""
+    s = short_side / _REF_SHORT_SIDE
+    long_side = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
+    frag = keep & (long_side < _CLUSTER_FRAG_LEN * s)
+    frag_mask = frag[labels].astype(np.float32)
+    h, w = frag_mask.shape
+    # 밀도는 저주파라 1/4 크기에서 구해도 결과가 같다(1080p 기준 수 ms)
+    quarter = cv2.resize(frag_mask, (max(1, w // 4), max(1, h // 4)), interpolation=cv2.INTER_AREA)
+    k = max(3, int(_CLUSTER_WIN * s / 4) | 1)
+    density = cv2.resize(cv2.blur(quarter, (k, k)), (w, h), interpolation=cv2.INTER_LINEAR)
+    area = np.maximum(stats[:, cv2.CC_STAT_AREA], 1)
+    mean_density = np.bincount(labels.ravel(), weights=(density * frag_mask).ravel(), minlength=len(keep)) / area
+    return keep & ~(frag & (mean_density > _CLUSTER_MAX_DENSITY))
 
 
 # NlMeans 등 OpenCV 연산은 멀티스레드 확장성이 낮아(10코어 ~1.4x) 프레임 단위
@@ -137,12 +165,17 @@ def cartoon_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     lab[:, :, 0] = cv2.LUT(np.ascontiguousarray(lab[:, :, 0]), _CEL_LUT)
     cel = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
-    # 잉크 라인: DoG → 이진화 → 소성분 제거 → 살짝 두껍게 → 소프트 블렌드
-    gray = cv2.cvtColor(den, cv2.COLOR_BGR2GRAY)
-    g1 = cv2.GaussianBlur(gray, (0, 0), 1.4)
+    # 잉크 라인: DoG → 이진화 → 소성분 제거 → 군집 억제 → 살짝 두껍게 → 소프트 블렌드.
+    # DoG 입력은 색 면과 같은 평활 이미지(`smooth`: bilateral + 중앙값)다. 예전에는 CLAHE로 대비만
+    # 키운 `den`에서 바로 뽑아서 보도블록 틈·낙엽 같은 잔질감이 전부 짧은 선 조각이 됐다.
+    # DoG 자체는 원본 해상도에서 계산한다 — DoG를 half-res로 계산했던 실험은 텍스트·세부선이
+    # 점묘화·단절돼 폐기했다(ponytail: 재시도 시 DoG 계산 해상도는 낮추지 말 것).
+    gray = cv2.cvtColor(smooth, cv2.COLOR_BGR2GRAY)
+    s = max(1.0, short_side / _DOG_REF_SHORT_SIDE)
+    g1 = cv2.GaussianBlur(gray, (0, 0), 1.4 * s)
     # σ=3.0을 원본에서 직접 구하는 대신 g1에 σ=2.65를 덧씌운다 — 가우시안은 합성되므로
     # (1.4² + 2.65² ≈ 3.0²) 결과가 사실상 같고(출력차 0.04/255) 커널이 작아 더 싸다.
-    g2 = cv2.GaussianBlur(g1, (0, 0), _DOG_SIGMA2_CASCADE)
+    g2 = cv2.GaussianBlur(g1, (0, 0), _DOG_SIGMA2_CASCADE * s)
     dog = cv2.subtract(g1, g2)
     _, line_mask = cv2.threshold(dog, 4, 255, cv2.THRESH_BINARY)
     line_mask = cv2.morphologyEx(line_mask, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
@@ -153,15 +186,14 @@ def cartoon_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     long_side = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
     # 조각마다 DoG 최대값을 따로 구하지 않고, 강한 픽셀이 하나라도 속한 라벨만 bincount로 표시한다
     strong = np.bincount(labels[dog >= _LINE_STRONG_DOG], minlength=n_labels) > 0
-    keep = (stats[:, cv2.CC_STAT_AREA] >= _LINE_MIN_AREA) & (
+    keep = (stats[:, cv2.CC_STAT_AREA] >= _LINE_MIN_AREA * s * s) & (
         (long_side >= _scale_px(_LINE_MIN_LEN, short_side)) | strong
     )
     keep[0] = False  # 배경 라벨
+    keep = _suppress_clusters(keep, labels, stats, short_side)
     line_mask = np.where(keep[labels], np.uint8(255), np.uint8(0))
-    line_mask = cv2.dilate(line_mask, np.ones((2, 2), np.uint8))
-    # half-res(σ/면적임계 절반 재조정)로 계산하는 실험을 실측했으나 텍스트/세부선이
-    # 점묘화·단절되는 화질 저하가 뚜렷해 폐기했다(ponytail: 속도보다 화질 우선, 재시도 시
-    # DoG 입력을 half-res로 낮추지 말고 connectedComponents 단계만 최적화할 것).
+    k = max(2, round(2 * s))
+    line_mask = cv2.dilate(line_mask, np.ones((k, k), np.uint8))
     #
     # 소프트 블렌드: numpy 브로드캐스트(uint16) 대신 OpenCV 융합 연산을 쓴다 — numpy는
     # 곱셈/덧셈마다 1080x1920x3 임시 배열을 새로 만드는데 cv2는 SIMD로 한 번에 처리한다

@@ -1,7 +1,15 @@
-"""흑백 선 크로키 렌더러 — 업로드 영상 필터(`video_filter=sketch`).
+"""연필 스케치 렌더러 — 업로드 영상 필터(`video_filter=sketch`).
 
-카툰 필터와 같은 저조도 전처리(감마 + CLAHE) 뒤에 윤곽선만 뽑아 미색 종이 위에 흑연색으로
-긋는다. 영상 변환(구간 병렬·인코딩·오디오 보존)은 `cartoon.filter_video`가 공유한다.
+카툰 필터와 같은 저조도 전처리(감마 + CLAHE) 뒤에 윤곽 세기를 연필 농도로 옮기고, 어두운 면을
+45도 연필 결로 옅게 칠해 미색 종이 위에 흑연색으로 그린다. 영상 변환(구간 병렬·인코딩·오디오
+보존)은 `cartoon.filter_video`가 공유한다.
+
+예전 "크로키"는 픽셀마다 선인지 아닌지를 0/1로 정하고 선 조각마다 남길지를 다시 정했다. 그 판정이
+문턱값 근처에서 프레임마다 뒤집혀 선 꼬리·잎사귀 고리가 깜빡였다(카메라 움직임 보정 후에도 남는
+변화). 연필 스케치는 문턱값·조각 판정 없이 윤곽 세기를 tanh 곡선(XDoG)으로 농도에 옮기므로,
+입력이 조금 바뀌면 출력도 조금만 바뀐다(피드 영상 실측: 깜빡임 25~70% 감소, 처리 시간 절반 이하).
+
+`_line_mask`·`_reference_gray`·종이 결 함수는 오렌지 카툰·흑백 카툰이 그대로 쓴다.
 cv2/numpy 외 앱 의존성을 두지 않는다 — worker가 이 모듈을 단독 import한다.
 """
 
@@ -16,13 +24,25 @@ from app.services.cartoon import _enhance
 _REF_SHORT_SIDE = 540
 
 PAPER_BGR = np.array([234, 240, 244], np.float32) / 255.0  # 미색 종이
-INK_BGR = np.array([38, 36, 40], np.float32) / 255.0  # 흑연
+INK_BGR = np.array([38, 36, 40], np.float32) / 255.0  # 종이 결의 어두운 쪽 색
+PENCIL_BGR = (52 / 255.0, 48 / 255.0, 46 / 255.0)  # 연필 흑연
+
+# 연필 선: XDoG 윤곽 항 e = p·(G_σ − G_kσ)가 _PENCIL_EPS보다 작을수록 진해진다(1 − tanh).
+# 선 농도가 연속값이라 문턱값 근처에서 0/1로 뒤집히지 않는다. _PENCIL_PHI가 작을수록 부드럽다.
+_PENCIL_SIGMA = 0.9
+_PENCIL_K = 1.6
+_PENCIL_P = 40.0
+_PENCIL_EPS = -0.1
+_PENCIL_PHI = 3.0
+# 음영: 휘도가 _SHADE_FROM보다 어두운 면을 최대 _SHADE_MAX 농도로 연필 결을 따라 칠한다
+_SHADE_MAX = 0.3
+_SHADE_FROM = 0.55
 
 # 전처리 bilateral은 기준 해상도로 줄여서 건다. 원본 해상도에서 걸면 1080p 기준 프레임당
 # 수백 ms가 들고, 커널을 해상도에 맞춰 키우지 않으면 잔질감이 덜 지워져 룩이 해상도마다 달라진다.
 _BILATERAL_PASSES = 2
 
-# 선 추출: DoG(σ, 1.6σ) 값이 _EPS_STRONG 아래면 확실한 선, _EPS_WEAK 아래면 약한 선이다.
+# 오렌지 카툰·흑백 카툰의 윤곽선(`_line_mask`): DoG(σ, 1.6σ) 값이 _EPS_STRONG 아래면 확실한 선, _EPS_WEAK 아래면 약한 선이다.
 # 약한 선은 확실한 선과 이어진 조각일 때만 남긴다(히스테리시스). 그래서 대비가 낮은
 # 역광 윤곽은 끊기지 않고, 벽·바닥의 고립된 잔질감은 점으로 남지 않는다.
 _DOG_SIGMA = 0.9
@@ -52,17 +72,8 @@ def _paper_texture(h: int, w: int) -> np.ndarray:
     return np.clip(grain, 0.85, 1.05).astype(np.float32)
 
 
-def _smoothed_gray(frame: np.ndarray, gamma: float, scale: float) -> np.ndarray:
-    """감마·CLAHE 보정 후 기준 해상도에서 bilateral로 잔질감을 지운 휘도(0~1, 원본 해상도)."""
-    h, w = frame.shape[:2]
-    gray = _reference_gray(frame, gamma, scale)
-    if gray.shape != (h, w):
-        gray = cv2.resize(gray, (w, h), interpolation=cv2.INTER_LINEAR)
-    return gray
-
-
 def _reference_gray(frame: np.ndarray, gamma: float, scale: float) -> np.ndarray:
-    """`_smoothed_gray`와 같은 휘도를 기준 해상도(짧은 변 540px) 그대로 돌려준다.
+    """감마·CLAHE 보정 후 bilateral로 잔질감을 지운 휘도(0~1)를 기준 해상도(짧은 변 540px)로 돌려준다.
 
     원본 해상도로 키워도 담긴 정보는 기준 해상도 그대로다. 그래서 이어지는 블러·선 추출을
     이 크기에서 하고 결과 마스크만 키우면, 같은 모습을 픽셀 1/4 비용으로 얻는다.
@@ -93,12 +104,36 @@ def _line_mask(gray: np.ndarray, scale: float) -> np.ndarray:
     return cv2.GaussianBlur(keep[labels].astype(np.float32), (0, 0), _LINE_SOFTEN_SIGMA * scale)
 
 
+@lru_cache(maxsize=4)
+def _pencil_grain(h: int, w: int) -> np.ndarray:
+    """음영에 곱하는 고정 연필 결(0~1, 평균 0.5): 45도로 늘린 노이즈. 시드가 고정이라 구간 병렬
+    프로세스끼리도 같은 결이 나온다. 프레임마다 새로 만들면 음영 전체가 지글거린다."""
+    rng = np.random.default_rng(11)
+    noise = rng.normal(0, 1, (h, w)).astype(np.float32)
+    stroke = np.flipud(np.eye(15, dtype=np.float32)) / 15
+    grain = cv2.filter2D(noise, -1, stroke)
+    return np.clip(0.5 + 0.18 * grain / (grain.std() + 1e-6), 0, 1)
+
+
+def _pencil_ink(gray: np.ndarray) -> np.ndarray:
+    """기준 해상도 휘도(0~1) → 연필 농도(0=종이, 1=흑연). 선과 음영을 겹쳐 칠한다."""
+    g1 = cv2.GaussianBlur(gray, (0, 0), _PENCIL_SIGMA)
+    g2 = cv2.GaussianBlur(gray, (0, 0), _PENCIL_SIGMA * _PENCIL_K)
+    edge = _PENCIL_P * (g1 - g2)
+    line = np.clip(-np.tanh(_PENCIL_PHI * (edge - _PENCIL_EPS)), 0, 1)
+    dark = np.clip(1.0 - cv2.GaussianBlur(gray, (0, 0), 2.5) / _SHADE_FROM, 0, 1)
+    shade = _SHADE_MAX * dark * (0.6 + 0.8 * _pencil_grain(*gray.shape))
+    return (1.0 - (1.0 - line) * (1.0 - shade)).astype(np.float32)
+
+
 def sketch_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
-    """BGR 프레임 1장을 흑백 선 크로키로 변환한다(같은 크기의 BGR uint8)."""
+    """BGR 프레임 1장을 연필 스케치로 변환한다(같은 크기의 BGR uint8)."""
     h, w = frame.shape[:2]
     scale = max(1.0, min(h, w) / _REF_SHORT_SIDE)
-    ink = _line_mask(_smoothed_gray(frame, gamma, scale), scale)
-    return cv2.blendLinear(_paper_background(h, w), _solid(h, w, tuple(INK_BGR.tolist())), 1.0 - ink, ink)
+    ink = _pencil_ink(_reference_gray(frame, gamma, scale))
+    if ink.shape != (h, w):
+        ink = cv2.resize(ink, (w, h), interpolation=cv2.INTER_LINEAR)
+    return cv2.blendLinear(_paper_background(h, w), _solid(h, w, PENCIL_BGR), 1.0 - ink, ink)
 
 
 @lru_cache(maxsize=4)

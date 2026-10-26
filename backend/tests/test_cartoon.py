@@ -52,6 +52,17 @@ class TestCartoonFrame:
         ink = np.abs(out.astype(np.int16) - LINE_BGR.astype(np.int16)).sum(axis=2) < 25
         assert float(ink.mean()) < 0.01, f"ink dots cover {float(ink.mean()):.2%} of a flat textured frame"
 
+    def test_dense_leaf_texture_leaves_no_ink_clusters(self):
+        # 낙엽 깔린 보도처럼 대비가 강한 작은 무늬가 빽빽한 면. 무늬 하나하나는 길이·대비 필터를
+        # 통과하는 잉크 조각을 만들지만, 좁은 곳에 몰리면 환공포증 같은 점 무늬가 된다.
+        rng = np.random.default_rng(3)
+        frame = np.full((1080, 1920, 3), 140, dtype=np.uint8)
+        for y, x in zip(rng.integers(0, 1070, 900), rng.integers(0, 1910, 900)):
+            frame[y : y + 10, x : x + 6] = 60
+        out = cartoon_frame(frame)
+        ink = np.abs(out.astype(np.int16) - LINE_BGR.astype(np.int16)).sum(axis=2) < 25
+        assert float(ink.mean()) < 0.01, f"ink clusters cover {float(ink.mean()):.2%} of a leaf-textured frame"
+
     def test_short_high_contrast_feature_keeps_ink(self):
         # 눈·입처럼 짧지만 대비가 강한 무늬는 길이 필터에 걸려도 잉크 선이 남아야 한다.
         frame = np.full((540, 960, 3), 120, dtype=np.uint8)

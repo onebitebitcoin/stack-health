@@ -99,7 +99,7 @@ describe('StepMedia', () => {
 
   it.each([
     ['카툰 필터', 'cartoon'],
-    ['크로키 필터', 'sketch'],
+    ['연필 스케치', 'sketch'],
     ['오렌지 카툰', 'orange_cartoon'],
     ['물감 필터', 'monet'],
     ['흑백 카툰', 'mono_cartoon'],

@@ -1,4 +1,4 @@
-"""선 크로키 렌더러(`app.services.sketch`) 단위 + 영상 E2E 테스트."""
+"""연필 스케치 렌더러(`app.services.sketch`) 단위 + 영상 E2E 테스트."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ import subprocess
 import cv2
 import numpy as np
 import pytest
+
 from app.services.cartoon import filter_video, frame_renderer
-from app.services.sketch import INK_BGR, PAPER_BGR, sketch_frame
+from app.services.sketch import PAPER_BGR, PENCIL_BGR, sketch_frame
 
 _HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
@@ -25,7 +26,7 @@ def _square_frame(h: int = 240, w: int = 320) -> np.ndarray:
 def _ink_ratio(out: np.ndarray) -> np.ndarray:
     """픽셀별 잉크 비율(0=종이, 1=흑연). 종이 결 때문에 종이도 0 근처에서 조금 흔들린다."""
     paper = PAPER_BGR.mean() * 255
-    ink = INK_BGR.mean() * 255
+    ink = float(np.mean(PENCIL_BGR)) * 255
     return np.clip((paper - out.mean(axis=2)) / (paper - ink), 0, 1)
 
 
@@ -44,19 +45,37 @@ class TestSketchFrame:
         frame[..., 2] = 255  # 빨강 계열로 물들여도
         out = sketch_frame(frame).astype(np.int16)
         spread = out.max(axis=2) - out.min(axis=2)
-        assert spread.max() <= 12  # 종이(234,240,244)와 흑연 사이 — 채도 없음
+        assert spread.max() <= 12  # 종이(234,240,244)와 연필(52,48,46) 사이 — 채도 없음
 
-    def test_lines_on_edges_only(self):
-        """사각형 테두리에는 선이 생기고, 평평한 안쪽과 바깥은 종이로 남는다."""
+    def test_lines_on_edges_shading_inside(self):
+        """사각형 테두리는 진한 선, 어두운 안쪽은 그보다 옅은 연필 음영, 밝은 바깥은 종이로 남는다."""
         h, w = 240, 320
         ink = _ink_ratio(sketch_frame(_square_frame(h, w)))
         edge_band = ink[h // 4 - 3 : h // 4 + 4, w // 4 + 10 : 3 * w // 4 - 10]
         assert edge_band.max(axis=0).mean() > 0.8  # 윗변을 따라 끊기지 않은 선
-        assert ink[h // 2 - 10 : h // 2 + 10, w // 2 - 10 : w // 2 + 10].max() < 0.15
+        inside = ink[h // 2 - 10 : h // 2 + 10, w // 2 - 10 : w // 2 + 10]
+        assert 0.05 < inside.mean() < 0.5  # 어두운 면은 칠하되 선보다 옅게
         assert ink[5:30, 5:30].max() < 0.15
 
+    def test_small_input_change_does_not_flip_lines(self):
+        """밝기가 조금 바뀌어도 선이 통째로 켜지거나 꺼지지 않는다 — 깜빡임 회귀 방지.
+
+        예전 크로키는 대비가 문턱값 근처인 무늬에서 0/1 판정이 뒤집혀, 노이즈 수준의 변화에도 선 조각이
+        사라지거나 생겼다(이 장면에서 농도가 0.5 넘게 뒤집힌 픽셀 0.57%). 연필 스케치는 0.04% 이하다.
+        """
+        rng = np.random.default_rng(1)
+        scene = np.full((270, 480), 150, np.float32)
+        for y, x in zip(rng.integers(0, 262, 300), rng.integers(0, 470, 300)):
+            scene[y : y + 6, x : x + 9] -= 8 + x / 480 * 40  # 왼쪽은 옅게, 오른쪽은 진하게
+        scene = cv2.GaussianBlur(scene, (0, 0), 1.2)
+        noise = np.random.default_rng(9).normal(0, 1.5, scene.shape)
+        base = cv2.merge([np.clip(scene, 0, 255).astype(np.uint8)] * 3)
+        nudged = cv2.merge([np.clip(scene + noise, 0, 255).astype(np.uint8)] * 3)
+        flipped = np.abs(_ink_ratio(sketch_frame(base)) - _ink_ratio(sketch_frame(nudged))) > 0.5
+        assert flipped.mean() < 0.002
+
     def test_isolated_texture_removed(self):
-        """평평한 면 위 잔질감(작은 노이즈 점)은 선으로 남지 않는다 — 카툰 필터의 땡땡이 회귀 방지."""
+        """평평한 면 위 잔질감(작은 노이즈 점)은 진한 선으로 남지 않는다 — 카툰 필터의 땡땡이 회귀 방지."""
         rng = np.random.default_rng(11)
         frame = np.full((240, 320, 3), 150, np.int16)
         frame += rng.integers(-6, 7, (240, 320, 1), dtype=np.int16)
