@@ -1,15 +1,14 @@
 """셀 셰이딩 카툰 렌더러 — 업로드 영상 필터.
 
 video-editor 프로젝트에서 검증된 파이프라인 이식:
-저조도 적응 감마 + CLAHE → L채널 셀 양자화 → DoG 잉크 라인.
+저조도 적응 감마 → L채널 셀 양자화 → DoG 잉크 라인.
 
 backend(1프레임 미리보기)와 worker(전체 영상 변환, `cartoonize_video`)가 공유한다.
 cv2/numpy 외 앱 의존성을 두지 않는다 — worker가 이 모듈을 단독 import한다.
 
 영상은 프레임 사이 흔들림을 세 단계로 줄인다: 광류 보정 시간 잡음 제거(`TemporalDenoiser`) →
 카툰 셀 단계의 광류 이동(`CelState.warp`) → 렌더 출력 안정화(`OutputStabilizer`, 모든 필터).
-CLAHE 보정량도 광류로 옮겨 가며 시간 방향으로 섞는다(`ClaheSmoother`) — 타일이 화면에 고정돼 있어
-카메라가 움직이면 같은 면의 보정 곡선이 바뀌고 셀 색면이 통째로 한 단계 튀기 때문이다.
+전처리에는 CLAHE를 쓰지 않는다 — 타일이 화면에 고정돼 있어 카메라가 움직이면 셀 색면이 통째로 튀기 때문이다(`_enhance` 참고).
 """
 
 import logging
@@ -44,7 +43,7 @@ _CEL_LUT = np.clip(
 ).astype(np.uint8)
 
 # 잉크 선 조각 필터·셀 면 정리의 픽셀 값은 짧은 변 540px 기준이며 해상도에 비례해 늘린다.
-# 어두운 영상은 감마·CLAHE가 벽·바닥의 잔질감까지 키워서, 면적만 보는 필터로는 짧은 점선
+# 어두운 영상은 감마가 벽·바닥의 잔질감까지 키워서, 면적만 보는 필터로는 짧은 점선
 # 조각이 화면 전체에 "땡땡이"로 남았다(실측: 조각의 약 60%가 12px 이하). 그래서 짧은 조각은
 # 대비가 강할 때만 남긴다 — 눈·입 같은 이목구비는 짧아도 DoG 피크가 높고, 질감은 낮다.
 _REF_SHORT_SIDE = 540
@@ -134,17 +133,16 @@ _MIN_SEGMENT_FRAMES = 90  # ~3초@30fps 미만은 분할 실익이 없음(프로
 # 구간 앞쪽 읽기 여유. 이것만으로 EMA가 수렴하지 않으므로 선행 패스의 정확한 상태를
 # 함께 넘긴다. 샘플 주기는 패딩 기준이 아니라 영상의 절대 프레임 번호에 맞춘다.
 _SEG_PAD_FRAMES = 60
-# 구간 시작 전 렌더만 하고 버리는 프레임 수. 셀 히스테리시스·CLAHE 평활(α0.1 ≈ 10프레임 시정수)·
+# 구간 시작 전 렌더만 하고 버리는 프레임 수. 셀 히스테리시스·
 # 출력 안정화기 상태를 수렴시킨다. 모자라면 구간 첫 프레임에서 한 프레임 튄다(1262번 글 511·1022프레임 실측).
 # _SEG_PAD_FRAMES를 넘으면 안 된다.
 _SEQ_WARMUP_FRAMES = 30
-_CLAHE_SMOOTH_ALPHA = 0.1  # CLAHE 보정량 EMA 계수 — 클수록 현재 프레임 쪽
 _GAMMA_SAMPLE_EVERY = 5  # 감마 재계산 주기(프레임). 노출은 연속적이라 매 프레임 잴 필요가 없다
 
 
 # 시간 방향 잡음 제거: 이전 프레임과 차이가 작은 픽셀(센서 잡음)만 이전 값 쪽으로 당긴다.
 # 차이가 큰 픽셀(실제 움직임)은 가중치가 0에 가까워 그대로 두므로 잔상이 거의 남지 않는다.
-# 어두운 영상에서 CLAHE가 잡음을 2~4배로 키워 필터 출력 전체가 아른거리던 것을 줄인다.
+# 어두운 영상에서 감마 리프트가 잡음을 2~4배로 키워 필터 출력 전체가 아른거리던 것을 줄인다.
 # σ8은 깜빡임을 조금 더 줄이지만 대비 15인 물체가 지나간 자리에 13% 잔상이 남았다(σ6은 3%).
 _TDN_SIGMA = 6.0
 _TDN_STRENGTH = 0.8
@@ -256,50 +254,22 @@ def adaptive_gamma(frame: np.ndarray) -> float:
     return float(np.clip(g, 0.4, 1.0))
 
 
-class ClaheSmoother:
-    """CLAHE 보정량(clahe(L) - L, 픽셀별 float32)을 프레임 사이에 섞는다. 순서대로 렌더할 때만 쓴다.
-
-    CLAHE 타일은 화면에 고정돼 있어 카메라가 움직이면 같은 면 위의 타일별 대비 곡선이 바뀐다.
-    그러면 셀 색면이 통째로 한 단계 튄다. 직전 보정량을 광류로 현재 좌표에 옮긴 뒤 EMA로 섞어 줄인다.
-    """
-
-    def __init__(self) -> None:
-        self.d: np.ndarray | None = None
-
-
-def _enhance(
-    frame: np.ndarray, gamma: float = 1.0, clip: float = 2.0,
-    clahe_state: ClaheSmoother | None = None, flow: np.ndarray | None = None,
-) -> np.ndarray:
-    """저조도 대응 전처리: 감마 리프트 + CLAHE(L채널).
+def _enhance(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+    """저조도 대응 전처리: 감마 리프트만 한다.
 
     NlMeans 디노이즈는 이후 bilateral filter + 셀 양자화가 잔여 노이즈를 마저
     뭉개버려 최종 출력에 거의 기여하지 않아 제거함(벤치마크: 프레임당 최대 ~65% 단축).
     감마 LUT는 반올림하고 1.0 미만이면 항상 적용한다 — 예전처럼 0.99 미만에서만 켜고
     소수점을 버리면 감마가 0.99를 넘나들 때 화면 전체가 1~2레벨씩 튀었다.
-    CLAHE를 고정 이득 국소 대비로 바꾸는 실험은 어두운 영상의 선명도가 23~59% 떨어져
-    폐기했다(2026-11-09 실측).
-    `clahe_state`가 있으면 CLAHE 보정량을 직전 프레임의 것(`flow`로 현재 좌표에 옮김)과
-    `_CLAHE_SMOOTH_ALPHA`로 섞는다. 직전 상태나 광류가 없으면(첫 프레임) 상태가 없을 때와 결과가 같다.
+    CLAHE(국소 대비)는 뺐다. 타일이 화면에 고정돼 있어 카메라가 움직이면 같은 면 위의 타일별 대비
+    곡선이 바뀌고, 셀 색면·스케치 선이 프레임마다 통째로 튄다. 보정량을 광류로 옮겨 시간 평활해도
+    가장 큰 깜빡임 원인으로 남았고, 뺐더니 움직임 보정 잔차가 카툰 15~19%, 스케치 12~20%,
+    모네 6~8% 줄었다(2026-11-09 실측). 대신 화면이 조금 평평해지는 것은 감수하기로 했다.
     """
     if gamma < 1.0:
         lut = np.rint(np.linspace(0, 1, 256) ** gamma * 255).astype(np.uint8)
         frame = cv2.LUT(frame, lut)
-    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-    light, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=clip, tileGridSize=(8, 8))
-    if clahe_state is None:
-        light = clahe.apply(light)
-    else:
-        d = clahe.apply(light).astype(np.float32) - light
-        prev = clahe_state.d
-        if prev is not None and prev.shape == d.shape and flow is not None:
-            h, w = d.shape
-            prev = cv2.remap(prev, *_flow_maps(flow, w, h), cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            d = prev + _CLAHE_SMOOTH_ALPHA * (d - prev)
-        clahe_state.d = d
-        light = np.clip(light + d, 0, 255).astype(np.uint8)
-    return cv2.cvtColor(cv2.merge([light, a, b]), cv2.COLOR_LAB2BGR)
+    return frame
 
 
 class CelState:
@@ -350,11 +320,11 @@ def _cel_quantize(light: np.ndarray, state: CelState | None) -> np.ndarray:
 
 def cartoon_frame(
     frame: np.ndarray, gamma: float = 1.0, cel_state: CelState | None = None,
-    clahe_state: ClaheSmoother | None = None, flow: np.ndarray | None = None,
+    flow: np.ndarray | None = None,
 ) -> np.ndarray:
     """셀 셰이딩 카툰: 저조도 보정 + 적응 채도 + L채널 셀 양자화 + DoG 잉크 라인."""
     h, w = frame.shape[:2]
-    den = _enhance(frame, gamma=gamma, clahe_state=clahe_state, flow=flow)
+    den = _enhance(frame, gamma=gamma)
 
     # 적응 채도: 이미 쨍한 프레임은 덜 올린다
     hsv = cv2.cvtColor(den, cv2.COLOR_BGR2HSV)
@@ -387,8 +357,7 @@ def cartoon_frame(
     cel = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
     # 잉크 라인: DoG → 이진화 → 소성분 제거 → 군집 억제 → 살짝 두껍게 → 소프트 블렌드.
-    # DoG 입력은 색 면과 같은 평활 이미지(`smooth`: bilateral + 중앙값)다. 예전에는 CLAHE로 대비만
-    # 키운 `den`에서 바로 뽑아서 보도블록 틈·낙엽 같은 잔질감이 전부 짧은 선 조각이 됐다.
+    # DoG 입력은 색 면과 같은 평활 이미지(`smooth`: bilateral + 중앙값)다. 예전에는 대비를 키운 `den`에서 바로 뽑아서 보도블록 틈·낙엽 같은 잔질감이 전부 짧은 선 조각이 됐다.
     # DoG 자체는 원본 해상도에서 계산한다 — DoG를 half-res로 계산했던 실험은 텍스트·세부선이
     # 점묘화·단절돼 폐기했다(ponytail: 재시도 시 DoG 계산 해상도는 낮추지 말 것).
     gray = cv2.cvtColor(line_src, cv2.COLOR_BGR2GRAY)
@@ -454,8 +423,7 @@ def frame_renderer(
 
     sketch·orange_cartoon·monet·mono_cartoon 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를
     피하려고 호출 시점에 가져온다. `sequential=True`는 프레임을 순서대로 렌더하는 구간 경로 전용으로,
-    카툰이 직전 셀 단계를 이어받아 경계 꿈틀거림을 줄이고(`_cel_quantize`), 카툰·스케치·모네는
-    CLAHE 보정량을 광류로 옮겨 시간 방향으로 평활한다(`ClaheSmoother`). 병렬 풀 경로는 평활하지 않는다.
+    카툰이 직전 셀 단계를 이어받아 경계 꿈틀거림을 줄인다(`_cel_quantize`). 병렬 풀 경로는 이어받지 않는다.
     `tone_range`는 orange_cartoon·mono_cartoon 전용 인자다 — 영상 전체
     샘플로 미리 계산한 밝기 기준(lo/hi, `orange_cartoon.sample_tone_range`)을 클로저로
     고정해 넘긴다. 다른 필터는 이 인자를 무시한다. 자세한 설계 이유는
@@ -464,16 +432,15 @@ def frame_renderer(
     if video_filter == "cartoon":
         if not sequential:
             return cartoon_frame
-        # 프레임을 순서대로 렌더하는 경로에서만 직전 셀 단계·CLAHE 보정량을 이어받는다
+        # 프레임을 순서대로 렌더하는 경로에서만 직전 셀 단계를 이어받는다
         state = CelState()
-        smoother = ClaheSmoother()
 
         def _render_cartoon(frame: np.ndarray, gamma: float = 1.0, flow: np.ndarray | None = None) -> np.ndarray:
             # 광류가 있으면 붙잡은 셀 단계를 먼저 현재 좌표로 옮겨, 카메라가 움직여도 히스테리시스가 이어진다
             if flow is not None and state.level is not None:
                 h, w = frame.shape[:2]
                 state.warp(_flow_maps(flow, w, h))
-            return cartoon_frame(frame, gamma, cel_state=state, clahe_state=smoother, flow=flow)
+            return cartoon_frame(frame, gamma, cel_state=state)
 
         return _render_cartoon
     if video_filter == "sketch":
@@ -481,10 +448,9 @@ def frame_renderer(
 
         if not sequential:
             return sketch_frame
-        sketch_smoother = ClaheSmoother()
 
         def _render_sketch(frame: np.ndarray, gamma: float = 1.0, flow: np.ndarray | None = None) -> np.ndarray:
-            return sketch_frame(frame, gamma, clahe_state=sketch_smoother, flow=flow)
+            return sketch_frame(frame, gamma)
 
         return _render_sketch
     if video_filter == "orange_cartoon":
@@ -499,10 +465,9 @@ def frame_renderer(
 
         if not sequential:
             return monet_frame
-        monet_smoother = ClaheSmoother()
 
         def _render_monet(frame: np.ndarray, gamma: float = 1.0, flow: np.ndarray | None = None) -> np.ndarray:
-            return monet_frame(frame, gamma, clahe_state=monet_smoother, flow=flow)
+            return monet_frame(frame, gamma)
 
         return _render_monet
     if video_filter == "mono_cartoon":
@@ -654,7 +619,7 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
                 proc.stdin.write(out.tobytes())
                 processed += 1
             elif frame_idx >= start - _SEQ_WARMUP_FRAMES and pad_start < start:
-                # 셀 히스테리시스·CLAHE 평활·출력 안정화 상태 예열(출력하지 않는다). 안정화기는 순서대로 먹여야 수렴한다
+                # 셀 히스테리시스·출력 안정화 상태 예열(출력하지 않는다). 안정화기는 순서대로 먹여야 수렴한다
                 stab(render(frame, gamma_ema, flow=flow), flow)
             frame_idx += 1
     finally:

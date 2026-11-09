@@ -42,7 +42,7 @@ class TestCartoonFrame:
         assert center[2] > center[0]  # 빨강 채널 우세 유지
 
     def test_low_contrast_texture_leaves_no_ink_dots(self):
-        # 어두운 체육관의 콘크리트 벽처럼 대비가 약한 잔질감만 있는 화면. 저조도 보정(감마·CLAHE)이
+        # 어두운 체육관의 콘크리트 벽처럼 대비가 약한 잔질감만 있는 화면. 저조도 보정(감마)이
         # 질감을 키워도 잉크 점이 흩뿌려지면 안 된다(실측: 개선 전 8.8%, 개선 후 0.5%).
         rng = np.random.default_rng(7)
         noise = cv2.GaussianBlur(rng.normal(0, 1, (540, 960)).astype(np.float32), (0, 0), 2.0)

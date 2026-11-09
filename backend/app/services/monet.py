@@ -22,7 +22,7 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
-from app.services.cartoon import ClaheSmoother, _enhance
+from app.services.cartoon import _enhance
 
 # 픽셀 단위 값은 짧은 변 540px 기준이며 해상도에 비례해 늘린다.
 _REF_SHORT_SIDE = 540
@@ -183,10 +183,7 @@ def _paint(work: np.ndarray, work_scale: float) -> np.ndarray:
     return 255 - cv2.multiply(255 - out, 255 - cv2.merge([bloom, bloom, bloom]), scale=1.0 / 255.0)
 
 
-def monet_frame(
-    frame: np.ndarray, gamma: float = 1.0,
-    clahe_state: ClaheSmoother | None = None, flow: np.ndarray | None = None,
-) -> np.ndarray:
+def monet_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     """BGR uint8 프레임 → 같은 크기의 모네풍 유화 프레임.
 
     `gamma`는 다른 렌더러와 같이 호출자(`filter_video`의 감마 EMA, 미리보기의
@@ -201,7 +198,7 @@ def monet_frame(
     else:
         work = frame
 
-    painted = _paint(_enhance(work, gamma, clip=1.6, clahe_state=clahe_state, flow=flow), work_short / _REF_SHORT_SIDE)
+    painted = _paint(_enhance(work, gamma), work_short / _REF_SHORT_SIDE)
     if painted.shape[:2] != (h, w):
         painted = cv2.resize(painted, (w, h), interpolation=cv2.INTER_LINEAR)
 
