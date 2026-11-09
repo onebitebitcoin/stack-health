@@ -124,6 +124,34 @@ _SEG_PAD_FRAMES = 60
 _GAMMA_SAMPLE_EVERY = 5  # 감마 재계산 주기(프레임). 노출은 연속적이라 매 프레임 잴 필요가 없다
 
 
+# 시간 방향 잡음 제거: 이전 프레임과 차이가 작은 픽셀(센서 잡음)만 이전 값 쪽으로 당긴다.
+# 차이가 큰 픽셀(실제 움직임)은 가중치가 0에 가까워 그대로 두므로 잔상이 거의 남지 않는다.
+# 어두운 영상에서 CLAHE가 잡음을 2~4배로 키워 필터 출력 전체가 아른거리던 것을 줄인다.
+# σ8은 깜빡임을 조금 더 줄이지만 대비 15인 물체가 지나간 자리에 13% 잔상이 남았다(σ6은 3%).
+_TDN_SIGMA = 6.0
+_TDN_STRENGTH = 0.8
+_TDN_LUT = np.rint(
+    255 * _TDN_STRENGTH * np.exp(-(np.arange(256, dtype=np.float32) ** 2) / (2 * _TDN_SIGMA**2))
+).astype(np.uint8)
+
+
+class TemporalDenoiser:
+    """프레임을 순서대로 넣으면 잡음을 줄인 프레임을 돌려준다. 이전 프레임 상태를 들고 있다."""
+
+    def __init__(self) -> None:
+        self._prev: np.ndarray | None = None
+
+    def __call__(self, frame: np.ndarray) -> np.ndarray:
+        cur = frame.astype(np.float32)
+        if self._prev is None or self._prev.shape != cur.shape:
+            self._prev = cur
+            return frame
+        diff = cv2.subtract(cur, self._prev)
+        weight = cv2.LUT(cv2.convertScaleAbs(diff), _TDN_LUT).astype(np.float32)
+        self._prev = cv2.subtract(cur, cv2.multiply(diff, weight, scale=1.0 / 255.0))
+        return cv2.convertScaleAbs(self._prev)
+
+
 def adaptive_gamma(frame: np.ndarray) -> float:
     """저조도 프레임을 밝히는 감마를 평균 휘도에서 추정한다 (밝은 영상은 ~1.0)."""
     mean = float(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).mean())
@@ -399,6 +427,7 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
 
     processed = 0
     gamma_ema: float | None = gamma_seed
+    denoise = TemporalDenoiser()
     frame_idx = pad_start
     try:
         while frame_idx < end:
@@ -408,6 +437,8 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
             if (frame.shape[1], frame.shape[0]) != (out_w, out_h):
                 frame = cv2.resize(frame, (out_w, out_h), interpolation=cv2.INTER_AREA)
             gamma_ema = _sample_gamma(frame, gamma_ema, frame_idx)
+            # 예열 구간에서도 돌려야 구간 시작 시점에 잡음 제거 상태가 수렴해 있다
+            frame = denoise(frame)
             if frame_idx >= start:
                 proc.stdin.write(render(frame, gamma_ema).tobytes())
                 processed += 1
@@ -610,6 +641,7 @@ def _cartoonize_frame_parallel(
     processed = 0
     read_idx = 0
     gamma_ema: float | None = None
+    denoise = TemporalDenoiser()
     pool = mp.get_context("spawn").Pool(_worker_pool_size(), initializer=_worker_init)
     try:
         while True:
@@ -623,7 +655,7 @@ def _cartoonize_frame_parallel(
                 # 감마 EMA: 프레임별 노출 변화로 밝기가 깜빡이지 않게 스무딩
                 gamma_ema = _sample_gamma(frame, gamma_ema, read_idx)
                 read_idx += 1
-                batch.append((frame, gamma_ema, video_filter, tone_range))
+                batch.append((denoise(frame), gamma_ema, video_filter, tone_range))
             if not batch:
                 break
             for canvas in pool.map(_render_one, batch):

@@ -95,3 +95,35 @@ def test_segment_pipeline_preserves_frames_and_pool_independence(exposure_video,
     finally:
         for cap in captures:
             cap.release()
+
+
+def _flat(value, noise_seed=None):
+    frame = np.full((60, 80, 3), value, np.float32)
+    if noise_seed is not None:
+        frame += np.random.default_rng(noise_seed).normal(0, 3.0, frame.shape)
+    return np.clip(frame, 0, 255).astype(np.uint8)
+
+
+def test_temporal_denoiser_passes_first_frame_through():
+    frame = _flat(90, noise_seed=1)
+    assert np.array_equal(cartoon.TemporalDenoiser()(frame), frame)
+
+
+def test_temporal_denoiser_reduces_static_sensor_noise():
+    denoise = cartoon.TemporalDenoiser()
+    raw = [_flat(90, noise_seed=i) for i in range(20)]
+    out = [denoise(f).astype(np.float32) for f in raw]
+    raw_jitter = np.abs(np.diff(np.asarray(raw, np.float32)[5:], axis=0)).mean()
+    out_jitter = np.abs(np.diff(np.asarray(out)[5:], axis=0)).mean()
+    assert out_jitter < raw_jitter * 0.6
+
+
+def test_temporal_denoiser_leaves_no_trail_behind_moving_object():
+    # 대비가 큰 물체가 빠르게 지나간 자리는 바로 배경으로 돌아와야 한다(잔상 없음)
+    denoise = cartoon.TemporalDenoiser()
+    for t in range(6):
+        frame = _flat(100)
+        frame[20:40, 10 * t:10 * t + 20] = 160
+        out = denoise(frame).astype(np.float32)
+    left_behind = out[20:40, 0:10 * 5]
+    assert np.abs(left_behind - 100).max() <= 1
