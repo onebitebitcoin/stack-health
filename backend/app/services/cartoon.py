@@ -27,6 +27,9 @@ _LINE_BGR_U8 = LINE_BGR.astype(np.uint8)  # 블렌드용 — cv2.multiply는 입
 _DOG_SIGMA2_CASCADE = float(np.sqrt(3.0**2 - 1.4**2))
 
 # L채널 셀 양자화 LUT: 0.8*(round(L/42.5)*42.5) + 0.2*L — 6단계 소프트 양자화
+_CEL_STEP = 42.5
+_CEL_HYSTERESIS = 0.15  # 셀 단계 경계 여유(단계 단위, L 약 6레벨)
+_CEL_HOLD_MAX = 12  # 직전 단계를 붙잡는 최대 프레임 수(30fps 기준 0.4초)
 _CEL_LUT = np.clip(
     0.8 * (np.round(np.arange(256, dtype=np.float32) / 42.5) * 42.5)
     + 0.2 * np.arange(256, dtype=np.float32),
@@ -121,6 +124,7 @@ _MIN_SEGMENT_FRAMES = 90  # ~3초@30fps 미만은 분할 실익이 없음(프로
 # 구간 앞쪽 읽기 여유. 이것만으로 EMA가 수렴하지 않으므로 선행 패스의 정확한 상태를
 # 함께 넘긴다. 샘플 주기는 패딩 기준이 아니라 영상의 절대 프레임 번호에 맞춘다.
 _SEG_PAD_FRAMES = 60
+_CEL_WARMUP_FRAMES = 8  # 구간 시작 전 렌더만 하고 버리는 프레임 수 — 셀 히스테리시스 상태 예열
 _GAMMA_SAMPLE_EVERY = 5  # 감마 재계산 주기(프레임). 노출은 연속적이라 매 프레임 잴 필요가 없다
 
 
@@ -181,7 +185,40 @@ def _enhance(frame: np.ndarray, gamma: float = 1.0, clip: float = 2.0) -> np.nda
     return cv2.cvtColor(cv2.merge([light, a, b]), cv2.COLOR_LAB2BGR)
 
 
-def cartoon_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+class CelState:
+    """직전 프레임의 셀 단계(픽셀별)를 들고 있다. 영상 변환처럼 프레임을 순서대로 렌더할 때만 쓴다."""
+
+    def __init__(self) -> None:
+        self.level: np.ndarray | None = None
+        self.held: np.ndarray | None = None  # 직전 단계를 붙잡고 있는 연속 프레임 수
+
+
+def _cel_quantize(light: np.ndarray, state: CelState | None) -> np.ndarray:
+    """L채널을 6단계로 양자화한다. `state`가 있으면 단계 경계에 히스테리시스를 건다.
+
+    바닥·천장처럼 밝기가 완만한 면에서는 L이 1~2만 흔들려도 단계 경계선이 크게 움직여
+    색면 모양이 프레임마다 꿈틀댔다(실측: 남은 깜빡임의 55%가 셀 경계). 직전 단계에서
+    _CEL_HYSTERESIS 단계 이상 벗어날 때만 단계를 바꾼다. 실제 움직임은 L이 크게 바뀌므로 바로 따라간다.
+    붙잡은 단계가 _CEL_HOLD_MAX 프레임을 넘으면 놓아준다 — 물체가 지나간 자리의 배경이 마침 단계
+    경계 근처면 물체의 단계가 계속 남아 자국이 생기기 때문이다.
+    """
+    if state is None:
+        return cv2.LUT(np.ascontiguousarray(light), _CEL_LUT)
+    x = light.astype(np.float32) * (1.0 / _CEL_STEP)
+    level = np.rint(x)
+    prev = state.level
+    if prev is not None and prev.shape == level.shape and state.held is not None:
+        hold = (np.abs(x - prev) < 0.5 + _CEL_HYSTERESIS) & (prev != level) & (state.held < _CEL_HOLD_MAX)
+        state.held = np.where(hold, state.held + 1, 0).astype(np.uint8)
+        level = np.where(hold, prev, level)
+    else:
+        state.held = np.zeros(level.shape, np.uint8)
+    state.level = level
+    out = 0.8 * _CEL_STEP * level + 0.2 * light.astype(np.float32)
+    return np.clip(out, 0, 255).astype(np.uint8)  # _CEL_LUT와 같은 버림 — 붙잡지 않은 픽셀은 결과가 같다
+
+
+def cartoon_frame(frame: np.ndarray, gamma: float = 1.0, cel_state: CelState | None = None) -> np.ndarray:
     """셀 셰이딩 카툰: 저조도 보정 + 적응 채도 + L채널 셀 양자화 + DoG 잉크 라인."""
     h, w = frame.shape[:2]
     den = _enhance(frame, gamma=gamma)
@@ -208,7 +245,7 @@ def cartoon_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     # L은 uint8이라 양자화식이 256개 값의 순수 함수 — 전체 이미지를 float32로 올리는 대신
     # 미리 만든 LUT를 태운다(결과 동일, ~63% 단축).
     lab = cv2.cvtColor(smooth, cv2.COLOR_BGR2LAB)
-    lab[:, :, 0] = cv2.LUT(np.ascontiguousarray(lab[:, :, 0]), _CEL_LUT)
+    lab[:, :, 0] = _cel_quantize(lab[:, :, 0], cel_state)
     cel = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
     # 잉크 라인: DoG → 이진화 → 소성분 제거 → 군집 억제 → 살짝 두껍게 → 소프트 블렌드.
@@ -271,17 +308,28 @@ _TONE_RANGE_FILTERS = ("orange_cartoon", "mono_cartoon")
 VIDEO_FILTERS = ("cartoon", "sketch", "orange_cartoon", "monet", "mono_cartoon")
 
 
-def frame_renderer(video_filter: str, tone_range: tuple[float, float] | None = None):
+def frame_renderer(
+    video_filter: str, tone_range: tuple[float, float] | None = None, sequential: bool = False,
+):
     """필터 이름 → 프레임 렌더러 `(frame, gamma) -> frame`.
 
     sketch·orange_cartoon·monet·mono_cartoon 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를
-    피하려고 호출 시점에 가져온다. `tone_range`는 orange_cartoon·mono_cartoon 전용 인자다 — 영상 전체
+    피하려고 호출 시점에 가져온다. `sequential=True`는 프레임을 순서대로 렌더하는 구간 경로 전용으로,
+    카툰이 직전 셀 단계를 이어받아 경계 꿈틀거림을 줄인다(`_cel_quantize`). `tone_range`는 orange_cartoon·mono_cartoon 전용 인자다 — 영상 전체
     샘플로 미리 계산한 밝기 기준(lo/hi, `orange_cartoon.sample_tone_range`)을 클로저로
     고정해 넘긴다. 다른 필터는 이 인자를 무시한다. 자세한 설계 이유는
     `app.services.orange_cartoon` 모듈 docstring 참고.
     """
     if video_filter == "cartoon":
-        return cartoon_frame
+        if not sequential:
+            return cartoon_frame
+        # 프레임을 순서대로 렌더하는 경로에서만 직전 셀 단계를 이어받는다(히스테리시스)
+        state = CelState()
+
+        def _render_cartoon(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+            return cartoon_frame(frame, gamma, cel_state=state)
+
+        return _render_cartoon
     if video_filter == "sketch":
         from app.services.sketch import sketch_frame
 
@@ -388,7 +436,7 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
     구간마다 다시 추정하지 않는다.
     """
     input_path, start, end, pad_start, out_w, out_h, fps, seg_path, video_filter, tone_range, gamma_seed = args
-    render = frame_renderer(video_filter, tone_range)
+    render = frame_renderer(video_filter, tone_range, sequential=True)
     cv2.setNumThreads(1)
     # x264 -threads auto는 코어당 ~1.5개 프레임 스레드를 띄운다. 구간마다 인코더가 하나씩
     # 떠서(k개) 렌더 프로세스 수와 별개로 코어를 오버섭스크립션한다 — 2로 고정.
@@ -442,6 +490,8 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
             if frame_idx >= start:
                 proc.stdin.write(render(frame, gamma_ema).tobytes())
                 processed += 1
+            elif frame_idx >= start - _CEL_WARMUP_FRAMES and pad_start < start:
+                render(frame, gamma_ema)  # 셀 히스테리시스 상태 예열(출력하지 않는다)
             frame_idx += 1
     finally:
         cap.release()

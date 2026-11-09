@@ -1,5 +1,6 @@
 """노출 변화와 병렬 구간 경계의 깜빡임 회귀 테스트."""
 
+import itertools
 import shutil
 import subprocess
 
@@ -127,3 +128,35 @@ def test_temporal_denoiser_leaves_no_trail_behind_moving_object():
         out = denoise(frame).astype(np.float32)
     left_behind = out[20:40, 0:10 * 5]
     assert np.abs(left_behind - 100).max() <= 1
+
+
+def _light(value):
+    return np.full((8, 8), value, np.uint8)
+
+
+def test_cel_hysteresis_keeps_level_under_small_jitter():
+    # 단계 경계(42.5·2.5 ≈ 106) 근처에서 L이 1~2만 흔들리면 순차 양자화는 단계를 바꾸지 않는다
+    state = cartoon.CelState()
+    values = [104, 108, 104, 108, 104, 108]
+    seq = [cartoon._cel_quantize(_light(v), state).astype(np.float32) for v in values]
+    raw = [cartoon._cel_quantize(_light(v), None).astype(np.float32) for v in values]
+    seq_jump = max(np.abs(b - a).max() for a, b in itertools.pairwise(seq))
+    raw_jump = max(np.abs(b - a).max() for a, b in itertools.pairwise(raw))
+    assert raw_jump > 30
+    assert seq_jump <= 2
+
+
+def test_cel_hysteresis_follows_large_change_immediately():
+    state = cartoon.CelState()
+    cartoon._cel_quantize(_light(60), state)
+    moved = cartoon._cel_quantize(_light(150), state)
+    assert np.array_equal(moved, cartoon._cel_quantize(_light(150), None))
+
+
+def test_cel_hysteresis_releases_held_level():
+    # 붙잡은 단계는 _CEL_HOLD_MAX 프레임 뒤 놓아준다(지나간 물체의 자국 방지)
+    state = cartoon.CelState()
+    cartoon._cel_quantize(_light(100), state)
+    for _ in range(cartoon._CEL_HOLD_MAX + 1):
+        out = cartoon._cel_quantize(_light(109), state)
+    assert np.array_equal(out, cartoon._cel_quantize(_light(109), None))
