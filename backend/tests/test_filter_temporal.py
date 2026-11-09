@@ -160,3 +160,77 @@ def test_cel_hysteresis_releases_held_level():
     for _ in range(cartoon._CEL_HOLD_MAX + 1):
         out = cartoon._cel_quantize(_light(109), state)
     assert np.array_equal(out, cartoon._cel_quantize(_light(109), None))
+
+
+def _textured_scene(shift, size=(96, 128)):
+    # 광류가 추적할 수 있게 부드러운 무작위 질감을 가로로 shift px 민 장면
+    base = np.random.default_rng(7).normal(128, 60, (size[0], size[1] + 80)).astype(np.float32)
+    base = cv2.GaussianBlur(base, (0, 0), 3.0)
+    base = cv2.normalize(base, None, 40, 215, cv2.NORM_MINMAX)
+    view = base[:, 40 + shift:40 + shift + size[1]]
+    return cv2.merge([view, view * 0.9, view * 0.8])
+
+
+def test_temporal_denoiser_denoises_while_moving():
+    denoise = cartoon.TemporalDenoiser()
+    rng = np.random.default_rng(3)
+    noise_sigma = 4.0
+    residuals, input_residuals = [], []
+    for t in range(14):
+        clean = np.clip(_textured_scene(3 * t), 0, 255)
+        noisy = np.clip(clean + rng.normal(0, noise_sigma, clean.shape), 0, 255).astype(np.uint8)
+        out = denoise(noisy)
+        if t >= 6:
+            residuals.append(np.abs(out.astype(np.float32) - clean)[8:-8, 12:-12].mean())
+            input_residuals.append(np.abs(noisy.astype(np.float32) - clean)[8:-8, 12:-12].mean())
+    assert denoise.flow is not None
+    assert np.mean(residuals) < np.mean(input_residuals)
+
+
+def test_temporal_denoiser_flow_is_none_on_first_frame():
+    denoise = cartoon.TemporalDenoiser()
+    denoise(_flat(90))
+    assert denoise.flow is None
+    denoise(_flat(90))
+    assert denoise.flow is not None
+
+
+def test_output_stabilizer_passes_first_frame_through():
+    frame = _flat(90, noise_seed=1)
+    assert np.array_equal(cartoon.OutputStabilizer()(frame, None), frame)
+
+
+def test_output_stabilizer_steadies_static_noisy_sequence():
+    stab = cartoon.OutputStabilizer()
+    flow = np.zeros((15, 20, 2), np.float32)
+    raw = [_flat(90, noise_seed=i) for i in range(20)]
+    out = [stab(f, flow).astype(np.float32) for f in raw]
+    raw_jitter = np.abs(np.diff(np.asarray(raw, np.float32)[5:], axis=0)).mean()
+    out_jitter = np.abs(np.diff(np.asarray(out)[5:], axis=0)).mean()
+    assert out_jitter < raw_jitter * 0.7
+
+
+def test_output_stabilizer_passes_large_change_through():
+    stab = cartoon.OutputStabilizer()
+    flow = np.zeros((15, 20, 2), np.float32)
+    for _ in range(4):
+        stab(_flat(100), flow)
+    frame = _flat(100)
+    frame[20:40, 20:40] = 220
+    out = stab(frame, flow)
+    assert np.abs(out[20:40, 20:40].astype(np.float32) - 220).max() <= 2
+    assert np.abs(stab(_flat(100), flow)[20:40, 20:40].astype(np.float32) - 100).max() <= 2
+
+
+def test_cel_state_warp_follows_flow():
+    state = cartoon.CelState()
+    level = np.zeros((20, 30), np.float32)
+    level[:, 10:15] = 3
+    state.level = level
+    state.held = np.zeros((20, 30), np.uint8)
+    # cur(x) = prev(x + 4): 내용이 왼쪽으로 4px 이동한다
+    flow = np.zeros((5, 8, 2), np.float32)
+    flow[..., 0] = 1.0  # 1/4 해상도 1px = 4px
+    state.warp(cartoon._flow_maps(flow, 30, 20))
+    assert state.level[10, 6:11].tolist() == [3, 3, 3, 3, 3]
+    assert state.level[10, 11] == 0 and state.level[10, 5] == 0

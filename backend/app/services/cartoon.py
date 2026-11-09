@@ -5,6 +5,9 @@ video-editor 프로젝트에서 검증된 파이프라인 이식:
 
 backend(1프레임 미리보기)와 worker(전체 영상 변환, `cartoonize_video`)가 공유한다.
 cv2/numpy 외 앱 의존성을 두지 않는다 — worker가 이 모듈을 단독 import한다.
+
+영상은 프레임 사이 흔들림을 세 단계로 줄인다: 광류 보정 시간 잡음 제거(`TemporalDenoiser`) →
+카툰 셀 단계의 광류 이동(`CelState.warp`) → 렌더 출력 안정화(`OutputStabilizer`, 모든 필터).
 """
 
 import logging
@@ -13,6 +16,7 @@ import os
 import subprocess
 import tempfile
 import threading
+from functools import lru_cache
 
 import cv2
 import numpy as np
@@ -143,20 +147,96 @@ _TDN_LUT = np.rint(
 ).astype(np.uint8)
 
 
+# 움직임 보상: 카메라가 움직이면 같은 좌표의 이전 프레임 픽셀은 다른 물체라 시간 필터가 꺼져 버린다.
+# 1/4 해상도 Farneback 광류로 이전 프레임을 현재 좌표로 끌어와(warp) 같은 지점끼리 비교한다.
+_FLOW_SCALE = 4
+
+
+def _flow_small(cur_bgr: np.ndarray, prev_bgr: np.ndarray) -> np.ndarray:
+    """cur에서 prev로 가는 광류(1/4 해상도, float32). cur(x) ≈ prev(x + flow)."""
+    def gray(img: np.ndarray) -> np.ndarray:
+        h, w = img.shape[:2]
+        small = cv2.resize(img, (max(2, w // _FLOW_SCALE), max(2, h // _FLOW_SCALE)), interpolation=cv2.INTER_AREA)
+        return cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+
+    return cv2.calcOpticalFlowFarneback(gray(cur_bgr), gray(prev_bgr), None, 0.5, 3, 15, 3, 5, 1.2, 0)
+
+
+@lru_cache(maxsize=4)
+def _base_grid(w: int, h: int) -> tuple[np.ndarray, np.ndarray]:
+    return np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
+
+
+def _flow_maps(flow_small: np.ndarray, w: int, h: int) -> tuple[np.ndarray, np.ndarray]:
+    """작은 광류를 (w, h)로 키워 cv2.remap용 좌표 맵 (mapx, mapy)로 바꾼다."""
+    sx = w / flow_small.shape[1]
+    sy = h / flow_small.shape[0]
+    flow = cv2.resize(flow_small, (w, h), interpolation=cv2.INTER_LINEAR)
+    gx, gy = _base_grid(w, h)
+    return gx + flow[..., 0] * sx, gy + flow[..., 1] * sy
+
+
+def _blend_toward_prev(cur: np.ndarray, prev_warped: np.ndarray, lut: np.ndarray) -> np.ndarray:
+    """차이가 작은 픽셀만 이전 값 쪽으로 당긴 float32 결과."""
+    diff = cv2.subtract(cur, prev_warped)
+    weight = cv2.LUT(cv2.convertScaleAbs(diff), lut).astype(np.float32)
+    return cv2.subtract(cur, cv2.multiply(diff, weight, scale=1.0 / 255.0))
+
+
 class TemporalDenoiser:
-    """프레임을 순서대로 넣으면 잡음을 줄인 프레임을 돌려준다. 이전 프레임 상태를 들고 있다."""
+    """프레임을 순서대로 넣으면 잡음을 줄인 프레임을 돌려준다. 이전 프레임 상태를 들고 있다.
+
+    이전 결과를 광류로 현재 좌표에 맞춘 뒤 섞으므로 카메라·물체가 움직여도 잡음이 줄어든다.
+    `flow`는 가장 최근 프레임의 작은 광류(첫 프레임·해상도 변경 직후는 None)로, 셀 상태 보정과
+    출력 안정화가 이어받아 쓴다.
+    """
+
+    def __init__(self) -> None:
+        self._prev: np.ndarray | None = None
+        self._raw: np.ndarray | None = None  # 직전 원본 프레임 — 광류는 잡음 제거 전 원본끼리 잰다
+        self.flow: np.ndarray | None = None
+
+    def __call__(self, frame: np.ndarray) -> np.ndarray:
+        cur = frame.astype(np.float32)
+        if self._prev is None or self._raw is None or self._prev.shape != cur.shape:
+            self._prev = cur
+            self._raw = frame
+            self.flow = None
+            return frame
+        self.flow = _flow_small(frame, self._raw)
+        self._raw = frame
+        h, w = frame.shape[:2]
+        mapx, mapy = _flow_maps(self.flow, w, h)
+        warped = cv2.remap(self._prev, mapx, mapy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        self._prev = _blend_toward_prev(cur, warped, _TDN_LUT)
+        return cv2.convertScaleAbs(self._prev)
+
+
+# 출력 안정화: 잡음 제거는 입력 쪽 잔떨림만 잡는다. 렌더 결과(셀 경계·잉크선)에 남은 프레임 간
+# 흔들림은 출력 프레임끼리 같은 방식(광류 보정 + 차이가 작을 때만 당김)으로 한 번 더 줄인다.
+# σ12는 렌더 후 흔들림이 입력 잡음보다 커서 넉넉히 잡은 값이다. 큰 변화(새 물체)는 가중치가 ~0이라 남지 않는다.
+_OUT_SIGMA = 12.0
+_OUT_STRENGTH = 0.6
+_OUT_LUT = np.rint(
+    255 * _OUT_STRENGTH * np.exp(-(np.arange(256, dtype=np.float32) ** 2) / (2 * _OUT_SIGMA**2))
+).astype(np.uint8)
+
+
+class OutputStabilizer:
+    """렌더된 출력 프레임을 순서대로 넣으면 프레임 간 흔들림을 줄여 돌려준다. 모든 필터 공용."""
 
     def __init__(self) -> None:
         self._prev: np.ndarray | None = None
 
-    def __call__(self, frame: np.ndarray) -> np.ndarray:
-        cur = frame.astype(np.float32)
-        if self._prev is None or self._prev.shape != cur.shape:
+    def __call__(self, out_bgr: np.ndarray, flow_small: np.ndarray | None) -> np.ndarray:
+        cur = out_bgr.astype(np.float32)
+        if self._prev is None or flow_small is None or self._prev.shape != cur.shape:
             self._prev = cur
-            return frame
-        diff = cv2.subtract(cur, self._prev)
-        weight = cv2.LUT(cv2.convertScaleAbs(diff), _TDN_LUT).astype(np.float32)
-        self._prev = cv2.subtract(cur, cv2.multiply(diff, weight, scale=1.0 / 255.0))
+            return out_bgr
+        h, w = out_bgr.shape[:2]
+        mapx, mapy = _flow_maps(flow_small, w, h)
+        warped = cv2.remap(self._prev, mapx, mapy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        self._prev = _blend_toward_prev(cur, warped, _OUT_LUT)
         return cv2.convertScaleAbs(self._prev)
 
 
@@ -195,6 +275,19 @@ class CelState:
     def __init__(self) -> None:
         self.level: np.ndarray | None = None
         self.held: np.ndarray | None = None  # 직전 단계를 붙잡고 있는 연속 프레임 수
+
+    def warp(self, maps: tuple[np.ndarray, np.ndarray]) -> None:
+        """붙잡은 셀 단계가 화면 움직임을 따라가도록 좌표 맵(`_flow_maps`)으로 옮긴다.
+
+        단계는 이산값이라 보간하지 않고 최근접으로 가져온다.
+        """
+        if self.level is None or self.held is None:
+            return
+        mapx, mapy = maps
+        self.level = cv2.remap(
+            self.level.astype(np.float32), mapx, mapy, cv2.INTER_NEAREST, borderMode=cv2.BORDER_REPLICATE
+        )
+        self.held = cv2.remap(self.held, mapx, mapy, cv2.INTER_NEAREST, borderMode=cv2.BORDER_REPLICATE)
 
 
 def _cel_quantize(light: np.ndarray, state: CelState | None) -> np.ndarray:
@@ -320,7 +413,8 @@ VIDEO_FILTERS = ("cartoon", "sketch", "orange_cartoon", "monet", "mono_cartoon")
 def frame_renderer(
     video_filter: str, tone_range: tuple[float, float] | None = None, sequential: bool = False,
 ):
-    """필터 이름 → 프레임 렌더러 `(frame, gamma) -> frame`.
+    """필터 이름 → 프레임 렌더러 `(frame, gamma) -> frame`. 카툰의 순차 렌더러만 `(frame, gamma, flow)`로
+    잡음 제거기의 광류(`TemporalDenoiser.flow`)를 더 받는다.
 
     sketch·orange_cartoon·monet·mono_cartoon 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를
     피하려고 호출 시점에 가져온다. `sequential=True`는 프레임을 순서대로 렌더하는 구간 경로 전용으로,
@@ -335,7 +429,11 @@ def frame_renderer(
         # 프레임을 순서대로 렌더하는 경로에서만 직전 셀 단계를 이어받는다(히스테리시스)
         state = CelState()
 
-        def _render_cartoon(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+        def _render_cartoon(frame: np.ndarray, gamma: float = 1.0, flow: np.ndarray | None = None) -> np.ndarray:
+            # 광류가 있으면 붙잡은 셀 단계를 먼저 현재 좌표로 옮겨, 카메라가 움직여도 히스테리시스가 이어진다
+            if flow is not None and state.level is not None:
+                h, w = frame.shape[:2]
+                state.warp(_flow_maps(flow, w, h))
             return cartoon_frame(frame, gamma, cel_state=state)
 
         return _render_cartoon
@@ -436,6 +534,13 @@ def _segment_gamma_states(
         cap.release()
 
 
+def _render_seq(render, video_filter: str, frame: np.ndarray, gamma: float, flow: np.ndarray | None) -> np.ndarray:
+    """순차 렌더러 호출. 광류는 셀 상태를 옮기는 카툰만 받는다."""
+    if video_filter == "cartoon":
+        return render(frame, gamma, flow)
+    return render(frame, gamma)
+
+
 def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
     """구간 하나를 카툰 변환해 비디오 전용(오디오 없음) mp4로 저장. (프레임 수, seg_path) 반환.
 
@@ -485,6 +590,7 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
     processed = 0
     gamma_ema: float | None = gamma_seed
     denoise = TemporalDenoiser()
+    stab = OutputStabilizer()
     frame_idx = pad_start
     try:
         while frame_idx < end:
@@ -496,11 +602,14 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
             gamma_ema = _sample_gamma(frame, gamma_ema, frame_idx)
             # 예열 구간에서도 돌려야 구간 시작 시점에 잡음 제거 상태가 수렴해 있다
             frame = denoise(frame)
+            flow = denoise.flow
             if frame_idx >= start:
-                proc.stdin.write(render(frame, gamma_ema).tobytes())
+                out = stab(_render_seq(render, video_filter, frame, gamma_ema, flow), flow)
+                proc.stdin.write(out.tobytes())
                 processed += 1
             elif frame_idx >= start - _CEL_WARMUP_FRAMES and pad_start < start:
-                render(frame, gamma_ema)  # 셀 히스테리시스 상태 예열(출력하지 않는다)
+                # 셀 히스테리시스·출력 안정화 상태 예열(출력하지 않는다). 안정화기는 순서대로 먹여야 수렴한다
+                stab(_render_seq(render, video_filter, frame, gamma_ema, flow), flow)
             frame_idx += 1
     finally:
         cap.release()
@@ -589,6 +698,8 @@ def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
     인코딩을 통째로 병렬화할 수 있고, 그러면 부모 프로세스가 홀로 하던 디코딩과 raw 파이프
     쓰기(1080x1920 기준 프레임당 6.2MB)까지 함께 분산된다.
     짧은 영상은 구간 분할 실익이 없어 기존 프레임 단위 병렬 경로를 그대로 쓴다.
+    두 경로 모두 입력에는 광류 보정 시간 잡음 제거, 출력에는 `OutputStabilizer`를 순서대로 건다
+    (구간 경로는 카툰 셀 단계도 광류로 옮긴다. 프레임 병렬 경로는 풀이 상태를 갖지 않아 셀 이동이 없다).
     """
     frame_renderer(video_filter)  # 알 수 없는 필터는 디코딩 전에 거른다
     cap = cv2.VideoCapture(input_path)
@@ -701,10 +812,12 @@ def _cartoonize_frame_parallel(
     read_idx = 0
     gamma_ema: float | None = None
     denoise = TemporalDenoiser()
+    stab = OutputStabilizer()
     pool = mp.get_context("spawn").Pool(_worker_pool_size(), initializer=_worker_init)
     try:
         while True:
             batch: list[tuple[np.ndarray, float, str, tuple[float, float] | None]] = []
+            flows: list[np.ndarray | None] = []  # 배치 항목별 작은 광류(약 1MB) — 풀이 아니라 메인에서 출력 안정화에 쓴다
             while len(batch) < _CHUNK:
                 ok, frame = cap.read()
                 if not ok:
@@ -715,10 +828,11 @@ def _cartoonize_frame_parallel(
                 gamma_ema = _sample_gamma(frame, gamma_ema, read_idx)
                 read_idx += 1
                 batch.append((denoise(frame), gamma_ema, video_filter, tone_range))
+                flows.append(denoise.flow)
             if not batch:
                 break
-            for canvas in pool.map(_render_one, batch):
-                proc.stdin.write(canvas.tobytes())
+            for canvas, flow in zip(pool.map(_render_one, batch), flows):
+                proc.stdin.write(stab(canvas, flow).tobytes())
                 processed += 1
     finally:
         pool.terminate()
