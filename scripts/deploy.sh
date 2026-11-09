@@ -153,6 +153,11 @@ echo "    ✓ Nginx reload 완료 (무중단)"
 sleep 5
 echo "    이전 슬롯 종료 ($CURRENT_SLOT, 포트 $CURRENT_PORT)..."
 systemctl --user stop "stack-health-app-$CURRENT_SLOT" || true
+# 재부팅 때 nginx가 가리키는 슬롯이 올라오도록 자동 시작(enable)도 함께 옮긴다.
+# 전환만 하고 enable을 그대로 두면 재부팅 후 이전 슬롯만 떠서 502가 날 수 있다
+# (2026-11-09 재부팅: blue만 enable된 채 nginx는 green을 가리키고 있었다).
+systemctl --user enable "stack-health-app-$NEXT_SLOT" 2>/dev/null || true
+systemctl --user disable "stack-health-app-$CURRENT_SLOT" 2>/dev/null || true
 
 # 슬롯 파일 업데이트
 echo "$NEXT_SLOT" > "$SLOT_FILE"
