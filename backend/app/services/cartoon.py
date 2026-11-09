@@ -8,6 +8,8 @@ cv2/numpy 외 앱 의존성을 두지 않는다 — worker가 이 모듈을 단�
 
 영상은 프레임 사이 흔들림을 세 단계로 줄인다: 광류 보정 시간 잡음 제거(`TemporalDenoiser`) →
 카툰 셀 단계의 광류 이동(`CelState.warp`) → 렌더 출력 안정화(`OutputStabilizer`, 모든 필터).
+CLAHE 보정량도 광류로 옮겨 가며 시간 방향으로 섞는다(`ClaheSmoother`) — 타일이 화면에 고정돼 있어
+카메라가 움직이면 같은 면의 보정 곡선이 바뀌고 셀 색면이 통째로 한 단계 튀기 때문이다.
 """
 
 import logging
@@ -132,7 +134,11 @@ _MIN_SEGMENT_FRAMES = 90  # ~3초@30fps 미만은 분할 실익이 없음(프로
 # 구간 앞쪽 읽기 여유. 이것만으로 EMA가 수렴하지 않으므로 선행 패스의 정확한 상태를
 # 함께 넘긴다. 샘플 주기는 패딩 기준이 아니라 영상의 절대 프레임 번호에 맞춘다.
 _SEG_PAD_FRAMES = 60
-_CEL_WARMUP_FRAMES = 8  # 구간 시작 전 렌더만 하고 버리는 프레임 수 — 셀 히스테리시스 상태 예열
+# 구간 시작 전 렌더만 하고 버리는 프레임 수. 셀 히스테리시스·CLAHE 평활(α0.1 ≈ 10프레임 시정수)·
+# 출력 안정화기 상태를 수렴시킨다. 모자라면 구간 첫 프레임에서 한 프레임 튄다(1262번 글 511·1022프레임 실측).
+# _SEG_PAD_FRAMES를 넘으면 안 된다.
+_SEQ_WARMUP_FRAMES = 30
+_CLAHE_SMOOTH_ALPHA = 0.1  # CLAHE 보정량 EMA 계수 — 클수록 현재 프레임 쪽
 _GAMMA_SAMPLE_EVERY = 5  # 감마 재계산 주기(프레임). 노출은 연속적이라 매 프레임 잴 필요가 없다
 
 
@@ -250,7 +256,21 @@ def adaptive_gamma(frame: np.ndarray) -> float:
     return float(np.clip(g, 0.4, 1.0))
 
 
-def _enhance(frame: np.ndarray, gamma: float = 1.0, clip: float = 2.0) -> np.ndarray:
+class ClaheSmoother:
+    """CLAHE 보정량(clahe(L) - L, 픽셀별 float32)을 프레임 사이에 섞는다. 순서대로 렌더할 때만 쓴다.
+
+    CLAHE 타일은 화면에 고정돼 있어 카메라가 움직이면 같은 면 위의 타일별 대비 곡선이 바뀐다.
+    그러면 셀 색면이 통째로 한 단계 튄다. 직전 보정량을 광류로 현재 좌표에 옮긴 뒤 EMA로 섞어 줄인다.
+    """
+
+    def __init__(self) -> None:
+        self.d: np.ndarray | None = None
+
+
+def _enhance(
+    frame: np.ndarray, gamma: float = 1.0, clip: float = 2.0,
+    clahe_state: ClaheSmoother | None = None, flow: np.ndarray | None = None,
+) -> np.ndarray:
     """저조도 대응 전처리: 감마 리프트 + CLAHE(L채널).
 
     NlMeans 디노이즈는 이후 bilateral filter + 셀 양자화가 잔여 노이즈를 마저
@@ -259,13 +279,26 @@ def _enhance(frame: np.ndarray, gamma: float = 1.0, clip: float = 2.0) -> np.nda
     소수점을 버리면 감마가 0.99를 넘나들 때 화면 전체가 1~2레벨씩 튀었다.
     CLAHE를 고정 이득 국소 대비로 바꾸는 실험은 어두운 영상의 선명도가 23~59% 떨어져
     폐기했다(2026-11-09 실측).
+    `clahe_state`가 있으면 CLAHE 보정량을 직전 프레임의 것(`flow`로 현재 좌표에 옮김)과
+    `_CLAHE_SMOOTH_ALPHA`로 섞는다. 직전 상태나 광류가 없으면(첫 프레임) 상태가 없을 때와 결과가 같다.
     """
     if gamma < 1.0:
         lut = np.rint(np.linspace(0, 1, 256) ** gamma * 255).astype(np.uint8)
         frame = cv2.LUT(frame, lut)
     lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
     light, a, b = cv2.split(lab)
-    light = cv2.createCLAHE(clipLimit=clip, tileGridSize=(8, 8)).apply(light)
+    clahe = cv2.createCLAHE(clipLimit=clip, tileGridSize=(8, 8))
+    if clahe_state is None:
+        light = clahe.apply(light)
+    else:
+        d = clahe.apply(light).astype(np.float32) - light
+        prev = clahe_state.d
+        if prev is not None and prev.shape == d.shape and flow is not None:
+            h, w = d.shape
+            prev = cv2.remap(prev, *_flow_maps(flow, w, h), cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+            d = prev + _CLAHE_SMOOTH_ALPHA * (d - prev)
+        clahe_state.d = d
+        light = np.clip(light + d, 0, 255).astype(np.uint8)
     return cv2.cvtColor(cv2.merge([light, a, b]), cv2.COLOR_LAB2BGR)
 
 
@@ -315,10 +348,13 @@ def _cel_quantize(light: np.ndarray, state: CelState | None) -> np.ndarray:
     return np.clip(out, 0, 255).astype(np.uint8)  # _CEL_LUT와 같은 버림 — 붙잡지 않은 픽셀은 결과가 같다
 
 
-def cartoon_frame(frame: np.ndarray, gamma: float = 1.0, cel_state: CelState | None = None) -> np.ndarray:
+def cartoon_frame(
+    frame: np.ndarray, gamma: float = 1.0, cel_state: CelState | None = None,
+    clahe_state: ClaheSmoother | None = None, flow: np.ndarray | None = None,
+) -> np.ndarray:
     """셀 셰이딩 카툰: 저조도 보정 + 적응 채도 + L채널 셀 양자화 + DoG 잉크 라인."""
     h, w = frame.shape[:2]
-    den = _enhance(frame, gamma=gamma)
+    den = _enhance(frame, gamma=gamma, clahe_state=clahe_state, flow=flow)
 
     # 적응 채도: 이미 쨍한 프레임은 덜 올린다
     hsv = cv2.cvtColor(den, cv2.COLOR_BGR2HSV)
@@ -413,12 +449,14 @@ VIDEO_FILTERS = ("cartoon", "sketch", "orange_cartoon", "monet", "mono_cartoon")
 def frame_renderer(
     video_filter: str, tone_range: tuple[float, float] | None = None, sequential: bool = False,
 ):
-    """필터 이름 → 프레임 렌더러 `(frame, gamma) -> frame`. 카툰의 순차 렌더러만 `(frame, gamma, flow)`로
-    잡음 제거기의 광류(`TemporalDenoiser.flow`)를 더 받는다.
+    """필터 이름 → 프레임 렌더러 `(frame, gamma) -> frame`. `sequential=True`면 `(frame, gamma, flow)`로
+    잡음 제거기의 광류(`TemporalDenoiser.flow`)를 더 받는다(모든 필터 공통).
 
     sketch·orange_cartoon·monet·mono_cartoon 렌더러는 이 모듈의 전처리(`_enhance`)를 import하므로 순환 import를
     피하려고 호출 시점에 가져온다. `sequential=True`는 프레임을 순서대로 렌더하는 구간 경로 전용으로,
-    카툰이 직전 셀 단계를 이어받아 경계 꿈틀거림을 줄인다(`_cel_quantize`). `tone_range`는 orange_cartoon·mono_cartoon 전용 인자다 — 영상 전체
+    카툰이 직전 셀 단계를 이어받아 경계 꿈틀거림을 줄이고(`_cel_quantize`), 카툰·스케치·모네는
+    CLAHE 보정량을 광류로 옮겨 시간 방향으로 평활한다(`ClaheSmoother`). 병렬 풀 경로는 평활하지 않는다.
+    `tone_range`는 orange_cartoon·mono_cartoon 전용 인자다 — 영상 전체
     샘플로 미리 계산한 밝기 기준(lo/hi, `orange_cartoon.sample_tone_range`)을 클로저로
     고정해 넘긴다. 다른 필터는 이 인자를 무시한다. 자세한 설계 이유는
     `app.services.orange_cartoon` 모듈 docstring 참고.
@@ -426,36 +464,51 @@ def frame_renderer(
     if video_filter == "cartoon":
         if not sequential:
             return cartoon_frame
-        # 프레임을 순서대로 렌더하는 경로에서만 직전 셀 단계를 이어받는다(히스테리시스)
+        # 프레임을 순서대로 렌더하는 경로에서만 직전 셀 단계·CLAHE 보정량을 이어받는다
         state = CelState()
+        smoother = ClaheSmoother()
 
         def _render_cartoon(frame: np.ndarray, gamma: float = 1.0, flow: np.ndarray | None = None) -> np.ndarray:
             # 광류가 있으면 붙잡은 셀 단계를 먼저 현재 좌표로 옮겨, 카메라가 움직여도 히스테리시스가 이어진다
             if flow is not None and state.level is not None:
                 h, w = frame.shape[:2]
                 state.warp(_flow_maps(flow, w, h))
-            return cartoon_frame(frame, gamma, cel_state=state)
+            return cartoon_frame(frame, gamma, cel_state=state, clahe_state=smoother, flow=flow)
 
         return _render_cartoon
     if video_filter == "sketch":
         from app.services.sketch import sketch_frame
 
-        return sketch_frame
+        if not sequential:
+            return sketch_frame
+        sketch_smoother = ClaheSmoother()
+
+        def _render_sketch(frame: np.ndarray, gamma: float = 1.0, flow: np.ndarray | None = None) -> np.ndarray:
+            return sketch_frame(frame, gamma, clahe_state=sketch_smoother, flow=flow)
+
+        return _render_sketch
     if video_filter == "orange_cartoon":
         from app.services.orange_cartoon import orange_cartoon_frame
 
-        def _render(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+        def _render(frame: np.ndarray, gamma: float = 1.0, flow: np.ndarray | None = None) -> np.ndarray:
             return orange_cartoon_frame(frame, gamma, tone_range=tone_range)
 
         return _render
     if video_filter == "monet":
         from app.services.monet import monet_frame
 
-        return monet_frame
+        if not sequential:
+            return monet_frame
+        monet_smoother = ClaheSmoother()
+
+        def _render_monet(frame: np.ndarray, gamma: float = 1.0, flow: np.ndarray | None = None) -> np.ndarray:
+            return monet_frame(frame, gamma, clahe_state=monet_smoother, flow=flow)
+
+        return _render_monet
     if video_filter == "mono_cartoon":
         from app.services.mono_cartoon import mono_cartoon_frame
 
-        def _render_mono(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+        def _render_mono(frame: np.ndarray, gamma: float = 1.0, flow: np.ndarray | None = None) -> np.ndarray:
             return mono_cartoon_frame(frame, gamma, tone_range=tone_range)
 
         return _render_mono
@@ -534,13 +587,6 @@ def _segment_gamma_states(
         cap.release()
 
 
-def _render_seq(render, video_filter: str, frame: np.ndarray, gamma: float, flow: np.ndarray | None) -> np.ndarray:
-    """순차 렌더러 호출. 광류는 셀 상태를 옮기는 카툰만 받는다."""
-    if video_filter == "cartoon":
-        return render(frame, gamma, flow)
-    return render(frame, gamma)
-
-
 def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
     """구간 하나를 카툰 변환해 비디오 전용(오디오 없음) mp4로 저장. (프레임 수, seg_path) 반환.
 
@@ -604,12 +650,12 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
             frame = denoise(frame)
             flow = denoise.flow
             if frame_idx >= start:
-                out = stab(_render_seq(render, video_filter, frame, gamma_ema, flow), flow)
+                out = stab(render(frame, gamma_ema, flow=flow), flow)
                 proc.stdin.write(out.tobytes())
                 processed += 1
-            elif frame_idx >= start - _CEL_WARMUP_FRAMES and pad_start < start:
-                # 셀 히스테리시스·출력 안정화 상태 예열(출력하지 않는다). 안정화기는 순서대로 먹여야 수렴한다
-                stab(_render_seq(render, video_filter, frame, gamma_ema, flow), flow)
+            elif frame_idx >= start - _SEQ_WARMUP_FRAMES and pad_start < start:
+                # 셀 히스테리시스·CLAHE 평활·출력 안정화 상태 예열(출력하지 않는다). 안정화기는 순서대로 먹여야 수렴한다
+                stab(render(frame, gamma_ema, flow=flow), flow)
             frame_idx += 1
     finally:
         cap.release()

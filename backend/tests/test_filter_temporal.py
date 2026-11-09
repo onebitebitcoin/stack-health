@@ -234,3 +234,46 @@ def test_cel_state_warp_follows_flow():
     state.warp(cartoon._flow_maps(flow, 30, 20))
     assert state.level[10, 6:11].tolist() == [3, 3, 3, 3, 3]
     assert state.level[10, 11] == 0 and state.level[10, 5] == 0
+
+
+def test_enhance_without_state_matches_first_smoothed_frame():
+    frame = np.clip(_textured_scene(0), 0, 255).astype(np.uint8)
+    plain = cartoon._enhance(frame, 0.8)
+    assert np.array_equal(cartoon._enhance(frame, 0.8, clahe_state=cartoon.ClaheSmoother()), plain)
+
+
+def test_clahe_smoother_damps_abrupt_correction_change():
+    base = np.clip(_textured_scene(0), 0, 255).astype(np.uint8)
+    changed = base.copy()
+    # 타일(12x16px) 한쪽에 밝은 물체가 나타나 그 타일의 히스토그램이 바뀐다
+    changed[0:12, 56:64] = 255
+    flow = np.zeros((24, 32, 2), np.float32)
+    region = (slice(0, 12), slice(36, 52))  # 같은 타일 근처의, 바뀌지 않은 영역
+
+    def jump(state):
+        before = cartoon._enhance(base, clahe_state=state, flow=flow)
+        after = cartoon._enhance(changed, clahe_state=state, flow=flow)
+        return np.abs(after.astype(np.float32) - before)[region].mean()
+
+    stateless = jump(None)
+    smoothed = jump(cartoon.ClaheSmoother())
+    assert stateless > 1.0
+    assert smoothed < stateless * 0.5
+
+
+def test_clahe_smoother_follows_translation_without_lag():
+    # 대비가 센 질감은 광류의 서브픽셀 오차만으로 보정량 차이가 커지므로 완만한 장면을 쓴다
+    base = np.random.default_rng(7).normal(128, 60, (96, 208)).astype(np.float32)
+    base = cv2.normalize(cv2.GaussianBlur(base, (0, 0), 6.0), None, 100, 160, cv2.NORM_MINMAX)
+    denoise = cartoon.TemporalDenoiser()
+    state = cartoon.ClaheSmoother()
+    diffs = []
+    for t in range(12):
+        view = base[:, 40 + 2 * t:40 + 2 * t + 128]
+        frame = np.clip(cv2.merge([view, view * 0.9, view * 0.8]), 0, 255).astype(np.uint8)
+        den = denoise(frame)
+        smoothed = cartoon._enhance(den, clahe_state=state, flow=denoise.flow)
+        if t >= 6:
+            diffs.append(np.abs(smoothed.astype(np.float32) - cartoon._enhance(den))[8:-8, 12:-12].mean())
+    assert denoise.flow is not None
+    assert np.mean(diffs) < 3.0

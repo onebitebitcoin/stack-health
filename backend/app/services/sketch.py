@@ -18,7 +18,7 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
-from app.services.cartoon import _enhance
+from app.services.cartoon import ClaheSmoother, _enhance
 
 # 픽셀 단위 값은 짧은 변 540px 기준이며 해상도에 비례해 늘린다.
 _REF_SHORT_SIDE = 540
@@ -72,7 +72,10 @@ def _paper_texture(h: int, w: int) -> np.ndarray:
     return np.clip(grain, 0.85, 1.05).astype(np.float32)
 
 
-def _reference_gray(frame: np.ndarray, gamma: float, scale: float) -> np.ndarray:
+def _reference_gray(
+    frame: np.ndarray, gamma: float, scale: float,
+    clahe_state: ClaheSmoother | None = None, flow: np.ndarray | None = None,
+) -> np.ndarray:
     """감마·CLAHE 보정 후 bilateral로 잔질감을 지운 휘도(0~1)를 기준 해상도(짧은 변 540px)로 돌려준다.
 
     원본 해상도로 키워도 담긴 정보는 기준 해상도 그대로다. 그래서 이어지는 블러·선 추출을
@@ -83,7 +86,7 @@ def _reference_gray(frame: np.ndarray, gamma: float, scale: float) -> np.ndarray
     # 결과는 사실상 같고, 1080p 기준 이 단계 비용이 약 1/4로 준다.
     if scale > 1.0:
         frame = cv2.resize(frame, (round(w / scale), round(h / scale)), interpolation=cv2.INTER_AREA)
-    enh = _enhance(frame, gamma, clip=1.6)
+    enh = _enhance(frame, gamma, clip=1.6, clahe_state=clahe_state, flow=flow)
     for _ in range(_BILATERAL_PASSES):
         enh = cv2.bilateralFilter(enh, 9, 60, 7)
     return cv2.cvtColor(enh, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
@@ -126,11 +129,14 @@ def _pencil_ink(gray: np.ndarray) -> np.ndarray:
     return (1.0 - (1.0 - line) * (1.0 - shade)).astype(np.float32)
 
 
-def sketch_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+def sketch_frame(
+    frame: np.ndarray, gamma: float = 1.0,
+    clahe_state: ClaheSmoother | None = None, flow: np.ndarray | None = None,
+) -> np.ndarray:
     """BGR 프레임 1장을 연필 스케치로 변환한다(같은 크기의 BGR uint8)."""
     h, w = frame.shape[:2]
     scale = max(1.0, min(h, w) / _REF_SHORT_SIDE)
-    ink = _pencil_ink(_reference_gray(frame, gamma, scale))
+    ink = _pencil_ink(_reference_gray(frame, gamma, scale, clahe_state, flow))
     if ink.shape != (h, w):
         ink = cv2.resize(ink, (w, h), interpolation=cv2.INTER_LINEAR)
     return cv2.blendLinear(_paper_background(h, w), _solid(h, w, PENCIL_BGR), 1.0 - ink, ink)
