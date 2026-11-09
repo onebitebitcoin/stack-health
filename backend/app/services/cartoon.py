@@ -49,7 +49,11 @@ _LINE_STRONG_DOG = 16  # 짧은 조각을 살리는 DoG 최소 피크(0~255). 9�
 # LO를 3으로 낮추면 옅은 선이 늘어 패닝에서 오히려 아른거렸다(warp-MAD +20%).
 _LINE_DOG_LO = 4
 _LINE_DOG_HI = 6.0
-_CEL_MEDIAN_K = 5  # 셀 양자화 전 L 중앙값 필터 — 잔질감이 만든 얼룩 조각을 주변 면으로 흡수한다
+_CEL_MEDIAN_K = 13  # 셀 양자화 전 L 중앙값 필터 — 잔질감이 만든 얼룩 조각을 주변 면으로 흡수한다.
+# 5에서 13으로 키웠다: 자갈·옷 주름이 잘게 쪼개진 색 조각이 움직일 때마다 꿈틀댔다(실측 조각 -65%,
+# 프레임 간 차이 정지 -30%·손떨림 -13%). 그림은 조금 더 평평해진다.
+_LINE_MEDIAN_K = 9  # 잉크선(DoG) 입력용 중앙값 필터. 색면과 같은 13을 쓰면 눈·입 같은 작은 특징의 윤곽이 사라져 작게 둔다.
+# 9는 14px 이상 특징(전신 영상의 눈·손)의 윤곽을 지키면서 잔질감 선 조각을 줄인다(5 대비 정지 장면 차이 -18%)
 
 # 군집 억제: 조각 하나하나는 길이·대비 필터를 통과해도, 질감 위에서는 짧은 조각이 좁은 곳에
 # 수십 개씩 모여 "환공포증" 무늬가 된다(피드 실측: 보도·낙엽·카펫). 짧은 조각만 모은 마스크의
@@ -238,6 +242,11 @@ def cartoon_frame(frame: np.ndarray, gamma: float = 1.0, cel_state: CelState | N
     # (540p 실측: 면적 80px 미만 셀 조각 582→278개). 원본 해상도 L에 걸면 1080p에서 커널이
     # 11로 커져 15ms가 들어서, 이미 절반으로 줄인 이미지에 해상도 비례 커널로 건다(1080p 0.4ms).
     short_side = min(h, w)
+    # 잉크선은 덜 뭉갠 이미지에서 뽑는다 — 색면용 큰 커널을 그대로 쓰면 눈·입 같은 작은 특징의 윤곽이 사라진다
+    line_src = cv2.resize(
+        cv2.medianBlur(small, _scale_px(_LINE_MEDIAN_K, short_side // 2) | 1), (w, h),
+        interpolation=cv2.INTER_LINEAR,
+    )
     small = cv2.medianBlur(small, _scale_px(_CEL_MEDIAN_K, short_side // 2) | 1)
     smooth = cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
 
@@ -253,7 +262,7 @@ def cartoon_frame(frame: np.ndarray, gamma: float = 1.0, cel_state: CelState | N
     # 키운 `den`에서 바로 뽑아서 보도블록 틈·낙엽 같은 잔질감이 전부 짧은 선 조각이 됐다.
     # DoG 자체는 원본 해상도에서 계산한다 — DoG를 half-res로 계산했던 실험은 텍스트·세부선이
     # 점묘화·단절돼 폐기했다(ponytail: 재시도 시 DoG 계산 해상도는 낮추지 말 것).
-    gray = cv2.cvtColor(smooth, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(line_src, cv2.COLOR_BGR2GRAY)
     s = max(1.0, short_side / _DOG_REF_SHORT_SIDE)
     g1 = cv2.GaussianBlur(gray, (0, 0), 1.4 * s)
     # σ=3.0을 원본에서 직접 구하는 대신 g1에 σ=2.65를 덧씌운다 — 가우시안은 합성되므로

@@ -65,10 +65,11 @@ class TestCartoonFrame:
 
     def test_short_high_contrast_feature_keeps_ink(self):
         # 눈·입처럼 짧지만 대비가 강한 무늬는 길이 필터에 걸려도 잉크 선이 남아야 한다.
+        # 잉크선 입력은 중앙값 필터를 거치므로 1080p 기준 14px 미만 점은 지워지는 것이 의도다.
         frame = np.full((540, 960, 3), 120, dtype=np.uint8)
-        frame[268:272, 477:483] = 250  # 6x4px 밝은 점
+        frame[266:274, 476:484] = 250  # 8x8px 밝은 점(1080p 기준 16px)
         out = cartoon_frame(frame)
-        around = cv2.cvtColor(out[258:282, 467:493], cv2.COLOR_BGR2GRAY)
+        around = cv2.cvtColor(out[256:284, 466:494], cv2.COLOR_BGR2GRAY)
         assert int(around.min()) < 70, "ink line around a short high-contrast feature was removed"
 
 
