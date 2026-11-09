@@ -20,7 +20,12 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
-from app.services.orange_cartoon import _EDGE_DILATE_KERNEL, _TONE_BLUR_SIGMA, _tone
+from app.services.orange_cartoon import (
+    _EDGE_DILATE_KERNEL,
+    _TONE_BLUR_SIGMA,
+    _tone,
+    _tone_mask,
+)
 from app.services.sketch import _REF_SHORT_SIDE, _line_mask, _paper_texture, _solid
 
 PAPER_BGR = np.array([244, 244, 242], np.float32) / 255.0  # 흰 종이(아주 옅은 웜톤)
@@ -62,7 +67,7 @@ def mono_cartoon_frame(
     edges = cv2.dilate((lines > 0.5).astype(np.uint8), _EDGE_DILATE_KERNEL)
     out = _paper_background(h, w)
     for i, (threshold, color) in enumerate(TONES):
-        mask = (g < threshold).astype(np.uint8)
+        mask = _tone_mask(g, threshold)
         if i == len(TONES) - 1:
             mask = np.maximum(mask, edges)  # 윤곽선은 먹판에 함께 찍는다
         sigma = (_LINE_EDGE_SIGMA if i == len(TONES) - 1 else _TONE_EDGE_SIGMA) * scale

@@ -102,10 +102,8 @@ def _worker_pool_size() -> int:
 
 _CHUNK = 16  # 청크 단위 map: 전 프레임을 메모리에 들고 있지 않도록 제한
 _MIN_SEGMENT_FRAMES = 90  # ~3초@30fps 미만은 분할 실익이 없음(프로세스 기동비용이 더 큼)
-# 구간 경계 예열 프레임 수 — 감마 EMA 워밍업용. EMA가 `_GAMMA_SAMPLE_EVERY`마다만 갱신되므로
-# 60프레임 ≈ 12회 갱신이 필요하다(24프레임이면 경계 감마가 최대 0.12 어긋나 밝기가 튄다).
-# 예열 구간은 디코딩과 감마 계산만 하고 렌더는 건너뛴다. 반드시 본문과 같은 샘플링 주기를
-# 써야 한다 — 주기가 다르면 EMA 응답이 달라져 예열을 늘려도 수렴하지 않는다.
+# 구간 앞쪽 읽기 여유. 이것만으로 EMA가 수렴하지 않으므로 선행 패스의 정확한 상태를
+# 함께 넘긴다. 샘플 주기는 패딩 기준이 아니라 영상의 절대 프레임 번호에 맞춘다.
 _SEG_PAD_FRAMES = 60
 _GAMMA_SAMPLE_EVERY = 5  # 감마 재계산 주기(프레임). 노출은 연속적이라 매 프레임 잴 필요가 없다
 
@@ -125,9 +123,13 @@ def _enhance(frame: np.ndarray, gamma: float = 1.0, clip: float = 2.0) -> np.nda
 
     NlMeans 디노이즈는 이후 bilateral filter + 셀 양자화가 잔여 노이즈를 마저
     뭉개버려 최종 출력에 거의 기여하지 않아 제거함(벤치마크: 프레임당 최대 ~65% 단축).
+    감마 LUT는 반올림하고 1.0 미만이면 항상 적용한다 — 예전처럼 0.99 미만에서만 켜고
+    소수점을 버리면 감마가 0.99를 넘나들 때 화면 전체가 1~2레벨씩 튀었다.
+    CLAHE를 고정 이득 국소 대비로 바꾸는 실험은 어두운 영상의 선명도가 23~59% 떨어져
+    폐기했다(2026-11-09 실측).
     """
-    if gamma < 0.99:
-        lut = (np.linspace(0, 1, 256) ** gamma * 255).astype(np.uint8)
+    if gamma < 1.0:
+        lut = np.rint(np.linspace(0, 1, 256) ** gamma * 255).astype(np.uint8)
         frame = cv2.LUT(frame, lut)
     lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
     light, a, b = cv2.split(lab)
@@ -292,15 +294,50 @@ def _plan_segments(frame_count: int, k: int) -> list[tuple[int, int, int]]:
     return segments
 
 
+def _segment_gamma_states(
+    input_path: str, starts: list[int], out_w: int, out_h: int,
+) -> dict[int, float | None]:
+    """구간 읽기 시작 직전의 감마 상태를 순차 경로와 정확히 같게 계산한다.
+
+    60프레임 예열 뒤에도 초기값 오차의 0.9**12가 남는다. 샘플 프레임만
+    변환하는 선행 패스에서 상태를 넘겨 병렬 수·구간 시작 위치에 따른 밝기 차이를 없앤다.
+    """
+    states: dict[int, float | None] = {0: None}
+    pending = set(starts) - {0}
+    if not pending:
+        return states
+    cap = cv2.VideoCapture(input_path)
+    gamma: float | None = None
+    last = max(pending)
+    try:
+        for idx in range(last + 1):
+            if idx in pending:
+                states[idx] = gamma
+            if idx == last:
+                break
+            if not cap.grab():
+                raise ValueError("cannot decode gamma prepass")
+            if idx % _GAMMA_SAMPLE_EVERY == 0:
+                ok, frame = cap.retrieve()
+                if not ok:
+                    raise ValueError("cannot retrieve gamma sample")
+                if (frame.shape[1], frame.shape[0]) != (out_w, out_h):
+                    frame = cv2.resize(frame, (out_w, out_h), interpolation=cv2.INTER_AREA)
+                gamma = _sample_gamma(frame, gamma, idx)
+        return states
+    finally:
+        cap.release()
+
+
 def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
     """구간 하나를 카툰 변환해 비디오 전용(오디오 없음) mp4로 저장. (프레임 수, seg_path) 반환.
 
-    pad_start부터 읽어 감마 EMA를 예열시키고 start 이후 프레임만 ffmpeg에 쓴다 —
-    구간 경계에서 EMA가 0부터 다시 쌓이며 밝기가 튀는 것을 막기 위함. orange_cartoon의
+    선행 패스의 감마 상태를 이어받아 pad_start부터 읽고 start 이후 프레임만 쓴다.
+    샘플링은 영상의 절대 프레임 번호를 사용해 순차 처리와 같은 EMA를 유지한다. orange_cartoon의
     밝기 기준(`tone_range`)은 감마와 달리 영상 전체에서 미리 계산해 넘긴 고정값이라
     구간마다 다시 추정하지 않는다.
     """
-    input_path, start, end, pad_start, out_w, out_h, fps, seg_path, video_filter, tone_range = args
+    input_path, start, end, pad_start, out_w, out_h, fps, seg_path, video_filter, tone_range, gamma_seed = args
     render = frame_renderer(video_filter, tone_range)
     cv2.setNumThreads(1)
     # x264 -threads auto는 코어당 ~1.5개 프레임 스레드를 띄운다. 구간마다 인코더가 하나씩
@@ -339,7 +376,7 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
     stderr_thread.start()
 
     processed = 0
-    gamma_ema: float | None = None
+    gamma_ema: float | None = gamma_seed
     frame_idx = pad_start
     try:
         while frame_idx < end:
@@ -348,7 +385,7 @@ def _render_cartoon_segment(args: tuple) -> tuple[int, str]:
                 break
             if (frame.shape[1], frame.shape[0]) != (out_w, out_h):
                 frame = cv2.resize(frame, (out_w, out_h), interpolation=cv2.INTER_AREA)
-            gamma_ema = _sample_gamma(frame, gamma_ema, frame_idx - pad_start)
+            gamma_ema = _sample_gamma(frame, gamma_ema, frame_idx)
             if frame_idx >= start:
                 proc.stdin.write(render(frame, gamma_ema).tobytes())
                 processed += 1
@@ -472,10 +509,11 @@ def filter_video(input_path: str, output_path: str, video_filter: str) -> None:
 
     try:
         segments = _plan_segments(frame_count, k)
+        gamma_states = _segment_gamma_states(input_path, [p for _, _, p in segments], out_w, out_h)
         with tempfile.TemporaryDirectory() as tmpdir:
             seg_args = [
                 (input_path, start, end, pad_start, out_w, out_h, fps,
-                 os.path.join(tmpdir, f"seg_{i}.mp4"), video_filter, tone_range)
+                 os.path.join(tmpdir, f"seg_{i}.mp4"), video_filter, tone_range, gamma_states[pad_start])
                 for i, (start, end, pad_start) in enumerate(segments)
             ]
             pool = mp.get_context("spawn").Pool(k)

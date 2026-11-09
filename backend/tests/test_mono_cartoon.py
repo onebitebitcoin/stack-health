@@ -48,8 +48,10 @@ class TestMonoCartoonFrame:
         """고른 그라데이션이 몇 가지 평평한 톤으로 계단지게 나뉜다(카툰 셀 셰이딩)."""
         out = mono_cartoon_frame(_gradient_frame(), tone_range=(0.0, 1.0))[..., 1]
         row = out[out.shape[0] // 2]
-        levels = np.unique((row // 8) * 8)
-        assert len(levels) <= 2 * (len(TONES) + 1)  # 톤 수 + 경계 블러 여유
+        # 경계에만 연속 농도를 허용하고 대부분의 면은 기존 잉크 톤에 머물러야 한다.
+        palette = np.array([244, *(color[1] * 255 for _, color in TONES)])
+        near_plate = np.abs(row[:, None].astype(float) - palette).min(axis=1) < 5
+        assert near_plate.mean() > 0.75
 
     def test_dark_region_is_ink_light_region_is_paper(self):
         out = mono_cartoon_frame(_square_frame())[..., 1].astype(np.float32)

@@ -50,6 +50,18 @@ _BLACK_BLUR_SIGMA = 0.7
 _INK_SHIFT_X = 2.0  # 먹판을 오렌지판 대비 어긋나게 찍는 오프셋(px, scale 비례)
 _INK_SHIFT_Y = 1.5
 
+_TONE_SOFT_BAND = 0.05  # 판 경계를 연속 농도로 넘기는 띠 폭(정규화 휘도)
+
+
+def _tone_mask(gray: np.ndarray, threshold: float) -> np.ndarray:
+    """문턱값 바로 위 띠에서만 판 농도를 서서히 줄여 미세 노출 변화가 면 전체를 뒤집지 않게 한다.
+
+    문턱값보다 어두운 픽셀은 예전 이진 판정과 똑같이 판 색 그대로 찍는다. 띠를 문턱값
+    양쪽에 걸치면 문턱값 바로 아래 면까지 옅어져 판화의 꽉 찬 면이 사라진다.
+    """
+    t = np.clip((threshold + _TONE_SOFT_BAND - gray) / _TONE_SOFT_BAND, 0, 1)
+    return (t * t * (3.0 - 2.0 * t)).astype(np.float32)
+
 
 def _tone(frame: np.ndarray, scale: float, tone_range: tuple[float, float] | None) -> np.ndarray:
     """휘도를 lo~hi 백분위 범위로 늘려 0~1로 정규화한다.
@@ -139,8 +151,8 @@ def orange_cartoon_frame(
         lines = cv2.resize(lines, (w, h), interpolation=cv2.INTER_LINEAR)
 
     wear = _ink_wear(h, w, scale)
-    orange = (g < _ORANGE_THRESHOLD).astype(np.float32)
-    black = (g < _BLACK_THRESHOLD).astype(np.float32)
+    orange = _tone_mask(g, _ORANGE_THRESHOLD)
+    black = _tone_mask(g, _BLACK_THRESHOLD)
     edges = cv2.dilate((lines > 0.5).astype(np.uint8), _EDGE_DILATE_KERNEL).astype(np.float32)
     black = np.maximum(black, edges)
 
