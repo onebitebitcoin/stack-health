@@ -42,6 +42,10 @@ _REF_SHORT_SIDE = 540
 _LINE_MIN_AREA = 14
 _LINE_MIN_LEN = 16  # 이보다 짧은 조각(바운딩 박스 긴 변)은 대비가 강할 때만 남긴다
 _LINE_STRONG_DOG = 16  # 짧은 조각을 살리는 DoG 최소 피크(0~255). 9·12는 질감이 남고 16부터 깨끗했다
+# 선 농도: DoG가 LO 미만이면 선 후보에서 빠지고, LO-0.5~HI 사이에서 서서히 진해진다.
+# LO를 3으로 낮추면 옅은 선이 늘어 패닝에서 오히려 아른거렸다(warp-MAD +20%).
+_LINE_DOG_LO = 4
+_LINE_DOG_HI = 6.0
 _CEL_MEDIAN_K = 5  # 셀 양자화 전 L 중앙값 필터 — 잔질감이 만든 얼룩 조각을 주변 면으로 흡수한다
 
 # 군집 억제: 조각 하나하나는 길이·대비 필터를 통과해도, 질감 위에서는 짧은 조각이 좁은 곳에
@@ -59,22 +63,34 @@ def _scale_px(px: int, short_side: int) -> int:
     return max(1, round(px * short_side / _REF_SHORT_SIDE))
 
 
-def _suppress_clusters(
+def _ramp(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
+    """lo 이하 0, hi 이상 1, 그 사이는 smoothstep. 이진 문턱값 대신 쓰는 연속 판정."""
+    t = np.clip((np.asarray(x, np.float32) - lo) / (hi - lo), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _cluster_weight(
     keep: np.ndarray, labels: np.ndarray, stats: np.ndarray, short_side: int
 ) -> np.ndarray:
-    """`keep`(라벨별 bool)에서 짧은 조각이 빽빽이 모인 곳의 조각을 뺀 새 배열."""
+    """`keep`(라벨별 가중치 0~1)에서 짧은 조각이 빽빽이 모인 곳의 가중치를 줄인 새 배열.
+
+    짧은 조각 여부와 밀도 초과 여부를 모두 연속값으로 판정한다. 예전처럼 0/1로 정하면
+    밀도가 문턱값 근처인 조각이 프레임마다 통째로 나타났다 사라졌다.
+    """
     s = short_side / _REF_SHORT_SIDE
     long_side = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
-    frag = keep & (long_side < _CLUSTER_FRAG_LEN * s)
-    frag_mask = frag[labels].astype(np.float32)
+    frag = 1.0 - _ramp(long_side, _CLUSTER_FRAG_LEN * s * 0.8, _CLUSTER_FRAG_LEN * s * 1.2)
+    frag_w = (keep * frag).astype(np.float32)
+    frag_mask = frag_w[labels]
     h, w = frag_mask.shape
     # 밀도는 저주파라 1/4 크기에서 구해도 결과가 같다(1080p 기준 수 ms)
     quarter = cv2.resize(frag_mask, (max(1, w // 4), max(1, h // 4)), interpolation=cv2.INTER_AREA)
     k = max(3, int(_CLUSTER_WIN * s / 4) | 1)
     density = cv2.resize(cv2.blur(quarter, (k, k)), (w, h), interpolation=cv2.INTER_LINEAR)
     area = np.maximum(stats[:, cv2.CC_STAT_AREA], 1)
-    mean_density = np.bincount(labels.ravel(), weights=(density * frag_mask).ravel(), minlength=len(keep)) / area
-    return keep & ~(frag & (mean_density > _CLUSTER_MAX_DENSITY))
+    mean_density = np.bincount(labels.ravel(), weights=(density * (labels > 0)).ravel(), minlength=len(keep)) / area
+    dense = _ramp(mean_density, _CLUSTER_MAX_DENSITY * 0.67, _CLUSTER_MAX_DENSITY * 1.33)
+    return keep * (1.0 - frag * dense)
 
 
 # NlMeans 등 OpenCV 연산은 멀티스레드 확장성이 낮아(10코어 ~1.4x) 프레임 단위
@@ -179,23 +195,29 @@ def cartoon_frame(frame: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     # (1.4² + 2.65² ≈ 3.0²) 결과가 사실상 같고(출력차 0.04/255) 커널이 작아 더 싸다.
     g2 = cv2.GaussianBlur(g1, (0, 0), _DOG_SIGMA2_CASCADE * s)
     dog = cv2.subtract(g1, g2)
-    _, line_mask = cv2.threshold(dog, 4, 255, cv2.THRESH_BINARY)
-    line_mask = cv2.morphologyEx(line_mask, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
-    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(line_mask, 8)
+    # 선 판정은 전부 연속값이다. 픽셀은 DoG가 _LINE_DOG_LO~HI 사이에서 서서히 진해지고, 조각은
+    # 면적·길이·대비·군집 조건 경계 근처에서 서서히 옅어진다. 예전에는 DoG 4 이상만 선으로 칠하고
+    # 조각마다 남길지를 0/1로 정해서, 조건 경계에 걸린 선이 프레임마다 깜빡였다.
+    cand = cv2.morphologyEx(
+        (dog >= _LINE_DOG_LO).astype(np.uint8), cv2.MORPH_OPEN, np.ones((2, 2), np.uint8)
+    )
+    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(cand, 8)
     # 컴포넌트별 Python 루프(`labels == i`)는 성분 수만큼 전체 이미지를 훑어
     # 1080x1920·성분 800개 기준 프레임당 ~330ms(전체의 60%)를 잡아먹었다.
     # 면적·길이·대비 조건을 라벨 LUT로 바꿔 한 번의 인덱싱으로 처리한다.
     long_side = np.maximum(stats[:, cv2.CC_STAT_WIDTH], stats[:, cv2.CC_STAT_HEIGHT])
-    # 조각마다 DoG 최대값을 따로 구하지 않고, 강한 픽셀이 하나라도 속한 라벨만 bincount로 표시한다
-    strong = np.bincount(labels[dog >= _LINE_STRONG_DOG], minlength=n_labels) > 0
-    keep = (stats[:, cv2.CC_STAT_AREA] >= _LINE_MIN_AREA * s * s) & (
-        (long_side >= _scale_px(_LINE_MIN_LEN, short_side)) | strong
+    # 조각의 대비는 강한 픽셀 수로 잰다. 최대값 하나로 정하면 그 픽셀 하나가 조각 전체를 켜고 끈다
+    strong_px = np.bincount(labels[dog >= _LINE_STRONG_DOG], minlength=n_labels)
+    min_len = _scale_px(_LINE_MIN_LEN, short_side)
+    min_area = _LINE_MIN_AREA * s * s
+    keep = _ramp(stats[:, cv2.CC_STAT_AREA], min_area * 0.6, min_area * 1.4) * np.maximum(
+        _ramp(long_side, min_len * 0.7, min_len * 1.3), _ramp(strong_px, 0, 3 * s * s)
     )
-    keep[0] = False  # 배경 라벨
-    keep = _suppress_clusters(keep, labels, stats, short_side)
-    line_mask = np.where(keep[labels], np.uint8(255), np.uint8(0))
+    keep[0] = 0.0  # 배경 라벨
+    keep = _cluster_weight(keep, labels, stats, short_side)
+    line = keep.astype(np.float32)[labels] * _ramp(dog, _LINE_DOG_LO - 0.5, _LINE_DOG_HI)
     k = max(2, round(2 * s))
-    line_mask = cv2.dilate(line_mask, np.ones((k, k), np.uint8))
+    line_mask = cv2.dilate(np.rint(line * 255).astype(np.uint8), np.ones((k, k), np.uint8))
     #
     # 소프트 블렌드: numpy 브로드캐스트(uint16) 대신 OpenCV 융합 연산을 쓴다 — numpy는
     # 곱셈/덧셈마다 1080x1920x3 임시 배열을 새로 만드는데 cv2는 SIMD로 한 번에 처리한다
