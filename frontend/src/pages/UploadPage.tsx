@@ -84,7 +84,7 @@ export default function UploadPage() {
   const [subtitlePosition, setSubtitlePosition] = useState<'top' | 'center' | 'bottom'>('center')
   const [subtitleLanguage, setSubtitleLanguage] = useState<SubtitleLanguage>('ko')
   const [extractingSubtitles, setExtractingSubtitles] = useState(false)
-  const [muteOriginalAudio, setMuteOriginalAudio] = useState(false)
+  const [muteOriginalAudio, setMuteOriginalAudio] = useState(true)
   const [videoFilter, setVideoFilter] = useState<VideoFilterValue>('')
   const [filteredPreviewUrl, setFilteredPreviewUrl] = useState<string | null>(null)
   const [videoAudioStatus, setVideoAudioStatus] = useState<'idle' | 'analyzing' | 'has_audio' | 'no_audio' | 'error'>('idle')
@@ -349,7 +349,7 @@ export default function UploadPage() {
     if (recording) {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
       streamRef.current?.getTracks().forEach((tr) => tr.stop()); streamRef.current = null
-      setRecording(false); audioBlobRef.current = null; setRecordingDone(false); setMuteOriginalAudio(false)
+      setRecording(false); audioBlobRef.current = null; setRecordingDone(false); setMuteOriginalAudio(true)
     }
     setStep((prev) => prev - 1)
   }
@@ -622,7 +622,7 @@ export default function UploadPage() {
           recording={recording} recordedSeconds={recordedSeconds} recordingDone={recordingDone}
           progressPct={progressPct} maxSeconds={MAX_RECORD_SECONDS}
           startRecording={startRecording} stopRecording={stopRecording}
-          onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0); setMuteOriginalAudio(false); clearSubtitle() }}
+          onRetake={() => { audioBlobRef.current = null; setRecordingDone(false); setRecordedSeconds(0); setMuteOriginalAudio(true); clearSubtitle() }}
           subtitleSize={subtitleSize} subtitlePosition={subtitlePosition}
           onSubtitleSizeChange={setSubtitleSize} onSubtitlePositionChange={setSubtitlePosition}
           subtitleLanguage={subtitleLanguage} onSubtitleLanguageChange={setSubtitleLanguage}
